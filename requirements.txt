@@ -1,0 +1,46 @@
+# Core dependencies
+groq==0.8.0
+pydantic==1.10.22
+python-dotenv==1.0.1
+requests==2.31.0
+numpy==1.24.3
+faiss-cpu==1.7.4
+torch==2.1.0
+sentence-transformers==2.2.2
+
+# Memory and data handling
+sqlalchemy==2.0.27
+pandas==2.1.0
+mem0ai>=0.1.0
+
+# Logging and monitoring
+python-json-logger==2.0.7
+
+# Web search and API integration
+serpapi==0.1.5
+beautifulsoup4==4.12.2
+
+# Terminal interface
+colorama==0.4.6
+rich==13.7.0
+
+# Desktop interface
+pywebview>=4.4.1
+flask>=2.3.0
+flask-cors>=4.0.0
+watchdog>=3.0.0
+
+# Development tools
+black==24.1.1
+isort==5.13.2
+mypy==1.8.0
+pytest==8.0.0
+pytest-cov==4.1.0
+
+# Additional dependencies
+pygame>=2.5.0
+numpy>=1.24.0
+asyncio>=3.4.3
+PyQt6>=6.4.0
+PyQt6-Qt6>=6.4.0
+PyQt6-sip>=13.4.0 

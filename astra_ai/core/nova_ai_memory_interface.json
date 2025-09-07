@@ -1,0 +1,1179 @@
+{
+  "version": "2.0",
+  "created_at": "2025-08-26T15:28:28.746729",
+  "memories": {
+    "ac63839e-7c2f-4893-bf1b-2e1e5e1f3eba": {
+      "id": "ac63839e-7c2f-4893-bf1b-2e1e5e1f3eba",
+      "category": "conversation_patterns",
+      "subcategory": "ai_response_style",
+      "content": "Response length: 7 words",
+      "confidence": 0.9,
+      "priority": 4,
+      "created_at": "2025-08-20T19:13:38.737119",
+      "last_accessed": "2025-08-20T19:13:46.675868",
+      "access_count": 1,
+      "relationships": [
+        "6da9bafa-524a-4ee0-8fc0-19d694e32971",
+        "bcd6ce66-b211-4c14-802f-7f01936fb940",
+        "566b8e73-739c-4883-a705-1408c76b4944",
+        "1f40ef40-c1a2-44ef-aab5-5b361b48a548",
+        "dff55737-fb35-4194-b810-ba61f5ea2d26",
+        "fe836068-face-4a82-b4c8-443747aacc6a",
+        "43ffc534-e95c-4458-bc20-b53ae97b0895"
+      ],
+      "tags": [
+        "ai_learning",
+        "response_analysis"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "response_length": 7,
+        "response_preview": "Hello! How can I assist you today?",
+        "context": {
+          "session_id": "default"
+        }
+      }
+    },
+    "7a3122aa-8a25-4bde-9767-ee12abf3f712": {
+      "id": "7a3122aa-8a25-4bde-9767-ee12abf3f712",
+      "category": "conversation_patterns",
+      "subcategory": "interaction_timing",
+      "content": "Conversation at 19:13",
+      "confidence": 0.7,
+      "priority": 4,
+      "created_at": "2025-08-20T19:13:38.739531",
+      "last_accessed": "2025-08-20T19:13:46.678959",
+      "access_count": 1,
+      "relationships": [
+        "d8a300cd-55dd-410e-9781-393e06a1fe8a",
+        "2af5aac4-1fba-4675-839c-09ea6c4a50c7",
+        "4f419bb3-a3e2-450a-a6d1-12fef1e00d85",
+        "47c2cf74-7c52-43c0-82b9-f1947cc6d207",
+        "bf86391a-aef3-421a-bd03-44d626a9f187",
+        "0016d0c5-e474-4515-810f-9edd0e2c8f79",
+        "a5d809b3-b760-41f0-8ad3-e04f7d20d8d1"
+      ],
+      "tags": [
+        "timing",
+        "patterns"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "timestamp": "2025-08-20T19:13:38.739488",
+        "user_message_length": 2,
+        "ai_response_length": 34
+      }
+    },
+    "2da9f143-af05-4c49-9a62-055385709e2f": {
+      "id": "2da9f143-af05-4c49-9a62-055385709e2f",
+      "category": "user_identity",
+      "subcategory": "name",
+      "content": "alex",
+      "confidence": 0.8,
+      "priority": 2,
+      "created_at": "2025-08-20T19:14:01.653156",
+      "last_accessed": "2025-08-20T19:14:16.683046",
+      "access_count": 1,
+      "relationships": [
+        "0e185068-ad11-4a4a-947d-b53ee39a098b",
+        "3c438f6c-3eb4-4141-bff1-788402b08d0d"
+      ],
+      "tags": [
+        "conversation_extracted"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "source_message": "My name is Alex and I'm a software developer who loves AI and machine learning",
+        "extraction_method": "pattern_matching",
+        "context": {
+          "session_id": "default"
+        }
+      }
+    },
+    "0e185068-ad11-4a4a-947d-b53ee39a098b": {
+      "id": "0e185068-ad11-4a4a-947d-b53ee39a098b",
+      "category": "user_identity",
+      "subcategory": "name",
+      "content": "a",
+      "confidence": 0.8,
+      "priority": 2,
+      "created_at": "2025-08-20T19:14:01.656168",
+      "last_accessed": "2025-08-20T19:14:16.695592",
+      "access_count": 1,
+      "relationships": [
+        "2da9f143-af05-4c49-9a62-055385709e2f",
+        "3c438f6c-3eb4-4141-bff1-788402b08d0d"
+      ],
+      "tags": [
+        "conversation_extracted"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "source_message": "My name is Alex and I'm a software developer who loves AI and machine learning",
+        "extraction_method": "pattern_matching",
+        "context": {
+          "session_id": "default"
+        }
+      }
+    },
+    "3c438f6c-3eb4-4141-bff1-788402b08d0d": {
+      "id": "3c438f6c-3eb4-4141-bff1-788402b08d0d",
+      "category": "professional_background",
+      "subcategory": "role",
+      "content": "software developer who loves ai and machine learning",
+      "confidence": 0.8,
+      "priority": 3,
+      "created_at": "2025-08-20T19:14:01.657788",
+      "last_accessed": "2025-08-20T19:14:16.728022",
+      "access_count": 1,
+      "relationships": [
+        "2da9f143-af05-4c49-9a62-055385709e2f",
+        "0e185068-ad11-4a4a-947d-b53ee39a098b"
+      ],
+      "tags": [
+        "conversation_extracted"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "source_message": "My name is Alex and I'm a software developer who loves AI and machine learning",
+        "extraction_method": "pattern_matching",
+        "context": {
+          "session_id": "default"
+        }
+      }
+    },
+    "6da9bafa-524a-4ee0-8fc0-19d694e32971": {
+      "id": "6da9bafa-524a-4ee0-8fc0-19d694e32971",
+      "category": "conversation_patterns",
+      "subcategory": "ai_response_style",
+      "content": "Response length: 41 words",
+      "confidence": 0.9,
+      "priority": 4,
+      "created_at": "2025-08-20T19:14:01.659379",
+      "last_accessed": "2025-08-20T19:14:16.733240",
+      "access_count": 1,
+      "relationships": [
+        "ac63839e-7c2f-4893-bf1b-2e1e5e1f3eba",
+        "bcd6ce66-b211-4c14-802f-7f01936fb940",
+        "566b8e73-739c-4883-a705-1408c76b4944",
+        "1f40ef40-c1a2-44ef-aab5-5b361b48a548",
+        "dff55737-fb35-4194-b810-ba61f5ea2d26",
+        "fe836068-face-4a82-b4c8-443747aacc6a",
+        "43ffc534-e95c-4458-bc20-b53ae97b0895"
+      ],
+      "tags": [
+        "ai_learning",
+        "response_analysis"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "response_length": 41,
+        "response_preview": "Nice to meet you, Alex! As a software developer wi",
+        "context": {
+          "session_id": "default"
+        }
+      }
+    },
+    "d8a300cd-55dd-410e-9781-393e06a1fe8a": {
+      "id": "d8a300cd-55dd-410e-9781-393e06a1fe8a",
+      "category": "conversation_patterns",
+      "subcategory": "interaction_timing",
+      "content": "Conversation at 19:14",
+      "confidence": 0.7,
+      "priority": 4,
+      "created_at": "2025-08-20T19:14:01.661288",
+      "last_accessed": "2025-08-20T19:14:16.740376",
+      "access_count": 1,
+      "relationships": [
+        "7a3122aa-8a25-4bde-9767-ee12abf3f712",
+        "2af5aac4-1fba-4675-839c-09ea6c4a50c7",
+        "4f419bb3-a3e2-450a-a6d1-12fef1e00d85",
+        "47c2cf74-7c52-43c0-82b9-f1947cc6d207",
+        "bf86391a-aef3-421a-bd03-44d626a9f187",
+        "0016d0c5-e474-4515-810f-9edd0e2c8f79",
+        "a5d809b3-b760-41f0-8ad3-e04f7d20d8d1"
+      ],
+      "tags": [
+        "timing",
+        "patterns"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "timestamp": "2025-08-20T19:14:01.661253",
+        "user_message_length": 78,
+        "ai_response_length": 233
+      }
+    },
+    "bcd6ce66-b211-4c14-802f-7f01936fb940": {
+      "id": "bcd6ce66-b211-4c14-802f-7f01936fb940",
+      "category": "conversation_patterns",
+      "subcategory": "ai_response_style",
+      "content": "Response length: 2 words",
+      "confidence": 0.9,
+      "priority": 4,
+      "created_at": "2025-08-20T19:15:06.943228",
+      "last_accessed": "2025-08-20T19:15:18.886644",
+      "access_count": 1,
+      "relationships": [
+        "ac63839e-7c2f-4893-bf1b-2e1e5e1f3eba",
+        "6da9bafa-524a-4ee0-8fc0-19d694e32971",
+        "566b8e73-739c-4883-a705-1408c76b4944",
+        "1f40ef40-c1a2-44ef-aab5-5b361b48a548",
+        "dff55737-fb35-4194-b810-ba61f5ea2d26",
+        "fe836068-face-4a82-b4c8-443747aacc6a",
+        "43ffc534-e95c-4458-bc20-b53ae97b0895"
+      ],
+      "tags": [
+        "ai_learning",
+        "response_analysis"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "response_length": 2,
+        "response_preview": "Hi Alex!",
+        "context": {
+          "session_id": "default"
+        }
+      }
+    },
+    "2af5aac4-1fba-4675-839c-09ea6c4a50c7": {
+      "id": "2af5aac4-1fba-4675-839c-09ea6c4a50c7",
+      "category": "conversation_patterns",
+      "subcategory": "interaction_timing",
+      "content": "Conversation at 19:15",
+      "confidence": 0.7,
+      "priority": 4,
+      "created_at": "2025-08-20T19:15:06.945740",
+      "last_accessed": "2025-08-20T19:15:18.901773",
+      "access_count": 1,
+      "relationships": [
+        "7a3122aa-8a25-4bde-9767-ee12abf3f712",
+        "d8a300cd-55dd-410e-9781-393e06a1fe8a",
+        "4f419bb3-a3e2-450a-a6d1-12fef1e00d85",
+        "47c2cf74-7c52-43c0-82b9-f1947cc6d207",
+        "bf86391a-aef3-421a-bd03-44d626a9f187",
+        "0016d0c5-e474-4515-810f-9edd0e2c8f79",
+        "a5d809b3-b760-41f0-8ad3-e04f7d20d8d1"
+      ],
+      "tags": [
+        "timing",
+        "patterns"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "timestamp": "2025-08-20T19:15:06.945703",
+        "user_message_length": 2,
+        "ai_response_length": 8
+      }
+    },
+    "566b8e73-739c-4883-a705-1408c76b4944": {
+      "id": "566b8e73-739c-4883-a705-1408c76b4944",
+      "category": "conversation_patterns",
+      "subcategory": "ai_response_style",
+      "content": "Response length: 17 words",
+      "confidence": 0.9,
+      "priority": 4,
+      "created_at": "2025-08-20T19:15:57.570020",
+      "last_accessed": "2025-08-20T19:16:18.919129",
+      "access_count": 1,
+      "relationships": [
+        "ac63839e-7c2f-4893-bf1b-2e1e5e1f3eba",
+        "6da9bafa-524a-4ee0-8fc0-19d694e32971",
+        "bcd6ce66-b211-4c14-802f-7f01936fb940",
+        "1f40ef40-c1a2-44ef-aab5-5b361b48a548",
+        "dff55737-fb35-4194-b810-ba61f5ea2d26",
+        "fe836068-face-4a82-b4c8-443747aacc6a",
+        "43ffc534-e95c-4458-bc20-b53ae97b0895"
+      ],
+      "tags": [
+        "ai_learning",
+        "response_analysis"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "response_length": 17,
+        "response_preview": "Your name is Alex, and you're a software developer",
+        "context": {
+          "session_id": "default"
+        }
+      }
+    },
+    "4f419bb3-a3e2-450a-a6d1-12fef1e00d85": {
+      "id": "4f419bb3-a3e2-450a-a6d1-12fef1e00d85",
+      "category": "conversation_patterns",
+      "subcategory": "interaction_timing",
+      "content": "Conversation at 19:15",
+      "confidence": 0.7,
+      "priority": 4,
+      "created_at": "2025-08-20T19:15:57.573153",
+      "last_accessed": "2025-08-20T19:16:18.932338",
+      "access_count": 1,
+      "relationships": [
+        "7a3122aa-8a25-4bde-9767-ee12abf3f712",
+        "d8a300cd-55dd-410e-9781-393e06a1fe8a",
+        "2af5aac4-1fba-4675-839c-09ea6c4a50c7",
+        "47c2cf74-7c52-43c0-82b9-f1947cc6d207",
+        "bf86391a-aef3-421a-bd03-44d626a9f187",
+        "0016d0c5-e474-4515-810f-9edd0e2c8f79",
+        "a5d809b3-b760-41f0-8ad3-e04f7d20d8d1"
+      ],
+      "tags": [
+        "timing",
+        "patterns"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "timestamp": "2025-08-20T19:15:57.573117",
+        "user_message_length": 42,
+        "ai_response_length": 94
+      }
+    },
+    "1f40ef40-c1a2-44ef-aab5-5b361b48a548": {
+      "id": "1f40ef40-c1a2-44ef-aab5-5b361b48a548",
+      "category": "conversation_patterns",
+      "subcategory": "ai_response_style",
+      "content": "Response length: 2 words",
+      "confidence": 0.9,
+      "priority": 4,
+      "created_at": "2025-08-26T15:21:43.335961",
+      "last_accessed": "2025-08-26T15:21:46.481198",
+      "access_count": 1,
+      "relationships": [
+        "ac63839e-7c2f-4893-bf1b-2e1e5e1f3eba",
+        "6da9bafa-524a-4ee0-8fc0-19d694e32971",
+        "bcd6ce66-b211-4c14-802f-7f01936fb940",
+        "566b8e73-739c-4883-a705-1408c76b4944",
+        "dff55737-fb35-4194-b810-ba61f5ea2d26",
+        "fe836068-face-4a82-b4c8-443747aacc6a",
+        "43ffc534-e95c-4458-bc20-b53ae97b0895"
+      ],
+      "tags": [
+        "ai_learning",
+        "response_analysis"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "response_length": 2,
+        "response_preview": "Hey Alex!",
+        "context": {
+          "session_id": "default"
+        }
+      }
+    },
+    "47c2cf74-7c52-43c0-82b9-f1947cc6d207": {
+      "id": "47c2cf74-7c52-43c0-82b9-f1947cc6d207",
+      "category": "conversation_patterns",
+      "subcategory": "interaction_timing",
+      "content": "Conversation at 15:21",
+      "confidence": 0.7,
+      "priority": 4,
+      "created_at": "2025-08-26T15:21:43.338184",
+      "last_accessed": "2025-08-26T15:21:46.497560",
+      "access_count": 1,
+      "relationships": [
+        "7a3122aa-8a25-4bde-9767-ee12abf3f712",
+        "d8a300cd-55dd-410e-9781-393e06a1fe8a",
+        "2af5aac4-1fba-4675-839c-09ea6c4a50c7",
+        "4f419bb3-a3e2-450a-a6d1-12fef1e00d85",
+        "bf86391a-aef3-421a-bd03-44d626a9f187",
+        "0016d0c5-e474-4515-810f-9edd0e2c8f79",
+        "a5d809b3-b760-41f0-8ad3-e04f7d20d8d1"
+      ],
+      "tags": [
+        "timing",
+        "patterns"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "timestamp": "2025-08-26T15:21:43.338138",
+        "user_message_length": 2,
+        "ai_response_length": 9
+      }
+    },
+    "dff55737-fb35-4194-b810-ba61f5ea2d26": {
+      "id": "dff55737-fb35-4194-b810-ba61f5ea2d26",
+      "category": "conversation_patterns",
+      "subcategory": "ai_response_style",
+      "content": "Response length: 4 words",
+      "confidence": 0.9,
+      "priority": 4,
+      "created_at": "2025-08-26T15:24:39.581010",
+      "last_accessed": "2025-08-26T15:24:58.562076",
+      "access_count": 1,
+      "relationships": [
+        "ac63839e-7c2f-4893-bf1b-2e1e5e1f3eba",
+        "6da9bafa-524a-4ee0-8fc0-19d694e32971",
+        "bcd6ce66-b211-4c14-802f-7f01936fb940",
+        "566b8e73-739c-4883-a705-1408c76b4944",
+        "1f40ef40-c1a2-44ef-aab5-5b361b48a548",
+        "fe836068-face-4a82-b4c8-443747aacc6a",
+        "43ffc534-e95c-4458-bc20-b53ae97b0895"
+      ],
+      "tags": [
+        "ai_learning",
+        "response_analysis"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "response_length": 4,
+        "response_preview": "Hey Alex, still here!",
+        "context": {
+          "session_id": "default"
+        }
+      }
+    },
+    "bf86391a-aef3-421a-bd03-44d626a9f187": {
+      "id": "bf86391a-aef3-421a-bd03-44d626a9f187",
+      "category": "conversation_patterns",
+      "subcategory": "interaction_timing",
+      "content": "Conversation at 15:24",
+      "confidence": 0.7,
+      "priority": 4,
+      "created_at": "2025-08-26T15:24:39.583274",
+      "last_accessed": "2025-08-26T15:24:58.588809",
+      "access_count": 1,
+      "relationships": [
+        "7a3122aa-8a25-4bde-9767-ee12abf3f712",
+        "d8a300cd-55dd-410e-9781-393e06a1fe8a",
+        "2af5aac4-1fba-4675-839c-09ea6c4a50c7",
+        "4f419bb3-a3e2-450a-a6d1-12fef1e00d85",
+        "47c2cf74-7c52-43c0-82b9-f1947cc6d207",
+        "0016d0c5-e474-4515-810f-9edd0e2c8f79",
+        "a5d809b3-b760-41f0-8ad3-e04f7d20d8d1"
+      ],
+      "tags": [
+        "timing",
+        "patterns"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "timestamp": "2025-08-26T15:24:39.583236",
+        "user_message_length": 2,
+        "ai_response_length": 21
+      }
+    },
+    "fe836068-face-4a82-b4c8-443747aacc6a": {
+      "id": "fe836068-face-4a82-b4c8-443747aacc6a",
+      "category": "conversation_patterns",
+      "subcategory": "ai_response_style",
+      "content": "Response length: 22 words",
+      "confidence": 0.9,
+      "priority": 4,
+      "created_at": "2025-08-26T15:28:03.679753",
+      "last_accessed": "2025-08-26T15:28:28.614535",
+      "access_count": 1,
+      "relationships": [
+        "ac63839e-7c2f-4893-bf1b-2e1e5e1f3eba",
+        "6da9bafa-524a-4ee0-8fc0-19d694e32971",
+        "bcd6ce66-b211-4c14-802f-7f01936fb940",
+        "566b8e73-739c-4883-a705-1408c76b4944",
+        "1f40ef40-c1a2-44ef-aab5-5b361b48a548",
+        "dff55737-fb35-4194-b810-ba61f5ea2d26",
+        "43ffc534-e95c-4458-bc20-b53ae97b0895"
+      ],
+      "tags": [
+        "ai_learning",
+        "response_analysis"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "response_length": 22,
+        "response_preview": "We already talked about this in our last conversat",
+        "context": {
+          "session_id": "default"
+        }
+      }
+    },
+    "0016d0c5-e474-4515-810f-9edd0e2c8f79": {
+      "id": "0016d0c5-e474-4515-810f-9edd0e2c8f79",
+      "category": "conversation_patterns",
+      "subcategory": "interaction_timing",
+      "content": "Conversation at 15:28",
+      "confidence": 0.7,
+      "priority": 4,
+      "created_at": "2025-08-26T15:28:03.683739",
+      "last_accessed": "2025-08-26T15:28:28.643693",
+      "access_count": 1,
+      "relationships": [
+        "7a3122aa-8a25-4bde-9767-ee12abf3f712",
+        "d8a300cd-55dd-410e-9781-393e06a1fe8a",
+        "2af5aac4-1fba-4675-839c-09ea6c4a50c7",
+        "4f419bb3-a3e2-450a-a6d1-12fef1e00d85",
+        "47c2cf74-7c52-43c0-82b9-f1947cc6d207",
+        "bf86391a-aef3-421a-bd03-44d626a9f187",
+        "a5d809b3-b760-41f0-8ad3-e04f7d20d8d1"
+      ],
+      "tags": [
+        "timing",
+        "patterns"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "timestamp": "2025-08-26T15:28:03.683700",
+        "user_message_length": 23,
+        "ai_response_length": 132
+      }
+    },
+    "43ffc534-e95c-4458-bc20-b53ae97b0895": {
+      "id": "43ffc534-e95c-4458-bc20-b53ae97b0895",
+      "category": "conversation_patterns",
+      "subcategory": "ai_response_style",
+      "content": "Response length: 36 words",
+      "confidence": 0.9,
+      "priority": 4,
+      "created_at": "2025-08-26T15:28:20.326291",
+      "last_accessed": "2025-08-26T15:28:28.678905",
+      "access_count": 1,
+      "relationships": [
+        "fe836068-face-4a82-b4c8-443747aacc6a",
+        "ac63839e-7c2f-4893-bf1b-2e1e5e1f3eba",
+        "6da9bafa-524a-4ee0-8fc0-19d694e32971",
+        "bcd6ce66-b211-4c14-802f-7f01936fb940",
+        "566b8e73-739c-4883-a705-1408c76b4944",
+        "1f40ef40-c1a2-44ef-aab5-5b361b48a548",
+        "dff55737-fb35-4194-b810-ba61f5ea2d26"
+      ],
+      "tags": [
+        "ai_learning",
+        "response_analysis"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "response_length": 36,
+        "response_preview": "I don't think we ever discussed an old name for yo",
+        "context": {
+          "session_id": "default"
+        }
+      }
+    },
+    "a5d809b3-b760-41f0-8ad3-e04f7d20d8d1": {
+      "id": "a5d809b3-b760-41f0-8ad3-e04f7d20d8d1",
+      "category": "conversation_patterns",
+      "subcategory": "interaction_timing",
+      "content": "Conversation at 15:28",
+      "confidence": 0.7,
+      "priority": 4,
+      "created_at": "2025-08-26T15:28:20.328984",
+      "last_accessed": "2025-08-26T15:28:28.714332",
+      "access_count": 1,
+      "relationships": [
+        "0016d0c5-e474-4515-810f-9edd0e2c8f79",
+        "7a3122aa-8a25-4bde-9767-ee12abf3f712",
+        "d8a300cd-55dd-410e-9781-393e06a1fe8a",
+        "2af5aac4-1fba-4675-839c-09ea6c4a50c7",
+        "4f419bb3-a3e2-450a-a6d1-12fef1e00d85",
+        "47c2cf74-7c52-43c0-82b9-f1947cc6d207",
+        "bf86391a-aef3-421a-bd03-44d626a9f187"
+      ],
+      "tags": [
+        "timing",
+        "patterns"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "timestamp": "2025-08-26T15:28:20.328949",
+        "user_message_length": 20,
+        "ai_response_length": 207
+      }
+    }
+  },
+  "memory_gaps": [],
+  "memory_insights": [],
+  "stats": {
+    "total_memories": 19,
+    "total_categories": 0,
+    "average_confidence": 0.0,
+    "last_consolidation": null,
+    "memory_gaps_detected": 0,
+    "insights_generated": 0
+  },
+  "category_schemas": {
+    "user_identity": {
+      "name": "User Identity",
+      "subcategories": [
+        "name",
+        "pronouns",
+        "nicknames",
+        "identity_evolution",
+        "personal_identifiers"
+      ],
+      "relationships": [
+        "personal_preferences",
+        "communication_style",
+        "personality_traits"
+      ],
+      "importance_weight": 1.0,
+      "retention_policy": "permanent"
+    },
+    "personal_preferences": {
+      "name": "Personal Preferences",
+      "subcategories": [
+        "communication_style",
+        "response_format",
+        "detail_level",
+        "formality",
+        "topics"
+      ],
+      "relationships": [
+        "communication_style",
+        "interaction_preferences",
+        "work_preferences"
+      ],
+      "importance_weight": 0.9,
+      "retention_policy": "permanent"
+    },
+    "communication_style": {
+      "name": "Communication Style",
+      "subcategories": [
+        "tone",
+        "formality",
+        "directness",
+        "humor",
+        "technical_level"
+      ],
+      "relationships": [
+        "personality_traits",
+        "interaction_preferences",
+        "professional_background"
+      ],
+      "importance_weight": 0.9,
+      "retention_policy": "permanent"
+    },
+    "personality_traits": {
+      "name": "Personality Traits",
+      "subcategories": [
+        "openness",
+        "conscientiousness",
+        "extraversion",
+        "agreeableness",
+        "neuroticism"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "permanent"
+    },
+    "values_beliefs": {
+      "name": "Values Beliefs",
+      "subcategories": [
+        "core_values",
+        "beliefs",
+        "principles",
+        "ethics",
+        "worldview"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "activity_patterns": {
+      "name": "Activity Patterns",
+      "subcategories": [
+        "daily_routine",
+        "work_schedule",
+        "peak_hours",
+        "break_patterns",
+        "seasonal_changes"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "conversation_patterns": {
+      "name": "Conversation Patterns",
+      "subcategories": [
+        "topic_preferences",
+        "question_types",
+        "engagement_style",
+        "conversation_flow"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "decision_patterns": {
+      "name": "Decision Patterns",
+      "subcategories": [
+        "decision_style",
+        "risk_tolerance",
+        "information_needs",
+        "consultation_preferences"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "learning_patterns": {
+      "name": "Learning Patterns",
+      "subcategories": [
+        "learning_style",
+        "preferred_formats",
+        "pace",
+        "feedback_preferences",
+        "retention_methods"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "interaction_preferences": {
+      "name": "Interaction Preferences",
+      "subcategories": [
+        "meeting_style",
+        "collaboration_preferences",
+        "feedback_style",
+        "conflict_resolution"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "professional_background": {
+      "name": "Professional Background",
+      "subcategories": [
+        "current_role",
+        "company",
+        "industry",
+        "experience_level",
+        "career_path"
+      ],
+      "relationships": [
+        "skills_expertise",
+        "career_goals",
+        "industry_knowledge"
+      ],
+      "importance_weight": 0.8,
+      "retention_policy": "long_term"
+    },
+    "skills_expertise": {
+      "name": "Skills Expertise",
+      "subcategories": [
+        "technical_skills",
+        "soft_skills",
+        "certifications",
+        "specializations",
+        "skill_levels"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "career_goals": {
+      "name": "Career Goals",
+      "subcategories": [
+        "short_term_goals",
+        "long_term_vision",
+        "desired_roles",
+        "skill_development",
+        "career_changes"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "work_preferences": {
+      "name": "Work Preferences",
+      "subcategories": [
+        "work_environment",
+        "team_size",
+        "autonomy_level",
+        "challenge_level",
+        "work_life_balance"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "industry_knowledge": {
+      "name": "Industry Knowledge",
+      "subcategories": [
+        "industry_trends",
+        "key_players",
+        "technologies",
+        "best_practices",
+        "regulations"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "current_projects": {
+      "name": "Current Projects",
+      "subcategories": [
+        "active_projects",
+        "project_roles",
+        "deadlines",
+        "priorities",
+        "challenges"
+      ],
+      "relationships": [
+        "task_management",
+        "deadlines_commitments",
+        "collaboration_history"
+      ],
+      "importance_weight": 0.8,
+      "retention_policy": "medium_term"
+    },
+    "project_history": {
+      "name": "Project History",
+      "subcategories": [
+        "completed_projects",
+        "outcomes",
+        "lessons_learned",
+        "success_factors",
+        "failures"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "task_management": {
+      "name": "Task Management",
+      "subcategories": [
+        "task_organization",
+        "prioritization_methods",
+        "tools_used",
+        "delegation_style"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "short_term"
+    },
+    "deadlines_commitments": {
+      "name": "Deadlines Commitments",
+      "subcategories": [
+        "upcoming_deadlines",
+        "recurring_commitments",
+        "availability",
+        "scheduling_preferences"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "collaboration_history": {
+      "name": "Collaboration History",
+      "subcategories": [
+        "team_experiences",
+        "collaboration_tools",
+        "communication_patterns",
+        "conflict_resolution"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "relationships": {
+      "name": "Relationships",
+      "subcategories": [
+        "family",
+        "friends",
+        "colleagues",
+        "mentors",
+        "professional_contacts"
+      ],
+      "relationships": [
+        "social_context",
+        "family_background",
+        "professional_network"
+      ],
+      "importance_weight": 0.7,
+      "retention_policy": "medium_term"
+    },
+    "social_context": {
+      "name": "Social Context",
+      "subcategories": [
+        "social_circles",
+        "community_involvement",
+        "social_preferences",
+        "networking_style"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "family_background": {
+      "name": "Family Background",
+      "subcategories": [
+        "family_structure",
+        "relationships",
+        "influences",
+        "traditions",
+        "values"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "friend_network": {
+      "name": "Friend Network",
+      "subcategories": [
+        "close_friends",
+        "social_groups",
+        "friendship_patterns",
+        "social_activities"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "professional_network": {
+      "name": "Professional Network",
+      "subcategories": [
+        "industry_contacts",
+        "mentors",
+        "collaborators",
+        "professional_groups"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "personal_interests": {
+      "name": "Personal Interests",
+      "subcategories": [
+        "hobbies",
+        "passions",
+        "curiosities",
+        "exploration_areas",
+        "creative_pursuits"
+      ],
+      "relationships": [
+        "hobbies_activities",
+        "entertainment_preferences",
+        "cultural_interests"
+      ],
+      "importance_weight": 0.6,
+      "retention_policy": "medium_term"
+    },
+    "hobbies_activities": {
+      "name": "Hobbies Activities",
+      "subcategories": [
+        "regular_activities",
+        "seasonal_hobbies",
+        "skill_development",
+        "time_investment"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "entertainment_preferences": {
+      "name": "Entertainment Preferences",
+      "subcategories": [
+        "movies",
+        "music",
+        "books",
+        "games",
+        "shows",
+        "genres"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "travel_experiences": {
+      "name": "Travel Experiences",
+      "subcategories": [
+        "places_visited",
+        "travel_style",
+        "preferences",
+        "memorable_experiences"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "cultural_interests": {
+      "name": "Cultural Interests",
+      "subcategories": [
+        "cultural_activities",
+        "art_preferences",
+        "cultural_background",
+        "traditions"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "short_term_goals": {
+      "name": "Short Term Goals",
+      "subcategories": [
+        "immediate_objectives",
+        "monthly_goals",
+        "quarterly_targets",
+        "current_focus"
+      ],
+      "relationships": [
+        "long_term_goals",
+        "personal_development",
+        "learning_objectives"
+      ],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "long_term_goals": {
+      "name": "Long Term Goals",
+      "subcategories": [
+        "life_vision",
+        "career_aspirations",
+        "personal_development",
+        "legacy_goals"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "personal_development": {
+      "name": "Personal Development",
+      "subcategories": [
+        "growth_areas",
+        "development_plans",
+        "learning_objectives",
+        "self_improvement"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "learning_objectives": {
+      "name": "Learning Objectives",
+      "subcategories": [
+        "skill_acquisition",
+        "knowledge_areas",
+        "learning_timeline",
+        "success_metrics"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "achievement_history": {
+      "name": "Achievement History",
+      "subcategories": [
+        "major_accomplishments",
+        "awards",
+        "recognition",
+        "milestones",
+        "proud_moments"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "system_preferences": {
+      "name": "System Preferences",
+      "subcategories": [
+        "interface_preferences",
+        "notification_settings",
+        "automation_preferences"
+      ],
+      "relationships": [
+        "tool_usage",
+        "technical_setup",
+        "integration_history"
+      ],
+      "importance_weight": 0.5,
+      "retention_policy": "permanent"
+    },
+    "tool_usage": {
+      "name": "Tool Usage",
+      "subcategories": [
+        "preferred_tools",
+        "tool_proficiency",
+        "workflow_integration",
+        "tool_feedback"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "technical_setup": {
+      "name": "Technical Setup",
+      "subcategories": [
+        "hardware",
+        "software",
+        "configurations",
+        "integrations",
+        "customizations"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "integration_history": {
+      "name": "Integration History",
+      "subcategories": [
+        "system_integrations",
+        "api_usage",
+        "automation_setups",
+        "workflow_optimizations"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "feedback_history": {
+      "name": "Feedback History",
+      "subcategories": [
+        "system_feedback",
+        "improvement_suggestions",
+        "feature_requests",
+        "satisfaction_ratings"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    },
+    "news_weather_history": {
+      "name": "News Weather History",
+      "subcategories": [
+        "news_queries",
+        "weather_queries",
+        "search_history",
+        "information_requests",
+        "topic_interests"
+      ],
+      "relationships": [],
+      "importance_weight": 0.5,
+      "retention_policy": "medium_term"
+    }
+  }
+}

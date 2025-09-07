@@ -1,0 +1,12 @@
+# Vector memory requirements
+torch>=2.0.0
+sentence-transformers>=2.2.0
+faiss-cpu>=1.7.0
+numpy>=1.20.0
+scikit-learn>=1.0.0
+
+# Database requirements
+# sqlite3 is part of the Python standard library
+
+# Utility requirements
+tqdm>=4.60.0

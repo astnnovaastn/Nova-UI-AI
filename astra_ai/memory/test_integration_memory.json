@@ -1,0 +1,132 @@
+{
+  "user": {
+    "user_id": "user_3de8a9ec",
+    "name": null,
+    "created_at": "2025-08-19T15:33:30.124083",
+    "status": "active",
+    "total_sessions": 0,
+    "last_seen": null,
+    "relationship_established": true
+  },
+  "memory_events": [
+    {
+      "type": "ADD",
+      "summary": "Added system_awareness.system_feedback: test",
+      "timestamp": "2025-08-19T15:33:30.124481",
+      "emotional_context": "neutral",
+      "semantic_context": null,
+      "importance_score": 0.5,
+      "confidence": 0.7,
+      "category": "system_awareness",
+      "subcategory": "system_feedback",
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": "test"
+    }
+  ],
+  "conversation": [
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2025-08-19T15:33:30.124481",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2025-08-19T15:33:30.124481",
+      "session_id": null
+    },
+    {
+      "role": "user",
+      "content": "What is my name?",
+      "timestamp": "2025-08-19T15:33:30.169255",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "Based on our previous conversation, your name is Alex.",
+      "timestamp": "2025-08-19T15:33:30.169255",
+      "session_id": null
+    }
+  ],
+  "current_facts": {
+    "system_awareness.system_feedback": "test"
+  },
+  "fact_history": {},
+  "sessions": {},
+  "current_session": null,
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": false,
+    "established_user": true
+  },
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {},
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {
+      "f5f13fbd4b2c": {
+        "category": "system_awareness",
+        "subcategory": "system_feedback",
+        "key": "f5f13fbd4b2c",
+        "value": "test",
+        "confidence": 0.7,
+        "timestamp": "2025-08-19T15:33:30.145235",
+        "last_accessed": "2025-08-19T15:33:30.145247",
+        "access_count": 0,
+        "source": "comprehensive_detection",
+        "relationships": [],
+        "tags": [],
+        "expiry_date": null,
+        "privacy_level": "normal",
+        "validation_status": "unverified",
+        "emotional_context": null,
+        "session_id": null
+      }
+    },
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+  "category_relationships": {},
+  "memory_metadata": {},
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  },
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  }
+}
