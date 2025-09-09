@@ -20,17 +20,19 @@ class ResponseManager:
     Combines functionality from ResponseGenerator, ResponseFormatter, and ResponseGeneration.
     """
     
-    def __init__(self, personality_manager=None, learning_system=None):
+    def __init__(self, personality_manager=None, learning_system=None, memory_system=None):
         """
         Initialize the response manager.
         
         Args:
             personality_manager: Optional PersonalityManager instance
             learning_system: Optional ContinuousLearning instance
+            memory_system: Optional memory system instance for context-aware responses
         """
         # Core components
         self.personality = personality_manager
         self.learning = learning_system
+        self.memory_system = memory_system
         
         # Initialize personality traits
         self.personality_traits = {
@@ -146,6 +148,9 @@ class ResponseManager:
         Returns:
             Tuple[str, Dict]: Generated response and response metadata
         """
+        # Load memory context if memory system is available
+        memory_context = self._load_memory_context(user_message, context)
+        
         # Get learning suggestions if available
         suggestions = {}
         if self.learning:
@@ -154,22 +159,22 @@ class ResponseManager:
         # Get personality style
         style = self._get_response_style(suggestions.get("message_type", "general"))
         
-        # Generate base response
-        base_response = self._generate_base_response(user_message, suggestions, style)
+        # Generate base response with memory context
+        base_response = self._generate_base_response(user_message, suggestions, style, memory_context)
         
-        # Enhance with personality
-        enhanced_response = self._enhance_response(base_response, style, context)
+        # Enhance with personality and memory
+        enhanced_response = self._enhance_response(base_response, style, context, memory_context)
         
-        # Add contextual elements
+        # Add contextual elements including memory
         contextualized_response = self._add_contextual_elements(
-            enhanced_response, conversation_history, context
+            enhanced_response, conversation_history, context, memory_context
         )
         
         # Format response based on query type
         final_response = self.format_response(contextualized_response, user_message)
         
-        # Generate metadata
-        metadata = self._generate_response_metadata(final_response, suggestions, style)
+        # Generate metadata including memory information
+        metadata = self._generate_response_metadata(final_response, suggestions, style, memory_context)
         
         return final_response, metadata
     
@@ -187,12 +192,66 @@ class ResponseManager:
         
         return style
     
+    def _load_memory_context(self, user_message: str, context: Dict) -> Dict[str, Any]:
+        """
+        Load memory context for response generation.
+        
+        Args:
+            user_message: The user's message
+            context: Current conversation context
+            
+        Returns:
+            Dict containing memory context information
+        """
+        if not self.memory_system:
+            return {"memory_available": False, "fallback_context": self._get_fallback_context()}
+        
+        try:
+            # Use the memory system's load_memory function
+            if hasattr(self.memory_system, 'load_memory'):
+                memory_context = self.memory_system.load_memory(user_message, "comprehensive")
+                return memory_context
+            elif hasattr(self.memory_system, 'get_context_for_ai_response'):
+                # Fallback to basic context if load_memory not available
+                basic_context = self.memory_system.get_context_for_ai_response("comprehensive")
+                return {
+                    "memory_available": True,
+                    "user_profile": basic_context.get("user_profile", {}),
+                    "basic_context": basic_context.get("basic_context", {}),
+                    "fallback_context": self._get_fallback_context()
+                }
+            else:
+                return {"memory_available": False, "fallback_context": self._get_fallback_context()}
+                
+        except Exception as e:
+            logger.error(f"Failed to load memory context: {e}")
+            return {"memory_available": False, "fallback_context": self._get_fallback_context()}
+    
+    def _get_fallback_context(self) -> Dict[str, Any]:
+        """Get fallback context when memory is not available"""
+        return {
+            "message": "I don't have access to our previous conversations right now, but I'm here to help!",
+            "suggestions": [
+                "You can ask me anything you'd like to know",
+                "I can help with general questions and tasks",
+                "Feel free to tell me about yourself so I can remember for next time"
+            ]
+        }
+    
     def _generate_base_response(self,
                               user_message: str,
                               suggestions: Dict,
-                              style: Dict) -> str:
+                              style: Dict,
+                              memory_context: Dict = None) -> str:
         """Generate base response using templates and learned patterns."""
         message_type = suggestions.get("message_type", "general")
+        
+        # Check for auto-instructions from memory
+        if memory_context and memory_context.get("memory_available", False):
+            auto_instructions = memory_context.get("auto_instructions", [])
+            for instruction in auto_instructions:
+                if self._should_apply_auto_instruction(instruction, user_message):
+                    return self._apply_auto_instruction(instruction, user_message)
         
         # Select appropriate template
         if message_type == "question":
@@ -215,33 +274,43 @@ class ResponseManager:
     def _enhance_response(self,
                          base_response: str,
                          style: Dict,
-                         context: Dict) -> str:
+                         context: Dict,
+                         memory_context: Dict = None) -> str:
         """Enhance response with personality and style."""
         # Adjust formality
-        response = self._adjust_formality(base_response, style["formality"])
+        response = self._adjust_formality(base_response, style.get("formality", 0.5))
         
         # Add personality markers
-        if style["creativity"] > 0.7:
+        if style.get("creativity", 0) > 0.7:
             response = self._add_creative_elements(response)
         
-        if style["empathy"] > 0.7:
+        if style.get("empathy", 0) > 0.7:
             response = self._add_empathetic_elements(response, context)
         
         if style.get("humor", 0) > 0.6:
             response = self._add_humor_elements(response)
+        
+        # Add memory-based personalization
+        if memory_context and memory_context.get("memory_available", False):
+            response = self._add_memory_personalization(response, memory_context)
         
         return response
     
     def _add_contextual_elements(self,
                                response: str,
                                conversation_history: List[Dict],
-                               context: Dict) -> str:
+                               context: Dict,
+                               memory_context: Dict = None) -> str:
         """Add contextual elements to response."""
         # Add references to previous conversation
         if conversation_history:
             last_topic = conversation_history[-1].get("topic")
             if last_topic and last_topic in context.get("topics", []):
                 response = f"Regarding {last_topic}, {response}"
+        
+        # Add memory-based context
+        if memory_context and memory_context.get("memory_available", False):
+            response = self._add_memory_context(response, memory_context)
         
         # Add learned preferences if available
         if self.personality and hasattr(self.personality, 'user_preferences'):
@@ -453,4 +522,129 @@ class ResponseManager:
         """Add a new response template."""
         if category not in self.templates:
             self.templates[category] = []
-        self.templates[category].append(template) 
+        self.templates[category].append(template)
+    
+    def _should_apply_auto_instruction(self, instruction: Dict, user_message: str) -> bool:
+        """Check if an auto-instruction should be applied to the current message."""
+        try:
+            content = instruction.get("content", "").lower()
+            message_lower = user_message.lower()
+            
+            # Check for trigger keywords
+            trigger_keywords = instruction.get("trigger_keywords", [])
+            if any(keyword in message_lower for keyword in trigger_keywords):
+                return True
+            
+            # Check for specific patterns
+            if "show time" in content and any(word in message_lower for word in ["hello", "hi", "start", "begin"]):
+                return True
+            if "display" in content and "greeting" in content:
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking auto instruction: {e}")
+            return False
+    
+    def _apply_auto_instruction(self, instruction: Dict, user_message: str) -> str:
+        """Apply an auto-instruction to generate a response."""
+        try:
+            content = instruction.get("content", "")
+            
+            # Handle time display instruction
+            if "time" in content.lower():
+                from datetime import datetime
+                current_time = datetime.now().strftime("%I:%M %p on %B %d, %Y")
+                return f"Hello! As you requested, here's the current time: {current_time}. How can I help you today?"
+            
+            # Handle greeting instruction
+            if "greeting" in content.lower():
+                return f"Hello! {content.replace('greeting', '').strip()}. How can I assist you today?"
+            
+            # Default auto-instruction response
+            return f"Hello! {content}. How can I help you today?"
+            
+        except Exception as e:
+            logger.error(f"Error applying auto instruction: {e}")
+            return "Hello! How can I help you today?"
+    
+    def _add_memory_personalization(self, response: str, memory_context: Dict) -> str:
+        """Add personalization based on memory context."""
+        try:
+            user_profile = memory_context.get("user_profile", {})
+            recent_conversations = memory_context.get("recent_conversations", [])
+            
+            # Add user name if available
+            if user_profile.get("name"):
+                name = user_profile["name"]
+                if not response.startswith(f"Hi {name}") and not response.startswith(f"Hello {name}"):
+                    response = f"Hi {name}! {response}"
+            
+            # Add reference to recent conversations
+            if recent_conversations:
+                recent_topics = [conv.get("content", "")[:50] for conv in recent_conversations[:2]]
+                if recent_topics:
+                    response += f" I see we were discussing {', '.join(recent_topics)} recently."
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error adding memory personalization: {e}")
+            return response
+    
+    def _add_memory_context(self, response: str, memory_context: Dict) -> str:
+        """Add memory-based context to the response."""
+        try:
+            relevant_memories = memory_context.get("relevant_memories", [])
+            user_instructions = memory_context.get("user_instructions", [])
+            
+            # Add relevant memory references
+            if relevant_memories:
+                memory_refs = []
+                for memory in relevant_memories[:2]:  # Limit to 2 most relevant
+                    content = memory.get("content", "")
+                    if len(content) < 100:  # Only short memories
+                        memory_refs.append(content)
+                
+                if memory_refs:
+                    response += f" I remember {', '.join(memory_refs)}."
+            
+            # Add user instruction context
+            if user_instructions:
+                for instruction in user_instructions[:1]:  # Only one instruction
+                    if instruction.get("confidence", 0) > 0.8:
+                        content = instruction.get("content", "")
+                        if "prefer" in content.lower() or "like" in content.lower():
+                            response += f" I know you {content.lower()}."
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error adding memory context: {e}")
+            return response
+    
+    def _generate_response_metadata(self,
+                                  response: str,
+                                  suggestions: Dict,
+                                  style: Dict,
+                                  memory_context: Dict = None) -> Dict:
+        """Generate metadata about the response."""
+        metadata = {
+            "timestamp": datetime.now().isoformat(),
+            "response_length": len(response),
+            "style_used": style,
+            "suggestions_applied": bool(suggestions),
+            "formality_level": style.get("formality", 0.5),
+            "creativity_level": style.get("creativity", 0.5),
+            "empathy_level": style.get("empathy", 0.5)
+        }
+        
+        # Add memory metadata
+        if memory_context:
+            metadata["memory_available"] = memory_context.get("memory_available", False)
+            metadata["memory_context_type"] = memory_context.get("context_type", "none")
+            metadata["relevant_memories_count"] = len(memory_context.get("relevant_memories", []))
+            metadata["auto_instructions_applied"] = len(memory_context.get("auto_instructions", []))
+        
+        return metadata 

@@ -142,6 +142,98 @@ from enum import Enum
 # Load environment variables
 load_dotenv()
 
+
+# --- Memory server auto-start & adapter wiring ---
+import os
+import sys
+import time
+import subprocess
+
+from typing import Optional
+
+_MEM_SERVER_HOST = os.getenv("MEMORY_SERVER_HOST", "127.0.0.1")
+_MEM_SERVER_PORT = int(os.getenv("MEMORY_SERVER_PORT", "8000"))
+_AUTOSTART = os.getenv("AUTOSTART_MEMORY_SERVER", "True").lower() in ("1", "true", "yes")
+
+
+def _is_server_running(host: str, port: int, timeout: float = 0.5) -> bool:
+    """Quick health check using the /memory/stats endpoint."""
+    try:
+        import requests
+    except Exception:
+        # fallback to urllib
+        try:
+            from urllib.request import urlopen
+            url = f"http://{host}:{port}/memory/stats"
+            with urlopen(url, timeout=timeout) as resp:
+                return resp.status == 200
+        except Exception:
+            return False
+    try:
+        url = f"http://{host}:{port}/memory/stats"
+        r = requests.get(url, timeout=timeout)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+def _start_memory_server(host: str = _MEM_SERVER_HOST, port: int = _MEM_SERVER_PORT) -> Optional[subprocess.Popen]:
+    """Start the FastAPI memory server in a background process using the
+    same Python interpreter. Returns the Popen or None on failure.
+    """
+    # Use sys.executable so the same Python/venv is used.
+    cmd = [sys.executable, "-m", "uvicorn", "astra_ai.core.memory_server:app", "--host", host, "--port", str(port)]
+    try:
+        # On Windows, avoid creating new console; just spawn detached process
+        creationflags = 0
+        if os.name == "nt":
+            # CREATE_NEW_PROCESS_GROUP is safer cross-shell
+            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
+        p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creationflags)
+        # give it a moment to start
+        time.sleep(0.3)
+        return p
+    except Exception:
+        return None
+
+
+# Ensure memory server is reachable or start it (best-effort)
+try:
+    from astra_ai.core.memory_adapter import MemoryAdapter
+    # If server is reachable, prefer server mode; otherwise autostart if configured
+    server_up = _is_server_running(_MEM_SERVER_HOST, _MEM_SERVER_PORT)
+    if not server_up and _AUTOSTART:
+        _proc = _start_memory_server(_MEM_SERVER_HOST, _MEM_SERVER_PORT)
+        # give more time for uvicorn to bind
+        if _proc is not None:
+            for _ in range(10):
+                if _is_server_running(_MEM_SERVER_HOST, _MEM_SERVER_PORT):
+                    server_up = True
+                    break
+                time.sleep(0.2)
+    # If server is available, instruct adapter to use it via env var
+    if server_up:
+        os.environ["USE_MEMORY_SERVER"] = "True"
+        memory = MemoryAdapter(server_url=f"http://{_MEM_SERVER_HOST}:{_MEM_SERVER_PORT}")
+    else:
+        # fallback to in-process adapter (MemoryAdapter will instantiate in-process)
+        os.environ["USE_MEMORY_SERVER"] = "False"
+        memory = MemoryAdapter()
+except Exception:
+    # If anything fails, provide a minimal no-op memory shim
+    class _NoopMemory:
+        def store(self, *a, **k):
+            return {"memory_id": None}
+
+        def retrieve(self, *a, **k):
+            return []
+
+        def get_relevant(self, *a, **k):
+            return {"context": ""}
+
+    memory = _NoopMemory()
+
+
 # Get API keys
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
@@ -238,7 +330,7 @@ except ImportError:
 
 # Import comprehensive memory integration system
 try:
-    from nova_memory_integration import NovaMemoryIntegration, get_memory_integration
+    from .nova_memory_integration import NovaMemoryIntegration, get_memory_integration
     COMPREHENSIVE_MEMORY_AVAILABLE = True
 except ImportError:
     try:
@@ -256,7 +348,7 @@ except ImportError:
 
 # Import unified memory integration system
 try:
-    from unified_memory_integration import UnifiedMemoryIntegration
+    from ..memory.unified_memory_integration import UnifiedMemoryIntegration
     UNIFIED_MEMORY_AVAILABLE = True
 except ImportError:
     try:
@@ -2951,10 +3043,14 @@ class AleChatBot:
             if UNIFIED_MEMORY_AVAILABLE:
                 self.memory_integration = UnifiedMemoryIntegration("nova_ai_memory.json", enable_logging=True)
 
-                if self.memory_integration and self.memory_integration.is_enabled:
+                if self.memory_integration and hasattr(self.memory_integration, 'is_enabled') and self.memory_integration.is_enabled:
                     self.memory_enabled = True
                     # Silently log to file only
                     file_logger.info("Unified memory system initialized successfully")
+                elif self.memory_integration:
+                    # If memory integration exists but no is_enabled attribute, assume it's working
+                    self.memory_enabled = True
+                    file_logger.info("Unified memory system initialized successfully (no is_enabled check)")
                 else:
                     # Silently log to file only
                     file_logger.warning("Unified memory system initialization failed")
@@ -2963,10 +3059,14 @@ class AleChatBot:
                 # Fallback to comprehensive memory system
                 self.memory_integration = get_memory_integration("nova_ai_memory.json")
 
-                if self.memory_integration and self.memory_integration.is_enabled:
+                if self.memory_integration and hasattr(self.memory_integration, 'is_enabled') and self.memory_integration.is_enabled:
                     self.memory_enabled = True
                     # Silently log to file only
                     file_logger.info("Comprehensive memory system initialized successfully")
+                elif self.memory_integration:
+                    # If memory integration exists but no is_enabled attribute, assume it's working
+                    self.memory_enabled = True
+                    file_logger.info("Comprehensive memory system initialized successfully (no is_enabled check)")
                 else:
                     # Silently log to file only
                     file_logger.warning("Comprehensive memory system initialization failed")
@@ -3572,11 +3672,16 @@ class AleChatBot:
         if self.memory_enabled:
             try:
                 # Use comprehensive memory system if available
-                if self.memory_integration and self.memory_integration.is_enabled:
-                    memory_system = self.memory_integration.memory_system
-
-                    # Get current search history
-                    search_data = memory_system.data["memory_categories"].get("search_external_info", {})
+                if self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
+                    if hasattr(self.memory_integration, 'memory_system'):
+                        memory_system = self.memory_integration.memory_system
+                        # Get current search history
+                        if hasattr(memory_system, 'data') and "memory_categories" in memory_system.data:
+                            search_data = memory_system.data["memory_categories"].get("search_external_info", {})
+                        else:
+                            search_data = {}
+                    else:
+                        search_data = {}
 
                     # Initialize search history if needed
                     if "search_history" not in search_data:
@@ -3680,23 +3785,49 @@ class AleChatBot:
         memory_info = ""
         if memory_context and memory_context.get("memory_available", False):
             user_profile = memory_context.get("user_profile", {})
-            preferences = memory_context.get("preferences", {})
-            recent_topics = memory_context.get("recent_topics", [])
+            recent_conversations = memory_context.get("recent_conversations", [])
+            user_instructions = memory_context.get("user_instructions", [])
+            auto_instructions = memory_context.get("auto_instructions", [])
+            relevant_memories = memory_context.get("relevant_memories", [])
 
             memory_parts = []
+            
+            # User profile information
+            if user_profile.get("name"):
+                memory_parts.append(f"The user's name is {user_profile['name']}.")
+            
             if user_profile.get("total_memory_items", 0) > 0:
                 memory_parts.append(f"I remember {user_profile['total_memory_items']} things about this user.")
-
-            if preferences:
-                pref_list = [f"{k}: {v}" for k, v in list(preferences.items())[:3]]
-                if pref_list:
-                    memory_parts.append(f"User preferences: {', '.join(pref_list)}")
-
-            if recent_topics:
-                memory_parts.append(f"Recent topics: {', '.join(recent_topics[:3])}")
+            
+            # Recent conversations
+            if recent_conversations:
+                recent_topics = [conv.get("content", "")[:50] for conv in recent_conversations[:3]]
+                memory_parts.append(f"Recent conversation topics: {', '.join(recent_topics)}.")
+            
+            # User instructions
+            if user_instructions:
+                instruction_texts = [inst.get("content", "") for inst in user_instructions[:2]]
+                memory_parts.append(f"User instructions: {', '.join(instruction_texts)}.")
+            
+            # Auto-instructions (should be followed automatically)
+            if auto_instructions:
+                auto_texts = [inst.get("content", "") for inst in auto_instructions]
+                memory_parts.append(f"Auto-execute instructions: {', '.join(auto_texts)}.")
+            
+            # Relevant memories for this query
+            if relevant_memories:
+                memory_texts = [mem.get("content", "")[:100] for mem in relevant_memories[:2]]
+                memory_parts.append(f"Relevant memories: {', '.join(memory_texts)}.")
 
             if memory_parts:
                 memory_info = f"\n\nMEMORY CONTEXT:\n{chr(10).join(f'• {part}' for part in memory_parts)}\nUse this context to personalize responses appropriately."
+        else:
+            # Use fallback context if available
+            fallback_context = memory_context.get("fallback_context", {}) if memory_context else {}
+            if fallback_context.get("message"):
+                memory_info = f"\n\nMEMORY CONTEXT:\n{fallback_context['message']}\n"
+            else:
+                memory_info = "\n\nMEMORY CONTEXT:\nNo previous conversation history available. This is a fresh conversation.\n"
 
         # Create dynamic system prompt
         system_prompt = f"""You are Nova, an advanced AI assistant with a {style} personality. Keep responses SHORT and engaging.{memory_info}
@@ -3984,13 +4115,20 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
             ai_response: The AI's response
         """
         try:
-            if self.memory_integration and self.memory_integration.is_enabled:
+            if self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
                 # Use comprehensive memory system
-                await self.memory_integration.process_conversation(
-                    user_message,
-                    ai_response,
-                    {"session_id": getattr(self, 'session_id', 'default')}
-                )
+                if hasattr(self.memory_integration, 'process_conversation'):
+                    await self.memory_integration.process_conversation(
+                        user_message,
+                        ai_response,
+                        {"session_id": getattr(self, 'session_id', 'default')}
+                    )
+                elif hasattr(self.memory_integration, 'memory_system') and hasattr(self.memory_integration.memory_system, 'process_conversation'):
+                    # Use synchronous method if available
+                    self.memory_integration.memory_system.process_conversation(
+                        user_message,
+                        ai_response
+                    )
             elif self.memory and hasattr(self, 'memory'):
                 # Fallback to basic memory system
                 await asyncio.to_thread(
@@ -4004,16 +4142,36 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
     async def _get_memory_context_for_response(self, user_message: str) -> Dict[str, Any]:
         """Get memory context to enhance AI responses"""
         try:
-            if self.memory_integration and self.memory_integration.is_enabled:
-                # Use comprehensive memory system
-                context = await self.memory_integration.get_memory_context(user_message, "comprehensive")
-                return context
+            if self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
+                # Use comprehensive memory system with load_memory function
+                if hasattr(self.memory_integration, 'load_memory'):
+                    context = self.memory_integration.load_memory(user_message, "comprehensive")
+                    return context
+                elif hasattr(self.memory_integration, 'get_memory_context'):
+                    context = await self.memory_integration.get_memory_context(user_message, "comprehensive")
+                    return context
+                elif hasattr(self.memory_integration, 'memory_system') and hasattr(self.memory_integration.memory_system, 'get_memory_context'):
+                    context = self.memory_integration.memory_system.get_memory_context(user_message)
+                    return context
+                else:
+                    return {"memory_available": False, "fallback_context": self._get_fallback_memory_context()}
             else:
-                # Return empty context if no memory system
-                return {}
+                # Return fallback context if no memory system
+                return {"memory_available": False, "fallback_context": self._get_fallback_memory_context()}
         except Exception as e:
             logger.debug(f"Memory context retrieval error: {e}")
-            return {}
+            return {"memory_available": False, "fallback_context": self._get_fallback_memory_context()}
+    
+    def _get_fallback_memory_context(self) -> Dict[str, Any]:
+        """Get fallback context when memory system is not available"""
+        return {
+            "message": "I don't have access to our previous conversations right now, but I'm here to help!",
+            "suggestions": [
+                "You can ask me anything you'd like to know",
+                "I can help with general questions and tasks",
+                "Feel free to tell me about yourself so I can remember for next time"
+            ]
+        }
 
     def _get_smart_greeting(self, session_id: str = "default") -> Optional[str]:
         """Get smart greeting if appropriate"""
@@ -4032,10 +4190,16 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                 return ""
 
             # Try comprehensive memory system first
-            if self.memory_integration and self.memory_integration.is_enabled:
+            if self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
                 try:
                     # Get recent conversation history
-                    history = self.memory_integration.get_conversation_history()
+                    if hasattr(self.memory_integration, 'get_conversation_history'):
+                        history = self.memory_integration.get_conversation_history()
+                    elif hasattr(self.memory_integration, 'memory_system') and hasattr(self.memory_integration.memory_system, 'get_conversation_history'):
+                        history = self.memory_integration.memory_system.get_conversation_history()
+                    else:
+                        history = []
+                    
                     if not history:
                         return ""
 
@@ -4134,11 +4298,16 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
     async def _get_comprehensive_user_profile_for_ai(self) -> str:
         """Get comprehensive user profile to send to AI at conversation start"""
         try:
-            if not self.memory_integration or not self.memory_integration.is_enabled:
+            if not self.memory_integration or (hasattr(self.memory_integration, 'is_enabled') and not self.memory_integration.is_enabled):
                 return ""
 
             # Get comprehensive user profile
-            profile = await asyncio.to_thread(self.memory_integration.memory_system.get_comprehensive_user_profile)
+            if hasattr(self.memory_integration, 'memory_system') and hasattr(self.memory_integration.memory_system, 'get_comprehensive_user_profile'):
+                profile = await asyncio.to_thread(self.memory_integration.memory_system.get_comprehensive_user_profile)
+            elif hasattr(self.memory_integration, 'get_user_profile'):
+                profile = await asyncio.to_thread(self.memory_integration.get_user_profile)
+            else:
+                profile = {}
 
             if not profile or profile.get("total_items", 0) == 0:
                 return ""
@@ -4298,7 +4467,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
 
     async def _process_memory_query(self, user_message: str) -> Optional[str]:
         """Process memory-related queries and return memory information"""
-        if not self.memory_integration or not self.memory_integration.is_enabled:
+        if not self.memory_integration or (hasattr(self.memory_integration, 'is_enabled') and not self.memory_integration.is_enabled):
             return None
 
         user_message_lower = user_message.lower()
@@ -4385,8 +4554,11 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                 # Query the comprehensive memory system
                 if hasattr(self.memory_integration, 'query_memories'):
                     memory_result = await self.memory_integration.query_memories(user_message, "general")
-
                     if memory_result.get("success", False):
+                        return self._format_memory_response(memory_result, user_message)
+                elif hasattr(self.memory_integration, 'memory_system') and hasattr(self.memory_integration.memory_system, 'query_memory'):
+                    memory_result = self.memory_integration.memory_system.query_memory(user_message)
+                    if memory_result:
                         return self._format_memory_response(memory_result, user_message)
                     else:
                         return "I'm having trouble accessing my memory right now. Could you try asking again?"
@@ -4607,7 +4779,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
 
         try:
             # Use comprehensive memory system if available
-            if self.memory_integration and self.memory_integration.is_enabled:
+            if self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
                 # For comprehensive memory system, we would need to implement a clear method
                 return "Memory clearing not implemented for comprehensive memory system"
 
@@ -4635,7 +4807,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
 
         try:
             # Use comprehensive memory system if available
-            if self.memory_integration and self.memory_integration.is_enabled:
+            if self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
                 # This will be handled by the async method, so we just log here
                 logger.debug("Conversation will be stored via comprehensive memory system")
                 return
@@ -4660,7 +4832,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
 
         try:
             # Use comprehensive memory system if available
-            if self.memory_integration and self.memory_integration.is_enabled:
+            if self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
                 # This should be handled by the memory query processing
                 return "Use memory query commands like 'what do you remember about me?'"
 
@@ -4732,7 +4904,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
     async def _get_search_history(self, query: str) -> str:
         """Get search history based on user query"""
         try:
-            if not self.memory_integration or not self.memory_integration.is_enabled:
+            if not self.memory_integration or (hasattr(self.memory_integration, 'is_enabled') and not self.memory_integration.is_enabled):
                 return "Search history not available - memory system disabled."
 
             memory_system = self.memory_integration.memory_system
@@ -4830,7 +5002,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
     async def _get_news_history(self, query: str) -> str:
         """Get news history based on user query"""
         try:
-            if not self.memory_integration or not self.memory_integration.is_enabled:
+            if not self.memory_integration or (hasattr(self.memory_integration, 'is_enabled') and not self.memory_integration.is_enabled):
                 return "News history not available - memory system disabled."
 
             memory_system = self.memory_integration.memory_system
@@ -4910,7 +5082,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
     async def _get_weather_history(self, query: str) -> str:
         """Get weather history based on user query"""
         try:
-            if not self.memory_integration or not self.memory_integration.is_enabled:
+            if not self.memory_integration or (hasattr(self.memory_integration, 'is_enabled') and not self.memory_integration.is_enabled):
                 return "Weather history not available - memory system disabled."
 
             memory_system = self.memory_integration.memory_system
@@ -5518,7 +5690,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
     async def _get_stored_knowledge(self, topic: str) -> Optional[Dict[str, Any]]:
         """Check if we have recent knowledge about this topic in memory"""
         try:
-            if not self.memory_integration or not self.memory_integration.is_enabled:
+            if not self.memory_integration or (hasattr(self.memory_integration, 'is_enabled') and not self.memory_integration.is_enabled):
                 return None
 
             memory_system = self.memory_integration.memory_system
@@ -5574,7 +5746,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
     async def _store_knowledge_search(self, topic: str, search_results: str):
         """Store knowledge search results in memory"""
         try:
-            if not self.memory_integration or not self.memory_integration.is_enabled:
+            if not self.memory_integration or (hasattr(self.memory_integration, 'is_enabled') and not self.memory_integration.is_enabled):
                 return
 
             memory_system = self.memory_integration.memory_system
@@ -5671,12 +5843,17 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
 
     async def _store_timezone_memory_async(self, location: str, time_result: str):
         """Store timezone query results in comprehensive memory system."""
-        if self.memory_enabled and self.memory_integration and self.memory_integration.is_enabled:
+        if self.memory_enabled and self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
             try:
-                memory_system = self.memory_integration.memory_system
-
-                # Get current timezone preferences
-                timezone_data = memory_system.memory_system.data["memory_categories"].get("timezone_preferences", {})
+                if hasattr(self.memory_integration, 'memory_system'):
+                    memory_system = self.memory_integration.memory_system
+                    # Get current timezone preferences
+                    if hasattr(memory_system, 'data') and "memory_categories" in memory_system.data:
+                        timezone_data = memory_system.data["memory_categories"].get("timezone_preferences", {})
+                    else:
+                        timezone_data = {}
+                else:
+                    timezone_data = {}
 
                 # Initialize timezone history if needed
                 if "timezone_queries" not in timezone_data:
@@ -5714,8 +5891,19 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                 timezone_data["preferred_locations"][location_lower]["last_query"] = timezone_record["timestamp"]
 
                 # Store updated data
-                memory_system.memory_system.data["memory_categories"]["timezone_preferences"] = timezone_data
-                memory_system.memory_system.save_memory()
+                if hasattr(memory_system, 'data') and "memory_categories" in memory_system.data:
+                    memory_system.data["memory_categories"]["timezone_preferences"] = timezone_data
+                    if hasattr(memory_system, 'save_memory'):
+                        memory_system.save_memory()
+                elif hasattr(memory_system, 'store_memory_item'):
+                    # Use store_memory_item as fallback
+                    memory_system.store_memory_item(
+                        "timezone_preferences",
+                        "timezone",
+                        f"timezone_{location}_{int(time.time())}",
+                        time_result,
+                        {"location": location, "timestamp": datetime.now().isoformat()}
+                    )
 
                 logger.debug(f"Stored timezone query in memory: {location}")
 
@@ -5724,7 +5912,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
 
     async def _store_news_memory_async(self, news_content: str, topic: str = "general", source: str = "various"):
         """Store news results in comprehensive memory system."""
-        if self.memory_enabled and self.memory_integration and self.memory_integration.is_enabled:
+        if self.memory_enabled and self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
             try:
                 # Use the unified memory integration's store_memory method
                 memory_content = f"News about {topic}"
@@ -5734,11 +5922,25 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                 memory_content += f": {news_content[:200]}..."  # Store first 200 chars as summary
 
                 # Store in news category
-                self.memory_integration.store_memory(
-                    content=memory_content,
-                    category="news_weather_history",
-                    confidence=0.8
-                )
+                if hasattr(self.memory_integration, 'store_memory'):
+                    self.memory_integration.store_memory(
+                        content=memory_content,
+                        category="news_weather_history",
+                        confidence=0.8
+                    )
+                elif hasattr(self.memory_integration, 'memory_system') and hasattr(self.memory_integration.memory_system, 'store_memory_item'):
+                    self.memory_integration.memory_system.store_memory_item(
+                        "news_weather_history",
+                        "news",
+                        f"news_{topic}_{source}",
+                        memory_content,
+                        {"topic": topic, "source": source, "timestamp": datetime.now().isoformat()}
+                    )
+                elif hasattr(self.memory_integration, 'memory_system') and hasattr(self.memory_integration.memory_system, 'process_conversation'):
+                    self.memory_integration.memory_system.process_conversation(
+                        f"News about {topic}: {memory_content}",
+                        f"Stored news about {topic} from {source}"
+                    )
 
                 logger.debug(f"Stored news results in memory: {topic}")
 
@@ -5747,12 +5949,17 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
 
     async def _store_weather_memory_async(self, weather_content: str, location: str):
         """Store weather results in comprehensive memory system."""
-        if self.memory_enabled and self.memory_integration and self.memory_integration.is_enabled:
+        if self.memory_enabled and self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
             try:
-                memory_system = self.memory_integration.memory_system
-
-                # Get current weather history
-                news_data = memory_system.memory_system.data["memory_categories"].get("news_weather_history", {})
+                if hasattr(self.memory_integration, 'memory_system'):
+                    memory_system = self.memory_integration.memory_system
+                    # Get current weather history
+                    if hasattr(memory_system, 'data') and "memory_categories" in memory_system.data:
+                        news_data = memory_system.data["memory_categories"].get("news_weather_history", {})
+                    else:
+                        news_data = {}
+                else:
+                    news_data = {}
 
                 # Initialize weather history if needed
                 if "weather_history" not in news_data:
@@ -5790,8 +5997,19 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                 })
 
                 # Store updated data
-                memory_system.memory_system.data["memory_categories"]["news_weather_history"] = news_data
-                memory_system.memory_system.save_memory()
+                if hasattr(memory_system, 'data') and "memory_categories" in memory_system.data:
+                    memory_system.data["memory_categories"]["news_weather_history"] = news_data
+                    if hasattr(memory_system, 'save_memory'):
+                        memory_system.save_memory()
+                elif hasattr(memory_system, 'store_memory_item'):
+                    # Use store_memory_item as fallback
+                    memory_system.store_memory_item(
+                        "news_weather_history",
+                        "weather",
+                        f"weather_{location}_{int(time.time())}",
+                        weather_content,
+                        {"location": location, "timestamp": datetime.now().isoformat()}
+                    )
 
                 logger.debug(f"Stored weather results in memory: {location}")
 
@@ -5890,9 +6108,15 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
 
         try:
             # Use comprehensive memory system if available
-            if self.memory_integration and self.memory_integration.is_enabled:
-                status = self.memory_integration.get_integration_status()
-                return f"Comprehensive Memory: {status['status']} | 23-category framework active"
+            if self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
+                if hasattr(self.memory_integration, 'get_integration_status'):
+                    status = self.memory_integration.get_integration_status()
+                    return f"Comprehensive Memory: {status.get('status', 'active')} | 23-category framework active"
+                elif hasattr(self.memory_integration, 'memory_system') and hasattr(self.memory_integration.memory_system, 'get_memory_stats'):
+                    stats = self.memory_integration.memory_system.get_memory_stats()
+                    return f"Comprehensive Memory: Active | 23-category framework active | {stats.get('total_memories', 0)} memories"
+                else:
+                    return "Comprehensive Memory: Active | 23-category framework active"
 
             # Fallback to basic memory system if available
             if hasattr(self, 'memory') and self.memory:
@@ -6183,7 +6407,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                 print(f"💾 {status}")
 
             elif memory_cmd == "stats":
-                if self.memory_integration and self.memory_integration.is_enabled:
+                if self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
                     print("📊 Comprehensive Memory System Statistics:")
                     print("• 23-category memory framework active")
                     print("• Real-time conversation processing")
@@ -6197,7 +6421,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
             elif memory_cmd.startswith("search "):
                 query = memory_cmd[7:].strip()
                 if query:
-                    if self.memory_integration and self.memory_integration.is_enabled:
+                    if self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
                         print(f"🔍 Use natural language: 'what do you remember about {query}?'")
                     elif hasattr(self, 'memory') and self.memory:
                         memories = self.memory.retrieve_memories(query, limit=5)
@@ -6210,7 +6434,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
             elif memory_cmd.startswith("store "):
                 content = memory_cmd[6:].strip()
                 if content:
-                    if self.memory_integration and self.memory_integration.is_enabled:
+                    if self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
                         print("✅ Information will be automatically stored during conversation")
                     elif hasattr(self, 'memory') and self.memory:
                         memory_id = self.memory.store_memory(content, MemoryType.FACT)
@@ -6230,7 +6454,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
             else:
                 # Default: search memories
                 if memory_cmd:
-                    if self.memory_integration and self.memory_integration.is_enabled:
+                    if self.memory_integration and (not hasattr(self.memory_integration, 'is_enabled') or self.memory_integration.is_enabled):
                         print(f"🔍 Use natural language: 'what do you remember about {memory_cmd}?'")
                     elif hasattr(self, 'memory') and self.memory:
                         memories = self.memory.retrieve_memories(memory_cmd, limit=5)

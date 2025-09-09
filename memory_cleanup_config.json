@@ -1,0 +1,8 @@
+{
+  "policy": "balanced",
+  "auto_cleanup_enabled": true,
+  "cleanup_interval_hours": 24,
+  "max_memory_size_mb": 100,
+  "preserve_essential_data": true,
+  "cleanup_logging": true
+}

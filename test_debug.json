@@ -1,94 +1,160 @@
 {
   "version": "2.0",
-  "created_at": "2025-09-08T21:47:44.264440",
+  "created_at": "2025-09-07T22:57:07.739002",
   "memories": {
-    "e7ba09ad-eaf9-4ab7-8bdd-0aee60f4cde5": {
-      "id": "e7ba09ad-eaf9-4ab7-8bdd-0aee60f4cde5",
+    "6ec3118c-7fd7-4e64-be4b-876c91931bdd": {
+      "id": "6ec3118c-7fd7-4e64-be4b-876c91931bdd",
       "category": "conversation_patterns",
-      "subcategory": "general",
-      "content": "Greeted there with 'Hey there! Working late tonight?' during night at 21:47",
-      "confidence": 0.8,
-      "priority": 3,
-      "created_at": "2025-09-08T21:47:44.264428",
-      "last_accessed": "2025-09-08T21:47:44.264428",
+      "subcategory": "ai_response_style",
+      "content": "Response length: 4 words",
+      "confidence": 0.9,
+      "priority": 4,
+      "created_at": "2025-09-07T22:51:39.497206",
+      "last_accessed": "2025-09-07T22:51:39.497209",
       "access_count": 0,
       "relationships": [],
-      "tags": [],
+      "tags": [
+        "ai_learning",
+        "response_analysis"
+      ],
       "source": "conversation",
       "validation_status": "pending",
       "consolidation_score": 0.0,
-      "metadata": {}
+      "metadata": {
+        "response_length": 4,
+        "response_preview": "Nice to meet you!",
+        "context": null
+      }
+    },
+    "82d0e297-cd54-463f-967c-03205f62a35f": {
+      "id": "82d0e297-cd54-463f-967c-03205f62a35f",
+      "category": "conversation_patterns",
+      "subcategory": "interaction_timing",
+      "content": "Conversation at 22:51",
+      "confidence": 0.7,
+      "priority": 4,
+      "created_at": "2025-09-07T22:51:39.499533",
+      "last_accessed": "2025-09-07T22:51:39.499534",
+      "access_count": 0,
+      "relationships": [],
+      "tags": [
+        "timing",
+        "patterns"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "timestamp": "2025-09-07T22:51:39.499494",
+        "user_message_length": 39,
+        "ai_response_length": 17
+      }
+    },
+    "3e880153-dad2-401c-99ed-d5d149d45c86": {
+      "id": "3e880153-dad2-401c-99ed-d5d149d45c86",
+      "category": "conversation_patterns",
+      "subcategory": "ai_response_style",
+      "content": "Response length: 4 words",
+      "confidence": 0.9,
+      "priority": 4,
+      "created_at": "2025-09-07T22:55:25.696623",
+      "last_accessed": "2025-09-07T22:55:25.696627",
+      "access_count": 0,
+      "relationships": [],
+      "tags": [
+        "ai_learning",
+        "response_analysis"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "response_length": 4,
+        "response_preview": "Nice to meet you!",
+        "context": null
+      }
+    },
+    "73b4ac9e-16ed-464f-8b90-0b4225f020ff": {
+      "id": "73b4ac9e-16ed-464f-8b90-0b4225f020ff",
+      "category": "conversation_patterns",
+      "subcategory": "interaction_timing",
+      "content": "Conversation at 22:55",
+      "confidence": 0.7,
+      "priority": 4,
+      "created_at": "2025-09-07T22:55:25.700833",
+      "last_accessed": "2025-09-07T22:55:25.700837",
+      "access_count": 0,
+      "relationships": [],
+      "tags": [
+        "timing",
+        "patterns"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "timestamp": "2025-09-07T22:55:25.700697",
+        "user_message_length": 39,
+        "ai_response_length": 17
+      }
+    },
+    "5fd73359-16ad-4ce3-abe5-10d635916a87": {
+      "id": "5fd73359-16ad-4ce3-abe5-10d635916a87",
+      "category": "conversation_patterns",
+      "subcategory": "ai_response_style",
+      "content": "Response length: 4 words",
+      "confidence": 0.9,
+      "priority": 4,
+      "created_at": "2025-09-07T22:57:07.734585",
+      "last_accessed": "2025-09-07T22:57:07.734589",
+      "access_count": 0,
+      "relationships": [],
+      "tags": [
+        "ai_learning",
+        "response_analysis"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "response_length": 4,
+        "response_preview": "Nice to meet you!",
+        "context": null
+      }
+    },
+    "3fb6ec77-beea-4b43-b971-e2a5df6b96b5": {
+      "id": "3fb6ec77-beea-4b43-b971-e2a5df6b96b5",
+      "category": "conversation_patterns",
+      "subcategory": "interaction_timing",
+      "content": "Conversation at 22:57",
+      "confidence": 0.7,
+      "priority": 4,
+      "created_at": "2025-09-07T22:57:07.738940",
+      "last_accessed": "2025-09-07T22:57:07.738943",
+      "access_count": 0,
+      "relationships": [],
+      "tags": [
+        "timing",
+        "patterns"
+      ],
+      "source": "conversation",
+      "validation_status": "pending",
+      "consolidation_score": 0.0,
+      "metadata": {
+        "timestamp": "2025-09-07T22:57:07.738771",
+        "user_message_length": 39,
+        "ai_response_length": 17
+      }
     }
   },
-  "memory_gaps": [
-    {
-      "category": "user_identity",
-      "description": "No memories stored for user identity",
-      "importance": 1.0,
-      "suggested_questions": [
-        "What is your name?",
-        "What pronouns do you prefer?",
-        "How would you like me to address you?",
-        "Is there anything specific about your identity I should know?"
-      ],
-      "detected_at": "2025-09-08T21:47:39.675605"
-    },
-    {
-      "category": "personal_preferences",
-      "description": "No memories stored for personal preferences",
-      "importance": 0.9,
-      "suggested_questions": [
-        "How do you prefer me to communicate with you?",
-        "Do you prefer detailed or brief responses?",
-        "What level of formality do you prefer?",
-        "Are there any topics you'd rather avoid?"
-      ],
-      "detected_at": "2025-09-08T21:47:39.675615"
-    },
-    {
-      "category": "communication_style",
-      "description": "No memories stored for communication style",
-      "importance": 0.9,
-      "suggested_questions": [
-        "Do you prefer direct or diplomatic communication?",
-        "How do you like to receive feedback?",
-        "What's your preferred tone for our conversations?",
-        "Do you enjoy humor in our interactions?"
-      ],
-      "detected_at": "2025-09-08T21:47:39.675619"
-    },
-    {
-      "category": "professional_background",
-      "description": "No memories stored for professional background",
-      "importance": 0.8,
-      "suggested_questions": [
-        "What do you do for work?",
-        "What industry are you in?",
-        "What's your role or position?",
-        "How long have you been in your current field?"
-      ],
-      "detected_at": "2025-09-08T21:47:39.675621"
-    },
-    {
-      "category": "personal_interests",
-      "description": "No memories stored for personal interests",
-      "importance": 0.6,
-      "suggested_questions": [
-        "What are your hobbies or interests?",
-        "What do you enjoy doing in your free time?",
-        "Are there any topics you're passionate about?",
-        "What kind of entertainment do you prefer?"
-      ],
-      "detected_at": "2025-09-08T21:47:39.675624"
-    }
-  ],
+  "memory_gaps": [],
   "memory_insights": [],
   "stats": {
-    "total_memories": 1,
+    "total_memories": 6,
     "total_categories": 0,
     "average_confidence": 0.0,
     "last_consolidation": null,
-    "memory_gaps_detected": 5,
+    "memory_gaps_detected": 0,
     "insights_generated": 0
   },
   "category_schemas": {

@@ -101,43 +101,33 @@ class AdaptiveLearning:
     failure_count: int = 0
 
 @dataclass
-class MemoryItem:
-    """Enhanced memory item with comprehensive metadata"""
-    category: str
-    subcategory: str
-    key: str
-    value: Any
-    confidence: float
-    timestamp: str
-    last_accessed: str
-    access_count: int = 0
-    source: str = "conversation"
-    relationships: List[str] = field(default_factory=list)
-    tags: List[str] = field(default_factory=list)
-    expiry_date: Optional[str] = None
-    privacy_level: str = "normal"  # normal, sensitive, private
-    validation_status: str = "unverified"  # unverified, confirmed, disputed
-    emotional_context: Optional[str] = None
-    session_id: Optional[str] = None
-
-@dataclass
 class CategorySchema:
-    """Schema definition for each memory category"""
+    """Schema for each memory category, supporting structured data."""    
     name: str
     description: str
-    subcategories: List[str]
-    detection_patterns: List[str]
-    relationships: List[str]
-    retention_policy: str  # permanent, session, temporary, user_controlled
-    privacy_default: str   # normal, sensitive, private
-    auto_expire: Optional[int] = None  # days until auto-expiry
+    fields: List[str] = field(default_factory=list)
+    allow_nested: bool = True
+    privacy_level: str = "normal"  # normal, sensitive, private
+    retention_policy: str = "permanent"  # permanent, session, temporary, user-controlled
+    relationships: List[str] = field(default_factory=list)
+    subcategories: List[str] = field(default_factory=list)
+
+@dataclass
+class MemoryItem:
+    """A single memory item supporting structured/nested data."""
+    category: str
+    value: Any  # Can be dict, list, str, etc.
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    privacy_level: str = "normal"
+    retention_policy: str = "permanent"
+    confidence: float = 1.0
+    subcategory: Optional[str] = None
 
 class ComprehensiveCategoryDetector:
     """
-    Advanced 22-category detection engine that automatically identifies and categorizes
-    information across all aspects of user interaction and behavior.
+    Advanced 27-category detection engine.
     """
-
     def __init__(self):
         self.category_schemas = self._initialize_category_schemas()
         self.detection_patterns = self._initialize_detection_patterns()
@@ -146,353 +136,18 @@ class ComprehensiveCategoryDetector:
         self.confidence_thresholds = self._initialize_confidence_thresholds()
 
     def _initialize_category_schemas(self) -> Dict[str, CategorySchema]:
-        """Initialize comprehensive schemas for all 22 categories"""
-        return {
-            MemoryCategory.USER_IDENTITY.value: CategorySchema(
-                name="User Identity & Profile",
-                description="Names, pronouns, identity evolution, personal identifiers",
-                subcategories=["name", "pronouns", "nicknames", "identity_changes", "personal_identifiers"],
-                detection_patterns=[
-                    r"my name is (.+)", r"call me (.+)", r"i'm (.+)", r"i go by (.+)",
-                    r"my pronouns are (.+)", r"use (.+) pronouns", r"i identify as (.+)"
-                ],
-                relationships=["personal_preferences", "communication_boundaries"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.PERSONAL_PREFERENCES.value: CategorySchema(
-                name="Personal Preferences & Communication Style",
-                description="Response length, formality, explanation rules, interaction preferences",
-                subcategories=["response_style", "formality", "explanation_rules", "communication_tone", "interaction_preferences"],
-                detection_patterns=[
-                    r"keep it (.+)", r"i prefer (.+)", r"don't (.+)", r"always (.+)", r"never (.+)",
-                    r"i like when (.+)", r"i hate when (.+)", r"make sure to (.+)"
-                ],
-                relationships=["communication_boundaries", "response_adaptation"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.TASK_PROJECT_TRACKING.value: CategorySchema(
-                name="Task & Project Tracking",
-                description="Active projects, tech stacks, deadlines, work context",
-                subcategories=["active_projects", "tech_stack", "deadlines", "work_context", "project_status"],
-                detection_patterns=[
-                    r"working on (.+)", r"my project (.+)", r"using (.+) for", r"deadline (.+)",
-                    r"building (.+)", r"developing (.+)", r"tech stack (.+)"
-                ],
-                relationships=["knowledge_expertise", "tool_integration", "long_term_goals"],
-                retention_policy="user_controlled",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.ACTIVITY_BEHAVIOR.value: CategorySchema(
-                name="Activity & Behavior Patterns",
-                description="Active times, conversation topics, engagement style, usage patterns",
-                subcategories=["active_times", "conversation_topics", "engagement_style", "usage_patterns", "interaction_frequency", "time_pattern", "learning_style", "conditional_behavior"],
-                detection_patterns=[
-                    r"usually (.+) at (.+)", r"i'm most active (.+)", r"i typically (.+)",
-                    r"my schedule (.+)", r"i work (.+) hours", r"most productive (.+)",
-                    r"prefer (.+) learning", r"work best (.+)", r"better in the (.+)",
-                    r"i like (.+) learning", r"hands-on (.+)", r"visual (.+)"
-                ],
-                relationships=["temporal_patterns", "personal_preferences"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.USER_INSTRUCTIONS.value: CategorySchema(
-                name="User Instruction Memory",
-                description="Permanent commands, rules, triggers, behavioral instructions",
-                subcategories=["permanent_commands", "behavioral_rules", "triggers", "automation_rules", "custom_instructions", "reminders"],
-                detection_patterns=[
-                    r"always remember to (.+)", r"never (.+)", r"when i say (.+) do (.+)",
-                    r"if (.+) then (.+)", r"remember that (.+)", r"make sure (.+)",
-                    r"always ask (.+)", r"always (.+) when (.+)", r"remind me to (.+)",
-                    r"don't forget to (.+)", r"every time (.+)"
-                ],
-                relationships=["personal_preferences", "response_adaptation"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.CURRENT_STATE.value: CategorySchema(
-                name="Current State/Context Memory",
-                description="Active topics, mood, recent questions, current focus",
-                subcategories=["active_topics", "current_mood", "recent_questions", "current_focus", "session_context"],
-                detection_patterns=[
-                    r"currently (.+)", r"right now (.+)", r"at the moment (.+)",
-                    r"i'm feeling (.+)", r"my mood is (.+)", r"focusing on (.+)"
-                ],
-                relationships=["session_themes", "personal_development"],
-                retention_policy="session",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.PERSONAL_DEVELOPMENT.value: CategorySchema(
-                name="Personal Development Memory",
-                description="Skills learning, progress logs, emotional notes, growth tracking",
-                subcategories=["skills_learning", "progress_logs", "emotional_notes", "growth_tracking", "learning_goals"],
-                detection_patterns=[
-                    r"learning (.+)", r"studying (.+)", r"improving (.+)", r"getting better at (.+)",
-                    r"my progress (.+)", r"struggling with (.+)", r"mastered (.+)"
-                ],
-                relationships=["knowledge_expertise", "long_term_goals"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.COMMUNICATION_BOUNDARIES.value: CategorySchema(
-                name="Communication Boundaries & Emotional Safety",
-                description="Sensitive topics, triggers, support level, emotional boundaries",
-                subcategories=["sensitive_topics", "triggers", "support_level", "emotional_boundaries", "safety_preferences", "private_topics", "acceptable_topics"],
-                detection_patterns=[
-                    r"don't talk about (.+)", r"sensitive about (.+)", r"triggers me (.+)",
-                    r"uncomfortable with (.+)", r"avoid (.+)", r"careful about (.+)",
-                    r"don't ask about (.+)", r"that's private", r"(.+) is private",
-                    r"you can ask about (.+)", r"(.+) is okay to discuss"
-                ],
-                relationships=["personal_preferences", "user_identity"],
-                retention_policy="permanent",
-                privacy_default="sensitive"
-            ),
-
-            MemoryCategory.CONTEXTUAL_RULES.value: CategorySchema(
-                name="Contextual Memory Rules",
-                description="Scope, expiry, recall priority, context-specific behaviors",
-                subcategories=["scope_rules", "expiry_rules", "recall_priority", "context_behaviors", "memory_management", "mode_rules", "context_switching"],
-                detection_patterns=[
-                    r"only remember (.+) for (.+)", r"forget (.+) after (.+)", r"priority (.+)",
-                    r"important to remember (.+)", r"temporary (.+)", r"permanent (.+)",
-                    r"when (.+) mode (.+)", r"in (.+) context (.+)", r"be (.+) when (.+)",
-                    r"when i'm in (.+)", r"in (.+) mode (.+)"
-                ],
-                relationships=["meta_memory", "data_privacy"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.MULTI_IDENTITY.value: CategorySchema(
-                name="Multi-Identity/Role Management",
-                description="Role profiles, switching triggers, context-based personas",
-                subcategories=["role_profiles", "switching_triggers", "personas", "context_roles", "identity_management"],
-                detection_patterns=[
-                    r"when i'm (.+) mode", r"as a (.+)", r"in my (.+) role", r"switch to (.+)",
-                    r"professional (.+)", r"personal (.+)", r"work (.+)", r"casual (.+)"
-                ],
-                relationships=["user_identity", "personal_preferences"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.KNOWLEDGE_EXPERTISE.value: CategorySchema(
-                name="Knowledge Snapshots & Expertise Mapping",
-                description="Skill levels, known concepts, expertise areas, knowledge gaps",
-                subcategories=["skill_levels", "known_concepts", "expertise_areas", "knowledge_gaps", "competency_tracking"],
-                detection_patterns=[
-                    r"i know (.+)", r"expert in (.+)", r"familiar with (.+)", r"don't know (.+)",
-                    r"beginner at (.+)", r"advanced in (.+)", r"experienced with (.+)"
-                ],
-                relationships=["personal_development", "task_project_tracking"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.TOOL_INTEGRATION.value: CategorySchema(
-                name="Tool Usage & AI Integration Behavior",
-                description="Permissions, preferred languages, tool preferences, integration settings",
-                subcategories=["permissions", "preferred_languages", "tool_preferences", "integration_settings", "usage_patterns", "preferred_tools", "integrations"],
-                detection_patterns=[
-                    r"use (.+) language", r"prefer (.+) tool", r"don't use (.+)", r"always use (.+)",
-                    r"permission to (.+)", r"allowed to (.+)", r"restricted from (.+)",
-                    r"i use (.+)", r"(.+) with (.+)", r"switched to (.+)",
-                    r"(.+) themes", r"(.+) plugins", r"(.+) copilot"
-                ],
-                relationships=["task_project_tracking", "personal_preferences"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            # Add remaining categories (continuing the comprehensive framework)
-            MemoryCategory.RESPONSE_ADAPTATION.value: CategorySchema(
-                name="Response Adaptation Logic",
-                description="Style corrections, tone adaptation, response optimization",
-                subcategories=["style_corrections", "tone_adaptation", "response_optimization", "feedback_integration", "adaptation_rules"],
-                detection_patterns=[
-                    r"too (.+)", r"more (.+)", r"less (.+)", r"better if (.+)",
-                    r"adjust (.+)", r"change (.+)", r"improve (.+)"
-                ],
-                relationships=["personal_preferences", "communication_boundaries"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.LONG_TERM_GOALS.value: CategorySchema(
-                name="Long-term Goals & Motivation Memory",
-                description="Life goals, career objectives, blockers, aspirations",
-                subcategories=["life_goals", "career_objectives", "blockers", "aspirations", "motivation_tracking"],
-                detection_patterns=[
-                    r"my goal is (.+)", r"want to achieve (.+)", r"working towards (.+)",
-                    r"dream of (.+)", r"aspire to (.+)", r"blocked by (.+)"
-                ],
-                relationships=["personal_development", "task_project_tracking"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.COLLABORATOR_RELATIONSHIPS.value: CategorySchema(
-                name="Collaborator & Relationship Memory",
-                description="Team members, communication styles, relationship dynamics",
-                subcategories=["team_members", "communication_styles", "relationship_dynamics", "collaboration_preferences", "social_context"],
-                detection_patterns=[
-                    r"my (.+) is (.+)", r"work with (.+)", r"team member (.+)",
-                    r"colleague (.+)", r"manager (.+)", r"reports to (.+)"
-                ],
-                relationships=["communication_boundaries", "personal_preferences"],
-                retention_policy="permanent",
-                privacy_default="sensitive"
-            ),
-
-            MemoryCategory.DATA_PRIVACY.value: CategorySchema(
-                name="Data Privacy & Memory Boundaries",
-                description="Retention policies, private sessions, data sensitivity",
-                subcategories=["retention_policies", "private_sessions", "data_sensitivity", "privacy_controls", "access_restrictions"],
-                detection_patterns=[
-                    r"private (.+)", r"confidential (.+)", r"don't store (.+)",
-                    r"delete (.+)", r"temporary (.+)", r"sensitive (.+)"
-                ],
-                relationships=["contextual_rules", "meta_memory"],
-                retention_policy="permanent",
-                privacy_default="private"
-            ),
-
-
-
-            MemoryCategory.META_MEMORY.value: CategorySchema(
-                name="Meta-Memory Tools for User Control",
-                description="Browser UI, change logs, cleanup, memory management",
-                subcategories=["browser_ui", "change_logs", "cleanup", "memory_management", "user_control", "memory_queries", "memory_management"],
-                detection_patterns=[
-                    r"show me (.+)", r"browse (.+)", r"delete (.+)", r"clean up (.+)",
-                    r"manage (.+)", r"control (.+)", r"history of (.+)",
-                    r"what do you remember (.+)", r"clear (.+)", r"forget (.+)"
-                ],
-                relationships=["data_privacy", "contextual_rules"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.FILE_MEDIA.value: CategorySchema(
-                name="File & Media Memory",
-                description="Uploads, context links, preferences, media handling",
-                subcategories=["uploaded_files", "media_context", "file_preferences", "document_history"],
-                detection_patterns=[
-                    r"uploaded (.+)", r"shared (.+) file", r"attached (.+)",
-                    r"diagram (.+)", r"document (.+)", r"image (.+)", r"video (.+)"
-                ],
-                relationships=["task_project_tracking", "knowledge_expertise"],
-                retention_policy="user_controlled",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.MULTIMODAL_PREFERENCES.value: CategorySchema(
-                name="Multimodal & Sensorial Preferences",
-                description="Image styles, audio modes, visual preferences, interaction modalities",
-                subcategories=["visual_preferences", "interaction_modes", "media_preferences", "accessibility"],
-                detection_patterns=[
-                    r"prefer (.+) diagrams", r"like (.+) explanations", r"visual (.+)",
-                    r"(.+) highlighting", r"(.+) examples", r"show (.+) format"
-                ],
-                relationships=["personal_preferences", "tool_integration"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.SYSTEM_AWARENESS.value: CategorySchema(
-                name="System Self-Awareness & Debugging Memory",
-                description="AI system feedback, performance notes, user awareness of AI capabilities and limitations",
-                subcategories=["system_feedback", "performance_notes", "error_tracking", "improvement_suggestions", "ai_capabilities", "ai_limitations"],
-                detection_patterns=[
-                    r"you (.+) repeat", r"system (.+)", r"responses (.+)", r"ai (.+)", r"you're an ai",
-                    r"getting better (.+)", r"improving (.+)", r"sometimes (.+)", r"you can't (.+)",
-                    r"i know you're (.+)", r"you don't (.+)", r"your limitations (.+)", r"you understand (.+)",
-                    r"as an ai (.+)", r"being an ai (.+)", r"ai system (.+)", r"artificial intelligence (.+)",
-                    r"you're not (.+)", r"you can (.+)", r"you're good at (.+)", r"you struggle with (.+)"
-                ],
-                relationships=["meta_memory", "response_adaptation"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.SESSION_THEMES.value: CategorySchema(
-                name="Session Themes & Contextual Threads",
-                description="Current session themes, topic transitions, conversation flow, and contextual continuity",
-                subcategories=["current_themes", "topic_transitions", "conversation_flow", "session_context", "session_goals", "discussion_topics"],
-                detection_patterns=[
-                    r"today (.+) focusing", r"switch to (.+)", r"now (.+) discuss", r"this session (.+)",
-                    r"theme (.+)", r"topic (.+)", r"let's talk about (.+)", r"want to focus on (.+)",
-                    r"today i want to (.+)", r"this conversation (.+)", r"our discussion (.+)",
-                    r"session (.+)", r"we're talking about (.+)", r"the main topic (.+)",
-                    r"continuing (.+)", r"following up (.+)", r"back to (.+)", r"moving on to (.+)"
-                ],
-                relationships=["current_state", "contextual_rules"],
-                retention_policy="session",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.TEMPORAL_PATTERNS.value: CategorySchema(
-                name="Temporal Patterns & Time-based Behaviors",
-                description="Time-based behaviors, patterns, scheduling preferences",
-                subcategories=["time_patterns", "behavioral_cycles", "scheduling_preferences", "temporal_habits"],
-                detection_patterns=[
-                    r"usually (.+) on (.+)", r"(.+) questions (.+) mornings",
-                    r"typically (.+) fridays", r"(.+) in the (.+)", r"(.+) time (.+)"
-                ],
-                relationships=["activity_behavior", "session_themes"],
-                retention_policy="permanent",
-                privacy_default="normal"
-            ),
-
-            MemoryCategory.SEARCH_EXTERNAL_INFO.value: CategorySchema(
-                name="Search & External Information Memory",
-                description="Internet search history, preferences, trusted sources, and external information retrieval patterns with intelligent behavioral adaptation",
-                subcategories=[
-                    "search_history", "news_topics", "preferred_sources", "disliked_sources",
-                    "search_preferences", "auto_search_settings", "news_preferences",
-                    "search_constraints", "search_scope_rules", "source_attribution_rules",
-                    "search_quality_feedback", "behavioral_adaptations", "session_search_logs"
-                ],
-                detection_patterns=[
-                    # Basic search requests
-                    r"search for (.+)", r"look up (.+)", r"find information about (.+)",
-                    r"what's the latest on (.+)", r"news about (.+)", r"google (.+)",
-                    r"find out (.+)", r"research (.+)", r"get news on (.+)",
-
-                    # Search depth preferences
-                    r"don't give me short (.+)", r"always go deep (.+)", r"(.+) comprehensive (.+)",
-                    r"i want detailed (.+)", r"give me thorough (.+)", r"shallow (.+) is fine",
-                    r"brief (.+) only", r"quick (.+) search", r"in-depth (.+)",
-
-                    # Source preferences and constraints
-                    r"i don't trust (.+)", r"only use (.+) sources", r"avoid (.+) sources",
-                    r"prefer (.+) websites", r"official sources only", r"don't show me (.+) links",
-                    r"(.+) unless i ask", r"only trust (.+) when (.+)", r"filter out (.+)",
-
-                    # News delivery preferences
-                    r"when giving news (.+)", r"i want (.+) summaries", r"(.+) bullet points (.+)",
-                    r"weekly (.+)", r"daily (.+)", r"monthly (.+)", r"(.+) digest (.+)",
-                    r"format (.+)", r"deliver (.+)", r"compile (.+)",
-
-                    # Quality and feedback patterns
-                    r"that source (.+)", r"good result (.+)", r"not helpful (.+)",
-                    r"better sources (.+)", r"more reliable (.+)", r"accurate (.+)"
-                ],
-                relationships=["task_project_tracking", "knowledge_expertise", "personal_preferences", "response_adaptation"],
-                retention_policy="permanent",
-                privacy_default="normal"
+        """Initialize schemas for all 27 categories."""
+        schemas = {}
+        for cat in MemoryCategory:
+            schemas[cat.value] = CategorySchema(
+                name=cat.value,
+                description=cat.name.replace("_", " ").title(),
+                fields=["value", "timestamp", "metadata"],
+                allow_nested=True,
+                privacy_level="normal",
+                retention_policy="permanent"
             )
-        }
+        return schemas
 
     def _initialize_detection_patterns(self) -> Dict[str, List[str]]:
         """Initialize comprehensive detection patterns for all categories"""
@@ -1636,6 +1291,351 @@ class FactRelationship:
     strength: float = 0.5  # 0.0 to 1.0
     evidence: List[str] = field(default_factory=list)
     created_at: str = ""
+
+    def __post_init__(self):
+        if not self.created_at:
+            self.created_at = datetime.now().isoformat()
+
+@dataclass
+class Conflict:
+    """Represents a conflict between facts"""
+    conflicting_facts: List[str]
+    conflict_type: str
+    severity: float = 0.5  # 0.0 to 1.0
+    suggested_resolution: str = ""
+    detected_at: str = ""
+
+    def __post_init__(self):
+        if not self.detected_at:
+            self.detected_at = datetime.now().isoformat()
+
+@dataclass
+class MemoryPattern:
+    """Represents detected patterns in memory"""
+    pattern_type: str
+    confidence: float
+    supporting_evidence: List[str] = field(default_factory=list)
+    predicted_next_steps: List[str] = field(default_factory=list)
+    detected_at: str = ""
+
+    def __post_init__(self):
+        if not self.detected_at:
+            self.detected_at = datetime.now().isoformat()
+
+@dataclass
+class MemoryImportance:
+    """Calculates importance score for memories"""
+    access_frequency: float = 0.0
+    recency_score: float = 0.0
+    emotional_weight: float = 0.0
+    cross_reference_count: int = 0
+    final_importance: float = 0.0
+
+@dataclass
+class MemoryEvent:
+    """Enhanced memory event with comprehensive 22-category support"""
+    type: str
+    summary: Union[str, Dict[str, str]]
+    timestamp: str
+    emotional_context: Optional[EmotionalContext] = None
+    semantic_context: Optional[SemanticContext] = None
+    importance_score: float = 0.5
+    # Additional fields for 22-category framework
+    confidence: float = 0.8
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    relationships: List[str] = field(default_factory=list)
+    session_id: Optional[str] = None
+    privacy_level: str = "normal"
+    previous_value: Optional[Any] = None
+    current_value: Optional[Any] = None
+
+    def __post_init__(self):
+        if not self.timestamp:
+            self.timestamp = datetime.now().isoformat()
+
+@dataclass
+class HistoricalValue:
+    """Represents a historical value of a fact"""
+    value: Any
+    timestamp: str
+    status: str  # "current" or "previous"
+    confidence: float = 0.8
+
+    def __post_init__(self):
+        if not self.timestamp:
+            self.timestamp = datetime.now().isoformat()
+
+@dataclass
+class MemoryFact:
+    """Enhanced memory fact with advanced context and relationships"""
+    key: str
+    value: Any
+    category: str
+    confidence: float
+    created_at: str
+    last_accessed: str
+    access_count: int = 0
+    history: List[HistoricalValue] = field(default_factory=list)
+    emotional_context: Optional[EmotionalContext] = None
+    semantic_context: Optional[SemanticContext] = None
+    importance_score: float = 0.5
+    relationships: List[FactRelationship] = field(default_factory=list)
+    conflicts: List[Conflict] = field(default_factory=list)
+    tags: List[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        if not self.created_at:
+            self.created_at = datetime.now().isoformat()
+        if not self.last_accessed:
+            self.last_accessed = self.created_at
+        if not self.semantic_context:
+            self.semantic_context = SemanticContext()
+        if not self.emotional_context:
+            self.emotional_context = EmotionalContext()
+
+@dataclass
+class ConversationSession:
+    """Represents a conversation session with metadata"""
+    session_id: str
+    start_time: str
+    end_time: Optional[str] = None
+    message_count: int = 0
+    topics_discussed: List[str] = field(default_factory=list)
+    user_name: Optional[str] = None
+    session_duration: Optional[str] = None
+    last_activity: str = ""
+
+    def __post_init__(self):
+        if not self.session_id:
+            self.session_id = f"session_{uuid.uuid4().hex[:8]}"
+        if not self.start_time:
+            self.start_time = datetime.now().isoformat()
+        if not self.last_activity:
+            self.last_activity = self.start_time
+
+@dataclass
+class ConversationMessage:
+    """Represents a conversation message with session context"""
+    role: str
+    content: str
+    timestamp: str = ""
+    session_id: str = ""
+
+    def __post_init__(self):
+        if not self.timestamp:
+            self.timestamp = datetime.now().isoformat()
+
+class EnhancedFactExtractor:
+    """Enhanced fact extractor with adaptive learning capabilities"""
+
+    def __init__(self):
+        # Initialize adaptive learning engine
+        self.adaptive_engine = AdaptiveLearningEngine()
+
+        # Enhanced patterns for better detection (now serves as fallback)
+        self.fact_patterns = {
+            'name': [
+                r'hi,?\s+i\'m\s+(\w+)',
+                r'hello,?\s+i\'m\s+(\w+)',
+                r'my name is\s+(\w+)',
+                r'i\'m\s+(\w+)(?:\s+and|\s*\.|,|$)',
+                r'call me\s+(\w+)',
+                # Enhanced patterns for name changes
+                r'my new name is\s+(\w+)',
+                r'new name is\s+(\w+)',
+                r'i changed my name to\s+(\w+)',
+                r'changed my name to\s+(\w+)',
+                r'now call me\s+(\w+)',
+                r'actually i\'m\s+(\w+)',
+                r'actually my name is\s+(\w+)',
+                r'i\'m actually\s+(\w+)',
+                r'just call me\s+[\'"]?(\w+)[\'"]?',
+                r'call me\s+[\'"]?(\w+)[\'"]?\s+from now on',
+                r'changed my name.*call me\s+[\'"]?(\w+)[\'"]?'
+            ],
+            'age': [
+                r'i\'m\s+(\d+)\s+years?\s+old',
+                r'i am\s+(\d+)\s+years?\s+old',
+                r'(\d+)\s+years?\s+old',
+                r'my age is\s+(\d+)'
+            ],
+            'occupation': [
+                r'i work as\s+(?:a\s+)?(.+?)(?:\.|,|$)',
+                r'i\'m\s+(?:a\s+)?(.+?)(?:\s+developer|\s+dev)(?:\.|,|$)',
+                r'i am\s+(?:a\s+)?(.+?)(?:\s+developer|\s+dev)(?:\.|,|$)',
+                r'my job is\s+(.+?)(?:\.|,|$)',
+                r'i do\s+(.+?)(?:\.|,|$)',
+                r'i\'ve shifted to\s+(.+?)(?:\s+dev|\s+developer)(?:\.|,|$)',
+                r'shifted to\s+(.+?)(?:\s+dev|\s+developer)(?:\.|,|$)',
+                r'now i\'m\s+(?:a\s+)?(.+?)(?:\s+developer|\s+dev)(?:\.|,|$)'
+            ],
+            'company': [
+                r'i work at\s+(.+?)(?:\.|,|$)',
+                r'i work for\s+(.+?)(?:\.|,|$)',
+                r'my company is\s+(.+?)(?:\.|,|$)',
+                # Enhanced patterns for job announcements
+                r'i got a job at\s+(.+?)(?:\.|,|$)',
+                r'i got a new job at\s+(.+?)(?:\.|,|$)',
+                r'i started working at\s+(.+?)(?:\.|,|$)',
+                r'i joined\s+(.+?)(?:\.|,|$)',
+                r'i\'m working at\s+(.+?)(?:\.|,|$)',
+                r'i\'m now at\s+(.+?)(?:\.|,|$)',
+                r'my new job is at\s+(.+?)(?:\.|,|$)',
+                r'i started at\s+(.+?)(?:\.|,|$)',
+                # Enhanced patterns for corrections
+                r'actually,?\s+i now work at\s+(.+?)(?:\.|,|$)',
+                r'actually,?\s+i work at\s+(.+?)(?:\.|,|$)',
+                r'i now work at\s+(.+?)(?:\.|,|$)',
+                r'correction.*i work at\s+(.+?)(?:\.|,|$)'
+            ],
+            'previous_company': [
+                r'i used to work at\s+(.+?)(?:\.|,|$)',
+                r'i previously worked at\s+(.+?)(?:\.|,|$)',
+                r'i worked at\s+(.+?)\s+before(?:\.|,|$)',
+                r'my previous job was at\s+(.+?)(?:\.|,|$)',
+                r'before this i worked at\s+(.+?)(?:\.|,|$)',
+                r'i came from\s+(.+?)(?:\.|,|$)'
+            ],
+            'location': [
+                r'i live in\s+(.+?)(?:\.|,|$)',
+                r'i\'m from\s+(.+?)(?:\.|,|$)',
+                r'i moved to\s+(.+?)(?:\.|,|$)',
+                r'based in\s+(.+?)(?:\.|,|$)'
+            ],
+            'interests': [
+                r'i\'m learning\s+(.+?)(?:\.|,|$)',
+                r'learning\s+(.+?)(?:\.|,|$)',
+                r'i love\s+(.+?)(?:\.|,|$)',
+                r'i like\s+(.+?)(?:\.|,|$)',
+                r'i enjoy\s+(.+?)(?:\.|,|$)',
+                r'i\'m interested in\s+(.+?)(?:\.|,|$)',
+                r'interested in\s+(.+?)(?:\.|,|$)',
+                r'i\'m into\s+(.+?)(?:\.|,|$)',
+                r'into\s+(.+?)(?:\.|,|$)',
+                r'i\'m also into\s+(.+?)(?:\.|,|$)'
+            ],
+            'preferences': [
+                r'always give me detailed answers',
+                r'give me detailed responses',
+                r'i want detailed answers',
+                r'provide detailed information',
+                r'give me brief answers',
+                r'keep it short',
+                r'be concise'
+            ],
+            'boundaries': [
+                r'don\'t ask me personal questions',
+                r'don\'t ask personal questions',
+                r'please don\'t ask personal questions',
+                r'no personal questions',
+                r'don\'t ask about (.+)',
+                r'please don\'t ask about (.+)',
+                r'i don\'t want to talk about (.+)',
+                r'let\'s not discuss (.+)',
+                r'don\'t ask me (.+) unless i bring it up',
+                r'only ask about (.+) if i mention it first',
+                r'wait for me to bring up (.+)',
+                r'i don\'t want you asking me about (.+?) anymore unless i bring it up',
+                r'don\'t want you asking.*about (.+?) unless',
+                r'stop asking.*about (.+?) unless',
+                # Capture full boundary statements
+                r'(i don\'t want you asking me about .+ unless .+)',
+                r'(don\'t ask me about .+ unless .+)',
+                r'(please don\'t ask about .+ unless .+)'
+            ],
+            'confirmation': [
+                r'yep,?\s+that\'s still my (.+)',
+                r'yes,?\s+that\'s still my (.+)',
+                r'that\'s still my (.+)',
+                r'still my (.+)',
+                r'yep,?\s+(.+) is still my priority',
+                r'yes,?\s+(.+) is still my priority',
+                r'(.+) is still my priority',
+                r'that\'s correct',
+                r'that\'s right',
+                r'exactly',
+                r'yep',
+                r'yes'
+            ]
+        }
+
+        # Update indicators for detecting corrections
+        self.update_indicators = [
+            'actually', 'correction', 'i meant', 'sorry', 'wrong',
+            'now i', 'i\'ve shifted', 'i changed', 'update', 'shifted to',
+            'no wait', 'let me correct', 'i should say', 'rather'
+        ]
+
+        # Delete indicators
+        self.delete_indicators = [
+            'forget', 'ignore', 'never mind', 'disregard', 'remove'
+        ]
+    
+    def analyze_message(self, message: str, current_facts: Dict[str, Any], context: Dict = None) -> List[Dict[str, Any]]:
+        """Analyze message using adaptive learning engine and fallback patterns"""
+        operations = []
+
+        # 1. First, try adaptive learning engine (primary method)
+        adaptive_operations = self.adaptive_engine.analyze_and_learn(message, current_facts, context)
+        operations.extend(adaptive_operations)
+
+        # 2. If no operations found, use fallback patterns
+        if not operations:
+            operations = self._analyze_with_fallback_patterns(message, current_facts)
+
+        # 3. Handle special cases
+        operations = self._handle_interests_special_cases(message, current_facts, operations)
+        operations = self._handle_confirmations(message, current_facts, operations)
+
+        return operations
+
+    def _analyze_with_fallback_patterns(self, message: str, current_facts: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Fallback analysis using traditional patterns"""
+        operations = []
+        message_lower = message.lower().strip()
+
+        # Check for delete operations first
+        if any(indicator in message_lower for indicator in self.delete_indicators):
+            delete_ops = self._detect_delete_operations(message, current_facts)
+            operations.extend(delete_ops)
+
+        # Check for update indicators
+        is_update = any(indicator in message_lower for indicator in self.update_indicators)
+
+        # Analyze for each fact type with priority for correction patterns
+        for fact_type, patterns in self.fact_patterns.items():
+            best_match = None
+            best_priority = -1
+
+            for i, pattern in enumerate(patterns):
+                matches = re.findall(pattern, message_lower, re.IGNORECASE)
+                if matches:
+                    value = matches[0].strip() if isinstance(matches[0], str) else matches[0][0].strip()
+
+                    # Assign priority - correction patterns get higher priority
+                    priority = 0
+                    if 'actually' in pattern or 'correction' in pattern or 'now work' in pattern:
+                        priority = 10  # High priority for corrections
+                    elif 'new' in pattern or 'changed' in pattern:
+                        priority = 5   # Medium priority for changes
+                    elif pattern.startswith('(') and pattern.endswith(')') and ("i don\\'t want you asking" in pattern or "i don't want you asking" in pattern):
+                        priority = 9   # Highest priority for full boundary statements (patterns that capture the whole statement)
+                    elif ("i don\\'t want you asking" in pattern or "i don't want you asking" in pattern) and '(' in pattern and ')' in pattern:
+                        priority = 6   # Medium priority for partial boundary statements
+                    elif ("don\\'t ask me about .+ unless" in pattern or "don't ask me about .+ unless" in pattern) and '(' in pattern:
+                        priority = 7   # High priority for full boundary statements
+                    else:
+                        priority = 1   # Low priority for basic patterns
+
+                    # Take the highest priority match
+                    if priority > best_priority:
+                        best_priority = priority
+                        best_match = value
+
+            if best_match:
+                # Clean up the value
+                value = self._clean_value(fact_type, best_match)
 
     def __post_init__(self):
         if not self.created_at:

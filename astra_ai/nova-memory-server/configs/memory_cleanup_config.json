@@ -1,0 +1,26 @@
+Memory System Server
+│
+├── server.py (Main entry point for the server)
+│   ├── Initialize Flask/FastAPI
+│   ├── Load memory system components
+│   ├── Define API endpoints
+│   └── Start server
+│
+├── nova_memory_interface.py (Handles memory operations)
+│   ├── NovaMemoryInterface
+│   └── MemoryInitializationError
+│
+├── enhanced_nova_memory_interface.py (Enhanced memory features)
+│   ├── EnhancedNovaMemoryInterface
+│   └── UserProfileManager
+│
+├── memory_cleanup_system.py (Memory cleanup logic)
+│   ├── MemoryCleanupSystem
+│   └── CleanupPolicy
+│
+├── mem0_memory_system.py (Core memory management)
+│   ├── NovaMemoryAI
+│   ├── AdaptiveLearningEngine
+│   └── MemoryCategory
+│
+└── utils.py (Utility functions, logging, etc.)
