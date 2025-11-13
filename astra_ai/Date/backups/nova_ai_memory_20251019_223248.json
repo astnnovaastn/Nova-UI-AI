@@ -1,0 +1,293 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": null,
+    "created_at": "2025-10-19T22:18:15.467497",
+    "status": "active",
+    "total_sessions": 1,
+    "last_seen": "2025-10-19T22:18:15.468212",
+    "relationship_established": false
+  },
+  "memory_events": [
+    {
+      "type": "ADD",
+      "summary": "User sees play game a lot as meaningful and worthwhile.",
+      "timestamp": "2025-10-19T22:18:25.498370",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.0,
+        "mood_context": "normal",
+        "confidence": 0.8
+      },
+      "semantic_context": "User expressed enjoyment and personal interest in play game a lot.",
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null,
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-19T22:18:25.515082",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "Conversation at 2025-10-19T22:18:25.498370",
+          "context": "User: i like to play game a lot...",
+          "event_index": 0
+        },
+        "source_conversation_timestamp": "2025-10-19T22:18:25.498370"
+      },
+      "Added_preference_likes": "enjoys to play game a lot"
+    },
+    {
+      "type": "ADD",
+      "summary": "User dislikes kfc.",
+      "timestamp": "2025-10-19T22:32:47.291923",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.0,
+        "mood_context": "normal",
+        "confidence": 0.8
+      },
+      "semantic_context": "Inferred from user input: User dislikes kfc.",
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null,
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-19T22:32:47.303465",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "Conversation at 2025-10-19T22:32:47.291923",
+          "context": "User: i don't like kfc...",
+          "event_index": 1
+        },
+        "source_conversation_timestamp": "2025-10-19T22:32:47.291923"
+      },
+      "Added_preference_avoid": "avoids kfc"
+    },
+    {
+      "type": "ADD",
+      "summary": "Added preference dislikes: kfc",
+      "timestamp": "2025-10-19T22:32:47.291923",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.5,
+        "mood_context": "normal",
+        "confidence": 0.7
+      },
+      "semantic_context": null,
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null
+    }
+  ],
+  "conversation": [
+    {
+      "role": "user",
+      "content": "i like to play game a lot",
+      "timestamp": "2025-10-19T22:18:25.498370",
+      "session_id": "session_263dc33e"
+    },
+    {
+      "role": "assistant",
+      "content": "Getting your gaming fix, I see. Which console do you prefer, Nemzz - Xbox, PlayStation, or Nintendo?",
+      "timestamp": "2025-10-19T22:18:25.498370",
+      "session_id": "session_263dc33e"
+    },
+    {
+      "role": "user",
+      "content": "i don't like kfc",
+      "timestamp": "2025-10-19T22:32:47.291923",
+      "session_id": "session_263dc33e"
+    },
+    {
+      "role": "assistant",
+      "content": "I remember you said you loved KFC just yesterday, Nemzz! Guess you changed your mind?",
+      "timestamp": "2025-10-19T22:32:47.291923",
+      "session_id": "session_263dc33e"
+    }
+  ],
+  "sessions": {
+    "session_263dc33e": {
+      "session_id": "session_263dc33e",
+      "start_time": "2025-10-19T22:18:15.468212",
+      "end_time": null,
+      "message_count": 4,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-10-19T22:32:47.291923"
+    }
+  },
+  "current_session": "session_263dc33e",
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": true,
+    "established_user": false
+  },
+  "fact_history": {
+    "personal_preferences": {
+      "likes": [
+        {
+          "item": "enjoys to play game a lot",
+          "score": 0.8,
+          "added": "2025-10-19",
+          "updated": "2025-10-19"
+        },
+        {
+          "item": "to play game a lot",
+          "score": 0.8,
+          "added": "2025-10-19",
+          "updated": "2025-10-19"
+        }
+      ],
+      "dislikes": [
+        {
+          "item": "kfc",
+          "score": 0.8,
+          "added": "2025-10-19",
+          "updated": "2025-10-19"
+        }
+      ],
+      "avoid": [
+        {
+          "item": "avoids kfc",
+          "score": 0.8,
+          "added": "2025-10-19",
+          "updated": "2025-10-19"
+        },
+        {
+          "item": "kfc",
+          "score": 0.8,
+          "added": "2025-10-19",
+          "updated": "2025-10-19"
+        }
+      ],
+      "always": [],
+      "style": [],
+      "conditional": [],
+      "interests": [],
+      "love": [],
+      "hate": [],
+      "enjoy": [],
+      "need": [],
+      "want": [],
+      "continue": []
+    }
+  },
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {
+      "pref_cd1892775380": {
+        "category": "personal_preferences",
+        "value": "to play game a lot",
+        "timestamp": "2025-10-19T22:18:25.509247",
+        "metadata": {},
+        "privacy_level": "normal",
+        "retention_policy": "permanent",
+        "confidence": 0.8,
+        "subcategory": "likes",
+        "key": "pref_cd1892775380",
+        "last_accessed": "2025-10-19T22:18:25.509252",
+        "source": "new_pattern",
+        "relationships": [],
+        "tags": [],
+        "session_id": null
+      },
+      "pref_4cea4946f61f": {
+        "category": "personal_preferences",
+        "value": "kfc",
+        "timestamp": "2025-10-19T22:32:47.300477",
+        "metadata": {},
+        "privacy_level": "normal",
+        "retention_policy": "permanent",
+        "confidence": 0.8,
+        "subcategory": "dislikes",
+        "key": "pref_4cea4946f61f",
+        "last_accessed": "2025-10-19T22:32:47.300481",
+        "source": "new_pattern",
+        "relationships": [],
+        "tags": [],
+        "session_id": null
+      },
+      "pref_829c749e8304": {
+        "category": "personal_preferences",
+        "value": "kfc",
+        "timestamp": "2025-10-19T22:32:47.300818",
+        "metadata": {},
+        "privacy_level": "normal",
+        "retention_policy": "permanent",
+        "confidence": 0.8,
+        "subcategory": "avoid",
+        "key": "pref_829c749e8304",
+        "last_accessed": "2025-10-19T22:32:47.300821",
+        "source": "new_pattern",
+        "relationships": [],
+        "tags": [],
+        "session_id": null
+      }
+    },
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+  "category_relationships": {},
+  "memory_metadata": {},
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  },
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  }
+}

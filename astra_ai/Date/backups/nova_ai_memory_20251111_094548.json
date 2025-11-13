@@ -1,0 +1,129 @@
+{
+  "user": {
+    "total_sessions": 1,
+    "last_seen": "2025-11-11T09:41:38.828728"
+  },
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2025-11-11T09:41:28.794394",
+      "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+    },
+    "memory_events": [],
+    "vector_index": {},
+    "clusters": {},
+    "update_log": []
+  },
+  "conversation": [
+    {
+      "role": "user",
+      "content": "i don't like to use old pc from the 2010",
+      "timestamp": "2025-11-11T09:42:34.795527",
+      "session_id": "session_96f29871"
+    },
+    {
+      "role": "assistant",
+      "content": "Time for an upgrade, I'd say!",
+      "timestamp": "2025-11-11T09:42:34.795527",
+      "session_id": "session_96f29871"
+    },
+    {
+      "role": "user",
+      "content": "hi",
+      "timestamp": "2025-11-11T09:42:41.224734",
+      "session_id": "session_96f29871"
+    },
+    {
+      "role": "assistant",
+      "content": "Morning to you, too!",
+      "timestamp": "2025-11-11T09:42:41.224734",
+      "session_id": "session_96f29871"
+    },
+    {
+      "role": "user",
+      "content": "i hate to use slow software like the old version of photoshop",
+      "timestamp": "2025-11-11T09:43:56.995275",
+      "session_id": "session_96f29871"
+    },
+    {
+      "role": "assistant",
+      "content": "Upgrade to the latest version, it'll be a game-changer!",
+      "timestamp": "2025-11-11T09:43:56.995275",
+      "session_id": "session_96f29871"
+    },
+    {
+      "role": "user",
+      "content": "i try to avois junk food, like mcdonalds and kfc",
+      "timestamp": "2025-11-11T09:44:32.499185",
+      "session_id": "session_96f29871"
+    },
+    {
+      "role": "assistant",
+      "content": "Healthy choices for a healthier you!",
+      "timestamp": "2025-11-11T09:44:32.499185",
+      "session_id": "session_96f29871"
+    },
+    {
+      "role": "user",
+      "content": "don't want to eat fast food",
+      "timestamp": "2025-11-11T09:44:47.434476",
+      "session_id": "session_96f29871"
+    },
+    {
+      "role": "assistant",
+      "content": "Cooking at home is a much better bet!",
+      "timestamp": "2025-11-11T09:44:47.434476",
+      "session_id": "session_96f29871"
+    },
+    {
+      "role": "user",
+      "content": "i enjoy programming in python and javascript",
+      "timestamp": "2025-11-11T09:44:53.749921",
+      "session_id": "session_96f29871"
+    },
+    {
+      "role": "assistant",
+      "content": "A great combo for web development!",
+      "timestamp": "2025-11-11T09:44:53.749921",
+      "session_id": "session_96f29871"
+    },
+    {
+      "role": "user",
+      "content": "i like listening to jazz and classical music",
+      "timestamp": "2025-11-11T09:45:02.948893",
+      "session_id": "session_96f29871"
+    },
+    {
+      "role": "assistant",
+      "content": "Sophisticated taste!",
+      "timestamp": "2025-11-11T09:45:02.948893",
+      "session_id": "session_96f29871"
+    }
+  ],
+  "fact_history": {},
+  "sessions": {
+    "session_96f29871": {
+      "session_id": "session_96f29871",
+      "start_time": "2025-11-11T09:41:38.828728",
+      "end_time": null,
+      "message_count": 14,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-11-11T09:45:02.948893"
+    }
+  },
+  "current_session": "session_96f29871",
+  "conversation_state": {
+    "introduction_phase": true,
+    "established_user": false,
+    "greeting_completed": false
+  },
+  "memory_categories": {},
+  "category_relationships": {},
+  "behavioral_adaptation": {},
+  "privacy_settings": {},
+  "current_facts": {},
+  "vector_index": {},
+  "clusters": {}
+}

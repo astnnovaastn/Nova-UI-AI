@@ -3,15 +3,85 @@ import logging
 import asyncio
 from datetime import datetime, timedelta
 import re
+import sys
+import os
+
+# Add the project root to sys.path to handle imports properly
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(current_dir))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from .context_manager import ContextManager
 from .response_generator import ResponseGenerator
 from .sentiment_analyzer import SentimentAnalyzer
-from ..memory.vector_memory import VectorMemorySystem
-from ..memory.semantic_memory import SemanticMemory
-from ..services.nova_searchweb_unified import NovaSearch
-from ..services.weather_service import WeatherService
-from ..services.news_summary import NewsSummarySystem
+
+# Import VectorMemorySystem with fallback
+try:
+    # Try to import from nova-memory-server
+    from astra_ai.nova_memory_server.scripts.vector_memory import VectorMemorySystem
+except ImportError:
+    try:
+        # Try to import from memory directory
+        from astra_ai.memory.vector_memory import VectorMemorySystem
+    except ImportError:
+        # Create a basic fallback VectorMemorySystem
+        class VectorMemorySystem:
+            """Fallback VectorMemorySystem when proper implementation is not available."""
+            
+            def __init__(self):
+                self._memory_store = []
+                
+            def add_memory(self, text: str, metadata: Optional[Dict] = None) -> int:
+                """Add a memory to the store."""
+                memory_id = len(self._memory_store)
+                self._memory_store.append({
+                    'id': memory_id,
+                    'text': text,
+                    'metadata': metadata or {},
+                    'timestamp': datetime.now().isoformat()
+                })
+                return memory_id
+                
+            def search_memories(self, query: str, k: int = 5) -> List[Dict]:
+                """Search for similar memories."""
+                # Simple keyword-based search for fallback
+                results = []
+                query_lower = query.lower()
+                for memory in self._memory_store:
+                    if query_lower in memory['text'].lower():
+                        results.append({
+                            'id': memory['id'],
+                            'text': memory['text'],
+                            'metadata': memory['metadata'],
+                            'similarity_score': 0.8 if query_lower in memory['text'].lower() else 0.0,
+                            'timestamp': memory['timestamp']
+                        })
+                return results[:k]
+
+# Import SemanticMemory with fallback
+try:
+    from astra_ai.memory.semantic_memory import SemanticMemory
+except ImportError:
+    # Create a basic fallback SemanticMemory
+    class SemanticMemory:
+        """Fallback SemanticMemory when proper implementation is not available."""
+        
+        def __init__(self):
+            self.concepts = {}
+            
+        def add_concept(self, name: str, properties: Dict) -> bool:
+            """Add a concept to semantic memory."""
+            self.concepts[name] = {
+                'properties': properties,
+                'created_at': datetime.now().isoformat()
+            }
+            return True
+
+import astra_ai.services.nova_searchweb_unified
+from astra_ai.services.nova_searchweb_unified import NovaSearch
+from astra_ai.services.weather_service import WeatherService
+from astra_ai.services.news_summary import NewsSummarySystem
 
 logger = logging.getLogger(__name__)
 

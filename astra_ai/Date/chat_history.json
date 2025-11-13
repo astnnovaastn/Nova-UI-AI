@@ -1,0 +1,239 @@
+{
+  "user": {
+    "user_id": "usr_001",
+    "name": "Astra",
+    "created_at": "2025-10-21T11:50:00Z",
+    "status": "active",
+    "total_sessions": 3,
+    "last_seen": "2025-10-21T11:59:59Z",
+    "relationship_established": true
+  },
+
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2025-10-21T12:00:00Z",
+      "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+    },
+    "memory_events": [
+      {
+        "event_id": "evt_001",
+        "type": "ADD",
+        "summary": "User likes watching anime during weekends",
+        "timestamp": "2025-10-16T17:08:03Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["interest"],
+          "emotional_intensity": 0.3,
+          "mood_context": "normal",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'I like to watch anime sometimes during the weekend.'",
+        "importance_score": 0.6,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "likes watching anime during weekends",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-16T17:08:03Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I like to watch anime sometimes during the weekend.",
+            "event_index": 0
+          },
+          "source_conversation_timestamp": "2025-10-16T17:08:03Z"
+        },
+        "Added_preference": "enjoys watching anime during weekends"
+      },
+      
+      {
+        "event_id": "evt_002",
+        "type": "UPDATE",
+        "summary": "User now prefers to watch anime only on Sundays",
+        "timestamp": "2025-10-20T14:32:48Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.1,
+          "mood_context": "normal",
+          "confidence": 0.9
+        },
+        "semantic_context": {
+          "related_facts": ["evt_001"],
+          "confidence_score": 0.89,
+          "context_type": "preference_update",
+          "semantic_tags": ["anime", "time_preference"],
+          "similarity_hash": "aeeaec0b"
+        },
+        "importance_score": 0.6,
+        "confidence": 0.9,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": "likes watching anime during weekends",
+        "current_value": "prefers watching anime only on Sundays",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-20T14:32:48Z",
+          "original_summary": "User likes watching anime during weekends.",
+          "context": "User: Actually, I prefer Sundays only.",
+          "source_conversation_timestamp": "2025-10-20T14:32:48Z",
+          "cleanup_operation": "stacked_prefix_removal"
+        }
+        
+      }
+    ],
+
+    "vector_index": {
+      "evt_001": [0.12, 0.23, 0.34, 0.45, 0.56, 0.67, 0.78, 0.89],
+      "evt_002": [0.15, 0.25, 0.33, 0.48, 0.55, 0.68, 0.75, 0.90]
+    },
+
+    "clusters": {
+      "cluster_001": {
+        "topic_label": "anime_preferences",
+        "centroid_vector": [0.135, 0.24, 0.335, 0.465, 0.555, 0.675, 0.765, 0.895],
+        "related_events": ["evt_001", "evt_002"],
+        "active_event": "evt_002"
+      }
+    },
+
+    "update_log": [
+      {
+        "update_id": "upd_001",
+        "source_event": "evt_002",
+        "replaced_event": "evt_001",
+        "timestamp": "2025-10-20T14:32:48Z",
+        "similarity_score": 0.89,
+        "update_type": "refinement",
+        "note": "Updated anime watching day from weekend to Sundays only"
+      }
+    ],
+
+    "system_policies": {
+      "similarity_thresholds": {
+        "cluster_assignment": 0.7,
+        "update_detection": 0.85,
+        "reinforce_threshold": 0.95
+      },
+      "duplicate_handling": {
+        "memory_events": "ignore duplicates with similarity > 0.95",
+        "fact_history": "merge with provenance tracking"
+      },
+      "vector_dimensions": 8,
+      "notes": "Template uses placeholder vectors; in production use high-dimension embeddings and a vector DB."
+    }
+  },
+
+  "conversation": [
+    {
+      "timestamp": "2025-10-21T11:55:00Z",
+      "role": "user",
+      "text": "I like to watch anime on weekends."
+    },
+    {
+      "timestamp": "2025-10-21T11:55:30Z",
+      "role": "assistant",
+      "text": "That's great! Do you have any favorite anime series?"
+    },
+    {
+      "timestamp": "2025-10-21T11:56:00Z",
+      "role": "user",
+      "text": "Actually, I prefer Sundays only."
+    },
+    {
+      "timestamp": "2025-10-21T11:56:30Z",
+      "role": "assistant",
+      "text": "Noted! So you like to watch anime specifically on Sundays. Any particular shows you enjoy?"
+    }
+  ],
+
+  "fact_history": {
+    "personal_preferences": {
+      "likes": [
+        {
+          "item": "likes watching anime during weekends",
+          "update_item": "prefers watching anime only on Sundays",
+          "added": "2025-10-16",
+          "updated": "2025-10-20",
+          "score": 0.90
+        }
+      ],
+      "dislikes": [],
+      "avoid": [],
+      "always": [],
+      "style": [],
+      "conditional": [],
+      "interests": []
+    },
+    "name": ["Astra"]
+  },
+
+  "sessions": {
+    "session_001": {
+      "started_at": "2025-10-21T11:50:00Z",
+      "ended_at": "2025-10-21T11:59:59Z",
+      "conversation_events": ["evt_001", "evt_002"]
+    }
+  },
+
+  "current_session": "session_001",
+
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": true,
+    "established_user": true
+  },
+
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {},
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+
+  "category_relationships": {},
+
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  },
+
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  }
+}

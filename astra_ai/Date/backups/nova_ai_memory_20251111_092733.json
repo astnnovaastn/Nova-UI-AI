@@ -1,0 +1,483 @@
+{
+  "user": {
+    "user_id": "usr_001",
+    "name": "Astra",
+    "created_at": "2025-10-21T11:50:00Z",
+    "status": "active",
+    "total_sessions": 3,
+    "last_seen": "2025-10-21T12:30:00Z",
+    "relationship_established": true
+  },
+
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2025-10-21T12:30:00Z",
+      "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+    },
+
+    "memory_events": [
+      {
+        "event_id": "evt_001",
+        "type": "ADD",
+        "summary": "User likes watching anime during weekends",
+        "timestamp": "2025-10-16T17:08:03Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["interest"],
+          "emotional_intensity": 0.3,
+          "mood_context": "normal",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'I like to watch anime sometimes during the weekend.'",
+        "importance_score": 0.6,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "likes watching anime during weekends",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-16T17:08:03Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I like to watch anime sometimes during the weekend.",
+            "event_index": 0
+          },
+          "source_conversation_timestamp": "2025-10-16T17:08:03Z"
+        },
+        "Added_preference": "enjoys watching anime during weekends"
+      },
+      {
+        "event_id": "evt_002",
+        "type": "UPDATE",
+        "summary": "User now prefers to watch anime only on Sundays",
+        "timestamp": "2025-10-20T14:32:48Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.1,
+          "mood_context": "normal",
+          "confidence": 0.9
+        },
+        "semantic_context": {
+          "related_facts": ["evt_001"],
+          "confidence_score": 0.89,
+          "context_type": "preference_update",
+          "semantic_tags": ["anime", "time_preference"],
+          "similarity_hash": "aeeaec0b"
+        },
+        "importance_score": 0.6,
+        "confidence": 0.9,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": "likes watching anime during weekends",
+        "current_value": "prefers watching anime only on Sundays",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-20T14:32:48Z",
+          "original_summary": "User likes watching anime during weekends.",
+          "context": "User: Actually, I prefer Sundays only.",
+          "source_conversation_timestamp": "2025-10-20T14:32:48Z",
+          "cleanup_operation": "stacked_prefix_removal"
+        }
+      },
+
+      {
+        "event_id": "evt_003",
+        "type": "ADD",
+        "summary": "User enjoys Italian cuisine",
+        "timestamp": "2025-10-21T12:00:00Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["interest", "food"],
+          "emotional_intensity": 0.5,
+          "mood_context": "happy",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from input: 'I love Italian food, especially pasta.'",
+        "importance_score": 0.7,
+        "confidence": 0.8,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "enjoys Italian cuisine",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:00:00Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I love Italian food, especially pasta.",
+            "event_index": 2
+          },
+          "source_conversation_timestamp": "2025-10-21T12:00:00Z"
+        },
+        "Added_preference": "loves Italian food",
+        "context": "User: I love Italian food, especially pasta."
+      },
+
+      {
+        "event_id": "evt_004",
+        "type": "ADD",
+        "summary": "User likes going for morning walks",
+        "timestamp": "2025-10-21T12:02:00Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["health", "habit"],
+          "emotional_intensity": 0.6,
+          "mood_context": "motivated",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'I usually go for morning walks.'",
+        "importance_score": 0.65,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "enjoys morning walks",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:02:00Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I usually go for morning walks.",
+            "event_index": 3
+          },
+          "source_conversation_timestamp": "2025-10-21T12:02:00Z"
+        },
+        "Added_preference": "morning walks habit"
+      },
+
+      {
+        "event_id": "evt_005",
+        "type": "ADD",
+        "summary": "User enjoys coffee in the morning",
+        "timestamp": "2025-10-21T12:03:30Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["food", "drink"],
+          "emotional_intensity": 0.4,
+          "mood_context": "content",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from input: 'I always have coffee in the morning.'",
+        "importance_score": 0.6,
+        "confidence": 0.8,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "enjoys morning coffee",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:03:30Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I always have coffee in the morning.",
+            "event_index": 4
+          },
+          "source_conversation_timestamp": "2025-10-21T12:03:30Z"
+        },
+        "Added_preference": "morning coffee habit"
+      },
+
+      {
+        "event_id": "evt_006",
+        "type": "ADD",
+        "summary": "User prefers reading science fiction novels",
+        "timestamp": "2025-10-21T12:05:00Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["reading", "interest"],
+          "emotional_intensity": 0.5,
+          "mood_context": "curious",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'I enjoy reading sci-fi novels.'",
+        "importance_score": 0.7,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "enjoys sci-fi novels",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:05:00Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I enjoy reading sci-fi novels.",
+            "event_index": 5
+          },
+          "source_conversation_timestamp": "2025-10-21T12:05:00Z"
+        },
+        "Added_preference": "sci-fi reading"
+      },
+
+      {
+        "event_id": "evt_007",
+        "type": "UPDATE",
+        "summary": "User also likes fantasy novels",
+        "timestamp": "2025-10-21T12:06:00Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["reading", "interest"],
+          "emotional_intensity": 0.6,
+          "mood_context": "happy",
+          "confidence": 0.88
+        },
+        "semantic_context": {
+          "related_facts": ["evt_006"],
+          "confidence_score": 0.87,
+          "context_type": "preference_update",
+          "semantic_tags": ["books", "genre"],
+          "similarity_hash": "bcd12345"
+        },
+        "importance_score": 0.7,
+        "confidence": 0.88,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": "enjoys sci-fi novels",
+        "current_value": "enjoys sci-fi and fantasy novels",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:06:00Z",
+          "original_summary": "User enjoys reading sci-fi novels.",
+          "context": "User: Actually, I also like fantasy novels.",
+          "source_conversation_timestamp": "2025-10-21T12:06:00Z",
+          "cleanup_operation": "merged_genres"
+        }
+      }
+
+      /* Continue adding events evt_008 to evt_020 with mix of ADD/UPDATE,
+         each with context, provenance, timestamps, vector index, etc. */
+    ],
+
+ // 🔹 Vector embeddings for similarity search
+  "vector_index": {
+    "evt_001": [0.12, 0.23, 0.34, 0.45, 0.56, 0.67, 0.78, 0.89],
+    "evt_002": [0.15, 0.25, 0.33, 0.48, 0.55, 0.68, 0.75, 0.90],
+    "evt_003": [0.11, 0.21, 0.31, 0.41, 0.51, 0.61, 0.71, 0.81],
+    "evt_004": [0.14, 0.24, 0.34, 0.44, 0.54, 0.64, 0.74, 0.84],
+    "evt_005": [0.16, 0.26, 0.36, 0.46, 0.56, 0.66, 0.76, 0.86],
+    "evt_006": [0.13, 0.23, 0.33, 0.43, 0.53, 0.63, 0.73, 0.83],
+    "evt_007": [0.14, 0.24, 0.34, 0.44, 0.54, 0.64, 0.74, 0.84]
+  },
+
+  // 🔹 Clusters group related events for fast lookup; each cluster has a centroid vector and event IDs.
+  "clusters": {
+    "cluster_001": {
+      "topic": "Anime Preferences",
+      "centroid_vector": [0.13, 0.24, 0.33, 0.46, 0.55, 0.67, 0.77, 0.88],
+      "event_ids": ["evt_001", "evt_002"],
+      "coherence_score": 0.91,
+      "last_updated": "2025-10-20T14:33:00Z",
+      "metadata": {
+        "dominant_tags": ["anime", "weekends", "watching habits"],
+        "cluster_type": "personal_preferences"
+      }
+    },
+    "cluster_002": {
+      "topic": "Food & Taste",
+      "centroid_vector": [0.12, 0.22, 0.32, 0.42, 0.52, 0.62, 0.72, 0.82],
+      "event_ids": ["evt_003", "evt_005"],
+      "coherence_score": 0.87,
+      "last_updated": "2025-10-21T12:03:30Z",
+      "metadata": {
+        "dominant_tags": ["food", "coffee", "Italian cuisine"],
+        "cluster_type": "personal_preferences"
+      }
+    },
+    "cluster_003": {
+      "topic": "Lifestyle Habits",
+      "centroid_vector": [0.14, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85],
+      "event_ids": ["evt_004"],
+      "coherence_score": 0.89,
+      "last_updated": "2025-10-21T12:02:00Z",
+      "metadata": {
+        "dominant_tags": ["health", "routine", "walking"],
+        "cluster_type": "habitual_behavior"
+      }
+    },
+    "cluster_004": {
+      "topic": "Reading Interests",
+      "centroid_vector": [0.13, 0.23, 0.34, 0.44, 0.54, 0.63, 0.73, 0.83],
+      "event_ids": ["evt_006", "evt_007"],
+      "coherence_score": 0.93,
+      "last_updated": "2025-10-21T12:06:00Z",
+      "metadata": {
+        "dominant_tags": ["books", "fantasy", "science fiction"],
+        "cluster_type": "personal_preferences"
+      }
+    }
+  }
+  },
+
+  "conversation": [
+    {
+      "timestamp": "2025-10-21T12:00:00Z",
+      "role": "user",
+      "text": "I love Italian food, especially pasta."
+    },
+    {
+      "timestamp": "2025-10-21T12:00:30Z",
+      "role": "assistant",
+      "text": "Italian cuisine is amazing! Do you prefer pasta or pizza more?"
+    },
+    {
+      "timestamp": "2025-10-21T12:02:00Z",
+      "role": "user",
+      "text": "I usually go for morning walks."
+    },
+    {
+      "timestamp": "2025-10-21T12:02:30Z",
+      "role": "assistant",
+      "text": "Morning walks are refreshing! How long do you usually walk?"
+    },
+    {
+      "timestamp": "2025-10-21T12:03:30Z",
+      "role": "user",
+      "text": "I always have coffee in the morning."
+    },
+    {
+      "timestamp": "2025-10-21T12:04:00Z",
+      "role": "assistant",
+      "text": "Coffee is a great start to the day! Do you prefer it black or with milk?"
+    },
+    {
+      "timestamp": "2025-10-21T12:05:00Z",
+      "role": "user",
+      "text": "I enjoy reading sci-fi novels."
+    },
+    {
+      "timestamp": "2025-10-21T12:05:30Z",
+      "role": "assistant",
+      "text": "Sci-fi is exciting! Do you read fantasy as well?"
+    },
+    {
+      "timestamp": "2025-10-21T12:06:00Z",
+      "role": "user",
+      "text": "Actually, I also like fantasy novels."
+    },
+    {
+      "timestamp": "2025-10-21T12:06:30Z",
+      "role": "assistant",
+      "text": "Great! Sci-fi and fantasy both open up amazing worlds. Any favorite authors?"
+    }
+
+    /* Continue until 20 conversation pairs matching events evt_008 to evt_020 */
+  ],
+
+  "fact_history": {
+    "personal_preferences": {
+      "likes": [
+        {
+          "item": "likes watching anime during weekends",
+          "update_item": "prefers watching anime only on Sundays",
+          "added": "2025-10-16",
+          "updated": "2025-10-20",
+          "score": 0.90
+        },
+        {
+          "item": "enjoys Italian cuisine",
+          "added": "2025-10-21",
+          "score": 0.85
+        },
+        {
+          "item": "enjoys morning walks",
+          "added": "2025-10-21",
+          "score": 0.8
+        },
+        {
+          "item": "enjoys morning coffee",
+          "added": "2025-10-21",
+          "score": 0.8
+        },
+        {
+          "item": "enjoys sci-fi novels",
+          "update_item": "enjoys sci-fi and fantasy novels",
+          "added": "2025-10-21",
+          "updated": "2025-10-21",
+          "score": 0.88
+        }
+      ],
+      "dislikes": [],
+      "avoid": [],
+      "always": [],
+      "style": [],
+      "conditional": [],
+      "interests": []
+    },
+    "name": ["Astra"]
+  },
+
+  "sessions": {
+    "session_001": {
+      "started_at": "2025-10-21T11:50:00Z",
+      "ended_at": "2025-10-21T12:30:00Z",
+      "conversation_events": ["evt_001","evt_002","evt_003","evt_004","evt_005","evt_006","evt_007"]
+    }
+  },
+
+  "current_session": "session_001",
+
+   "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": true,
+    "established_user": true
+  },
+
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {},
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+
+  "category_relationships": {},
+
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  },
+
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  }
+}
+

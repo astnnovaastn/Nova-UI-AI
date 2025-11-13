@@ -1,0 +1,444 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": "Not",
+    "created_at": "2025-11-07T12:16:00.926085",
+    "status": "active",
+    "total_sessions": 1,
+    "last_seen": "2025-11-07T12:16:00.929645",
+    "relationship_established": false
+  },
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2025-11-07T12:16:00.926106",
+      "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+    },
+    "memory_events": [
+      {
+        "event_id": "evt_4a22f955",
+        "type": "ADD",
+        "summary": "User likes to play a new game bye",
+        "timestamp": "2025-11-07T12:17:03.483202",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'to play a new game bye'",
+        "importance_score": 0.6,
+        "confidence": 0.8,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "to play a new game bye",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-07T12:17:03.483202",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: to play a new game bye",
+            "event_index": 0
+          },
+          "source_conversation_timestamp": "2025-11-07T12:17:03.483202"
+        }
+      },
+      {
+        "event_id": "evt_bce9d946",
+        "type": "ADD",
+        "summary": "User dislikes to wach to much youtube",
+        "timestamp": "2025-11-07T12:21:52.341725",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'to wach to much youtube'",
+        "importance_score": 0.6,
+        "confidence": 0.8,
+        "category": "personal_preferences",
+        "subcategory": "dislikes",
+        "previous_value": null,
+        "current_value": "to wach to much youtube",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-07T12:21:52.341725",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: to wach to much youtube",
+            "event_index": 1
+          },
+          "source_conversation_timestamp": "2025-11-07T12:21:52.341725"
+        }
+      },
+      {
+        "type": "ADD",
+        "summary": "User's name is Not.",
+        "timestamp": "2025-11-07T12:22:00.836592",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "general",
+          "semantic_tags": [],
+          "similarity_hash": "d529e941"
+        },
+        "importance_score": 0.8,
+        "confidence": 0.8,
+        "category": null,
+        "subcategory": null,
+        "relationships": [],
+        "session_id": null,
+        "privacy_level": "normal",
+        "previous_value": null,
+        "current_value": null
+      },
+      {
+        "event_id": "evt_96cb0b2e",
+        "type": "ADD",
+        "summary": "User likes like",
+        "timestamp": "2025-11-07T12:23:09.977501",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [
+            "interest"
+          ],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'like'",
+        "importance_score": 0.6,
+        "confidence": 0.8,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "like",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-07T12:23:09.977501",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: like",
+            "event_index": 3
+          },
+          "source_conversation_timestamp": "2025-11-07T12:23:09.977501"
+        }
+      }
+    ],
+    "vector_index": {
+      "evt_4a22f955": [
+        0.36650833306891567,
+        0.0,
+        0.8551861104941365,
+        0.36650833306891567,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_bce9d946": [
+        0.1386750490563073,
+        0.8320502943378436,
+        0.1386750490563073,
+        0.4160251471689218,
+        0.0,
+        0.2773500981126146,
+        0.1386750490563073,
+        0.0
+      ],
+      "evt_96cb0b2e": [
+        0.4728662437434604,
+        0.07881104062391008,
+        0.3152441624956403,
+        0.2364331218717302,
+        0.5516772843673705,
+        0.5516772843673705,
+        0.07881104062391008,
+        0.0
+      ]
+    },
+    "clusters": {
+      "cluster_d1859fb7": {
+        "topic": "personal_preferences_evt_4a22",
+        "centroid_vector": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "event_ids": [
+          "evt_4a22f955"
+        ],
+        "coherence_score": 1.0,
+        "last_updated": "2025-11-07T12:17:03.483391",
+        "metadata": {
+          "dominant_tags": [
+            "personal"
+          ],
+          "cluster_type": "personal"
+        }
+      },
+      "cluster_8b51dfd0": {
+        "topic": "personal_preferences_evt_bce9",
+        "centroid_vector": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "event_ids": [
+          "evt_bce9d946"
+        ],
+        "coherence_score": 1.0,
+        "last_updated": "2025-11-07T12:21:52.341778",
+        "metadata": {
+          "dominant_tags": [
+            "personal"
+          ],
+          "cluster_type": "personal"
+        }
+      },
+      "cluster_3490362b": {
+        "topic": "personal_preferences_evt_96cb",
+        "centroid_vector": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "event_ids": [
+          "evt_96cb0b2e"
+        ],
+        "coherence_score": 1.0,
+        "last_updated": "2025-11-07T12:23:09.977551",
+        "metadata": {
+          "dominant_tags": [
+            "personal"
+          ],
+          "cluster_type": "personal"
+        }
+      }
+    },
+    "update_log": []
+  },
+  "conversation": [
+    {
+      "role": "user",
+      "content": "hi",
+      "timestamp": "2025-11-07T12:16:12.838987",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "assistant",
+      "content": "You're probably taking a break from gaming or anime, huh?",
+      "timestamp": "2025-11-07T12:16:12.838987",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "user",
+      "content": "when did i say that",
+      "timestamp": "2025-11-07T12:16:27.633748",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "assistant",
+      "content": "Never mind, I made a guess. What's on your mind?",
+      "timestamp": "2025-11-07T12:16:27.633748",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "user",
+      "content": "i like to play a new game bye",
+      "timestamp": "2025-11-07T12:17:03.449433",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "assistant",
+      "content": "Have fun gaming, and I'll catch you later!",
+      "timestamp": "2025-11-07T12:17:03.449433",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "user",
+      "content": "yh",
+      "timestamp": "2025-11-07T12:17:07.926529",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "assistant",
+      "content": "Later then.",
+      "timestamp": "2025-11-07T12:17:07.926529",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "user",
+      "content": "i don't like to wach to much youtube",
+      "timestamp": "2025-11-07T12:21:52.335331",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "assistant",
+      "content": "Not a big YouTube fan, okay!",
+      "timestamp": "2025-11-07T12:21:52.335331",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "user",
+      "content": "yh i'm not",
+      "timestamp": "2025-11-07T12:22:00.836592",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "assistant",
+      "content": "Got it.",
+      "timestamp": "2025-11-07T12:22:00.836592",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "user",
+      "content": "i like to wach youtube a lot now",
+      "timestamp": "2025-11-07T12:23:09.972049",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "assistant",
+      "content": "Change of heart!",
+      "timestamp": "2025-11-07T12:23:09.972049",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "user",
+      "content": "i guesse so",
+      "timestamp": "2025-11-07T12:23:21.415473",
+      "session_id": "session_31efa3c3"
+    },
+    {
+      "role": "assistant",
+      "content": "Seems that way!",
+      "timestamp": "2025-11-07T12:23:21.415473",
+      "session_id": "session_31efa3c3"
+    }
+  ],
+  "fact_history": {
+    "evt_4a22f955": {
+      "item": "to play a new game bye",
+      "added": "2025-11-07",
+      "score": 0.8
+    },
+    "evt_bce9d946": {
+      "item": "to wach to much youtube",
+      "added": "2025-11-07",
+      "score": 0.8
+    },
+    "evt_96cb0b2e": {
+      "item": "like",
+      "added": "2025-11-07",
+      "score": 0.8
+    },
+    "personal_preferences": {
+      "likes": [],
+      "dislikes": [],
+      "avoid": [],
+      "always": [],
+      "style": [],
+      "conditional": [],
+      "interests": [],
+      "love": [],
+      "hate": [],
+      "enjoy": [],
+      "need": [],
+      "want": [],
+      "continue": []
+    }
+  },
+  "sessions": {
+    "session_31efa3c3": {
+      "session_id": "session_31efa3c3",
+      "start_time": "2025-11-07T12:16:00.929645",
+      "end_time": null,
+      "message_count": 16,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-11-07T12:23:21.415473"
+    }
+  },
+  "current_session": "session_31efa3c3",
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": true,
+    "established_user": false
+  },
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {},
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+  "category_relationships": {},
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  },
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  }
+}

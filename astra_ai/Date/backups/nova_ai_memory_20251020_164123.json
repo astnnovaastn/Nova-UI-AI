@@ -1,0 +1,230 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": null,
+    "created_at": "2025-10-20T16:40:55.383157",
+    "status": "active",
+    "total_sessions": 1,
+    "last_seen": "2025-10-20T16:40:55.384207",
+    "relationship_established": false
+  },
+  "memory_events": [
+    {
+      "type": "ADD",
+      "summary": "User dislikes to wach anime.",
+      "timestamp": "2025-10-20T16:41:22.349403",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.0,
+        "mood_context": "normal",
+        "confidence": 0.8
+      },
+      "semantic_context": "Inferred from user input: User dislikes to wach anime.",
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null,
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-20T16:41:22.356353",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "Conversation at 2025-10-20T16:41:22.349403",
+          "context": "User: i don't like to wach anime...",
+          "event_index": 0
+        },
+        "source_conversation_timestamp": "2025-10-20T16:41:22.349403"
+      },
+      "Added_preference_avoid": "avoids to wach anime"
+    },
+    {
+      "type": "ADD",
+      "summary": "Added preference dislikes: to wach anime",
+      "timestamp": "2025-10-20T16:41:22.349403",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.5,
+        "mood_context": "normal",
+        "confidence": 0.7
+      },
+      "semantic_context": null,
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null
+    }
+  ],
+  "conversation": [
+    {
+      "role": "user",
+      "content": "nova",
+      "timestamp": "2025-10-20T16:41:07.494759",
+      "session_id": "session_7dfd3f14"
+    },
+    {
+      "role": "assistant",
+      "content": "Still with me, Nemzz?",
+      "timestamp": "2025-10-20T16:41:07.494759",
+      "session_id": "session_7dfd3f14"
+    },
+    {
+      "role": "user",
+      "content": "i don't like to wach anime",
+      "timestamp": "2025-10-20T16:41:22.349403",
+      "session_id": "session_7dfd3f14"
+    },
+    {
+      "role": "assistant",
+      "content": "Not a fan of anime, huh?",
+      "timestamp": "2025-10-20T16:41:22.349403",
+      "session_id": "session_7dfd3f14"
+    }
+  ],
+  "sessions": {
+    "session_7dfd3f14": {
+      "session_id": "session_7dfd3f14",
+      "start_time": "2025-10-20T16:40:55.384207",
+      "end_time": null,
+      "message_count": 4,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-10-20T16:41:22.349403"
+    }
+  },
+  "current_session": "session_7dfd3f14",
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": true,
+    "established_user": false
+  },
+  "fact_history": {
+    "personal_preferences": {
+      "likes": [],
+      "dislikes": [
+        {
+          "item": "to wach anime",
+          "score": 0.8,
+          "added": "2025-10-20",
+          "updated": "2025-10-20"
+        }
+      ],
+      "avoid": [
+        {
+          "item": "avoids to wach anime",
+          "score": 0.8,
+          "added": "2025-10-20",
+          "updated": "2025-10-20"
+        },
+        {
+          "item": "to wach anime",
+          "score": 0.8,
+          "added": "2025-10-20",
+          "updated": "2025-10-20"
+        }
+      ],
+      "always": [],
+      "style": [],
+      "conditional": [],
+      "interests": [],
+      "love": [],
+      "hate": [],
+      "enjoy": [],
+      "need": [],
+      "want": [],
+      "continue": []
+    }
+  },
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {
+      "pref_28832ff7548e": {
+        "category": "personal_preferences",
+        "value": "to wach anime",
+        "timestamp": "2025-10-20T16:41:22.353123",
+        "metadata": {},
+        "privacy_level": "normal",
+        "retention_policy": "permanent",
+        "confidence": 0.8,
+        "subcategory": "dislikes",
+        "key": "pref_28832ff7548e",
+        "last_accessed": "2025-10-20T16:41:22.353126",
+        "source": "new_pattern",
+        "relationships": [],
+        "tags": [],
+        "session_id": null
+      },
+      "pref_208cd2ed8fdf": {
+        "category": "personal_preferences",
+        "value": "to wach anime",
+        "timestamp": "2025-10-20T16:41:22.353218",
+        "metadata": {},
+        "privacy_level": "normal",
+        "retention_policy": "permanent",
+        "confidence": 0.8,
+        "subcategory": "avoid",
+        "key": "pref_208cd2ed8fdf",
+        "last_accessed": "2025-10-20T16:41:22.353221",
+        "source": "new_pattern",
+        "relationships": [],
+        "tags": [],
+        "session_id": null
+      }
+    },
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+  "category_relationships": {},
+  "memory_metadata": {},
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  },
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  }
+}

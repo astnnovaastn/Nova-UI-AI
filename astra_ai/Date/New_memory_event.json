@@ -1,0 +1,246 @@
+{
+  "user": {
+    "user_id": "usr_001",
+    "name": "Astra",
+    "created_at": "2025-10-21T11:50:00Z",
+    "status": "active",
+    "total_sessions": 3,
+    "last_seen": "2025-10-21T12:30:00Z",
+    "relationship_established": true
+  },
+
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2025-10-21T12:30:00Z",
+      "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+    },
+
+    "memory_events": [
+      {
+        "event_id": "evt_001",
+        "type": "ADD",
+        "summary": "User likes watching anime during weekends",
+        "timestamp": "2025-10-16T17:08:03Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["interest"],
+          "emotional_intensity": 0.3,
+          "mood_context": "normal",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'I like to watch anime sometimes during the weekend.'",
+        "importance_score": 0.6,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "likes watching anime during weekends",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-16T17:08:03Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I like to watch anime sometimes during the weekend.",
+            "event_index": 0
+          },
+          "source_conversation_timestamp": "2025-10-16T17:08:03Z"
+        },
+        "Added_preference": "enjoys watching anime during weekends"
+      },
+      {
+        "event_id": "evt_002",
+        "type": "UPDATE",
+        "summary": "User now prefers to watch anime only on Sundays",
+        "timestamp": "2025-10-20T14:32:48Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.1,
+          "mood_context": "normal",
+          "confidence": 0.9
+        },
+        "semantic_context": {
+          "related_facts": ["evt_001"],
+          "confidence_score": 0.89,
+          "context_type": "preference_update",
+          "semantic_tags": ["anime", "time_preference"],
+          "similarity_hash": "aeeaec0b"
+        },
+        "importance_score": 0.6,
+        "confidence": 0.9,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": "likes watching anime during weekends",
+        "current_value": "prefers watching anime only on Sundays",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-20T14:32:48Z",
+          "original_summary": "User likes watching anime during weekends.",
+          "context": "User: Actually, I prefer Sundays only.",
+          "source_conversation_timestamp": "2025-10-20T14:32:48Z",
+          "cleanup_operation": "stacked_prefix_removal"
+        }
+      },
+      {
+        "event_id": "evt_003",
+        "type": "ADD",
+        "summary": "User enjoys Italian cuisine",
+        "timestamp": "2025-10-21T12:00:00Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["interest", "food"],
+          "emotional_intensity": 0.5,
+          "mood_context": "happy",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from input: 'I love Italian food, especially pasta.'",
+        "importance_score": 0.7,
+        "confidence": 0.8,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "enjoys Italian cuisine",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:00:00Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I love Italian food, especially pasta.",
+            "event_index": 2
+          },
+          "source_conversation_timestamp": "2025-10-21T12:00:00Z"
+        },
+        "Added_preference": "loves Italian food",
+        "context": "User: I love Italian food, especially pasta."
+      }
+    ],
+
+    "vector_index": {
+      "evt_001": [0.12, 0.23, 0.85, 0.0, 0.0, 0.0, 0.0, 0.5],
+      "evt_002": [0.15, 0.1, 0.9, 0.0, 0.0, 0.0, 0.0, 0.8],
+      "evt_003": [0.2, 0.3, 0.0, 0.8, 0.0, 0.0, 0.0, 0.1]
+    },
+
+    "clusters": {
+      "cluster_001": {
+        "topic": "Anime Preferences",
+        "centroid_vector": [0.13, 0.16, 0.87, 0.0, 0.0, 0.0, 0.0, 0.65],
+        "event_ids": ["evt_001", "evt_002"],
+        "coherence_score": 0.91,
+        "last_updated": "2025-10-20T14:33:00Z",
+        "metadata": {
+          "dominant_tags": ["anime", "weekends", "watching habits"],
+          "cluster_type": "personal_preferences"
+        }
+      },
+      "cluster_002": {
+        "topic": "Food Preferences",
+        "centroid_vector": [0.2, 0.3, 0.0, 0.8, 0.0, 0.0, 0.0, 0.1],
+        "event_ids": ["evt_003"],
+        "coherence_score": 0.87,
+        "last_updated": "2025-10-21T12:00:00Z",
+        "metadata": {
+          "dominant_tags": ["food", "Italian cuisine"],
+          "cluster_type": "personal_preferences"
+        }
+      }
+    }
+  },
+
+  "conversation": [
+    {
+      "timestamp": "2025-10-21T12:00:00Z",
+      "role": "user",
+      "text": "I love Italian food, especially pasta."
+    }
+  ],
+
+  "fact_history": {
+    "personal_preferences": {
+      "likes": [
+        {
+          "item": "likes watching anime during weekends",
+          "update_item": "prefers watching anime only on Sundays",
+          "added": "2025-10-16",
+          "updated": "2025-10-20",
+          "score": 0.90
+        },
+        {
+          "item": "enjoys Italian cuisine",
+          "added": "2025-10-21",
+          "score": 0.85
+        }
+      ]
+    },
+    "name": ["Astra"]
+  },
+
+  "sessions": {
+    "session_001": {
+      "started_at": "2025-10-21T11:50:00Z",
+      "ended_at": "2025-10-21T12:30:00Z",
+      "conversation_events": ["evt_001","evt_002","evt_003"]
+    }
+  },
+
+  "current_session": "session_001",
+
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": true,
+    "established_user": true
+  },
+
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {},
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+
+  "category_relationships": {},
+
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  },
+
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  }
+}

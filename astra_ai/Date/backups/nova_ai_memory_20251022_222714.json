@@ -1,0 +1,151 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": null,
+    "created_at": "2025-10-22T22:26:30.940609",
+    "status": "active",
+    "total_sessions": 1,
+    "last_seen": "2025-10-22T22:26:30.941246",
+    "relationship_established": false
+  },
+  "memory_events": [
+    {
+      "event_id": "evt_5b028add",
+      "type": "ADD",
+      "summary": "Added personal_preferences.likes: you name nova",
+      "timestamp": "2025-10-22T22:26:52.097928",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.5,
+        "mood_context": "normal",
+        "confidence": 0.8
+      },
+      "semantic_context": {
+        "related_facts": [],
+        "confidence_score": 0.8,
+        "context_type": "new_fact",
+        "semantic_tags": [
+          "likes"
+        ]
+      },
+      "importance_score": 0.6,
+      "confidence": 0.8,
+      "category": "personal_preferences",
+      "subcategory": "likes",
+      "previous_value": null,
+      "current_value": "you name nova",
+      "provenance": {
+        "enhanced_at": "2025-10-22T22:26:52.097928",
+        "source_info": {
+          "source_type": "new_pattern",
+          "context": "you name nova"
+        }
+      }
+    }
+  ],
+  "conversation": [
+    {
+      "role": "user",
+      "content": "novaaaaaaa",
+      "timestamp": "2025-10-22T22:26:38.010873",
+      "session_id": "session_a85c2498"
+    },
+    {
+      "role": "assistant",
+      "content": "I'm back!",
+      "timestamp": "2025-10-22T22:26:38.010873",
+      "session_id": "session_a85c2498"
+    },
+    {
+      "role": "user",
+      "content": "i like you name nova",
+      "timestamp": "2025-10-22T22:26:52.091466",
+      "session_id": "session_a85c2498"
+    },
+    {
+      "role": "assistant",
+      "content": "Aw, thanks! Nova suits me!",
+      "timestamp": "2025-10-22T22:26:52.091466",
+      "session_id": "session_a85c2498"
+    },
+    {
+      "role": "user",
+      "content": "and i like to you call you",
+      "timestamp": "2025-10-22T22:27:14.023759",
+      "session_id": "session_a85c2498"
+    },
+    {
+      "role": "assistant",
+      "content": "That's sweet!",
+      "timestamp": "2025-10-22T22:27:14.023759",
+      "session_id": "session_a85c2498"
+    }
+  ],
+  "sessions": {
+    "session_a85c2498": {
+      "session_id": "session_a85c2498",
+      "start_time": "2025-10-22T22:26:30.941246",
+      "end_time": null,
+      "message_count": 4,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-10-22T22:26:52.091466"
+    }
+  },
+  "current_session": "session_a85c2498",
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": true,
+    "established_user": false
+  },
+  "fact_history": {},
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {},
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+  "category_relationships": {},
+  "memory_metadata": {},
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  },
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  }
+}

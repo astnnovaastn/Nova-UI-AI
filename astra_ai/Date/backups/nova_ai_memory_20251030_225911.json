@@ -1,0 +1,301 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": null,
+    "created_at": "2025-10-30T22:58:33.735005",
+    "status": "active",
+    "total_sessions": 1,
+    "last_seen": "2025-10-30T22:58:33.736472",
+    "relationship_established": false
+  },
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2025-10-30T22:58:33.735018",
+      "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+    },
+    "memory_events": [
+      {
+        "event_id": "evt_dc7932d8",
+        "type": "ADD",
+        "summary": "Added personal_preferences.likes: to code a lot now",
+        "timestamp": "2025-10-30T22:59:10.033849",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from input: 'to code a lot now'",
+        "importance_score": 0.6,
+        "confidence": 0.8,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "to code a lot now",
+        "provenance": {
+          "enhanced_at": "2025-10-30T22:59:10.033849",
+          "source_info": {
+            "source_type": "new_pattern",
+            "context": "to code a lot now"
+          }
+        }
+      },
+      {
+        "event_id": "evt_9237cfba",
+        "type": "UPDATE",
+        "summary": "Describes what new information: unknown",
+        "timestamp": "2025-10-30T22:59:10.034508Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [
+            "evt_9237cfba"
+          ],
+          "confidence_score": 1.0000000000000002,
+          "context_type": "refinement",
+          "semantic_tags": [
+            "preference_update",
+            "refinement"
+          ]
+        },
+        "importance_score": 0.6,
+        "confidence": 0.85,
+        "category": "current_state",
+        "subcategory": "current_state",
+        "previous_value": "Describes what new information: unknown",
+        "current_value": "unknown",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-30T22:59:10.034508Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: unknown",
+            "event_index": 1
+          },
+          "source_conversation_timestamp": "2025-10-30T22:59:10.034508Z"
+        },
+        "Added_preference": "a clean, human-readable description of the newly added fact or preference: unknown"
+      }
+    ],
+    "vector_index": {},
+    "clusters": {},
+    "update_log": []
+  },
+  "conversation": [
+    {
+      "role": "user",
+      "content": "hi",
+      "timestamp": "2025-10-30T22:58:45.101774",
+      "session_id": "session_87a32e90"
+    },
+    {
+      "role": "assistant",
+      "content": "Late night gaming, I see.",
+      "timestamp": "2025-10-30T22:58:45.101774",
+      "session_id": "session_87a32e90"
+    },
+    {
+      "role": "user",
+      "content": "i like to code a lot now",
+      "timestamp": "2025-10-30T22:59:09.999307",
+      "session_id": "session_87a32e90"
+    },
+    {
+      "role": "assistant",
+      "content": "Coding's a great skill, Rich! Python or Java your go-to language?",
+      "timestamp": "2025-10-30T22:59:09.999307",
+      "session_id": "session_87a32e90"
+    }
+  ],
+  "fact_history": {
+    "evt_9237cfba": {
+      "item": "unknown",
+      "added": "2025-10-30",
+      "score": 0.85
+    },
+    "personal_preferences": {
+      "likes": [],
+      "dislikes": [],
+      "avoid": [],
+      "always": [],
+      "style": [],
+      "conditional": [],
+      "interests": [],
+      "love": [],
+      "hate": [],
+      "enjoy": [],
+      "need": [],
+      "want": [],
+      "continue": []
+    }
+  },
+  "sessions": {
+    "session_87a32e90": {
+      "session_id": "session_87a32e90",
+      "start_time": "2025-10-30T22:58:33.736472",
+      "end_time": null,
+      "message_count": 4,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-10-30T22:59:09.999307"
+    }
+  },
+  "current_session": "session_87a32e90",
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": true,
+    "established_user": false
+  },
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {},
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+  "category_relationships": {},
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  },
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  },
+  "memory_events": [
+    {
+      "event_id": "evt_9237cfba",
+      "type": "UPDATE",
+      "summary": "Describes what new information: unknown",
+      "timestamp": "2025-10-30T22:59:10.034508Z",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.5,
+        "mood_context": "normal",
+        "confidence": 0.7
+      },
+      "semantic_context": {
+        "related_facts": [
+          "evt_9237cfba"
+        ],
+        "confidence_score": 1.0000000000000002,
+        "context_type": "refinement",
+        "semantic_tags": [
+          "preference_update",
+          "refinement"
+        ]
+      },
+      "importance_score": 0.6,
+      "confidence": 0.85,
+      "category": "current_state",
+      "subcategory": "current_state",
+      "previous_value": "Describes what new information: unknown",
+      "current_value": "unknown",
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-30T22:59:10.034508Z",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "chat input",
+          "context": "User: unknown",
+          "event_index": 1
+        },
+        "source_conversation_timestamp": "2025-10-30T22:59:10.034508Z"
+      },
+      "Added_preference": "a clean, human-readable description of the newly added fact or preference: unknown"
+    },
+    {
+      "type": "UPDATE_LOG",
+      "summary": "Update log entry: refinement from evt_9237cfba",
+      "timestamp": "2025-10-30T22:59:10.060176",
+      "update_entry": {
+        "update_id": "upd_b1645f3c",
+        "source_event": "evt_9237cfba",
+        "replaced_event": "evt_9237cfba",
+        "timestamp": "2025-10-30T22:59:10.060082",
+        "similarity_score": 1.0000000000000002,
+        "update_type": "refinement",
+        "note": "Updated refinement with similarity 1.000"
+      }
+    }
+  ],
+  "vector_index": {
+    "evt_9237cfba": [
+      -0.3120188603766914,
+      -0.03466876226407682,
+      -0.03466876226407682,
+      0.1733438113203841,
+      0.24268133584853777,
+      -0.5200314339611524,
+      -0.5200314339611524,
+      -0.5200314339611524
+    ]
+  },
+  "clusters": {
+    "cluster_a4dfc761": {
+      "topic_label": "current_state_evt_9237",
+      "centroid_vector": [
+        -0.3120188603766914,
+        -0.03466876226407682,
+        -0.03466876226407682,
+        0.1733438113203841,
+        0.24268133584853777,
+        -0.5200314339611524,
+        -0.5200314339611524,
+        -0.5200314339611524
+      ],
+      "related_events": [
+        "evt_9237cfba"
+      ],
+      "active_event": "evt_9237cfba",
+      "semantic_context": {
+        "primary_topic": "current_state",
+        "related_concepts": [
+          "current_state"
+        ],
+        "confidence_score": 0.85,
+        "context_type": "refinement"
+      }
+    }
+  }
+}

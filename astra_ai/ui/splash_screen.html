@@ -7833,6 +7833,14 @@
         // Generate a unique session ID for this conversation
         let sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         
+        // Connection monitoring variables
+        let connectionStatus = 'unknown';
+        let connectionCheckInterval = null;
+        let lastConnectionCheck = 0;
+        let connectionRetryCount = 0;
+        const MAX_CONNECTION_RETRIES = 3;
+        const CONNECTION_CHECK_INTERVAL = 30000; // 30 seconds
+        
         // Store user's location (default to Italy for testing)
         let userLocation = localStorage.getItem('userLocation') || 'Italy';
         if (userLocation === 'Italy') {
@@ -10629,7 +10637,11 @@
                 lowerMessage.includes('what does this say') || lowerMessage.includes('what\'s written here')) {
                 
                 showAIEyeWidget();
-                addModernChatMessage('??? **Activating AI Vision System...**\n\n?? **Opening camera and analyzing in real-time...**\n\n?? **Camera will activate automatically** - I'm ready to see what you're showing me!\n\n? **Processing your request through AI backend...**', false);
+                const visionMessage = "??? **Activating AI Vision System...**\n\n" +
+                                     "?? **Opening camera and analyzing in real-time...**\n\n" +
+                                     "?? **Camera will activate automatically** - I'm ready to see what you're showing me!\n\n" +
+                                     "? **Processing your request through AI backend...**";
+                addModernChatMessage(visionMessage, false);
                 
                 // Send the vision query to the AI backend for processing
                 sendToNovaAI(message);
@@ -10930,14 +10942,14 @@
                 const apiPort = urlParams.get('api_port') || '5001';
 
                 // Send request to Nova AI service
-                const response = await fetch(`http://localhost:${apiPort}/chat`, {
+                const response = await fetch(`http://127.0.0.1:${apiPort}/api/chat`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
                         message: message,
-                        conversation_id: 'nova-chat-' + Date.now()
+                        session_id: sessionId
                     })
                 });
 
@@ -11090,6 +11102,102 @@
         window.hideModernChat = function() {
             closeModernChat();
         };
+
+        // ================= CONNECTION MONITORING FUNCTIONS =================
+
+        /**
+         * Check the connection status to the Nova AI backend
+         */
+        async function checkConnectionStatus() {
+            try {
+                // Don't check too frequently
+                const now = Date.now();
+                if (now - lastConnectionCheck < 5000) {
+                    return connectionStatus;
+                }
+                lastConnectionCheck = now;
+
+                const response = await fetch(`${API_BASE_URL}/api/status`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'running' && data.nova_ai_initialized) {
+                        connectionStatus = 'connected';
+                        connectionRetryCount = 0;
+                        console.log('✅ Connected to Nova AI backend');
+                    } else {
+                        connectionStatus = 'disconnected';
+                        console.log('⚠️ Nova AI backend not fully initialized');
+                    }
+                } else {
+                    connectionStatus = 'disconnected';
+                    console.log('⚠️ Disconnected from Nova AI backend');
+                }
+            } catch (error) {
+                connectionStatus = 'disconnected';
+                console.log('❌ Connection error:', error.message);
+            }
+
+            return connectionStatus;
+        }
+
+        /**
+         * Start monitoring the connection to the Nova AI backend
+         */
+        function startConnectionMonitoring() {
+            // Clear any existing interval
+            if (connectionCheckInterval) {
+                clearInterval(connectionCheckInterval);
+            }
+
+            // Start periodic connection checking
+            connectionCheckInterval = setInterval(async () => {
+                const status = await checkConnectionStatus();
+                
+                // Update UI elements if they exist
+                const serverStatusElement = document.getElementById('serverStatus');
+                if (serverStatusElement) {
+                    if (status === 'connected') {
+                        serverStatusElement.textContent = 'Connected';
+                        serverStatusElement.style.background = 'rgba(0, 255, 0, 0.2)';
+                        serverStatusElement.style.color = '#00ff96';
+                    } else {
+                        serverStatusElement.textContent = 'Disconnected';
+                        serverStatusElement.style.background = 'rgba(255, 0, 0, 0.2)';
+                        serverStatusElement.style.color = '#ff6b6b';
+                    }
+                }
+
+                // Retry connection if disconnected
+                if (status === 'disconnected') {
+                    connectionRetryCount++;
+                    if (connectionRetryCount <= MAX_CONNECTION_RETRIES) {
+                        console.log(`🔄 Retrying connection (${connectionRetryCount}/${MAX_CONNECTION_RETRIES})...`);
+                    }
+                }
+            }, CONNECTION_CHECK_INTERVAL);
+
+            console.log('📡 Started connection monitoring');
+        }
+
+        /**
+         * Stop monitoring the connection to the Nova AI backend
+         */
+        function stopConnectionMonitoring() {
+            if (connectionCheckInterval) {
+                clearInterval(connectionCheckInterval);
+                connectionCheckInterval = null;
+                console.log('📡 Stopped connection monitoring');
+            }
+        }
+
+        // Initialize connection monitoring
+        startConnectionMonitoring();
 
         // Initialize modern chat when page loads
         initializeModernChat();
@@ -13839,7 +13947,7 @@
                     },
                     body: JSON.stringify({
                         message: summarizationPrompt,
-                        conversation_id: 'notepad-summary-' + Date.now()
+                        session_id: 'notepad-summary-' + Date.now()
                     })
                 });
 
@@ -13935,14 +14043,14 @@
             const apiPort = urlParams.get('api_port') || '5001';
 
             // Send request to Nova AI service
-            const response = await fetch(`http://localhost:${apiPort}/chat`, {
+            const response = await fetch(`http://127.0.0.1:${apiPort}/api/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     message: summarizationPrompt,
-                    conversation_id: 'notepad-summary-' + Date.now()
+                    session_id: 'notepad-summary-' + Date.now()
                 })
             });
 
@@ -17469,14 +17577,14 @@ Please format the response in a clear, organized manner with proper headings and
                     const apiPort = urlParams.get('api_port') || '5001';
 
                     // Send request to Nova AI service
-                    const response = await fetch(`http://localhost:${apiPort}/chat`, {
+                    const response = await fetch(`http://127.0.0.1:${apiPort}/api/chat`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
                             message: lookupPrompt,
-                            conversation_id: 'object-lookup-' + Date.now(),
+                            session_id: 'object-lookup-' + Date.now(),
                             context: {
                                 type: 'object_lookup',
                                 object_info: objectInfo,
@@ -18071,11 +18179,11 @@ Please format the response in a clear, organized manner with proper headings and
                     // Convert canvas image to base64 (remove data:image/jpeg;base64, prefix)
                     const base64Image = imageData.split(',')[1];
 
-                    // Create concise, factual prompts for structured responses
-let enhancedPrompt;
-
-if (isObjectIdentification) {
-    enhancedPrompt = `Analyze this camera image and identify the main object being shown. Provide a very brief, focused response with only the most important details:
+                    // Create concise, factual prompt for structured response
+                    let enhancedPrompt;
+                    
+                    if (isObjectIdentification) {
+                        enhancedPrompt = `Analyze this camera image and identify the main object being shown. Provide a very brief, focused response with only the most important details:
 
 User's question: "${question}"
 
@@ -18092,64 +18200,8 @@ IMPORTANT:
 - Only include what is most relevant and clearly identifiable
 
 Respond naturally in first-person as if you're personally identifying the object. Start with phrases like "I can see..." or "I'm looking at..." and be extremely concise. Avoid speculation and unnecessary details.`;
-
-} else if (isPersonDetection) {
-    enhancedPrompt = `Analyze this camera image and describe the most prominent person. Provide a very brief, focused summary:
-
-User's question: "${question}"
-
-Response format:
-- Main person (gender, age group, or notable appearance)
-- Visible action (e.g., walking, sitting, holding something)
-- Key detail (e.g., clothing, expression, uniform)
-
-IMPORTANT:
-- Keep response under 25 words
-- Focus only on the most visible person
-- Ignore background individuals and minor elements
-- Do NOT mention timestamps, camera UI, or unrelated context
-- Only describe what is clearly observable and central
-
-Respond naturally in first-person as if you're observing the scene. Start with "I can see..." or "I'm seeing..." and be precise.`;
-
-} else if (isSafetyMonitoring) {
-    enhancedPrompt = `Evaluate this camera image for any visible safety concerns or hazards. Provide a brief, high-priority assessment only:
-
-User's question: "${question}"
-
-Response format:
-- Clearly visible threat or safety issue
-- Location clue (e.g., near ladder, rooftop, wet floor)
-- Relevant context if it affects safety (e.g., missing gear)
-
-IMPORTANT:
-- Keep response under 30 words
-- Only describe obvious and critical risks
-- Do NOT include neutral behaviors or minor context
-- Do NOT mention timestamps, camera UI, or metadata
-
-Respond naturally in first-person with clear safety observation. Begin with "I can see..." or "I'm seeing..." and be factual and urgent.`;
-
-} else if (isFacialEmotionRecognition) {
-    enhancedPrompt = `Analyze the person's facial expression and describe the clearly visible emotion. Provide a short, confident description:
-
-User's question: "${question}"
-
-Response format:
-- Main emotion (e.g., happy, sad, angry)
-- Who it is (adult male, child, elderly woman)
-- Visible cue (e.g., smile, tears, frown, clenched jaw)
-
-IMPORTANT:
-- Keep response under 20 words
-- Only describe emotions that are clearly visible
-- Avoid guessing or interpreting beyond what’s shown
-- Do NOT include time, lighting, or background distractions
-
-Respond naturally in first-person as if you’re identifying a feeling. Start with "I can see..." or "I'm seeing..." and describe only what is visually clear.`;
-
-} else {
-    enhancedPrompt = `Analyze this camera image and describe only the most important elements. Provide a very brief, focused summary:
+                    } else {
+                        enhancedPrompt = `Analyze this camera image and describe only the most important elements. Provide a very brief, focused summary:
 
 User's question: "${question}"
 
@@ -18166,7 +18218,7 @@ IMPORTANT:
 - Only include what is immediately relevant and clearly significant
 
 Respond naturally in first-person as if you're personally seeing the scene. Start with phrases like "I'm seeing..." or "I can see..." and be extremely selective. Only mention what truly matters in the scene.`;
-}
+                    }
 
 
                     // Prepare the request for direct Gemini API

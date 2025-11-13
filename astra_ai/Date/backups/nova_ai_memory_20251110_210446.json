@@ -1,0 +1,1432 @@
+{
+  "user": {
+    "total_sessions": 2,
+    "last_seen": "2025-11-10T20:48:11.284155",
+    "relationship_established": true
+  },
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2025-11-10T21:02:30.177068",
+      "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+    },
+    "memory_events": [
+      {
+        "event_id": "evt_c42a9d74",
+        "type": "ADD",
+        "summary": "User general rich",
+        "timestamp": "2025-11-10T20:46:01.099020Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "e7f4f8bd"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "rich",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:46:01.099020Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: my name is Rich",
+            "event_index": 0
+          },
+          "source_conversation_timestamp": "2025-11-10T20:46:01.099020Z"
+        },
+        "Added_preference": "User general rich",
+        "session_id": "session_e2fa7bfe"
+      },
+      {
+        "event_id": "evt_553c0e51",
+        "type": "ADD",
+        "summary": "User general reading science fiction novels",
+        "timestamp": "2025-11-10T20:46:20.634277Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "58889d8b"
+        },
+        "importance_score": 0.85,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "reading science fiction novels",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:46:20.634277Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i enjoy reading science fiction novels",
+            "event_index": 1
+          },
+          "source_conversation_timestamp": "2025-11-10T20:46:20.634277Z"
+        },
+        "Added_preference": "User general reading science fiction novels",
+        "session_id": "session_e2fa7bfe"
+      },
+      {
+        "event_id": "evt_b1173a5e",
+        "type": "ADD",
+        "summary": "User preferences enjoy reading science fiction novels",
+        "timestamp": "2025-11-10T20:46:20.634560Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "preferences"
+          ],
+          "similarity_hash": "89745691"
+        },
+        "importance_score": 0.85,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "preferences",
+        "previous_value": null,
+        "current_value": "enjoy reading science fiction novels",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:46:20.634560Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i enjoy reading science fiction novels",
+            "event_index": 2
+          },
+          "source_conversation_timestamp": "2025-11-10T20:46:20.634560Z"
+        },
+        "Added_preference": "User preferences enjoy reading science fiction novels",
+        "session_id": "session_e2fa7bfe"
+      },
+      {
+        "event_id": "evt_64e22aa2",
+        "type": "ADD",
+        "summary": "User general software engineer",
+        "timestamp": "2025-11-10T20:46:20.651708Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "6eec3fb9"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "software engineer",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:46:20.651708Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i work as a software engineer",
+            "event_index": 3
+          },
+          "source_conversation_timestamp": "2025-11-10T20:46:20.651708Z"
+        },
+        "Added_preference": "User general software engineer",
+        "session_id": "session_e2fa7bfe"
+      },
+      {
+        "event_id": "evt_a44d5572",
+        "type": "ADD",
+        "summary": "User general new york",
+        "timestamp": "2025-11-10T20:46:20.656389Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "learning",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "5cbe8b23"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "new york",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:46:20.656389Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i live in New York",
+            "event_index": 4
+          },
+          "source_conversation_timestamp": "2025-11-10T20:46:20.656389Z"
+        },
+        "Added_preference": "User general new york",
+        "session_id": "session_e2fa7bfe"
+      },
+      {
+        "event_id": "evt_8044ace4",
+        "type": "ADD",
+        "summary": "User general waiting in long lines",
+        "timestamp": "2025-11-10T20:46:20.660602Z",
+        "emotional_context": {
+          "sentiment": "negative",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "d487feb2"
+        },
+        "importance_score": 0.85,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "waiting in long lines",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:46:20.660602Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i hate waiting in long lines",
+            "event_index": 5
+          },
+          "source_conversation_timestamp": "2025-11-10T20:46:20.660602Z"
+        },
+        "Added_preference": "User general waiting in long lines",
+        "session_id": "session_e2fa7bfe"
+      },
+      {
+        "event_id": "evt_20ccfcbd",
+        "type": "ADD",
+        "summary": "User preferences hate waiting in long lines",
+        "timestamp": "2025-11-10T20:46:20.660799Z",
+        "emotional_context": {
+          "sentiment": "negative",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "preferences"
+          ],
+          "similarity_hash": "a031b17c"
+        },
+        "importance_score": 0.85,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "preferences",
+        "previous_value": null,
+        "current_value": "hate waiting in long lines",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:46:20.660799Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i hate waiting in long lines",
+            "event_index": 6
+          },
+          "source_conversation_timestamp": "2025-11-10T20:46:20.660799Z"
+        },
+        "Added_preference": "User preferences hate waiting in long lines",
+        "session_id": "session_e2fa7bfe"
+      },
+      {
+        "event_id": "evt_471898b3",
+        "type": "ADD",
+        "summary": "User general to play game a lot doing the weekend",
+        "timestamp": "2025-11-10T20:49:06.321222Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "36902229"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "to play game a lot doing the weekend",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:49:06.321222Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i like to play game a lot doing the weekend",
+            "event_index": 7
+          },
+          "source_conversation_timestamp": "2025-11-10T20:49:06.321222Z"
+        },
+        "Added_preference": "User general to play game a lot doing the weekend",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_09483b94",
+        "type": "ADD",
+        "summary": "User preferences like to play game a lot doing the weekend",
+        "timestamp": "2025-11-10T20:49:06.321477Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "preferences"
+          ],
+          "similarity_hash": "28a1db36"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "preferences",
+        "previous_value": null,
+        "current_value": "like to play game a lot doing the weekend",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:49:06.321477Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i like to play game a lot doing the weekend",
+            "event_index": 8
+          },
+          "source_conversation_timestamp": "2025-11-10T20:49:06.321477Z"
+        },
+        "Added_preference": "User preferences like to play game a lot doing the weekend",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_fde86326",
+        "type": "ADD",
+        "summary": "User general anime",
+        "timestamp": "2025-11-10T21:01:45.323601Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "387e6278"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "anime",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T21:01:45.323601Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i like anime",
+            "event_index": 9
+          },
+          "source_conversation_timestamp": "2025-11-10T21:01:45.323601Z"
+        },
+        "Added_preference": "User general anime",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_f4111649",
+        "type": "ADD",
+        "summary": "User preferences like anime",
+        "timestamp": "2025-11-10T21:01:45.323804Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "preferences"
+          ],
+          "similarity_hash": "81693b79"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "preferences",
+        "previous_value": null,
+        "current_value": "like anime",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T21:01:45.323804Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i like anime",
+            "event_index": 10
+          },
+          "source_conversation_timestamp": "2025-11-10T21:01:45.323804Z"
+        },
+        "Added_preference": "User preferences like anime",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_0badd46c",
+        "type": "ADD",
+        "summary": "User greetings hiking on weekends",
+        "timestamp": "2025-11-10T21:01:45.334372Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "greetings"
+          ],
+          "similarity_hash": "d178d9b2"
+        },
+        "importance_score": 0.65,
+        "confidence": 0.85,
+        "category": "greeting_patterns",
+        "subcategory": "greetings",
+        "previous_value": null,
+        "current_value": "hiking on weekends",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T21:01:45.334372Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i enjoy hiking on weekends",
+            "event_index": 11
+          },
+          "source_conversation_timestamp": "2025-11-10T21:01:45.334372Z"
+        },
+        "Added_preference": "User greetings hiking on weekends",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_00d36f5a",
+        "type": "ADD",
+        "summary": "User preferences enjoy hiking on weekends",
+        "timestamp": "2025-11-10T21:01:45.334580Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "preferences"
+          ],
+          "similarity_hash": "a2ca624d"
+        },
+        "importance_score": 0.85,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "preferences",
+        "previous_value": null,
+        "current_value": "enjoy hiking on weekends",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T21:01:45.334580Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i enjoy hiking on weekends",
+            "event_index": 12
+          },
+          "source_conversation_timestamp": "2025-11-10T21:01:45.334580Z"
+        },
+        "Added_preference": "User preferences enjoy hiking on weekends",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_606348fb",
+        "type": "ADD",
+        "summary": "User preferences enjoy hiking",
+        "timestamp": "2025-11-10T21:01:45.334717Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "preferences"
+          ],
+          "similarity_hash": "b8738740"
+        },
+        "importance_score": 0.85,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "preferences",
+        "previous_value": null,
+        "current_value": "enjoy hiking",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T21:01:45.334717Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i enjoy hiking on weekends",
+            "event_index": 13
+          },
+          "source_conversation_timestamp": "2025-11-10T21:01:45.334717Z"
+        },
+        "Added_preference": "User preferences enjoy hiking",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_68b2e1ec",
+        "type": "ADD",
+        "summary": "User general color blue",
+        "timestamp": "2025-11-10T21:01:45.342493Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "c1412753"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "color blue",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T21:01:45.342493Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: my favorite color is blue",
+            "event_index": 14
+          },
+          "source_conversation_timestamp": "2025-11-10T21:01:45.342493Z"
+        },
+        "Added_preference": "User general color blue",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_bc2caac4",
+        "type": "ADD",
+        "summary": "User general google",
+        "timestamp": "2025-11-10T21:01:45.384395Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "c822c1b6"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "google",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T21:01:45.384395Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i work at Google",
+            "event_index": 15
+          },
+          "source_conversation_timestamp": "2025-11-10T21:01:45.384395Z"
+        },
+        "Added_preference": "User general google",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_77703942",
+        "type": "ADD",
+        "summary": "User general california",
+        "timestamp": "2025-11-10T21:01:45.391600Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "c6698873"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "california",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T21:01:45.391600Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i live in California",
+            "event_index": 16
+          },
+          "source_conversation_timestamp": "2025-11-10T21:01:45.391600Z"
+        },
+        "Added_preference": "User general california",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_22a14650",
+        "type": "ADD",
+        "summary": "User preferences love playing video games",
+        "timestamp": "2025-11-10T21:02:29.768022Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.8999999999999999,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "preferences"
+          ],
+          "similarity_hash": "abab1714"
+        },
+        "importance_score": 0.8899999999999999,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "preferences",
+        "previous_value": null,
+        "current_value": "love playing video games",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T21:02:29.768022Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i really love playing video games",
+            "event_index": 17
+          },
+          "source_conversation_timestamp": "2025-11-10T21:02:29.768022Z"
+        },
+        "Added_preference": "User preferences love playing video games",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_5a64915f",
+        "type": "ADD",
+        "summary": "User preferences really love playing video games",
+        "timestamp": "2025-11-10T21:02:29.768190Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.8999999999999999,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "preferences"
+          ],
+          "similarity_hash": "05b2927b"
+        },
+        "importance_score": 0.8899999999999999,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "preferences",
+        "previous_value": null,
+        "current_value": "really love playing video games",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T21:02:29.768190Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i really love playing video games",
+            "event_index": 18
+          },
+          "source_conversation_timestamp": "2025-11-10T21:02:29.768190Z"
+        },
+        "Added_preference": "User preferences really love playing video games",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_9e2c11ff",
+        "type": "ADD",
+        "summary": "User general play in the evening after work",
+        "timestamp": "2025-11-10T21:02:29.796606Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "463edb36"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "play in the evening after work",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T21:02:29.796606Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i usually play in the evening after work",
+            "event_index": 19
+          },
+          "source_conversation_timestamp": "2025-11-10T21:02:29.796606Z"
+        },
+        "Added_preference": "User general play in the evening after work",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_dcfcffa2",
+        "type": "ADD",
+        "summary": "User behavior_patterns usually play in the evening after work",
+        "timestamp": "2025-11-10T21:02:29.796790Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "behavior_patterns"
+          ],
+          "similarity_hash": "3bc7be3f"
+        },
+        "importance_score": 0.6,
+        "confidence": 0.85,
+        "category": "activity_behavior",
+        "subcategory": "behavior_patterns",
+        "previous_value": null,
+        "current_value": "usually play in the evening after work",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T21:02:29.796790Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i usually play in the evening after work",
+            "event_index": 20
+          },
+          "source_conversation_timestamp": "2025-11-10T21:02:29.796790Z"
+        },
+        "Added_preference": "User behavior_patterns usually play in the evening after work",
+        "session_id": "session_7e67d0bb"
+      },
+      {
+        "event_id": "evt_218ea5a0",
+        "type": "ADD",
+        "summary": "User general play evening after work",
+        "timestamp": "2025-11-10T21:02:29.796907Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "37f71292"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "play evening after work",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T21:02:29.796907Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i usually play in the evening after work",
+            "event_index": 21
+          },
+          "source_conversation_timestamp": "2025-11-10T21:02:29.796907Z"
+        },
+        "Added_preference": "User general play evening after work",
+        "session_id": "session_7e67d0bb"
+      }
+    ],
+    "vector_index": {
+      "evt_22a14650": [
+        0.7698003589195009,
+        0.0,
+        0.19245008972987523,
+        0.0,
+        0.5773502691896257,
+        0.19245008972987523,
+        0.0,
+        0.0
+      ],
+      "evt_5a64915f": [
+        0.43759497449368373,
+        0.7293249574894728,
+        0.0,
+        0.0,
+        0.0,
+        0.2917299829957891,
+        0.4375949744936836,
+        0.0
+      ],
+      "evt_9e2c11ff": [
+        0.4818998735750599,
+        0.4130570344929085,
+        0.4130570344929085,
+        0.06884283908215143,
+        0.4130570344929085,
+        0.4818998735750599,
+        0.13768567816430285,
+        0.0
+      ],
+      "evt_dcfcffa2": [
+        0.30151134457776363,
+        0.502518907629606,
+        0.10050378152592121,
+        0.20100756305184242,
+        0.7035264706814484,
+        0.10050378152592121,
+        0.30151134457776363,
+        0.10050378152592121
+      ],
+      "evt_218ea5a0": [
+        0.5696519211398116,
+        0.32551538350846376,
+        0.16275769175423188,
+        0.16275769175423188,
+        0.40689422938557973,
+        0.5696519211398116,
+        0.16275769175423188,
+        0.0
+      ]
+    },
+    "clusters": {},
+    "update_log": []
+  },
+  "conversation": [
+    {
+      "role": "user",
+      "content": "my name is Rich",
+      "timestamp": "2025-11-10T20:46:01.098616",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "assistant",
+      "content": "Nice to meet you Rich!",
+      "timestamp": "2025-11-10T20:46:01.098616",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "user",
+      "content": "i enjoy reading science fiction novels",
+      "timestamp": "2025-11-10T20:46:20.627078",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "assistant",
+      "content": "Interesting!",
+      "timestamp": "2025-11-10T20:46:20.627078",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "user",
+      "content": "i work as a software engineer",
+      "timestamp": "2025-11-10T20:46:20.638636",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "assistant",
+      "content": "Great career choice!",
+      "timestamp": "2025-11-10T20:46:20.638636",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "user",
+      "content": "i live in New York",
+      "timestamp": "2025-11-10T20:46:20.655803",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "assistant",
+      "content": "Nice place!",
+      "timestamp": "2025-11-10T20:46:20.655803",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "user",
+      "content": "i hate waiting in long lines",
+      "timestamp": "2025-11-10T20:46:20.660166",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "assistant",
+      "content": "I understand!",
+      "timestamp": "2025-11-10T20:46:20.660166",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "user",
+      "content": "i like to play game a lot doing the weekend",
+      "timestamp": "2025-11-10T20:49:06.315691",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "assistant",
+      "content": "Gaming is a great way to unwind, Rich! Which games do you enjoy playing the most?",
+      "timestamp": "2025-11-10T20:49:06.315691",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "user",
+      "content": "i enjoy reading science fiction novels",
+      "timestamp": "2025-11-10T21:00:46.550703",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "assistant",
+      "content": "Interesting!",
+      "timestamp": "2025-11-10T21:00:46.550703",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "user",
+      "content": "i work as a software engineer",
+      "timestamp": "2025-11-10T21:00:46.565133",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "assistant",
+      "content": "Great career choice!",
+      "timestamp": "2025-11-10T21:00:46.565133",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "user",
+      "content": "i live in New York",
+      "timestamp": "2025-11-10T21:00:46.577570",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "assistant",
+      "content": "Nice place!",
+      "timestamp": "2025-11-10T21:00:46.577570",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "user",
+      "content": "i hate waiting in long lines",
+      "timestamp": "2025-11-10T21:00:46.625320",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "assistant",
+      "content": "I understand!",
+      "timestamp": "2025-11-10T21:00:46.625320",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "user",
+      "content": "i like anime",
+      "timestamp": "2025-11-10T21:01:45.318725",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "assistant",
+      "content": "That's great!",
+      "timestamp": "2025-11-10T21:01:45.318725",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "user",
+      "content": "i enjoy hiking on weekends",
+      "timestamp": "2025-11-10T21:01:45.333838",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "assistant",
+      "content": "Sounds fun!",
+      "timestamp": "2025-11-10T21:01:45.333838",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "user",
+      "content": "my favorite color is blue",
+      "timestamp": "2025-11-10T21:01:45.342120",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2025-11-10T21:01:45.342120",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "user",
+      "content": "i work at Google",
+      "timestamp": "2025-11-10T21:01:45.375433",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "assistant",
+      "content": "Great company!",
+      "timestamp": "2025-11-10T21:01:45.375433",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "user",
+      "content": "i live in California",
+      "timestamp": "2025-11-10T21:01:45.390795",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "assistant",
+      "content": "Beautiful state!",
+      "timestamp": "2025-11-10T21:01:45.390795",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "user",
+      "content": "i really love playing video games",
+      "timestamp": "2025-11-10T21:02:29.761061",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "assistant",
+      "content": "That sounds fun! What types of games do you enjoy?",
+      "timestamp": "2025-11-10T21:02:29.761061",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "user",
+      "content": "my favorite games are RPGs and strategy games",
+      "timestamp": "2025-11-10T21:02:29.777675",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "assistant",
+      "content": "Great choices! What makes them your favorites?",
+      "timestamp": "2025-11-10T21:02:29.777675",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "user",
+      "content": "i usually play in the evening after work",
+      "timestamp": "2025-11-10T21:02:29.796229",
+      "session_id": "session_7e67d0bb"
+    },
+    {
+      "role": "assistant",
+      "content": "That's a good time to unwind!",
+      "timestamp": "2025-11-10T21:02:29.796229",
+      "session_id": "session_7e67d0bb"
+    }
+  ],
+  "fact_history": {
+    "evt_c42a9d74": {
+      "item": "rich",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "personal_preferences": {
+      "preferences": [
+        {
+          "item": "enjoy reading science fiction novels",
+          "added": "2025-11-10",
+          "score": 0.85
+        },
+        {
+          "item": "hate waiting in long lines",
+          "added": "2025-11-10",
+          "score": 0.85
+        },
+        {
+          "item": "like to play game a lot doing the weekend",
+          "added": "2025-11-10",
+          "score": 0.85
+        },
+        {
+          "item": "like anime",
+          "added": "2025-11-10",
+          "score": 0.85
+        },
+        {
+          "item": "enjoy hiking on weekends",
+          "added": "2025-11-10",
+          "score": 0.85
+        },
+        {
+          "item": "enjoy hiking",
+          "added": "2025-11-10",
+          "score": 0.85
+        },
+        {
+          "item": "love playing video games",
+          "added": "2025-11-10",
+          "score": 0.85
+        },
+        {
+          "item": "really love playing video games",
+          "added": "2025-11-10",
+          "score": 0.85
+        }
+      ]
+    },
+    "evt_553c0e51": {
+      "item": "reading science fiction novels",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_b1173a5e": {
+      "item": "enjoy reading science fiction novels",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_64e22aa2": {
+      "item": "software engineer",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_a44d5572": {
+      "item": "new york",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_8044ace4": {
+      "item": "waiting in long lines",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_20ccfcbd": {
+      "item": "hate waiting in long lines",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_471898b3": {
+      "item": "to play game a lot doing the weekend",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_09483b94": {
+      "item": "like to play game a lot doing the weekend",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_fde86326": {
+      "item": "anime",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_f4111649": {
+      "item": "like anime",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_0badd46c": {
+      "item": "hiking on weekends",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_00d36f5a": {
+      "item": "enjoy hiking on weekends",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_606348fb": {
+      "item": "enjoy hiking",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_68b2e1ec": {
+      "item": "color blue",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_bc2caac4": {
+      "item": "google",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_77703942": {
+      "item": "california",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_22a14650": {
+      "item": "love playing video games",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_5a64915f": {
+      "item": "really love playing video games",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_9e2c11ff": {
+      "item": "play in the evening after work",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_dcfcffa2": {
+      "item": "usually play in the evening after work",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_218ea5a0": {
+      "item": "play evening after work",
+      "added": "2025-11-10",
+      "score": 0.85
+    }
+  },
+  "sessions": {
+    "session_e2fa7bfe": {
+      "session_id": "session_e2fa7bfe",
+      "start_time": "2025-11-10T20:46:01.098636",
+      "end_time": null,
+      "message_count": 10,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-11-10T20:46:20.660166"
+    },
+    "session_7e67d0bb": {
+      "session_id": "session_7e67d0bb",
+      "start_time": "2025-11-10T20:48:11.284155",
+      "end_time": null,
+      "message_count": 26,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-11-10T21:02:29.796229"
+    }
+  },
+  "current_session": "session_7e67d0bb",
+  "conversation_state": {
+    "introduction_phase": false,
+    "established_user": true,
+    "greeting_completed": true
+  },
+  "memory_categories": {},
+  "category_relationships": {},
+  "behavioral_adaptation": {},
+  "privacy_settings": {},
+  "current_facts": {},
+  "vector_index": {
+    "evt_22a14650": [
+      0.7698003589195009,
+      0.0,
+      0.19245008972987523,
+      0.0,
+      0.5773502691896257,
+      0.19245008972987523,
+      0.0,
+      0.0
+    ],
+    "evt_5a64915f": [
+      0.43759497449368373,
+      0.7293249574894728,
+      0.0,
+      0.0,
+      0.0,
+      0.2917299829957891,
+      0.4375949744936836,
+      0.0
+    ],
+    "evt_9e2c11ff": [
+      0.4818998735750599,
+      0.4130570344929085,
+      0.4130570344929085,
+      0.06884283908215143,
+      0.4130570344929085,
+      0.4818998735750599,
+      0.13768567816430285,
+      0.0
+    ],
+    "evt_dcfcffa2": [
+      0.30151134457776363,
+      0.502518907629606,
+      0.10050378152592121,
+      0.20100756305184242,
+      0.7035264706814484,
+      0.10050378152592121,
+      0.30151134457776363,
+      0.10050378152592121
+    ],
+    "evt_218ea5a0": [
+      0.5696519211398116,
+      0.32551538350846376,
+      0.16275769175423188,
+      0.16275769175423188,
+      0.40689422938557973,
+      0.5696519211398116,
+      0.16275769175423188,
+      0.0
+    ]
+  },
+  "clusters": {}
+}

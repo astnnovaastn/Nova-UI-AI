@@ -1,0 +1,333 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": null,
+    "created_at": "2025-10-20T17:01:43.726032",
+    "status": "active",
+    "total_sessions": 1,
+    "last_seen": "2025-10-20T17:01:43.726987",
+    "relationship_established": false
+  },
+  "memory_events": [
+    {
+      "type": "ADD",
+      "summary": "User is intrigued by talke to you nova and enjoys it.",
+      "timestamp": "2025-10-20T17:02:01.083872",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.0,
+        "mood_context": "normal",
+        "confidence": 0.8
+      },
+      "semantic_context": "User expressed enjoyment and personal interest in talke to you nova.",
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null,
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-20T17:02:01.092949",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "Conversation at 2025-10-20T17:02:01.083872",
+          "context": "User: i like to talke to you nova...",
+          "event_index": 0
+        },
+        "source_conversation_timestamp": "2025-10-20T17:02:01.083872"
+      },
+      "Added_preference_likes": "enjoys to talke to you nova"
+    },
+    {
+      "type": "ADD",
+      "summary": "User dislikes to wach yuotube that much.",
+      "timestamp": "2025-10-20T17:02:26.350357",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.0,
+        "mood_context": "normal",
+        "confidence": 0.8
+      },
+      "semantic_context": "Inferred from user input: User dislikes to wach yuotube that much.",
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null,
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-20T17:02:26.353348",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "Conversation at 2025-10-20T17:02:26.350357",
+          "context": "User: i don't like to wach yuotube that much...",
+          "event_index": 1
+        },
+        "source_conversation_timestamp": "2025-10-20T17:02:26.350357"
+      },
+      "Added_preference_avoid": "avoids to wach yuotube that much"
+    },
+    {
+      "type": "ADD",
+      "summary": "User likes Added preference dislikes: to wach yuotube that much and Added preference likes: love.",
+      "timestamp": "2025-10-20T17:02:26.350357",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.5,
+        "mood_context": "normal",
+        "confidence": 0.7
+      },
+      "semantic_context": null,
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null
+    },
+    {
+      "type": "ADD",
+      "summary": "User loves waching anime.",
+      "timestamp": "2025-10-20T17:03:09.546812",
+      "emotional_context": {
+        "sentiment": "positive",
+        "emotion_tags": [],
+        "emotional_intensity": 0.3,
+        "mood_context": "normal",
+        "confidence": 0.8
+      },
+      "semantic_context": "Inferred from user input: User loves waching anime.",
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null,
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-20T17:03:09.550961",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "Conversation at 2025-10-20T17:03:09.546812",
+          "context": "User: i love waching anime...",
+          "event_index": 3
+        },
+        "source_conversation_timestamp": "2025-10-20T17:03:09.546812"
+      },
+      "Added_preference_love": "loves waching anime"
+    }
+  ],
+  "conversation": [
+    {
+      "role": "user",
+      "content": "hi",
+      "timestamp": "2025-10-20T17:01:48.111228",
+      "session_id": "session_332feb83"
+    },
+    {
+      "role": "assistant",
+      "content": "Hey back at ya!",
+      "timestamp": "2025-10-20T17:01:48.111228",
+      "session_id": "session_332feb83"
+    },
+    {
+      "role": "user",
+      "content": "i like to talke to you nova",
+      "timestamp": "2025-10-20T17:02:01.083872",
+      "session_id": "session_332feb83"
+    },
+    {
+      "role": "assistant",
+      "content": "That's really sweet, thanks for saying that.",
+      "timestamp": "2025-10-20T17:02:01.083872",
+      "session_id": "session_332feb83"
+    },
+    {
+      "role": "user",
+      "content": "i don't like to wach yuotube that much",
+      "timestamp": "2025-10-20T17:02:26.350357",
+      "session_id": "session_332feb83"
+    },
+    {
+      "role": "assistant",
+      "content": "Not a huge YouTube fan, I get it!",
+      "timestamp": "2025-10-20T17:02:26.350357",
+      "session_id": "session_332feb83"
+    },
+    {
+      "role": "user",
+      "content": "i love waching anime",
+      "timestamp": "2025-10-20T17:03:09.546812",
+      "session_id": "session_332feb83"
+    },
+    {
+      "role": "assistant",
+      "content": "It seems I was wrong earlier, you do like anime after all!",
+      "timestamp": "2025-10-20T17:03:09.546812",
+      "session_id": "session_332feb83"
+    }
+  ],
+  "sessions": {
+    "session_332feb83": {
+      "session_id": "session_332feb83",
+      "start_time": "2025-10-20T17:01:43.726987",
+      "end_time": null,
+      "message_count": 8,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-10-20T17:03:09.546812"
+    }
+  },
+  "current_session": "session_332feb83",
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": true,
+    "established_user": false
+  },
+  "fact_history": {
+    "personal_preferences": {
+      "likes": [
+        {
+          "item": "enjoys to talke to you nova",
+          "score": 0.8,
+          "added": "2025-10-20",
+          "updated": "2025-10-20"
+        }
+      ],
+      "dislikes": [],
+      "avoid": [
+        {
+          "item": "avoids to wach yuotube that much",
+          "score": 0.8,
+          "added": "2025-10-20",
+          "updated": "2025-10-20"
+        }
+      ],
+      "always": [],
+      "style": [],
+      "conditional": [],
+      "interests": [],
+      "love": [
+        {
+          "item": "loves waching anime",
+          "score": 0.8,
+          "added": "2025-10-20",
+          "updated": "2025-10-20"
+        }
+      ],
+      "hate": [],
+      "enjoy": [],
+      "need": [],
+      "want": [],
+      "continue": []
+    }
+  },
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {
+      "pref_likes_01f3ae07_0": {
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "key": "pref_likes_01f3ae07_0",
+        "value": "enjoys to talke to you nova",
+        "confidence": 0.8,
+        "timestamp": "2025-10-20T17:03:09.566480",
+        "last_accessed": "2025-10-20T17:03:09.566483",
+        "source": "fact_history_sync",
+        "relationships": [],
+        "tags": [
+          "likes"
+        ]
+      },
+      "pref_avoid_b851989d_0": {
+        "category": "personal_preferences",
+        "subcategory": "avoid",
+        "key": "pref_avoid_b851989d_0",
+        "value": "avoids to wach yuotube that much",
+        "confidence": 0.8,
+        "timestamp": "2025-10-20T17:03:09.566514",
+        "last_accessed": "2025-10-20T17:03:09.566516",
+        "source": "fact_history_sync",
+        "relationships": [],
+        "tags": [
+          "avoid"
+        ]
+      },
+      "pref_love_dee47f5c_0": {
+        "category": "personal_preferences",
+        "subcategory": "love",
+        "key": "pref_love_dee47f5c_0",
+        "value": "loves waching anime",
+        "confidence": 0.8,
+        "timestamp": "2025-10-20T17:03:09.566544",
+        "last_accessed": "2025-10-20T17:03:09.566546",
+        "source": "fact_history_sync",
+        "relationships": [],
+        "tags": [
+          "love"
+        ]
+      }
+    },
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+  "category_relationships": {},
+  "memory_metadata": {},
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  },
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  }
+}

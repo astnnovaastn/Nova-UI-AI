@@ -1,0 +1,376 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": null,
+    "created_at": "2025-11-09T19:42:54.498398",
+    "status": "active",
+    "total_sessions": 3,
+    "last_seen": "2025-11-09T19:48:01.480157",
+    "relationship_established": true
+  },
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2025-11-09T19:42:54.498407",
+      "description": "Mem0 AI Memory Engine - Event-based user memory management system"
+    },
+    "memory_events": [],
+    "vector_index": {},
+    "clusters": {},
+    "update_log": []
+  },
+  "vector_index": {},
+  "clusters": {},
+  "conversation": [
+    {
+      "role": "user",
+      "text": "hi",
+      "timestamp": "2025-11-09T19:43:05.693317"
+    },
+    {
+      "role": "assistant",
+      "text": "It's nice to chat with you.",
+      "timestamp": "2025-11-09T19:43:05.693317"
+    },
+    {
+      "role": "user",
+      "text": "i like to play game",
+      "timestamp": "2025-11-09T19:44:06.875692"
+    },
+    {
+      "role": "assistant",
+      "text": "Want to talk about your favorite game or genres?",
+      "timestamp": "2025-11-09T19:44:06.875692"
+    },
+    {
+      "role": "user",
+      "text": "i like to play gamesss",
+      "timestamp": "2025-11-09T19:47:10.938516"
+    },
+    {
+      "role": "assistant",
+      "text": "Multi-tasking gamer, eh?",
+      "timestamp": "2025-11-09T19:47:10.938516"
+    },
+    {
+      "role": "user",
+      "text": "i like to play football",
+      "timestamp": "2025-11-09T19:48:10.694659"
+    },
+    {
+      "role": "assistant",
+      "text": "We already talked about football earlier. What position do you play?",
+      "timestamp": "2025-11-09T19:48:10.694659"
+    }
+  ],
+  "fact_history": {
+    "personal_preferences": {
+      "likes": [],
+      "dislikes": [],
+      "avoid": [],
+      "always": [],
+      "style": [],
+      "conditional": [],
+      "interests": [],
+      "love": [],
+      "hate": [],
+      "enjoy": [],
+      "need": [],
+      "want": [],
+      "continue": []
+    }
+  },
+  "sessions": {
+    "session_68ceebd2": {
+      "session_id": "session_68ceebd2",
+      "start_time": "2025-11-09T19:42:54.499192",
+      "end_time": null,
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-11-09T19:43:05.693317"
+    },
+    "session_c0866b8b": {
+      "session_id": "session_c0866b8b",
+      "start_time": "2025-11-09T19:47:02.246964",
+      "end_time": null,
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-11-09T19:47:02.246964"
+    },
+    "session_6a00d91e": {
+      "session_id": "session_6a00d91e",
+      "start_time": "2025-11-09T19:48:01.480157",
+      "end_time": null,
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-11-09T19:48:01.480157"
+    }
+  },
+  "current_session": "session_6a00d91e",
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": false,
+    "established_user": true
+  },
+  "memory_categories": {
+    "user_identity": {
+      "description": "Names, pronouns, identity evolution",
+      "enhancement_focus": "Personalization, identity consistency, name variations",
+      "contextual_considerations": [
+        "previous_names",
+        "identity_evolution",
+        "pronoun_preferences"
+      ]
+    },
+    "personal_preferences": {},
+    "task_project_tracking": {
+      "description": "Active projects, tech stacks, deadlines",
+      "enhancement_focus": "Project context, technical details, timeline awareness",
+      "contextual_considerations": [
+        "current_projects",
+        "tech_stack",
+        "deadlines",
+        "progress_tracking"
+      ]
+    },
+    "activity_behavior": {
+      "description": "Active times, conversation topics, engagement",
+      "enhancement_focus": "Behavioral patterns, temporal context, engagement metrics",
+      "contextual_considerations": [
+        "active_hours",
+        "topic_preferences",
+        "engagement_levels"
+      ]
+    },
+    "user_instructions": {
+      "description": "Permanent commands, rules, triggers",
+      "enhancement_focus": "Instruction clarity, permanence recognition, trigger identification",
+      "contextual_considerations": [
+        "permanent_rules",
+        "conditional_triggers",
+        "command_hierarchy"
+      ]
+    },
+    "current_state": {
+      "description": "Active topics, mood, recent questions",
+      "enhancement_focus": "State awareness, temporal relevance, contextual transitions",
+      "contextual_considerations": [
+        "active_topics",
+        "emotional_state",
+        "recent_interactions"
+      ]
+    },
+    "personal_development": {
+      "description": "Skills learning, progress, emotional notes",
+      "enhancement_focus": "Progress tracking, skill relationships, learning patterns",
+      "contextual_considerations": [
+        "skill_progress",
+        "learning_journey",
+        "developmental_milestones"
+      ]
+    },
+    "communication_boundaries": {
+      "description": "Sensitive topics, triggers, support level",
+      "enhancement_focus": "Boundary respect, sensitivity awareness, support adaptation",
+      "contextual_considerations": [
+        "sensitive_topics",
+        "emotional_triggers",
+        "support_boundaries"
+      ]
+    },
+    "contextual_rules": {
+      "description": "Scope, expiry, recall priority",
+      "enhancement_focus": "Rule contextualization, priority management, scope definition",
+      "contextual_considerations": [
+        "rule_scope",
+        "priority_levels",
+        "expiration_contexts"
+      ]
+    },
+    "multi_identity": {
+      "description": "Role profiles, switching triggers",
+      "enhancement_focus": "Identity context switching, role consistency, transition awareness",
+      "contextual_considerations": [
+        "role_profiles",
+        "identity_switching",
+        "contextual_triggers"
+      ]
+    },
+    "knowledge_expertise": {
+      "description": "Skill levels, known concepts",
+      "enhancement_focus": "Expertise assessment, knowledge mapping, competency progression",
+      "contextual_considerations": [
+        "skill_levels",
+        "domain_knowledge",
+        "competency_assessment"
+      ]
+    },
+    "tool_integration": {
+      "description": "Permissions, preferred languages",
+      "enhancement_focus": "Integration optimization, preference alignment, permission management",
+      "contextual_considerations": [
+        "tool_preferences",
+        "permission_levels",
+        "integration_contexts"
+      ]
+    },
+    "response_adaptation": {
+      "description": "Style corrections, tone adaptation",
+      "enhancement_focus": "Adaptive responses, tone consistency, style refinement",
+      "contextual_considerations": [
+        "style_corrections",
+        "tone_adaptation",
+        "response_refinement"
+      ]
+    },
+    "file_media": {
+      "description": "Uploads, context links, preferences",
+      "enhancement_focus": "Media context, link relevance, preference tracking",
+      "contextual_considerations": [
+        "file_references",
+        "media_preferences",
+        "link_context"
+      ]
+    },
+    "long_term_goals": {
+      "description": "Life goals, career objectives, blockers",
+      "enhancement_focus": "Goal progression, objective alignment, obstacle identification",
+      "contextual_considerations": [
+        "life_goals",
+        "career_objectives",
+        "progress_tracking"
+      ]
+    },
+    "collaborator_relationships": {
+      "description": "Team members, communication styles",
+      "enhancement_focus": "Relationship dynamics, communication adaptation, collaboration context",
+      "contextual_considerations": [
+        "team_members",
+        "communication_styles",
+        "collaboration_history"
+      ]
+    },
+    "data_privacy": {
+      "description": "Retention policies, private sessions",
+      "enhancement_focus": "Privacy compliance, retention management, session security",
+      "contextual_considerations": [
+        "privacy_policies",
+        "retention_rules",
+        "security_protocols"
+      ]
+    },
+    "multimodal_preferences": {
+      "description": "Image styles, audio modes",
+      "enhancement_focus": "Multimodal adaptation, preference consistency, format optimization",
+      "contextual_considerations": [
+        "media_formats",
+        "style_preferences",
+        "modality_choices"
+      ]
+    },
+    "system_awareness": {
+      "description": "Errors, feedback, constraints",
+      "enhancement_focus": "System understanding, constraint awareness, feedback integration",
+      "contextual_considerations": [
+        "system_constraints",
+        "error_history",
+        "feedback_loops"
+      ]
+    },
+    "session_themes": {
+      "description": "Themes, emotional arcs, continuity",
+      "enhancement_focus": "Thematic consistency, emotional tracking, narrative coherence",
+      "contextual_considerations": [
+        "session_themes",
+        "emotional_arcs",
+        "continuity_markers"
+      ]
+    },
+    "meta_memory": {
+      "description": "Browser UI, change logs, cleanup",
+      "enhancement_focus": "Meta-awareness, change tracking, system maintenance",
+      "contextual_considerations": [
+        "system_ui",
+        "change_logs",
+        "maintenance_tracking"
+      ]
+    },
+    "temporal_patterns": {
+      "description": "Time-based behaviors and preferences",
+      "enhancement_focus": "Temporal awareness, pattern recognition, schedule optimization",
+      "contextual_considerations": [
+        "time_patterns",
+        "behavioral_cycles",
+        "schedule_preferences"
+      ]
+    },
+    "search_external_info": {
+      "description": "Internet search history, preferences, trusted sources",
+      "enhancement_focus": "Information quality, source reliability, search optimization",
+      "contextual_considerations": [
+        "search_history",
+        "trusted_sources",
+        "information_preferences"
+      ]
+    },
+    "greeting_patterns": {
+      "description": "Greeting history, timing, session tracking",
+      "enhancement_focus": "Greeting personalization, timing optimization, session recognition",
+      "contextual_considerations": [
+        "greeting_history",
+        "timing_preferences",
+        "session_patterns"
+      ]
+    },
+    "conversation_analytics": {
+      "description": "Duration, session gaps, statistics",
+      "enhancement_focus": "Engagement metrics, conversation analytics, interaction patterns",
+      "contextual_considerations": [
+        "engagement_metrics",
+        "session_gaps",
+        "conversation_stats"
+      ]
+    },
+    "news_weather_history": {
+      "description": "News and weather query results and summaries",
+      "enhancement_focus": "Information retention, query context, temporal updates",
+      "contextual_considerations": [
+        "query_context",
+        "information_type",
+        "update_frequency"
+      ]
+    },
+    "timezone_preferences": {
+      "description": "Time zone queries and location preferences",
+      "enhancement_focus": "Timezone awareness, location context, scheduling preferences",
+      "contextual_considerations": [
+        "timezone_context",
+        "location_preferences",
+        "scheduling_needs"
+      ]
+    }
+  },
+  "category_relationships": {},
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  },
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  }
+}

@@ -1,0 +1,433 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": "Nemzz",
+    "created_at": "2025-10-16T17:07:58.834147",
+    "status": "active",
+    "total_sessions": 2,
+    "last_seen": "2025-10-16T17:52:10.164339",
+    "relationship_established": true
+  },
+  "memory_events": [
+    {
+      "type": "ADD",
+      "summary": "User has an interest in wach anime sometimes doing the weekend and enjoys learning about it.",
+      "timestamp": "2025-10-16T17:08:03.170717",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.2,
+        "mood_context": "normal",
+        "confidence": 0.8
+      },
+      "semantic_context": "User expressed enjoyment and personal interest in wach anime sometimes doing the weekend.",
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null,
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-16T17:08:03.180948",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "Conversation at 2025-10-16T17:08:03.170717",
+          "context": "User: i like to wach anime sometimes doing the weekend...",
+          "event_index": 0
+        },
+        "source_conversation_timestamp": "2025-10-16T17:08:03.170717"
+      },
+      "Added_preference_likes": "enjoys to wach anime sometimes doing the weekend"
+    },
+    {
+      "type": "ADD",
+      "summary": "User's name is Nemzz.",
+      "timestamp": "2025-10-16T17:10:48.924057",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.0,
+        "mood_context": "normal",
+        "confidence": 0.8
+      },
+      "semantic_context": "Inferred from user input: User's name is Nemzz.",
+      "importance_score": 0.8,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null,
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-16T17:10:48.934927",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "Conversation at 2025-10-16T17:10:48.924057",
+          "context": "User: My name is Nemzz...",
+          "event_index": 1
+        },
+        "source_conversation_timestamp": "2025-10-16T17:10:48.924057"
+      },
+      "Added_preference_likes": "enjoys Nemzz"
+    },
+    {
+      "type": "ADD",
+      "summary": "Nemzz likes to use ai all the time and Added preference dislikes: to use ai all the time and Added preference likes: love.",
+      "timestamp": "2025-10-16T17:12:17.079959",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.0,
+        "mood_context": "normal",
+        "confidence": 0.8
+      },
+      "semantic_context": "Inferred from user input: User dislikes to use ai all the time.",
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null,
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-16T17:12:17.080866",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "Conversation at 2025-10-16T17:12:17.079959",
+          "context": "User: i don't like to use ai all the time...",
+          "event_index": 2
+        },
+        "source_conversation_timestamp": "2025-10-16T17:12:17.079959"
+      },
+      "Added_preference_avoid": "avoids using ai all the time"
+    },
+    {
+      "type": "ADD",
+      "summary": "User dislikes to use ai all the time.",
+      "timestamp": "2025-10-16T17:12:17.079959",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.0,
+        "mood_context": "normal",
+        "confidence": 0.8
+      },
+      "semantic_context": "Inferred from user input: User dislikes to use ai all the time.",
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null,
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-16T17:27:46.828944",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "Conversation at 2025-10-16T17:12:17.079959",
+          "context": "User: i don't like to use ai all the time...",
+          "event_index": 3
+        },
+        "source_conversation_timestamp": "2025-10-16T17:12:17.079959"
+      },
+      "Added_preference_avoid": "avoids using ai all the time"
+    },
+    {
+      "type": "ADD",
+      "summary": "User loves to eat at kfc on some day of the weeksend.",
+      "timestamp": "2025-10-16T17:27:46.806638",
+      "emotional_context": {
+        "sentiment": "positive",
+        "emotion_tags": [],
+        "emotional_intensity": 0.3,
+        "mood_context": "normal",
+        "confidence": 0.8
+      },
+      "semantic_context": "Inferred from user input: User loves to eat at kfc on some day of the weeksend.",
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null,
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-16T17:27:46.807513",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "Conversation at 2025-10-16T17:27:46.806638",
+          "context": "User: i love to eat at kfc on some day of the weeksend...",
+          "event_index": 4
+        },
+        "source_conversation_timestamp": "2025-10-16T17:27:46.806638"
+      },
+      "Added_preference_love": "loves kfc"
+    }
+  ],
+  "conversation": [
+    {
+      "role": "user",
+      "content": "i like to wach anime sometimes doing the weekend",
+      "timestamp": "2025-10-16T17:08:03.170717",
+      "session_id": "session_bccd0010"
+    },
+    {
+      "role": "assistant",
+      "content": "Your favorite anime shows must have some pretty epic storylines, Nemzz!",
+      "timestamp": "2025-10-16T17:08:03.170717",
+      "session_id": "session_bccd0010"
+    },
+    {
+      "role": "user",
+      "content": "My name is Nemzz",
+      "timestamp": "2025-10-16T17:10:48.924057",
+      "session_id": "session_bccd0010"
+    },
+    {
+      "role": "assistant",
+      "content": "Nice to remind me, Nemzz. What's your go-to anime genre: action, romance, or something else?",
+      "timestamp": "2025-10-16T17:10:48.924057",
+      "session_id": "session_bccd0010"
+    },
+    {
+      "role": "user",
+      "content": "i don't like to use ai all the time",
+      "timestamp": "2025-10-16T17:12:17.079959",
+      "session_id": "session_bccd0010"
+    },
+    {
+      "role": "assistant",
+      "content": "Fair enough, Nemzz. You like to mix it up and not overdo it with the tech.",
+      "timestamp": "2025-10-16T17:12:17.079959",
+      "session_id": "session_bccd0010"
+    },
+    {
+      "role": "user",
+      "content": "i love to eat at kfc on some day of the weeksend",
+      "timestamp": "2025-10-16T17:27:46.806638",
+      "session_id": "session_bccd0010"
+    },
+    {
+      "role": "assistant",
+      "content": "Finger-lickin' good choice, Nemzz! KFC on the weekends sounds like a tasty treat!",
+      "timestamp": "2025-10-16T17:27:46.806638",
+      "session_id": "session_bccd0010"
+    }
+  ],
+  "current_facts": {
+    "personal_preferences.likes": [
+      {
+        "item": "love",
+        "added_at": "2025-10-16T17:27:46.806956"
+      }
+    ],
+    "name": "Nemzz",
+    "personal_preferences.dislikes": [
+      {
+        "item": "to use ai all the time",
+        "added_at": "2025-10-16T17:12:17.080360"
+      }
+    ],
+    "personal_preferences.avoid": [
+      {
+        "item": "to use ai all the time",
+        "added_at": "2025-10-16T17:12:17.080421"
+      }
+    ]
+  },
+  "fact_history": {
+    "personal_preferences": {
+      "likes": [
+        {
+          "item": "enjoys to wach anime sometimes doing the weekend",
+          "score": 0.8,
+          "added": "2025-10-16",
+          "updated": "2025-10-16"
+        },
+        {
+          "item": "enjoys Nemzz",
+          "score": 0.8,
+          "added": "2025-10-16",
+          "updated": "2025-10-16"
+        }
+      ],
+      "dislikes": [],
+      "avoid": [
+        {
+          "item": "avoids using ai all the time",
+          "score": 0.8,
+          "added": "2025-10-16",
+          "updated": "2025-10-16"
+        }
+      ],
+      "always": [],
+      "style": [],
+      "conditional": [],
+      "interests": []
+    },
+    "name": [
+      {
+        "value": "Nemzz",
+        "timestamp": "2025-10-16T17:10:48.924057",
+        "status": "current",
+        "confidence": 0.8
+      }
+    ]
+  },
+  "sessions": {
+    "session_bccd0010": {
+      "session_id": "session_bccd0010",
+      "start_time": "2025-10-16T17:07:58.834822",
+      "end_time": null,
+      "message_count": 8,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-10-16T17:27:46.806638"
+    },
+    "session_1760629930": {
+      "session_id": "session_1760629930",
+      "start_time": "2025-10-16T17:52:10.164349",
+      "end_time": null,
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": "Nemzz",
+      "session_duration": null,
+      "last_activity": "2025-10-16T17:52:10.164352"
+    }
+  },
+  "current_session": "session_1760629930",
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": false,
+    "established_user": true
+  },
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {
+      "pref_6e4c9a5a250c": {
+        "category": "personal_preferences",
+        "value": "to wach anime sometimes doing the weekend",
+        "timestamp": "2025-10-16T17:08:03.175549",
+        "metadata": {},
+        "privacy_level": "normal",
+        "retention_policy": "permanent",
+        "confidence": 0.8,
+        "subcategory": "likes",
+        "key": "pref_6e4c9a5a250c",
+        "last_accessed": "2025-10-16T17:08:03.175552",
+        "source": "new_pattern",
+        "relationships": [],
+        "tags": [],
+        "session_id": null
+      },
+      "pref_853e682242e4": {
+        "category": "personal_preferences",
+        "value": "to use ai all the time",
+        "timestamp": "2025-10-16T17:12:17.080360",
+        "metadata": {},
+        "privacy_level": "normal",
+        "retention_policy": "permanent",
+        "confidence": 0.8,
+        "subcategory": "dislikes",
+        "key": "pref_853e682242e4",
+        "last_accessed": "2025-10-16T17:12:17.080362",
+        "source": "new_pattern",
+        "relationships": [],
+        "tags": [],
+        "session_id": null
+      },
+      "pref_37b40e98f195": {
+        "category": "personal_preferences",
+        "value": "to use ai all the time",
+        "timestamp": "2025-10-16T17:12:17.080421",
+        "metadata": {},
+        "privacy_level": "normal",
+        "retention_policy": "permanent",
+        "confidence": 0.8,
+        "subcategory": "avoid",
+        "key": "pref_37b40e98f195",
+        "last_accessed": "2025-10-16T17:12:17.080423",
+        "source": "new_pattern",
+        "relationships": [],
+        "tags": [],
+        "session_id": null
+      },
+      "pref_b9977f81a225": {
+        "category": "personal_preferences",
+        "value": "love",
+        "timestamp": "2025-10-16T17:27:46.806956",
+        "metadata": {},
+        "privacy_level": "normal",
+        "retention_policy": "permanent",
+        "confidence": 0.8,
+        "subcategory": "likes",
+        "key": "pref_b9977f81a225",
+        "last_accessed": "2025-10-16T17:27:46.806958",
+        "source": "learned_pattern",
+        "relationships": [],
+        "tags": [],
+        "session_id": null
+      }
+    },
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+  "category_relationships": {},
+  "memory_metadata": {},
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  },
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  }
+}

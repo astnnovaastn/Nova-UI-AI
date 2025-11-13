@@ -1,0 +1,416 @@
+{
+  "user": {
+    "total_sessions": 1,
+    "last_seen": "2025-11-10T20:46:01.098636"
+  },
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2025-11-10T20:46:01.096126",
+      "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+    },
+    "memory_events": [
+      {
+        "event_id": "evt_c42a9d74",
+        "type": "ADD",
+        "summary": "User general rich",
+        "timestamp": "2025-11-10T20:46:01.099020Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "e7f4f8bd"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "rich",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:46:01.099020Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: my name is Rich",
+            "event_index": 0
+          },
+          "source_conversation_timestamp": "2025-11-10T20:46:01.099020Z"
+        },
+        "Added_preference": "User general rich",
+        "session_id": "session_e2fa7bfe"
+      },
+      {
+        "event_id": "evt_553c0e51",
+        "type": "ADD",
+        "summary": "User general reading science fiction novels",
+        "timestamp": "2025-11-10T20:46:20.634277Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "58889d8b"
+        },
+        "importance_score": 0.85,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "reading science fiction novels",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:46:20.634277Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i enjoy reading science fiction novels",
+            "event_index": 1
+          },
+          "source_conversation_timestamp": "2025-11-10T20:46:20.634277Z"
+        },
+        "Added_preference": "User general reading science fiction novels",
+        "session_id": "session_e2fa7bfe"
+      },
+      {
+        "event_id": "evt_b1173a5e",
+        "type": "ADD",
+        "summary": "User preferences enjoy reading science fiction novels",
+        "timestamp": "2025-11-10T20:46:20.634560Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "preferences"
+          ],
+          "similarity_hash": "89745691"
+        },
+        "importance_score": 0.85,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "preferences",
+        "previous_value": null,
+        "current_value": "enjoy reading science fiction novels",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:46:20.634560Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i enjoy reading science fiction novels",
+            "event_index": 2
+          },
+          "source_conversation_timestamp": "2025-11-10T20:46:20.634560Z"
+        },
+        "Added_preference": "User preferences enjoy reading science fiction novels",
+        "session_id": "session_e2fa7bfe"
+      },
+      {
+        "event_id": "evt_64e22aa2",
+        "type": "ADD",
+        "summary": "User general software engineer",
+        "timestamp": "2025-11-10T20:46:20.651708Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "6eec3fb9"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "software engineer",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:46:20.651708Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i work as a software engineer",
+            "event_index": 3
+          },
+          "source_conversation_timestamp": "2025-11-10T20:46:20.651708Z"
+        },
+        "Added_preference": "User general software engineer",
+        "session_id": "session_e2fa7bfe"
+      },
+      {
+        "event_id": "evt_a44d5572",
+        "type": "ADD",
+        "summary": "User general new york",
+        "timestamp": "2025-11-10T20:46:20.656389Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "learning",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "general"
+          ],
+          "similarity_hash": "5cbe8b23"
+        },
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "new york",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-10T20:46:20.656389Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i live in New York",
+            "event_index": 4
+          },
+          "source_conversation_timestamp": "2025-11-10T20:46:20.656389Z"
+        },
+        "Added_preference": "User general new york",
+        "session_id": "session_e2fa7bfe"
+      }
+    ],
+    "vector_index": {
+      "evt_553c0e51": [
+        0.4330127018922193,
+        0.2886751345948129,
+        0.14433756729740646,
+        0.0,
+        0.0,
+        0.4330127018922193,
+        0.7216878364870322,
+        0.0
+      ],
+      "evt_b1173a5e": [
+        0.1147078669352809,
+        0.4588314677411236,
+        0.1147078669352809,
+        0.6882472016116853,
+        0.2294157338705618,
+        0.34412360080584264,
+        0.3441236008058427,
+        0.0
+      ],
+      "evt_64e22aa2": [
+        0.08304547985373997,
+        0.4982728791224398,
+        0.2491364395612199,
+        0.5813183589761797,
+        0.41522739926869984,
+        0.41522739926869984,
+        0.0,
+        0.0
+      ],
+      "evt_a44d5572": [
+        0.25197631533948484,
+        0.12598815766974242,
+        0.12598815766974242,
+        0.25197631533948484,
+        0.7559289460184544,
+        0.5039526306789697,
+        0.12598815766974242,
+        0.0
+      ]
+    },
+    "clusters": {},
+    "update_log": []
+  },
+  "conversation": [
+    {
+      "role": "user",
+      "content": "my name is Rich",
+      "timestamp": "2025-11-10T20:46:01.098616",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "assistant",
+      "content": "Nice to meet you Rich!",
+      "timestamp": "2025-11-10T20:46:01.098616",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "user",
+      "content": "i enjoy reading science fiction novels",
+      "timestamp": "2025-11-10T20:46:20.627078",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "assistant",
+      "content": "Interesting!",
+      "timestamp": "2025-11-10T20:46:20.627078",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "user",
+      "content": "i work as a software engineer",
+      "timestamp": "2025-11-10T20:46:20.638636",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "assistant",
+      "content": "Great career choice!",
+      "timestamp": "2025-11-10T20:46:20.638636",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "user",
+      "content": "i live in New York",
+      "timestamp": "2025-11-10T20:46:20.655803",
+      "session_id": "session_e2fa7bfe"
+    },
+    {
+      "role": "assistant",
+      "content": "Nice place!",
+      "timestamp": "2025-11-10T20:46:20.655803",
+      "session_id": "session_e2fa7bfe"
+    }
+  ],
+  "fact_history": {
+    "evt_c42a9d74": {
+      "item": "rich",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "personal_preferences": {
+      "preferences": [
+        {
+          "item": "enjoy reading science fiction novels",
+          "added": "2025-11-10",
+          "score": 0.85
+        }
+      ]
+    },
+    "evt_553c0e51": {
+      "item": "reading science fiction novels",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_b1173a5e": {
+      "item": "enjoy reading science fiction novels",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_64e22aa2": {
+      "item": "software engineer",
+      "added": "2025-11-10",
+      "score": 0.85
+    },
+    "evt_a44d5572": {
+      "item": "new york",
+      "added": "2025-11-10",
+      "score": 0.85
+    }
+  },
+  "sessions": {
+    "session_e2fa7bfe": {
+      "session_id": "session_e2fa7bfe",
+      "start_time": "2025-11-10T20:46:01.098636",
+      "end_time": null,
+      "message_count": 8,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-11-10T20:46:20.655803"
+    }
+  },
+  "current_session": "session_e2fa7bfe",
+  "conversation_state": {
+    "introduction_phase": true,
+    "established_user": false,
+    "greeting_completed": false
+  },
+  "memory_categories": {},
+  "category_relationships": {},
+  "behavioral_adaptation": {},
+  "privacy_settings": {},
+  "current_facts": {},
+  "vector_index": {
+    "evt_553c0e51": [
+      0.4330127018922193,
+      0.2886751345948129,
+      0.14433756729740646,
+      0.0,
+      0.0,
+      0.4330127018922193,
+      0.7216878364870322,
+      0.0
+    ],
+    "evt_b1173a5e": [
+      0.1147078669352809,
+      0.4588314677411236,
+      0.1147078669352809,
+      0.6882472016116853,
+      0.2294157338705618,
+      0.34412360080584264,
+      0.3441236008058427,
+      0.0
+    ],
+    "evt_64e22aa2": [
+      0.08304547985373997,
+      0.4982728791224398,
+      0.2491364395612199,
+      0.5813183589761797,
+      0.41522739926869984,
+      0.41522739926869984,
+      0.0,
+      0.0
+    ],
+    "evt_a44d5572": [
+      0.25197631533948484,
+      0.12598815766974242,
+      0.12598815766974242,
+      0.25197631533948484,
+      0.7559289460184544,
+      0.5039526306789697,
+      0.12598815766974242,
+      0.0
+    ]
+  },
+  "clusters": {}
+}

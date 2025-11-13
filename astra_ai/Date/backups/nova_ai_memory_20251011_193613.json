@@ -1,0 +1,228 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": null,
+    "created_at": "2025-10-11T19:29:37.647147",
+    "status": "active",
+    "total_sessions": 1,
+    "last_seen": "2025-10-11T19:29:37.648317",
+    "relationship_established": false
+  },
+  "memory_events": [
+    {
+      "type": "ADD",
+      "summary": "User likes hp laptop a lot and it good to use and considers it an interest.",
+      "timestamp": "2025-10-11T19:30:06.112570",
+      "emotional_context": {
+        "sentiment": "neutral",
+        "emotion_tags": [],
+        "emotional_intensity": 0.5,
+        "mood_context": "normal",
+        "confidence": 0.7
+      },
+      "semantic_context": null,
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null,
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-11T19:30:06.115724",
+        "original_summary": "Added preference likes: hp laptop a lot and it good to use",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "Conversation at 2025-10-11T19:30:06.112570",
+          "context": "User user: i like hp laptop a lot and it good to use...",
+          "event_index": 0,
+          "original_summary": "Added preference likes: hp laptop a lot and it good to use"
+        },
+        "source_conversation_timestamp": "2025-10-11T19:30:06.112570"
+      }
+    },
+    {
+      "type": "ADD",
+      "summary": "User likes nemzz rap and considers it an interest.",
+      "timestamp": "2025-10-11T19:31:07.088408",
+      "emotional_context": {
+        "sentiment": "positive",
+        "emotion_tags": [],
+        "emotional_intensity": 0.5,
+        "mood_context": "normal",
+        "confidence": 0.7
+      },
+      "semantic_context": null,
+      "importance_score": 0.5,
+      "confidence": 0.8,
+      "category": null,
+      "subcategory": null,
+      "relationships": [],
+      "session_id": null,
+      "privacy_level": "normal",
+      "previous_value": null,
+      "current_value": null,
+      "provenance": {
+        "enhanced_in_place": true,
+        "enhanced_at": "2025-10-11T19:31:07.089551",
+        "original_summary": "Added preference likes: love",
+        "source_info": {
+          "source_type": "conversation",
+          "source_details": "Conversation at 2025-10-11T19:31:07.088408",
+          "context": "User user: and i love nemzz rap...",
+          "event_index": 1,
+          "original_summary": "Added preference likes: love"
+        },
+        "source_conversation_timestamp": "2025-10-11T19:31:07.088408"
+      }
+    }
+  ],
+  "conversation": [
+    {
+      "role": "user",
+      "content": "nova",
+      "timestamp": "2025-10-11T19:29:40.861348",
+      "session_id": "session_6515e143"
+    },
+    {
+      "role": "assistant",
+      "content": "Ciao Rich! What's on your mind?",
+      "timestamp": "2025-10-11T19:29:40.861348",
+      "session_id": "session_6515e143"
+    },
+    {
+      "role": "user",
+      "content": "i like hp laptop a lot and it good to use",
+      "timestamp": "2025-10-11T19:30:06.112570",
+      "session_id": "session_6515e143"
+    },
+    {
+      "role": "assistant",
+      "content": "Glad to hear that, Rich! HP Laptops are reliable and popular choices.",
+      "timestamp": "2025-10-11T19:30:06.112570",
+      "session_id": "session_6515e143"
+    },
+    {
+      "role": "user",
+      "content": "and i love nemzz rap",
+      "timestamp": "2025-10-11T19:31:07.088408",
+      "session_id": "session_6515e143"
+    },
+    {
+      "role": "assistant",
+      "content": "Nemzz rap, huh? I've got some fun facts about underground rappers!",
+      "timestamp": "2025-10-11T19:31:07.088408",
+      "session_id": "session_6515e143"
+    }
+  ],
+  "current_facts": {
+    "personal_preferences.likes": [
+      {
+        "item": "love",
+        "added_at": "2025-10-11T19:31:07.088663"
+      }
+    ]
+  },
+  "fact_history": {},
+  "sessions": {
+    "session_6515e143": {
+      "session_id": "session_6515e143",
+      "start_time": "2025-10-11T19:29:37.648317",
+      "end_time": null,
+      "message_count": 6,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-10-11T19:31:07.088408"
+    }
+  },
+  "current_session": "session_6515e143",
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": true,
+    "established_user": false
+  },
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {
+      "pref_474fc3ac76ec": {
+        "category": "personal_preferences",
+        "value": "hp laptop a lot and it good to use",
+        "timestamp": "2025-10-11T19:30:06.113080",
+        "metadata": {},
+        "privacy_level": "normal",
+        "retention_policy": "permanent",
+        "confidence": 0.8,
+        "subcategory": "likes",
+        "key": "pref_474fc3ac76ec",
+        "last_accessed": "2025-10-11T19:30:06.113083",
+        "source": "new_pattern",
+        "relationships": [],
+        "tags": [],
+        "session_id": null
+      },
+      "pref_e3bbf2144eb3": {
+        "category": "personal_preferences",
+        "value": "love",
+        "timestamp": "2025-10-11T19:31:07.088663",
+        "metadata": {},
+        "privacy_level": "normal",
+        "retention_policy": "permanent",
+        "confidence": 0.8,
+        "subcategory": "likes",
+        "key": "pref_e3bbf2144eb3",
+        "last_accessed": "2025-10-11T19:31:07.088667",
+        "source": "learned_pattern",
+        "relationships": [],
+        "tags": [],
+        "session_id": null
+      }
+    },
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+  "category_relationships": {},
+  "memory_metadata": {},
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  },
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  }
+}

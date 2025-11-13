@@ -1,0 +1,65 @@
+{
+  "event_id": "evt_000",
+  "type": "ADD",
+  "summary": "rewritten by the Mem0_ai_organizer.py AI to describe what new information has been added to be modified. ",
+  "timestamp": "ISO-8601-UTC-format (e.g., 2025-10-28T10:00:00Z)",
+  "emotional_context": {
+    "sentiment": "positive | neutral | negative",
+    "emotion_tags": ["interest", "joy", "curiosity"] ,
+    "emotional_intensity": "float between 0.0 and 1.0",
+    "mood_context": "user's general mood",
+    "confidence": "float between 0.5 and 1.0"
+  },
+  "semantic_context": "Inferred from user's input text describing the new fact ",
+  "importance_score": "float between 0.0 and 1.0 (indicates relevance)",
+  "confidence": "float between 0.5 and 1.0 (model confidence)",
+  "category": "top-level memory category (e.g., personal_preferences, user_identity)",
+  "subcategory": "specific subcategory within the main category (e.g., likes, habits)",
+  "previous_value": null,
+  "current_value": "the new value, preference, or fact being stored",
+  "provenance": {
+    "enhanced_in_place": true,
+    "enhanced_at": "timestamp of enrichment",
+    "source_info": {
+      "source_type": "conversation | api | file | manual_input",
+      "source_details": "where or how the data was provided",
+      "context": "optional input text or event context",
+      "event_index": "integer position in conversation or sequence"
+    },
+    "source_conversation_timestamp": "ISO-8601 timestamp of when the data was mentioned"
+  },
+  "Added_preference": "a clean, human-readable description of the newly added fact or preference"
+}
+
+{
+  "event_id": "evt_001",
+  "type": "ADD",
+  "summary": "User likes watching anime during weekends", 
+  "timestamp": "2025-10-16T17:08:03Z",
+  "emotional_context": {
+    "sentiment": "positive",
+    "emotion_tags": ["interest", "watching anime"],
+    "emotional_intensity": 0.3,
+    "mood_context": "normal",
+    "confidence": 0.85
+  },
+  "semantic_context": "Inferred from input: 'I like to watch anime sometimes during the weekend.'",
+  "importance_score": 0.6,
+  "confidence": 0.85,
+  "category": "personal_preferences",
+  "subcategory": "likes",
+  "previous_value": null,
+  "current_value": "likes watching anime during weekends",
+  "provenance": {
+    "enhanced_in_place": true,
+    "enhanced_at": "2025-10-16T17:08:03Z",
+    "source_info": {
+      "source_type": "conversation",
+      "source_details": "chat input",
+      "context": "User: I like to watch anime sometimes during the weekend.",
+      "event_index": 0
+    },
+    "source_conversation_timestamp": "2025-10-16T17:08:03Z"
+  },
+  "Added_preference": "enjoys watching anime during weekends"
+}

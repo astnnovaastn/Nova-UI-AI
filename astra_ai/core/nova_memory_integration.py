@@ -30,24 +30,36 @@ memory_path = os.path.join(os.path.dirname(__file__), '..', 'memory')
 if memory_path not in sys.path:
     sys.path.insert(0, memory_path)
 
+# Also add the parent directory to path to handle absolute imports
+parent_dir = os.path.join(os.path.dirname(__file__), '..')
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 try:
-    from ..memory.nova_memory_interface import NovaMemoryInterface
-    from ..memory.mem0_memory_system import NovaMemoryAI, MemoryCategory
+    # Try different import strategies
+    from astra_ai.memory.nova_memory_interface import NovaMemoryInterface
+    from astra_ai.memory.mem0_memory_system import NovaMemoryAI, MemoryCategory
     MEMORY_SYSTEM_AVAILABLE = True
 except ImportError as e:
     try:
-        # Fallback for direct execution
-        import sys
-        import os
-        memory_path = os.path.join(os.path.dirname(__file__), '..', 'memory')
-        if memory_path not in sys.path:
-            sys.path.insert(0, memory_path)
-        from nova_memory_interface import NovaMemoryInterface
-        from mem0_memory_system import NovaMemoryAI, MemoryCategory
+        # Fallback to direct import from memory module
+        from memory.nova_memory_interface import NovaMemoryInterface
+        from memory.mem0_memory_system import NovaMemoryAI, MemoryCategory
         MEMORY_SYSTEM_AVAILABLE = True
-    except ImportError as e2:
-        print(f"⚠️ Memory system not available: {e2}")
-        MEMORY_SYSTEM_AVAILABLE = False
+    except ImportError as e1:
+        try:
+            # Fallback for direct execution
+            import sys
+            import os
+            memory_path = os.path.join(os.path.dirname(__file__), '..', 'memory')
+            if memory_path not in sys.path:
+                sys.path.insert(0, memory_path)
+            from nova_memory_interface import NovaMemoryInterface
+            from mem0_memory_system import NovaMemoryAI, MemoryCategory
+            MEMORY_SYSTEM_AVAILABLE = True
+        except ImportError as e2:
+            print(f"⚠️ Memory system not available: {e1}, {e2}")
+            MEMORY_SYSTEM_AVAILABLE = False
 
 class NovaMemoryIntegration:
     """

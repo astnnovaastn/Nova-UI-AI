@@ -1,23 +1,70 @@
 #!/usr/bin/env python3
-"""Minimal NovaMemoryInterface implementation.
+"""
+Nova Memory Interface - Standalone Memory System for AI Integration
+==================================================================
 
-This provides a small, safe on-disk JSON-backed memory store with the
-methods the memory server expects. It's intentionally small so it can be
-used as an in-process fallback or during tests.
+A clean, standalone interface for the Enhanced 23-Category Memory Framework
+that can be easily imported and used by any external AI system.
+
+PRODUCTION READY - Tested Success Rate: 97.5%
+- 22/23 categories working perfectly
+- 98 successful memory operations
+- Full JSON serialization support
+- Intelligent search behavior adaptation
+- Cross-category relationship mapping
+
+Usage:
+    from nova_memory_interface import NovaMemoryInterface
+
+    memory = NovaMemoryInterface("my_ai_memory.json")
+    result = memory.process_conversation("Hi, I'm Alex", "Hello Alex!")
+    context = memory.get_context_for_ai_response()
+
+Author: Nova Memory AI Team
+Version: 2.0 - Enhanced 23-Category Framework
 """
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any, Optional, Union
+
+
+# Try to import memory system components
+try:
+    from .mem0_memory_system import NovaMemoryAI, MemoryCategory
+except ImportError:
+    try:
+        from mem0_memory_system import NovaMemoryAI, MemoryCategory
+    except ImportError:
+        # Fallback - create placeholder classes if imports fail
+        class NovaMemoryAI:
+            def __init__(self, *args, **kwargs):
+                raise ImportError("mem0_memory_system module not available")
+        
+        class MemoryCategory:
+            pass
+
+# Try to import enhanced memory system
+try:
+    from .enhanced_nova_memory_interface import EnhancedNovaMemoryInterface
+    ENHANCED_MEMORY_AVAILABLE = True
+except ImportError:
+    try:
+        from enhanced_nova_memory_interface import EnhancedNovaMemoryInterface
+        ENHANCED_MEMORY_AVAILABLE = True
+    except ImportError:
+        ENHANCED_MEMORY_AVAILABLE = False
+        EnhancedNovaMemoryInterface = None
 
 
 class NovaMemoryInterface:
     def __init__(self, path: Optional[str] = None):
-        self.path = Path(path or "data/nova_ai_memory.json")
+        self.path = Path(path or "@astra_ai/Date/nova_ai_memory.json")
         self._lock = threading.Lock()
         # ensure parent dir
         if not self.path.parent.exists():
@@ -163,27 +210,6 @@ Usage:
 Author: Nova Memory AI Team
 Version: 2.0 - Enhanced 23-Category Framework
 """
-
-try:
-    from .mem0_memory_system import NovaMemoryAI, MemoryCategory
-except ImportError:
-    from mem0_memory_system import NovaMemoryAI, MemoryCategory
-
-# Try to import enhanced memory system
-try:
-    from .enhanced_nova_memory_interface import EnhancedNovaMemoryInterface
-    ENHANCED_MEMORY_AVAILABLE = True
-except ImportError:
-    try:
-        from enhanced_nova_memory_interface import EnhancedNovaMemoryInterface
-        ENHANCED_MEMORY_AVAILABLE = True
-    except ImportError:
-        ENHANCED_MEMORY_AVAILABLE = False
-        EnhancedNovaMemoryInterface = None
-import json
-from datetime import datetime
-from typing import Dict, List, Any, Optional, Union
-import logging
 
 class NovaMemoryInterface:
     """
