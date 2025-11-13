@@ -54,5 +54,29 @@
       "ai_response": "Nova: I encountered an error while getting news about gaza. Please try again or rephrase your request.",
       "message_id": "7021287748867945523"
     }
+  },
+  {
+    "timestamp": "2025-10-31T11:38:40.319714Z",
+    "conversation_data": {
+      "user_message": "hi",
+      "ai_response": "Hi! How's your day going so far?",
+      "message_id": "4431203489569668721"
+    }
+  },
+  {
+    "timestamp": "2025-10-31T11:40:31.378289Z",
+    "conversation_data": {
+      "user_message": "nova",
+      "ai_response": "That's my name!",
+      "message_id": "7961372264702843738"
+    }
+  },
+  {
+    "timestamp": "2025-10-31T11:40:35.342135Z",
+    "conversation_data": {
+      "user_message": "what up",
+      "ai_response": "Not much!",
+      "message_id": "6972873583097490783"
+    }
   }
 ]

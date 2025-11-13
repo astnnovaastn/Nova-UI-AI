@@ -41,10 +41,34 @@ class ContextManager:
             if len(self.conversation_state['context_window']) > 10:
                 self.conversation_state['context_window'].pop(0)
             
-            # Simple topic detection (can be enhanced with NLP)
-            if 'weather' in message.lower():
+            # Enhanced intent and topic detection
+            message_lower = message.lower().strip()
+            
+            # Greeting detection
+            greeting_patterns = [
+                'hi', 'hello', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening',
+                'what\'s up', 'whats up', 'how\'s it going', 'how are you', 'how are u', 'hows it going',
+                'what up', 'yo', 'sup', 'good day', 'nice to meet', 'pleased to meet'
+            ]
+            
+            # Check for greeting patterns
+            is_greeting = any(greeting in message_lower for greeting in greeting_patterns) or \
+                         (message_lower.startswith('hi ') or message_lower.startswith('hello ') or 
+                          message_lower.startswith('hey ') or 'nova' in message_lower and 
+                          any(greeting in message_lower for greeting in ['hi', 'hello', 'hey', 'what up']))
+            
+            if is_greeting:
+                self.conversation_state['current_topic'] = 'greeting'
+                self.conversation_state['user_intent'] = 'greeting'
+            elif 'weather' in message_lower:
                 self.conversation_state['current_topic'] = 'weather'
                 self.conversation_state['user_intent'] = 'get_weather'
+            elif any(word in message_lower for word in ['news', 'what\'s happening', 'whats happening', 'latest']):
+                self.conversation_state['current_topic'] = 'news'
+                self.conversation_state['user_intent'] = 'get_news'
+            elif any(word in message_lower for word in ['time', 'what time', 'current time', 'clock']):
+                self.conversation_state['current_topic'] = 'time'
+                self.conversation_state['user_intent'] = 'get_time'
             else:
                 self.conversation_state['current_topic'] = 'general'
                 self.conversation_state['user_intent'] = 'chat'

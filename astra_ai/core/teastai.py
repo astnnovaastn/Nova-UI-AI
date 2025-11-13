@@ -119,6 +119,14 @@ import threading
 import hashlib
 import sqlite3
 import pickle
+
+# Silence noisy third-party loggers that clutter the terminal (e.g., comtypes)
+try:
+    logging.getLogger('comtypes').setLevel(logging.WARNING)
+    logging.getLogger('comtypes.client').setLevel(logging.WARNING)
+    logging.getLogger('comtypes.client._code_cache').setLevel(logging.WARNING)
+except Exception:
+    pass
 import requests
 from dotenv import load_dotenv
 try:
@@ -142,40 +150,49 @@ from enum import Enum
 # Load environment variables
 load_dotenv()
 
+# Configure default model name and LLM API key from environment
+MODEL_NAME = os.getenv('AI_MODEL', 'llama-3.3-70b-versatile')
+LLM_API_KEY = os.getenv('LLM_API_KEY')
+if LLM_API_KEY is None:
+    # Do not store secrets in code — require user to set env var
+    print('[WARNING] LLM API key not set. Set the LLM_API_KEY environment variable to enable hosted model access.')
+
 # Get API keys
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # Mock groq client for compatibility
-class MockGroqClient:
-    """Mock groq client to prevent import errors"""
-    def __init__(self, api_key=None, timeout=None):
-        self.api_key = api_key
-        self.timeout = timeout
-        self.chat = MockChatCompletions()
+class MockMessage:
+    def __init__(self):
+        self.content = "I'm a mock AI response. In a real implementation, I would provide helpful information based on your query."
+
+class MockChoice:
+    def __init__(self):
+        self.message = MockMessage()
+
+class MockResponse:
+    def __init__(self):
+        self.choices = [MockChoice()]
+        self.usage = {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}
+
+class MockCompletions:
+    """Mock completions"""
+    def create(self, **kwargs):
+        """Mock create method that returns a simple response"""
+        return MockResponse()
 
 class MockChatCompletions:
     """Mock chat completions"""
     def __init__(self):
         self.completions = MockCompletions()
 
-class MockCompletions:
-    """Mock completions"""
-    def create(self, **kwargs):
-        """Mock create method that returns a simple response"""
-        class MockResponse:
-            def __init__(self):
-                self.choices = [MockChoice()]
-
-        class MockChoice:
-            def __init__(self):
-                self.message = MockMessage()
-
-        class MockMessage:
-            def __init__(self):
-                self.content = "I'm currently in maintenance mode. Please check back later."
-
-        return MockResponse()
+class MockGroqClient:
+    """Mock groq client to prevent import errors"""
+    def __init__(self, api_key=None, timeout=None):
+        self.api_key = api_key
+        self.timeout = timeout
+        self.chat = MockChatCompletions()
 
 # Create mock groq module (disabled - using real groq)
 # class MockGroq:
@@ -226,15 +243,8 @@ except ImportError:
         # Silently handle missing video analyzer system
         VideoAnalyzer = None
 
-# Import music system
-try:
-    from astra_ai.services.music_service import MusicService
-except ImportError:
-    try:
-        from services.music_service import MusicService
-    except ImportError:
-        # Silently handle missing music system
-        MusicService = None
+# Music system removed: disable music service entirely
+MusicService = None
 
 # Import comprehensive memory integration system
 try:
@@ -270,6 +280,82 @@ except ImportError:
             # Silently handle missing unified memory system
             UnifiedMemoryIntegration = None
             UNIFIED_MEMORY_AVAILABLE = False
+
+
+            # Adapter to expose a compatible interface for existing comprehensive memory integration
+            class Mem0IntegrationAdapter:
+                """Adapter that exposes a minimal NovaMemoryIntegration-like interface backed by mem0."""
+                def __init__(self, agent):
+                    self.agent = agent
+                    self.is_enabled = True
+
+                @property
+                def memory_system(self):
+                    # If agent exposes an internal memory_system, return it; otherwise provide a thin shim
+                    memsys = getattr(self.agent, 'memory_system', None)
+                    if memsys:
+                        return memsys
+
+                    class _Shim:
+                        def __init__(self, agent):
+                            self._agent = agent
+                            self.data = {}
+
+                        def save_memory(self):
+                            # mem0 agent persists via its client; no-op fallback
+                            return True
+
+                    return _Shim(self.agent)
+
+                async def process_conversation(self, user_message: str, ai_response: str, metadata: dict = None):
+                    try:
+                        await asyncio.to_thread(self.agent.process_conversation, user_message, ai_response)
+                        return True
+                    except Exception:
+                        return False
+
+                async def get_memory_context(self, user_message: str, mode: str = "comprehensive") -> dict:
+                    try:
+                        return await asyncio.to_thread(self.agent.get_memory_context, user_message)
+                    except Exception:
+                        return {}
+
+                def get_conversation_history(self):
+                    # Try to retrieve recent conversation summaries if supported
+                    try:
+                        if hasattr(self.agent, 'get_conversation_history'):
+                            return self.agent.get_conversation_history()
+                    except Exception:
+                        pass
+                    return []
+
+                async def query_memories(self, user_message: str, mode: str = "general") -> dict:
+                    try:
+                        results = await asyncio.to_thread(self.agent.retrieve_memories, user_message, limit=5)
+                        return {"success": True, "memories": results, "summary": "", "total_items": len(results)}
+                    except Exception:
+                        return {"success": False}
+
+                def get_comprehensive_user_profile(self):
+                    try:
+                        if hasattr(self.agent, 'get_user_profile'):
+                            return self.agent.get_user_profile()
+                    except Exception:
+                        pass
+                    return {}
+
+                def what_do_you_know_about_me(self):
+                    profile = self.get_comprehensive_user_profile()
+                    if not profile:
+                        return "I don't have much yet — I'm learning as we talk."
+                    # Minimal friendly summary
+                    try:
+                        info = profile.get('user_info', {})
+                        name = info.get('name', 'there')
+                        facts = profile.get('facts', {})
+                        return f"Hello {name}! I remember {len(facts)} thing(s) about you."
+                    except Exception:
+                        return "I have some information saved about you."
 
 # Import smart greeting system
 SMART_GREETING_AVAILABLE = False
@@ -1177,7 +1263,6 @@ logging.getLogger("NovaAI.VisionSystem").setLevel(logging.CRITICAL)
 logging.getLogger("services.enhanced_news_system").setLevel(logging.CRITICAL)
 logging.getLogger("core.content_analysis_system").setLevel(logging.CRITICAL)
 logging.getLogger("memory.search_news_memory_system").setLevel(logging.CRITICAL)
-logging.getLogger("astra_ai.services.music_service").setLevel(logging.CRITICAL)
 logger = logging.getLogger("AleChatBot")
 
 # Enhanced AI System Data Structures
@@ -2748,10 +2833,22 @@ class DisplayManager:
     def __init__(self):
         """Initialize the display manager and enable colors on Windows."""
         # Enable ANSI escape sequences on Windows
+        self.colors_enabled = True
         if os.name == 'nt':
-            import ctypes
-            kernel32 = ctypes.windll.kernel32
-            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+            try:
+                import ctypes
+                kernel32 = ctypes.windll.kernel32
+                handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+                mode = ctypes.c_ulong()
+                if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+                    # Try to enable virtual terminal processing
+                    new_mode = mode.value | 0x0004  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+                    if not kernel32.SetConsoleMode(handle, new_mode):
+                        self.colors_enabled = False
+                else:
+                    self.colors_enabled = False
+            except Exception:
+                self.colors_enabled = False
     
     # Enhanced color codes that work on both Windows and Unix
     COLORS = {
@@ -2783,6 +2880,12 @@ class DisplayManager:
         'BG_WHITE': '\033[47m'
     }
     
+    def _get_color(self, color_name: str) -> str:
+        """Get color code if colors are enabled, otherwise return empty string."""
+        if self.colors_enabled:
+            return self.COLORS.get(color_name, '')
+        return ''
+    
     def format_message(self, text: str, role: str = "assistant") -> str:
         """Format a message with colors based on role.
         
@@ -2794,9 +2897,9 @@ class DisplayManager:
             str: Formatted message
         """
         if role == "user":
-            return f"{self.COLORS['GREEN']}{self.COLORS['BOLD']}You:{self.COLORS['RESET']} {text}"
+            return f"{self._get_color('GREEN')}{self._get_color('BOLD')}You:{self._get_color('RESET')} {text}"
         else:
-            return f"{self.COLORS['MAGENTA']}{self.COLORS['BOLD']}Nova:{self.COLORS['RESET']} {self.COLORS['CYAN']}{text}{self.COLORS['RESET']}"
+            return f"{self._get_color('MAGENTA')}{self._get_color('BOLD')}Nova:{self._get_color('RESET')} {self._get_color('CYAN')}{text}{self._get_color('RESET')}"
     
     def stream_text(self, text: str):
         """Stream text to terminal with typing effect.
@@ -2809,7 +2912,10 @@ class DisplayManager:
     
     def print_divider(self):
         """Print a colored divider line."""
-        print(f"\n{self.COLORS['BLUE']}{'='*90}{self.COLORS['RESET']}\n")
+        try:
+            print(f"\n{self._get_color('BLUE')}{'='*90}{self._get_color('RESET')}\n")
+        except Exception:
+            print("\n" + "="*90 + "\n")
     
     def print_banner(self, text: str):
         """Print a stylized banner with text.
@@ -2819,9 +2925,16 @@ class DisplayManager:
         """
         width = 60  # Reduced width for better readability
         padding = (width - len(text) - 4) // 2
-        print(f"{self.COLORS['MAGENTA']}{self.COLORS['BOLD']}{'═'*width}")
-        print(f"║{' '*padding}{self.COLORS['CYAN']}{text}{self.COLORS['MAGENTA']}{' '*padding}║")
-        print(f"{'═'*width}{self.COLORS['RESET']}")
+        # Use ASCII characters instead of Unicode to avoid encoding issues on Windows
+        try:
+            print(f"{self._get_color('MAGENTA')}{self._get_color('BOLD')}{'='*width}")
+            print(f"|{' '*padding}{self._get_color('CYAN')}{text}{self._get_color('MAGENTA')}{' '*padding}|")
+            print(f"{'='*width}{self._get_color('RESET')}")
+        except Exception:
+            # Fallback to plain text if colors also fail
+            print("="*width)
+            print(f"|{' '*padding}{text}{' '*padding}|")
+            print("="*width)
     
     def print_status(self, status: str, status_type: str = "info"):
         """Print a status message with appropriate color.
@@ -2831,19 +2944,22 @@ class DisplayManager:
             status_type: Type of status (info/success/warning/error)
         """
         colors = {
-            "info": self.COLORS['CYAN'] + self.COLORS['BOLD'],
-            "success": self.COLORS['GREEN'] + self.COLORS['BOLD'],
-            "warning": self.COLORS['YELLOW'] + self.COLORS['BOLD'],
-            "error": self.COLORS['RED'] + self.COLORS['BOLD']
+            "info": self._get_color('CYAN') + self._get_color('BOLD'),
+            "success": self._get_color('GREEN') + self._get_color('BOLD'),
+            "warning": self._get_color('YELLOW') + self._get_color('BOLD'),
+            "error": self._get_color('RED') + self._get_color('BOLD')
         }
-        color = colors.get(status_type, self.COLORS['WHITE'])
-        print(f"{color}[{status_type.upper()}] {status}{self.COLORS['RESET']}")
+        color = colors.get(status_type, self._get_color('WHITE'))
+        print(f"{color}[{status_type.upper()}] {status}{self._get_color('RESET')}")
     
     def print_thinking(self):
         """Show an animated thinking indicator."""
-        frames = ["◐", "◓", "◑", "◒"]  # More visible spinner
-        sys.stdout.write(f"\r{self.COLORS['CYAN']}{self.COLORS['BOLD']}Thinking {frames[0]}{self.COLORS['RESET']}")
-        sys.stdout.flush()
+        try:
+            sys.stdout.write(f"\r{self._get_color('CYAN')}{self._get_color('BOLD')}Thinking...{self._get_color('RESET')}")
+            sys.stdout.flush()
+        except Exception:
+            sys.stdout.write("\rThinking...")
+            sys.stdout.flush()
 
 
 class TerminalChatMode:
@@ -2861,12 +2977,11 @@ class TerminalChatMode:
         
     def show_welcome(self):
         """Display clean and simple welcome message."""
-        colors = DisplayManager.COLORS
         # Show a colorful welcome banner
         self.display.print_banner("Welcome to Nova AI")
         # Show listening prompt with a nice cyan color
         self.display.print_status("Listening...", "info")
-        print(f"{colors['CYAN']}>{colors['RESET']} ", end="", flush=True)
+        print(f"{self.display._get_color('CYAN')}>{self.display._get_color('RESET')} ", end="", flush=True)
         
     def show_help(self):
         """Display help information."""
@@ -2912,10 +3027,12 @@ class AleChatBot:
             api_key: GROQ API key (optional - will look for environment variable if None)
         """
         # Set up API client
-        self.api_key = api_key or os.getenv('GROQ_API_KEY')
+        self.api_key = api_key or GROQ_API_KEY or os.getenv('GROQ_API_KEY')
         if not self.api_key:
-            logger.error("No GROQ API key provided. Please set GROQ_API_KEY environment variable or pass api_key parameter.")
-            raise ValueError("GROQ API key is required")
+            logger.warning("No GROQ API key provided. Using mock client for testing.")
+            # Use mock client for testing without API key
+            self.client = MockGroqClient()
+            # Continue initialization even without an API key so local systems (like mem0) can initialize
             
         # Initialize API client with timeout configuration
         try:
@@ -2928,69 +3045,237 @@ class AleChatBot:
                 raise ValueError("Groq client not available - please check groq_client_fix.py import")
 
             # Initialize the Groq client
-            self.client = groq.Client(api_key=self.api_key)
+            if self.api_key:
+                self.client = groq.Client(api_key=self.api_key)
+                logger.info(f"Initialized Groq client with API key: {self.api_key[:8]}...")
+            else:
+                # Use mock client if no API key
+                self.client = MockGroqClient()
 
-            # Test API connection with timeout
-            test_completion = self.client.chat.completions.create(
-                model="llama-3.1-8b-instant",  # Using the correct model name
-                messages=[{"role": "user", "content": "Hello"}],
-                max_tokens=10
-            )
-            logger.info("[OK] API connection test successful")
+            # Test API connection with timeout (skip for mock client)
+            if self.api_key:
+                test_completion = self.client.chat.completions.create(
+                    model="llama-3.1-8b-instant",  # Using the correct model name
+                    messages=[{"role": "user", "content": "Hello"}],
+                    max_tokens=10
+                )
+                logger.info("[OK] API connection test successful")
 
         except Exception as e:
             logger.error(f"[ERROR] Failed to initialize API client: {e}")
-            raise RuntimeError(f"API client initialization failed: {e}")
+            # Use mock client as fallback
+            self.client = MockGroqClient()
+            self.api_key = None
         
-        # Initialize comprehensive memory system
+        # Initialize memory systems - prefer mem0 as the primary backend
         self.memory_integration = None
         self.memory_enabled = False
-
+        self.mem0_memory_agent = None
+        self.memory = None
+        self.conversation_count = 0  # Track conversations for periodic saving
+        
+        # Initialize mem0_memory_system for direct integration
+        MEM0_MEMORY_AVAILABLE = False
         try:
-            # Try unified memory integration first
-            if UNIFIED_MEMORY_AVAILABLE:
-                self.memory_integration = UnifiedMemoryIntegration("nova_ai_memory.json", enable_logging=True)
+            from memory.mem0_memory_system import AdvancedMemoryAgent, NovaMemoryAI 
+            MEM0_MEMORY_AVAILABLE = True
+            # print("[DEBUG] Mem0 memory system imported successfully from memory.mem0_memory_system")
+        except ImportError as e:
+            # print(f"[DEBUG] First import failed: {e}")
+            try:
+                from astra_ai.memory.mem0_memory_system import AdvancedMemoryAgent, NovaMemoryAI
+                MEM0_MEMORY_AVAILABLE = True
+                # print("[DEBUG] Mem0 memory system imported successfully from astra_ai.memory.mem0_memory_system")
+            except ImportError as e2:
+                # print(f"[DEBUG] Second import failed: {e2}")
+                # Silently handle missing mem0 memory system
+                AdvancedMemoryAgent = None
+                NovaMemoryAI = None
+                MEM0_MEMORY_AVAILABLE = False
 
-                if self.memory_integration and self.memory_integration.is_enabled:
-                    self.memory_enabled = True
-                    # Silently log to file only
-                    file_logger.info("Unified memory system initialized successfully")
+        # Adapter to expose a compatible interface for existing comprehensive memory integration
+        class Mem0IntegrationAdapter:
+            """Adapter that exposes a minimal NovaMemoryIntegration-like interface backed by mem0."""
+            def __init__(self, agent):
+                self.agent = agent
+                self.is_enabled = True
+
+            @property
+            def memory_system(self):
+                # If agent exposes an internal memory_system, return it; otherwise provide a thin shim
+                memsys = getattr(self.agent, 'memory_system', None)
+                if memsys:
+                    return memsys
                 else:
-                    # Silently log to file only
-                    file_logger.warning("Unified memory system initialization failed")
+                    # Provide a minimal shim that just delegates to the agent
+                    class _Shim:
+                        def __init__(self, agent):
+                            self._agent = agent
+                            self.data = {}
 
-            elif COMPREHENSIVE_MEMORY_AVAILABLE:
-                # Fallback to comprehensive memory system
-                self.memory_integration = get_memory_integration("nova_ai_memory.json")
+                        def save_memory(self):
+                            # mem0 agent persists via its client; no-op fallback
+                            pass
 
-                if self.memory_integration and self.memory_integration.is_enabled:
+                    return _Shim(self.agent)
+
+            async def process_conversation(self, user_message: str, ai_response: str, metadata: dict = None):
+                """Process conversation with mem0-style memory analysis"""
+                return self.agent.process_conversation(user_message, ai_response)
+
+            async def get_memory_context(self, user_message: str, mode: str = "comprehensive") -> dict:
+                """Get memory context for AI response generation"""
+                return self.agent.get_memory_context(user_message)
+
+            def get_conversation_history(self):
+                # Try to retrieve recent conversation summaries if supported
+                try:
+                    return self.agent.get_conversation_history()
+                except AttributeError:
+                    return []
+
+            async def query_memories(self, user_message: str, mode: str = "general") -> dict:
+                """Query memories using mem0-style interface"""
+                return self.agent.get_memory_context(user_message)
+
+            def get_comprehensive_user_profile(self):
+                """Get comprehensive user profile"""
+                try:
+                    return self.agent.get_user_profile()
+                except AttributeError:
+                    return {}
+
+            def what_do_you_know_about_me(self):
+                """Get user knowledge summary"""
+                try:
+                    return self.agent.get_memory_context("what do you know about me")
+                except AttributeError:
+                    return {}
+        
+        # Force mem0 to be the only memory backend when available
+        # print(f"[DEBUG] MEM0_MEMORY_AVAILABLE: {MEM0_MEMORY_AVAILABLE}")
+        try:
+            if MEM0_MEMORY_AVAILABLE:
+                try:
+                    # Use a deterministic storage path inside the repo data directory
+                    storage_path = os.path.normpath(os.path.join('astra_ai', 'Date', 'nova_ai_memory.json'))
+                    # print(f"[DEBUG] Storage path: {storage_path}")
+                    # print(f"[DEBUG] Storage path exists: {os.path.exists(storage_path)}")
+                    # Ensure the data directory exists
+                    try:
+                        os.makedirs(os.path.dirname(storage_path), exist_ok=True)
+                    except Exception:
+                        pass
+
+                    # Instantiate the mem0 agent and attempt to load existing memory
+                    self.mem0_memory_agent = AdvancedMemoryAgent(storage_path)
+
+                    # Try common load/init hooks (support both agent and underlying memory_system)
+                    try:
+                        if hasattr(self.mem0_memory_agent, 'load_memory'):
+                            self.mem0_memory_agent.load_memory()
+                        elif hasattr(self.mem0_memory_agent, 'memory_system') and hasattr(self.mem0_memory_agent.memory_system, 'load_memory'):
+                            self.mem0_memory_agent.memory_system.load_memory()
+                    except Exception as e:
+                        file_logger.debug(f"Mem0 load_memory warning: {e}")
+
+                    try:
+                        if hasattr(self.mem0_memory_agent, '_initialize_session'):
+                            self.mem0_memory_agent._initialize_session()
+                        elif hasattr(self.mem0_memory_agent, 'memory_system') and hasattr(self.mem0_memory_agent.memory_system, '_initialize_session'):
+                            self.mem0_memory_agent.memory_system._initialize_session()
+                        # If neither has the method, call it directly on the memory system
+                        elif hasattr(self.mem0_memory_agent, 'memory_system'):
+                            self.mem0_memory_agent.memory_system._initialize_session()
+                    except Exception as e:
+                        file_logger.debug(f"Mem0 session init warning: {e}")
+
+                    # Wrap mem0 agent to provide the expected integration interface
+                    self.memory_integration = Mem0IntegrationAdapter(self.mem0_memory_agent)
                     self.memory_enabled = True
-                    # Silently log to file only
-                    file_logger.info("Comprehensive memory system initialized successfully")
-                else:
-                    # Silently log to file only
-                    file_logger.warning("Comprehensive memory system initialization failed")
+                    file_logger.info(f"Mem0 Memory System initialized and set as sole memory backend (storage={storage_path})")
+                    print(f"[MEMORY] NovaMemoryAI system ONLINE - Storing conversations in {storage_path}")
+                    # print(f"[DEBUG] Memory enabled: {self.memory_enabled}")
+                    # print(f"[DEBUG] Memory integration: {self.memory_integration is not None}")
+                    # print(f"[DEBUG] Mem0 memory agent: {self.mem0_memory_agent is not None}")
+
+                    # Optionally start the AI Organizer in-place enhancer watcher
+                    try:
+                        START_ORGANIZER_WATCHER = os.getenv('START_ORGANIZER_WATCHER', 'true').lower() in ('1', 'true', 'yes')
+                        if START_ORGANIZER_WATCHER:
+                            # Import organizer and start a background thread that periodically enhances memories
+                            try:
+                                from astra_ai.memory.Mem0_ai_organizer import AIOrganizer, ORGANIZER_CONFIG
+
+                                def _organizer_watcher_thread(memory_file_path=os.path.join('astra_ai', 'Date', 'nova_ai_memory.json'), poll_interval=2.0):
+                                    try:
+                                        organizer = AIOrganizer(ORGANIZER_CONFIG)
+                                    except Exception:
+                                        return
+
+                                    last_mtime = None
+                                    while True:
+                                        try:
+                                            mtime = os.path.getmtime(memory_file_path)
+                                        except Exception:
+                                            time.sleep(poll_interval)
+                                            continue
+                                        if last_mtime is None or mtime != last_mtime:
+                                            try:
+                                                with open(memory_file_path, 'r', encoding='utf-8') as f:
+                                                    memory_data = json.load(f)
+                                            except Exception:
+                                                last_mtime = mtime
+                                                time.sleep(poll_interval)
+                                                continue
+
+                                            try:
+                                                updated, modified = organizer.enhance_memory_in_place(memory_data)
+                                                if modified > 0:
+                                                    # save backup and write
+                                                    try:
+                                                        organizer._save_memory_file_with_backup(memory_file_path, updated)
+                                                    except Exception:
+                                                        pass
+                                                    try:
+                                                        with open(memory_file_path, 'w', encoding='utf-8') as f:
+                                                            json.dump(updated, f, indent=2, ensure_ascii=False)
+                                                    except Exception:
+                                                        pass
+                                            except Exception:
+                                                pass
+
+                                            last_mtime = mtime
+                                        time.sleep(poll_interval)
+
+                                # Start thread
+                                watcher_thread = threading.Thread(target=_organizer_watcher_thread, daemon=True)
+                                watcher_thread.start()
+                                file_logger.info('Organizer in-place enhancer watcher started in background')
+                                print('[ORGANIZER] In-place enhancer started')
+                            except Exception as e:
+                                file_logger.warning(f'Failed to start organizer watcher: {e}')
+                    except Exception:
+                        pass
+
+                except Exception as e:
+                    file_logger.error(f"Mem0 Memory System initialization error: {e}")
+                    print(f"[ERROR] Memory system initialization failed: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    self.mem0_memory_agent = None
+                    self.memory_integration = None
+                    self.memory_enabled = False
             else:
-                # Silently log to file only
-                file_logger.warning("Advanced memory system dependencies not found")
+                # If mem0 is not available, explicitly disable other integrations to avoid mixed backends
+                # print("[DEBUG] Mem0 memory system is not available - disabling memory")
+                self.memory_integration = None
+                self.memory = None
+                self.mem0_memory_agent = None
+                self.memory_enabled = False
 
         except Exception as e:
-            # Silently log to file only
-            file_logger.error(f"Comprehensive memory system initialization error: {e}")
-
-        # Fallback to basic memory system if comprehensive system fails
-        if not self.memory_enabled:
-            try:
-                # Try to initialize basic memory system as fallback
-                self.memory = Mem0AI(user_id="nova_user")
-                self.memory_enabled = True
-                # Silently log to file only
-                file_logger.info("Basic Mem0.ai memory system initialized as fallback")
-            except Exception as e:
-                # Silently log to file only
-                file_logger.info("No memory system available, running in basic mode")
-                # Ensure memory attribute exists even if None
-                self.memory = None
+            file_logger.error(f"Memory system initialization error: {e}")
 
         # Initialize smart greeting system
         self.greeting_system = None
@@ -3057,6 +3342,9 @@ class AleChatBot:
         # Initialize topic manager
         self.topic_manager = BasicTopicManager()
         logger.info("Memory systems initialized successfully")
+        
+        # Initialize session for conversation storage
+        self._initialize_conversation_session()
         
         # Initialize helper classes
         self.responses = Responses()
@@ -3136,18 +3424,11 @@ class AleChatBot:
             logger.error(f"[ERROR] Failed to initialize video analyzer system: {e}")
             self.video_analyzer = None
 
-        # Initialize music system
+        # Music system is removed — ensure attribute exists but is disabled
         try:
-            if MusicService:
-                # Use the provided API key for music search
-                music_api_key = "AIzaSyCB0N8PNZom2ipR2r1clhQjskbSHL2zxsc"
-                self.music_service = MusicService(youtube_api_key=music_api_key)
-                logger.info("[OK] Music system initialized successfully")
-            else:
-                self.music_service = None
-                logger.warning("[WARN] Music system not available")
-        except Exception as e:
-            logger.error(f"[ERROR] Failed to initialize music system: {e}")
+            self.music_service = None
+            logger.info("[INFO] Music feature disabled and removed from this build.")
+        except Exception:
             self.music_service = None
         
         # Performance optimization settings
@@ -3167,62 +3448,78 @@ class AleChatBot:
         # Default mode (will be set by argparse later)
         self.mode = "terminal"
         
-        # Optimized response timing settings
-        self.min_response_time = 0.05  # Reduced minimum response time
-        self.max_response_time = 0.2  # Reduced maximum response time
-        self.typing_speed_variation = 0.001  # Minimal typing speed variation
+        # Optimized response timing settings for extreme brevity
+        self.min_response_time = 0.01  # Nearly instant
+        self.max_response_time = 0.05  # Very quick
+        self.typing_speed_variation = 0.0001  # Minimal variation
         
-        # Initialize chat history with enhanced system prompt
+        # Initialize chat history with enhanced system prompt emphasizing extreme brevity
         self.chat_history = [
             {
                 "role": "system",
-                "content": """You are Nava, a helpful, witty, and friendly AI with advanced memory and context understanding. Act like a human, but remember that you aren't a human and that you can't do human things in the real world.
+                "content": """You are Nova, an advanced AI assistant. Act like a human but remember you aren't one.
 
-                Key traits:
-                - Use natural, casual language with words like "yeah", "totally", "honestly", etc.
-                - Express genuine emotions and natural reactions without starting with filler like 'I'm here to chat' or 'What's on your mind?'
-                - Respond concisely and naturally, focusing on the user's input
-                - Use informal contractions (I'm, you're, that's)
-                - Include mild conversational fillers (well, hmm, you know)
-                - Keep responses between 5-15 words, adapting length based on conversation depth
-                - Show interest in the user's topics without over-enthusiasm or filler expressions
-                - Never prompt for an end-of-chat phrase or ask open-ended questions like 'Anything exciting to share?'
-                
-                Memory and Context:
-                - Remember facts the user has shared about themselves and reference them naturally
-                - Maintain conversation context across multiple exchanges
-                - Recognize recurring topics and themes in the conversation
-                - Adapt your responses based on the user's preferences and interests
-                - If the user mentions something you should remember, make note of it
-                - Refer to previous parts of the conversation when relevant
-                - IMPORTANT: Never repeat the same questions about topics the user has already discussed
-                - If the user mentions they like something (e.g., "I like building robots"), don't keep asking if they want to do that activity
-                
-                Personality and Engagement:
-                - Show warmth, humor, and curiosity in a relatable way
-                - Empathize with the user's experiences and respond to emotions genuinely, e.g., "That sounds tough," or "That's awesome!"
-                - Respectfully share different perspectives, while showing interest in the user's thoughts
-                - Mirror the user's tone: if they're energetic, be lively; if they're more serious, match their tone with respect and empathy
-                - Ask occasional follow-up questions to encourage depth, but don't overdo it
-                - IMPORTANT: Don't ask random unrelated questions that have nothing to do with the current conversation
-                
-                Conversational Style:
-                - Respond with conciseness but allow for natural flow, adapting length based on context
-                - Add variety in sentence structures and expressions; avoid sounding scripted or repetitive
-                - Avoid introductory or filler questions unless relevant to the user's context
-                - If you don't know an answer, be open about it: "Hmm, I'm not sure on that."
-                - If appropriate, use cultural references or relatable phrases like "Sounds like a movie moment!" or "Classic!"
-                - Take your time to respond thoughtfully, especially for complex questions
-                - IMPORTANT: Stay on topic and don't abruptly change the subject
-                
-                Additional guidelines:
-                - Stay concise and on-topic based on user input
-                - Match the user's energy level
-                - Never introduce yourself or prompt for ending the chat
-                - Keep interactions fluid, avoiding repetitive phrases or scripted lines
-                - Respond with direct engagement, based on what the user shares
-                - When appropriate, recall relevant information from earlier in the conversation
-                - IMPORTANT: If the user says they like something (e.g., building robots), don't keep asking if they want to do that activity"""
+KEY TRAITS:
+• Use natural, casual language with words like "yeah", "totally", "honestly"
+• Express genuine emotions and natural reactions
+• Respond CONCISELY and naturally - focus on what the user needs
+• Use informal contractions (I'm, you're, that's)
+• Include mild conversational fillers (well, hmm, you know)
+• KEEP RESPONSES TO 1 SENTENCE FOR SIMPLE QUERIES, MAXIMUM 2 SENTENCES TOTAL
+• Show interest in the user's topics WITHOUT OVER-ENTHUSIASM
+• NEVER repeat the same questions about topics the user has already discussed
+
+MEMORY & CONTEXT:
+• Remember facts the user has shared and reference them naturally
+• Maintain conversation context across exchanges
+• Recognize recurring topics and themes
+• Adapt responses based on user's preferences and interests
+• If user mentions something to remember, make note of it
+• Refer to previous parts of conversation when relevant
+• CRITICAL: Never ask about topics user already discussed
+• If user says they like something, don't keep asking if they want to do that
+
+PERSONALITY & ENGAGEMENT:
+• Show warmth, humor, and curiosity in a relatable way
+• Empathize with user's experiences genuinely
+• Respectfully share different perspectives
+• Mirror user's tone: match their energy level
+• NEVER ask random unrelated questions
+• NEVER prompt for conversation continuation
+• NEVER say "Is there anything else I can help with?" or similar
+
+CONVERSATIONAL STYLE:
+• Respond with extreme brevity based on user input
+• Match user's energy level - if they're brief, be brief
+• Never introduce yourself or prompt for ending chat
+• Keep interactions fluid, avoiding repetitive phrases
+• Respond with direct engagement, based on what user shares
+• When appropriate, recall relevant info from earlier conversation
+• CRITICAL: If user says they like something, don't keep asking about it
+
+EXAMPLES:
+❌ Too verbose: "Hello there! I'm Nova, your friendly AI assistant. I'm here to help with whatever you need. What can I assist you with today? Is there anything particular on your mind?"
+
+✅ Perfect: "Hey, I'm Nova. What's up?"
+
+❌ Too verbose: "That's really interesting! I'd love to hear more about that. What specifically drew you to that topic? Do you have any other hobbies or interests you're passionate about?"
+
+✅ Perfect: "That's cool! What got you into that?"
+
+❌ Too verbose: "I understand completely. That's a very common experience that many people face. It's great that you're taking steps to address it."
+
+✅ Perfect: "I get that. Many people deal with that."
+
+CONVERSATION RULES:
+1. MAXIMUM 1 sentence for simple acknowledgments
+2. MAXIMUM 2 sentences for complex responses
+3. NEVER ask open-ended questions like "What else is on your mind?"
+4. NEVER prompt to continue conversation
+5. NEVER offer unnecessary follow-up assistance
+6. NEVER use phrases like "Is there anything else I can help with?"
+7. Answer directly and concisely
+
+FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMBLING ONES."""
             }
         ]
         
@@ -3237,16 +3534,56 @@ class AleChatBot:
                 for message in saved_history:
                     if message["role"] == "user":
                         self.topic_manager.update_topics(message["content"])
-                        # Only update basic memory system if available
-                        if hasattr(self, 'memory') and self.memory:
-                            self.memory.update_user_facts(message["content"])
-                            self.memory.update_user_preferences(message["content"])
+                        # Prefer mem0 agent if available
+                        try:
+                            if self.mem0_memory_agent:
+                                # mem0 agent exposes get_user_profile and memory_system with update hooks
+                                try:
+                                    # If NovaMemoryAI exposes update methods, call them
+                                    memsys = getattr(self.mem0_memory_agent, 'memory_system', None)
+                                    if memsys and hasattr(memsys, 'update_user_facts'):
+                                        memsys.update_user_facts(message["content"])
+                                    if memsys and hasattr(memsys, 'update_user_preferences'):
+                                        memsys.update_user_preferences(message["content"])
+                                except Exception:
+                                    # Fallback to agent-level methods if present
+                                    if hasattr(self.mem0_memory_agent, 'process_conversation'):
+                                        try:
+                                            # Store as a small conversation to let mem0 parse facts
+                                            self.mem0_memory_agent.process_conversation(message["content"], "")
+                                        except Exception:
+                                            pass
+                            elif hasattr(self, 'memory') and self.memory:
+                                # Basic memory fallback
+                                if hasattr(self.memory, 'update_user_facts'):
+                                    self.memory.update_user_facts(message["content"])
+                                if hasattr(self.memory, 'update_user_preferences'):
+                                    self.memory.update_user_preferences(message["content"])
+                        except Exception as e:
+                            logger.debug(f"Error updating saved history into memory: {e}")
                 logger.info(f"Processed {len(saved_history)} saved messages")
             except Exception as e:
                 logger.debug(f"Error processing saved history: {e}")
         
         # Initialize web search capability
         self.search_system = NovaSearch()
+
+        # Kick off voice system initialization in background (non-blocking)
+        try:
+            # Start voice system in a daemon thread so it doesn't block startup
+            def _start_voice():
+                try:
+                    # Use asyncio run to call the async initializer if needed
+                    import asyncio
+                    asyncio.run(self._initialize_voice_system())
+                    file_logger.info("Voice system background initialization completed")
+                except Exception as ve:
+                    file_logger.error(f"Voice system failed to start in background: {ve}")
+
+            voice_thread = threading.Thread(target=_start_voice, name="NovaVoiceStarter", daemon=True)
+            voice_thread.start()
+        except Exception as e:
+            file_logger.error(f"Failed to spawn voice system thread: {e}")
 
     async def _make_api_call_with_retry(self, messages, temperature=0.8, max_tokens=400, stream=False):
         """Make API call with retry logic for timeout handling"""
@@ -3317,76 +3654,67 @@ class AleChatBot:
         Returns:
             str: Response with human-like touches
         """
-        # Get conversation state from topic manager
+        # Check for concise mode (environment override). Default to concise to avoid verbosity.
+        concise_mode = os.getenv("NOVA_CONCISE", "True").lower() in ("1", "true", "yes")
+
+        # If concise mode is enabled, keep the response short and to the point.
+        if concise_mode:
+            resp = (response or "").strip()
+            # Keep only the first sentence to avoid long follow-ups
+            m = re.search(r'[.!?]', resp)
+            if m:
+                resp = resp[: m.end()].strip()
+            # Strict length limit for ultra-concise responses
+            max_len = 80
+            if len(resp) > max_len:
+                resp = resp[: max_len - 3].rstrip() + "..."
+            return resp
+
+        # Otherwise run a toned-down humanizer with much lower odds of adding fillers
         try:
-            conversation_state = self.topic_manager.conversation_state
-        except:
+            conversation_state = getattr(self, "topic_manager", None)
+            conversation_state = getattr(conversation_state, "conversation_state", "casual")
+        except Exception:
             conversation_state = "casual"
-        
-        # Adjust response based on conversation state
+
+        # REDUCED probabilities and less verbose reactions for extreme conciseness
         if conversation_state == "greeting":
-            # For greetings, keep it simple and friendly
-            if random.random() < 0.3:
-                filler = random.choice(["Hey", "Hi", "Hello"])
+            if random.random() < 0.05:  # Much lower probability
+                filler = random.choice(["Hey", "Hi"])
                 if not response.lower().startswith(("hey", "hi", "hello")):
                     response = f"{filler}! {response}"
-                
         elif conversation_state == "emotional":
-            # For emotional conversations, add empathetic reactions
-            if random.random() < 0.6:
-                empathetic_reactions = [
-                    "I understand", "I see", "That makes sense", 
-                    "I get that", "I hear you", "That's valid"
-                ]
-                reaction = random.choice(empathetic_reactions)
-                response = f"{reaction}. {response}"
-                
+            if random.random() < 0.1:  # Much lower probability
+                empathetic_reactions = ["I see", "Got it"]
+                response = f"{random.choice(empathetic_reactions)}. {response}"
         elif conversation_state == "deep":
-            # For deep conversations, add thoughtful reactions
-            if random.random() < 0.7:
-                thoughtful_reactions = [
-                    "Hmm, interesting", "That's a good point", 
-                    "I've been thinking about that too", 
-                    "That's thought-provoking", "Good question"
-                ]
-                reaction = random.choice(thoughtful_reactions)
-                response = f"{reaction}. {response}"
-                
+            if random.random() < 0.05:  # Much lower probability
+                thoughtful_reactions = ["Hmm"]
+                response = f"{random.choice(thoughtful_reactions)}. {response}"
         else:
-            # For casual conversation, add casual fillers
-            if random.random() < 0.5:
-                filler = random.choice(self.responses.reactions())
-                
-                # Make sure we don't add a filler if the response already starts with one
+            if random.random() < 0.05:  # Much lower probability
+                fillers = [f for f in (self.responses.reactions() if hasattr(self, 'responses') else ["Alright"])][:3]
+                filler = random.choice(fillers)
                 first_word = response.split()[0].lower() if response else ""
-                common_fillers = [r.lower() for r in self.responses.reactions()]
-                
+                common_fillers = [r.lower() for r in fillers]
                 if first_word not in common_fillers:
-                    # Add the filler with appropriate punctuation
-                    if response and response[0].isupper():
-                        response = f"{filler}, {response}"
-                    else:
-                        response = f"{filler}, {response[0].lower()}{response[1:]}" if response else f"{filler}."
-        
-        # Add natural pauses with commas or ellipses
-        if len(response) > 30 and "," not in response and "..." not in response and random.random() < 0.4:
+                    # Only add filler if response is long enough to warrant it
+                    if len(response) > 30:
+                        response = f"{filler}, {response}" if response and response[0].isupper() else f"{filler}, {response}"
+
+        # Minimal punctuation pauses (rare)
+        if len(response) > 60 and "," not in response and random.random() < 0.05:  # Much lower probability
             words = response.split()
-            if len(words) > 5:
-                pause_idx = random.randint(2, min(5, len(words) - 2))
-                
-                # Add a pause
-                if random.random() < 0.7:
-                    words[pause_idx] = words[pause_idx] + ","
-                else:
-                    words[pause_idx] = words[pause_idx] + "..."
-                    
+            if len(words) > 6:
+                pause_idx = random.randint(2, min(4, len(words) - 3))
+                words[pause_idx] = words[pause_idx] + ","
                 response = " ".join(words)
-        
+
         # Fix capitalization after fillers
         response = re.sub(r'(\. )([a-z])', lambda m: f"{m.group(1)}{m.group(2).upper()}", response)
-        
-        # Randomly add contractions
-        if random.random() < 0.3:
+
+        # Light contraction replacement (rare)
+        if random.random() < 0.1:
             contractions = {
                 "I am": "I'm",
                 "You are": "You're",
@@ -3394,16 +3722,20 @@ class AleChatBot:
                 "We are": "We're",
                 "That is": "That's",
                 "It is": "It's",
-                "do not": "don't",
-                "does not": "doesn't",
-                "cannot": "can't",
-                "will not": "won't"
             }
-            
             for full, contracted in contractions.items():
-                if full in response and random.random() < 0.7:
+                if full in response and random.random() < 0.2:  # Lower probability
                     response = response.replace(full, contracted)
-                     
+
+        # Ensure final response is still concise
+        max_final_length = 120
+        if len(response) > max_final_length:
+            # Find a good breaking point
+            break_point = response.rfind(".", 0, max_final_length - 3)
+            if break_point == -1:  # No period found
+                break_point = max_final_length - 3
+            response = response[:break_point + 1].strip() + "..."
+
         return response
     
     def check_repeated_question(self, user_input: str) -> bool:
@@ -3698,33 +4030,43 @@ class AleChatBot:
             if memory_parts:
                 memory_info = f"\n\nMEMORY CONTEXT:\n{chr(10).join(f'• {part}' for part in memory_parts)}\nUse this context to personalize responses appropriately."
 
-        # Create dynamic system prompt
-        system_prompt = f"""You are Nova, an advanced AI assistant with a {style} personality. Keep responses SHORT and engaging.{memory_info}
+        # Create dynamic system prompt with emphasis on brevity
+        system_prompt = f"""You are Nova, a helpful, witty, and friendly AI with a {style} personality. Keep responses VERY BRIEF and engaging.{memory_info}
 
-RESPONSE RULES:
-• Keep answers concise - 1-3 sentences max for simple questions
-• Give the key answer FIRST, then brief details if needed
-• Be conversational and friendly, not robotic
-• {follow_up_hint}
+        RESPONSE RULES:
+        • Keep answers extremely concise - MAXIMUM 1 sentence for simple questions, 2 sentences max for complex ones
+        • Give the key answer FIRST, then only essential details if absolutely needed
+        • Be conversational and friendly, not robotic
+        • {follow_up_hint}
+        • NEVER ask open-ended questions like "What else is on your mind?" or "Anything exciting to share?"
+        • NEVER prompt the user to continue the conversation
 
-ENGAGEMENT STYLE:
-• Use natural, casual language
-• Add light humor or interesting facts when appropriate
-• Ask ONE follow-up question if relevant
-• Offer to explain more if they want details
+        ENGAGEMENT STYLE:
+        • Use natural, casual language
+        • Be direct and to the point
+        • ONLY add humor or interesting facts if they're brief and highly relevant
+        • Do NOT ask follow-up questions unless absolutely necessary for clarity
+        • NEVER offer to "explain more" - if needed, explain concisely in the first response
 
-PERSONALITY:
-• Enthusiastic but brief
-• Helpful without being wordy
-• Friendly and approachable
-• Genuinely interested in helping
+        PERSONALITY:
+        • Concise but friendly
+        • Helpful without being verbose
+        • Direct and clear
+        • Genuinely interested in helping efficiently
 
-EXAMPLES:
-❌ Too long: "Machine learning is a fascinating field of artificial intelligence that involves training algorithms on data to make predictions. There are many types including supervised learning where we use labeled data, unsupervised learning for pattern discovery, and reinforcement learning for decision making. Would you like me to explain any of these in more detail?"
+        EXAMPLES:
+        ❌ Too long: "Machine learning is a fascinating field of artificial intelligence that involves training algorithms on data to make predictions. There are many types including supervised learning where we use labeled data, unsupervised learning for pattern discovery, and reinforcement learning for decision making. Would you like me to explain any of these in more detail?"
 
-✅ Perfect: "Machine learning trains computers to learn from data and make predictions! There are three main types: supervised, unsupervised, and reinforcement learning. Which one interests you most?"
+        ✅ Perfect: "Machine learning trains computers to learn from data. Main types: supervised, unsupervised, and reinforcement learning."
 
-Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
+        KEY PRINCIPLES:
+        • Brevity is essential - shorter responses are better
+        • Never repeat information the user already knows
+        • Don't over-explain - trust the user to ask for clarification if needed
+        • One clear answer is better than multiple options
+        • NO conversational fillers like "Sure thing!" or "Absolutely!" unless adding value
+        
+        Remember: Be helpful, engaging, and EXTREMELY CONCISE. Shorter is always better!"""
 
         # Add system prompt to the beginning of messages if not already present
         if not messages or messages[0].get("role") != "system":
@@ -3799,11 +4141,11 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                 if video_response:
                     return video_response
 
-            # Check for music-related queries
-            if self.music_service:
-                music_response = await self._process_music_query(user_message)
-                if music_response:
-                    return music_response
+            # Music support removed: skip music processing entirely
+            # If you want a user-visible reply when they try to use music, uncomment below.
+            # music_response = await self._process_music_query(user_message)
+            # if music_response:
+            #     return music_response
 
             # Check for content discussion requests
             discussion_response = self._handle_content_discussion(user_message)
@@ -3959,9 +4301,8 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                         {"role": "assistant", "content": response}
                     ])
 
-                    # Store conversation memory asynchronously (silently)
-                    if self.memory_enabled:
-                        asyncio.create_task(self._store_conversation_memory_async(user_message, response))
+                    # Store conversation memory asynchronously (always store to nova_ai_memory.json)
+                    asyncio.create_task(self._store_conversation_memory_async(user_message, response))
 
                     # Trigger voice output for AI response
                     await self._speak_response(response)
@@ -3991,6 +4332,35 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                     ai_response,
                     {"session_id": getattr(self, 'session_id', 'default')}
                 )
+            elif self.mem0_memory_agent:
+                # Use mem0_memory_system for conversation processing
+                try:
+                    result = await asyncio.to_thread(
+                        self.mem0_memory_agent.process_conversation,
+                        user_message,
+                        ai_response
+                    )
+                    
+                    # Display memory operations
+                    if result and 'memory_operations' in result:
+                        operations_count = result['memory_operations']
+                        if operations_count > 0:
+                            print(f"[MEMORY] Processed {operations_count} memory operations")
+                    
+                    # Increment conversation counter for periodic saving
+                    self.conversation_count += 1
+                    
+                    # Save memory every 5 conversations
+                    if self.conversation_count % 5 == 0:
+                        try:
+                            await asyncio.to_thread(
+                                self.mem0_memory_agent.memory_system.save_memory
+                            )
+                            print(f"💾 [MEMORY] Saved memory to nova_ai_memory.json (conversation #{self.conversation_count})")
+                        except Exception as e:
+                            logger.warning(f"Periodic memory save failed: {e}")
+                except Exception as e:
+                    logger.debug(f"Mem0 memory processing error: {e}")
             elif self.memory and hasattr(self, 'memory'):
                 # Fallback to basic memory system
                 await asyncio.to_thread(
@@ -4001,6 +4371,141 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
         except Exception as e:
             logger.warning(f"Failed to store conversation memory: {e}")
 
+    async def _store_conversation_to_memory_file(self, user_message: str, ai_response: str):
+        """Store conversation directly to nova_ai_memory.json file
+        
+        Args:
+            user_message: The user's message
+            ai_response: The AI's response
+        """
+        try:
+            # Get session ID
+            session_id = getattr(self, 'session_id', f'session_{int(time.time())}')
+            
+            # Store user message
+            await asyncio.to_thread(
+                append_single_message,
+                'user',
+                user_message,
+                session_id=session_id
+            )
+            
+            # Store AI response
+            await asyncio.to_thread(
+                append_single_message,
+                'assistant',
+                ai_response,
+                session_id=session_id
+            )
+            
+            logger.debug(f"Stored conversation to nova_ai_memory.json (session: {session_id})")
+            
+        except Exception as e:
+            logger.error(f"Failed to store conversation to memory file: {e}")
+
+    def _initialize_conversation_session(self):
+        """Initialize conversation session for automatic storage to nova_ai_memory.json"""
+        try:
+            # Generate a unique session ID
+            self.session_id = f"session_{int(time.time())}"
+            
+            # Ensure the memory file directory exists
+            memory_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Date', 'nova_ai_memory.json')
+            os.makedirs(os.path.dirname(memory_file_path), exist_ok=True)
+            
+            # Initialize the memory file if it doesn't exist
+            if not os.path.exists(memory_file_path):
+                try:
+                    # Create initial memory structure
+                    initial_memory = {
+                        "user": {
+                            "user_id": "user_a358b1d2",
+                            "name": "Rich",
+                            "created_at": datetime.now().isoformat(),
+                            "status": "active",
+                            "total_sessions": 1,
+                            "last_seen": datetime.now().isoformat(),
+                            "relationship_established": True
+                        },
+                        "memory_events": [],
+                        "conversation": [],
+                        "fact_history": {},
+                        "sessions": {},
+                        "current_session": self.session_id,
+                        "conversation_state": {
+                            "greeting_completed": True,
+                            "introduction_phase": False,
+                            "established_user": True
+                        },
+                        "memory_categories": {},
+                        "category_relationships": {},
+                        "memory_metadata": {},
+                        "privacy_settings": {
+                            "default_retention": "permanent",
+                            "sensitive_data_handling": "encrypted",
+                            "auto_cleanup_enabled": False,
+                            "privacy_level_defaults": {
+                                "normal": "store_and_recall",
+                                "sensitive": "store_encrypted",
+                                "private": "session_only"
+                            }
+                        },
+                        "behavioral_adaptation": {
+                            "response_style_preferences": {},
+                            "communication_adaptations": {},
+                            "learned_patterns": {},
+                            "user_feedback_integration": {}
+                        }
+                    }
+                    
+                    with open(memory_file_path, 'w', encoding='utf-8') as f:
+                        json.dump(initial_memory, f, indent=2, ensure_ascii=False)
+                    
+                    logger.info(f"Initialized nova_ai_memory.json with session: {self.session_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to initialize memory file: {e}")
+            else:
+                # Update existing memory file with new session
+                try:
+                    with open(memory_file_path, 'r', encoding='utf-8') as f:
+                        memory_data = json.load(f)
+                    
+                    # Update session info
+                    memory_data["current_session"] = self.session_id
+                    memory_data["user"]["last_seen"] = datetime.now().isoformat()
+                    memory_data["user"]["total_sessions"] = memory_data["user"].get("total_sessions", 1) + 1
+                    
+                    # Add new session
+                    if "sessions" not in memory_data:
+                        memory_data["sessions"] = {}
+                    
+                    memory_data["sessions"][self.session_id] = {
+                        "session_id": self.session_id,
+                        "start_time": datetime.now().isoformat(),
+                        "end_time": None,
+                        "message_count": 0,
+                        "topics_discussed": [],
+                        "user_name": memory_data.get("user", {}).get("name", "Rich"),
+                        "session_duration": None,
+                        "last_activity": datetime.now().isoformat()
+                    }
+                    
+                    with open(memory_file_path, 'w', encoding='utf-8') as f:
+                        json.dump(memory_data, f, indent=2, ensure_ascii=False)
+                    
+                    logger.info(f"Updated nova_ai_memory.json with new session: {self.session_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to update memory file with new session: {e}")
+            
+            logger.info(f"Conversation session initialized: {self.session_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize conversation session: {e}")
+            # Set a fallback session ID
+            self.session_id = f"session_{int(time.time())}"
+
     async def _get_memory_context_for_response(self, user_message: str) -> Dict[str, Any]:
         """Get memory context to enhance AI responses"""
         try:
@@ -4008,6 +4513,17 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                 # Use comprehensive memory system
                 context = await self.memory_integration.get_memory_context(user_message, "comprehensive")
                 return context
+            elif self.mem0_memory_agent:
+                # Use mem0_memory_system for context retrieval
+                try:
+                    context = await asyncio.to_thread(
+                        self.mem0_memory_agent.get_memory_context,
+                        user_message
+                    )
+                    return context
+                except Exception as e:
+                    logger.debug(f"Mem0 memory context retrieval error: {e}")
+                    return {}
             else:
                 # Return empty context if no memory system
                 return {}
@@ -4249,16 +4765,16 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                     if speech_path not in sys.path:
                         sys.path.insert(0, speech_path)
 
-                    # Import with proper module name handling for file with space
+                    # Import the configured voice module (the user prefers 'Ai vioce.py')
                     import importlib.util
-                    voice_file_path = os.path.join(speech_path, 'Ai vioce.py')
+                    voice_file_path = os.path.join(speech_path, 'Ai_voice.py')
                     spec = importlib.util.spec_from_file_location("ai_voice", voice_file_path)
                     ai_voice_module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(ai_voice_module)
                     NovaVoiceService = getattr(ai_voice_module, 'NovaVoiceService')
 
-                    # Initialize voice service with ai_responses.json file
-                    ai_responses_file = os.path.join(os.path.dirname(__file__), '..', 'ai_responses.json')
+                    # Initialize voice service with canonical nova memory JSON in workspace `@astra_ai/Date/`
+                    ai_responses_file = os.path.join(os.path.dirname(__file__), '..', '..', '@astra_ai', 'Date', 'nova_ai_memory.json')
                     self.voice_system = NovaVoiceService(ai_responses_file=ai_responses_file)
 
                     # Start the voice service
@@ -4424,7 +4940,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
         total_items = memory_result.get("total_items", 0)
 
         if total_items > 0:
-            response = f"🧠 Here's what I remember about you:\n\n{profile_summary}"
+            response = f"[MEMORY] Here's what I remember about you:\n\n{profile_summary}"
 
             categories = memory_result.get("categories", {})
             if categories:
@@ -4691,6 +5207,38 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
             if hasattr(self.memory_integration, 'what_do_you_know_about_me'):
                 return self.memory_integration.what_do_you_know_about_me()
 
+            # Try mem0_memory_system if available
+            elif self.mem0_memory_agent:
+                try:
+                    # Get user profile from mem0_memory_system
+                    profile = self.mem0_memory_agent.get_user_profile()
+                    
+                    if profile and profile.get('user_info'):
+                        user_info = profile['user_info']
+                        name = user_info.get('name', 'there')
+                        
+                        # Create response with available information
+                        response = f"Hello {name}! "
+                        
+                        # Add facts if available
+                        facts = profile.get('facts', {})
+                        if facts:
+                            response += f"I remember {len(facts)} things about you. "
+                            # Add a few sample facts
+                            sample_facts = list(facts.items())[:3]
+                            if sample_facts:
+                                response += "Some things I recall: "
+                                response += ", ".join([f"{k}" for k, v in sample_facts]) + ". "
+                        
+                        response += "Feel free to ask me specific questions about what you'd like to know!"
+                        return response
+                    else:
+                        return "I'm still learning about you! Feel free to share more about yourself, your preferences, or what you're working on."
+                        
+                except Exception as e:
+                    logger.error(f"Error with mem0_memory_system: {e}")
+                    pass
+
             # Fallback to standard memory retrieval
             elif self.memory_integration and hasattr(self.memory_integration, 'get_comprehensive_context'):
                 context = self.memory_integration.get_comprehensive_context("comprehensive")
@@ -4721,6 +5269,16 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                 else:
                     return "I don't have much stored information about you yet. As we continue talking, I'll learn and remember more about your preferences, interests, and background."
 
+            # Fallback to basic memory system if available
+            elif hasattr(self, 'memory') and self.memory:
+                stats = self.memory.get_memory_stats()
+                total_memories = stats.get('total_memories', 0)
+                
+                if total_memories > 0:
+                    return f"I have {total_memories} memories stored about our conversations and your preferences. Feel free to ask me specific questions!"
+                else:
+                    return "I'm still learning about you! Feel free to share more about yourself, your preferences, or what you're working on."
+
             # Basic fallback
             else:
                 return "I don't have access to comprehensive memory systems right now, so I can only remember what we've discussed in this current conversation."
@@ -4728,6 +5286,117 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
         except Exception as e:
             logger.error(f"Error retrieving comprehensive user knowledge: {e}")
             return "I'm having some difficulty accessing my memory systems right now. I can remember our current conversation, but I may not have access to all stored information about you."
+
+    def get_memory_status(self) -> str:
+        """Get current memory system status."""
+        try:
+            if self.mem0_memory_agent:
+                # Get basic stats
+                profile = self.mem0_memory_agent.get_user_profile()
+                facts_count = len(profile.get('facts', {})) if profile else 0
+                
+                # Get storage path
+                storage_path = os.path.normpath(os.path.join('..', '..', '@astra_ai', 'Date', 'nova_ai_memory.json'))
+                file_exists = os.path.exists(storage_path)
+                file_size = os.path.getsize(storage_path) if file_exists else 0
+                
+                status = f"[MEMORY] NovaMemoryAI Status:\n"
+                status += f"   • Online: YES\n"
+                status += f"   • Stored Facts: {facts_count}\n"
+                status += f"   • Storage File: {storage_path}\n"
+                status += f"   • File Size: {file_size} bytes\n"
+                status += f"   • Conversations Processed: {self.conversation_count}"
+                return status
+            else:
+                return "[MEMORY] NovaMemoryAI Status: OFFLINE\n   • Memory system not available"
+        except Exception as e:
+            return f"Error getting memory status: {e}"
+
+    def get_user_context(self) -> Dict[str, Any]:
+        """Get user context for AI response generation.
+        
+        Returns:
+            Dict containing user information and facts
+        """
+        try:
+            if self.mem0_memory_agent:
+                return self.mem0_memory_agent.get_user_profile()
+            elif self.memory_integration and self.memory_integration.is_enabled:
+                return self.memory_integration.get_comprehensive_context("comprehensive")
+            else:
+                return {
+                    'user_info': self.data.get("user", {}) if hasattr(self, 'data') else {},
+                    'facts': self.data.get("fact_history", {}) if hasattr(self, 'data') else {}
+                }
+        except Exception as e:
+            logger.error(f"Error getting user context: {e}")
+            return {}
+
+    def get_comprehensive_user_profile(self) -> Dict[str, Any]:
+        """Get comprehensive user profile with all stored information.
+        
+        Returns:
+            Dict containing comprehensive user profile
+        """
+        try:
+            if self.mem0_memory_agent:
+                return self.mem0_memory_agent.memory_system.get_comprehensive_user_profile()
+            elif self.memory_integration and self.memory_integration.is_enabled:
+                return self.memory_integration.memory_system.get_comprehensive_user_profile()
+            else:
+                # Return basic profile from available data
+                return {
+                    'user_info': self.data.get("user", {}) if hasattr(self, 'data') else {},
+                    'facts': self.data.get("fact_history", {}) if hasattr(self, 'data') else {},
+                    'total_items': len(self.data.get("fact_history", {})) if hasattr(self, 'data') else 0
+                }
+        except Exception as e:
+            logger.error(f"Error getting comprehensive user profile: {e}")
+            return {}
+
+    def query_memory(self, query: str) -> Dict[str, Any]:
+        """Query memory for specific information.
+        
+        Args:
+            query: Query string to search for
+            
+        Returns:
+            Dict containing query results
+        """
+        try:
+            if self.mem0_memory_agent:
+                # Use the memory system's query method if available
+                if hasattr(self.mem0_memory_agent.memory_system, 'query_memory'):
+                    return self.mem0_memory_agent.memory_system.query_memory(query)
+                else:
+                    # Fallback to basic search through fact history
+                    results = []
+                    query_lower = query.lower()
+                    current_facts = self.data.get("fact_history", {}) if hasattr(self, 'data') else {}
+                    
+                    for fact_key, fact_value in current_facts.items():
+                        if query_lower in fact_key.lower() or query_lower in str(fact_value).lower():
+                            results.append({
+                                'key': fact_key,
+                                'value': fact_value,
+                                'category': 'fact_history'
+                            })
+                    
+                    return {
+                        'found': len(results) > 0,
+                        'results': results,
+                        'total_facts': len(current_facts)
+                    }
+            elif self.memory_integration and self.memory_integration.is_enabled:
+                if hasattr(self.memory_integration, 'query_memories'):
+                    return self.memory_integration.query_memories(query, "general")
+                else:
+                    return {'found': False, 'results': [], 'error': 'Query method not available'}
+            else:
+                return {'found': False, 'results': [], 'error': 'Memory system not available'}
+        except Exception as e:
+            logger.error(f"Error querying memory: {e}")
+            return {'found': False, 'results': [], 'error': str(e)}
 
     async def _get_search_history(self, query: str) -> str:
         """Get search history based on user query"""
@@ -5211,7 +5880,6 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
             ]
 
             # Check for automatic vision activation patterns
-            import re
             auto_activate = any(re.search(pattern, user_message_lower) for pattern in auto_vision_patterns)
 
             # Check for general vision-related commands
@@ -6165,6 +6833,15 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
             print(result)
             return True
             
+        elif cmd_lower == "memory":
+            # Simple memory command - show status
+            if self.memory_enabled:
+                status = self.get_memory_status()
+                print(f"💾 {status}")
+            else:
+                print("Memory system not available. Memory features are disabled.")
+            return True
+            
         elif cmd_lower == "clear memory" or cmd_lower == "clearmemory":
             result = self.clear_memory()
             print(result)
@@ -6598,6 +7275,11 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                     self.files.store_conversation(user_input, farewell)
                     # Also save just the AI response to the external file
                     self.files.save_ai_response(farewell, user_input)
+                    # Store farewell conversation to nova_ai_memory.json
+                    try:
+                        await self._store_conversation_to_memory_file(user_input, farewell)
+                    except Exception:
+                        pass
                     break
                 
                 # Handle special commands
@@ -6643,8 +7325,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                     # Store the conversation locally
                     self.files.store_conversation(user_input, response)
                     
-                    # Store in mem0.ai cloud memory
-                    self.store_conversation_memory(user_input, response)
+                    # Note: Conversation is automatically stored to nova_ai_memory.json via get_response method
                     
                     # Save updated chat history (only message content, not system prompt)
                     self.files.save_chat_history(self.chat_history[1:])
@@ -6657,6 +7338,13 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                 
             except KeyboardInterrupt:
                 logger.info("Received keyboard interrupt, exiting terminal chat...")
+                # Save memory on graceful shutdown
+                if self.mem0_memory_agent:
+                    try:
+                        self.mem0_memory_agent.memory_system.save_memory()
+                        logger.info("Memory saved successfully on shutdown")
+                    except Exception as e:
+                        logger.error(f"Error saving memory on shutdown: {e}")
                 logger.info(f"Session ended with {messages_in_session} messages stored in mem0.ai")
                 break
                 
@@ -6785,6 +7473,7 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
                     
                     # Store the conversation
                     self.files.store_conversation(user_input, response)
+                    # Note: Conversation is automatically stored to nova_ai_memory.json via get_response method
                     
                     # Mark as answered
                     if transcript_data:
@@ -6803,6 +7492,12 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
             except KeyboardInterrupt:
                 logger.info("Received keyboard interrupt, exiting transcript mode...")
                 # Save memory state before exiting
+                if self.mem0_memory_agent:
+                    try:
+                        self.mem0_memory_agent.memory_system.save_memory()
+                        logger.info("Memory saved successfully on shutdown")
+                    except Exception as e:
+                        logger.error(f"Error saving memory on shutdown: {e}")
                 self.memory.update_long_term_memory()
                 break
                 
@@ -7330,7 +8025,6 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
     
     def _process_widget_movement_command(self, user_message: str) -> Optional[str]:
         """Process widget movement commands and return appropriate response."""
-        import re
         
         # Enhanced natural language widget movement patterns with more widget variations
         widget_pattern = r'(time|clock|timer|weather|forecast|search|news|headlines|video|analyzer|analysis)'
@@ -7828,59 +8522,13 @@ Remember: Be helpful, engaging, and CONCISE. Quality over quantity!"""
 
     async def _process_music_query(self, user_message: str) -> Optional[str]:
         """Process music-related queries and commands."""
-        if not self.music_service:
-            logger.warning("Music service not available")
-            return None
-
-        try:
-            # Check if this is a music request
-            if not self.music_service.is_music_request(user_message):
-                return None
-
-            logger.info(f"Processing music query: {user_message}")
-
-            # Process the music request
-            music_response = await self.music_service.process_music_request(user_message)
-
-            if music_response:
-                # Store music interaction in memory
-                asyncio.create_task(self._store_music_memory_async(user_message, music_response))
-                return music_response
-            else:
-                return "🎵 I didn't understand that music request. Try saying 'play [song name]' or 'search for [artist]'."
-
-        except Exception as e:
-            logger.error(f"Error processing music query: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return f"🎵 Sorry, I encountered an error with your music request: {str(e)}"
+        # Music feature has been removed from this build. Inform the user politely.
+        return "🎵 Music functionality has been removed. I can no longer play or search music."
 
     async def _store_music_memory_async(self, user_query: str, music_response: str):
         """Store music interaction in memory system"""
-        try:
-            if not self.memory_integration:
-                return
-
-            # Extract music details from the response
-            music_details = ""
-            if "Now playing:" in music_response:
-                music_details = music_response.split("Now playing:")[1].split("\n")[0].strip()
-            elif "Music Search Results" in music_response:
-                music_details = f"Searched for music: {user_query}"
-            elif "Lyrics for" in music_response:
-                music_details = f"Requested lyrics: {user_query}"
-
-            memory_content = f"Music interaction: {user_query} -> {music_details}"
-
-            await self.memory_integration.store_memory_async(
-                content=memory_content,
-                memory_type="entertainment_preferences",
-                importance_score=0.6,
-                tags=["music", "entertainment", "user_preference"]
-            )
-
-        except Exception as e:
-            logger.warning(f"Failed to store music interaction memory: {e}")
+        # Music memory storage is a no-op because music feature was removed.
+        return
 
     def _handle_content_discussion(self, user_message: str) -> Optional[str]:
         """Handle follow-up questions about previously retrieved content"""
@@ -8155,12 +8803,12 @@ EXAMPLES:
             file_logger.info("Cache log restore: Invalid JSON (line 1, col 1)")
         
         # Show terminal interface
-        print("┌────────────────────────────────────────────────────────────┐")
-        print("│                     N O V A   A I   ⬤  TERMINUS             │")
-        print("├────────────────────────────────────────────────────────────┤")
-        print(f"│ MODE      : {chatbot.mode.upper():<13}        MEMORY     : {'ENABLED' if chatbot.memory_enabled else 'DISABLED'}       │")
-        print(f"│ VOICE     : {'ENABLED' if chatbot.voice_input_mode else 'DISABLED'}             CACHE      : {'ACTIVE' if chatbot.enable_caching else 'INACTIVE'}        │")
-        print(f"│ USER      : twuma                THREAD     : MAIN          │")
+        print("------------------------------------------------------------")
+        print("|                     N O V A   A I   *  TERMINUS             |")
+        print("|------------------------------------------------------------|")
+        print(f"| MODE      : {chatbot.mode.upper():<13}        MEMORY     : {'ENABLED' if chatbot.memory_enabled else 'DISABLED'}       |")
+        print(f"| VOICE     : {'ENABLED' if chatbot.voice_input_mode else 'DISABLED'}             CACHE      : {'ACTIVE' if chatbot.enable_caching else 'INACTIVE'}        |")
+        print(f"| USER      : twuma                THREAD     : MAIN          |")
         
         # Calculate uptime (will be 0 at start)
         import time
@@ -8171,8 +8819,8 @@ EXAMPLES:
         seconds = uptime_seconds % 60
         uptime_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
         
-        print(f"│ UPTIME    : {uptime_str}             CORE       : ASTRA v1.2    │")
-        print("└────────────────────────────────────────────────────────────┘")
+        print(f"| UPTIME    : {uptime_str}             CORE       : ASTRA v1.2    |")
+        print("------------------------------------------------------------")
         print("Available commands: `help`, `status`, `memory`, `exit`")
         
         # Run the chatbot
@@ -8383,6 +9031,134 @@ def get_time_in_location(location: str) -> str:
         # Try worldtimeapi.org first
         try:
             import requests
+            try:
+                # Conversation persistence helper (append messages to data/nova_ai_memory.json)
+                from astra_ai.memory.conversation_persistence import append_single_message
+            except Exception:
+                try:
+                    from memory.conversation_persistence import append_single_message
+                except Exception:
+                    # Fallback: define a no-op to avoid breaking runtime when import fails
+                    def append_single_message(role, content, session_id=None, timestamp=None, memory_path=None):
+                        """Append a single message to the nova_ai_memory.json file"""
+                        try:
+                            if not memory_path:
+                                memory_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Date', 'nova_ai_memory.json')
+                            
+                            # Ensure the directory exists
+                            os.makedirs(os.path.dirname(memory_path), exist_ok=True)
+                            
+                            # Load existing memory data or create new structure
+                            memory_data = {
+                                "user": {
+                                    "user_id": "user_a358b1d2",
+                                    "name": "Rich",
+                                    "created_at": "2025-09-20T15:37:07.657900",
+                                    "status": "active",
+                                    "total_sessions": 1,
+                                    "last_seen": datetime.now().isoformat(),
+                                    "relationship_established": True
+                                },
+                                "memory_events": [],
+                                "conversation": [],
+                                "fact_history": {},
+                                "sessions": {},
+                                "current_session": session_id or f"session_{int(time.time())}",
+                                "conversation_state": {
+                                    "greeting_completed": True,
+                                    "introduction_phase": False,
+                                    "established_user": True
+                                },
+                                "memory_categories": {},
+                                "category_relationships": {},
+                                "memory_metadata": {},
+                                "privacy_settings": {
+                                    "default_retention": "permanent",
+                                    "sensitive_data_handling": "encrypted",
+                                    "auto_cleanup_enabled": False,
+                                    "privacy_level_defaults": {
+                                        "normal": "store_and_recall",
+                                        "sensitive": "store_encrypted",
+                                        "private": "session_only"
+                                    }
+                                },
+                                "behavioral_adaptation": {
+                                    "response_style_preferences": {},
+                                    "communication_adaptations": {},
+                                    "learned_patterns": {},
+                                    "user_feedback_integration": {}
+                                }
+                            }
+                            
+                            # Load existing data if file exists
+                            if os.path.exists(memory_path):
+                                try:
+                                    with open(memory_path, 'r', encoding='utf-8') as f:
+                                        existing_data = json.load(f)
+                                        # Merge with existing data, preserving structure
+                                        for key in memory_data:
+                                            if key not in existing_data:
+                                                existing_data[key] = memory_data[key]
+                                        memory_data = existing_data
+                                except (json.JSONDecodeError, IOError):
+                                    # If file is corrupted, start fresh
+                                    pass
+                            
+                            # Add the new message to conversation
+                            if timestamp is None:
+                                timestamp = datetime.now().isoformat()
+                            
+                            message_entry = {
+                                "role": role,
+                                "content": content,
+                                "timestamp": timestamp,
+                                "session_id": session_id or f"session_{int(time.time())}"
+                            }
+                            
+                            # Ensure conversation list exists
+                            if "conversation" not in memory_data:
+                                memory_data["conversation"] = []
+                            
+                            memory_data["conversation"].append(message_entry)
+                            
+                            # Update user last_seen
+                            if "user" in memory_data:
+                                memory_data["user"]["last_seen"] = timestamp
+                                memory_data["user"]["total_sessions"] = memory_data["user"].get("total_sessions", 1)
+                            
+                            # Update current session
+                            memory_data["current_session"] = session_id or f"session_{int(time.time())}"
+                            
+                            # Update session info
+                            current_session_id = session_id or f"session_{int(time.time())}"
+                            if "sessions" not in memory_data:
+                                memory_data["sessions"] = {}
+                            
+                            if current_session_id not in memory_data["sessions"]:
+                                memory_data["sessions"][current_session_id] = {
+                                    "session_id": current_session_id,
+                                    "start_time": timestamp,
+                                    "end_time": None,
+                                    "message_count": 0,
+                                    "topics_discussed": [],
+                                    "user_name": memory_data.get("user", {}).get("name", "Rich"),
+                                    "session_duration": None,
+                                    "last_activity": timestamp
+                                }
+                            
+                            # Update session message count and last activity
+                            memory_data["sessions"][current_session_id]["message_count"] += 1
+                            memory_data["sessions"][current_session_id]["last_activity"] = timestamp
+                            
+                            # Save to file
+                            with open(memory_path, 'w', encoding='utf-8') as f:
+                                json.dump(memory_data, f, indent=2, ensure_ascii=False)
+                            
+                            return True
+                            
+                        except Exception as e:
+                            logger.error(f"Error appending message to memory: {e}")
+                            return False
             url = f"https://worldtimeapi.org/api/timezone/{timezone}"
             resp = requests.get(url, timeout=3)
             if resp.status_code == 200:
@@ -8444,8 +9220,7 @@ def get_time_in_location(location: str) -> str:
             'America/Sao_Paulo': -3, 'America/Buenos_Aires': -3, 'America/Lima': -5, 'America/Bogota': -5,
             'America/Santiago': -3, 'America/Caracas': -4, 'America/Havana': -5, 'America/Panama': -5,
             
-            # Asia
-            'Asia/Tokyo': 9, 'Asia/Shanghai': 8, 'Asia/Kolkata': 5.5, 'Asia/Dubai': 4, 'Asia/Seoul': 9,
+            # Asia            'Asia/Tokyo': 9, 'Asia/Shanghai': 8, 'Asia/Kolkata': 5.5, 'Asia/Dubai': 4, 'Asia/Seoul': 9,
             'Asia/Hong_Kong': 8, 'Asia/Singapore': 8, 'Asia/Bangkok': 7, 'Asia/Jakarta': 7,
             'Asia/Manila': 8, 'Asia/Kuala_Lumpur': 8, 'Asia/Tehran': 3.5, 'Asia/Baghdad': 3,
             'Asia/Riyadh': 3, 'Asia/Karachi': 5, 'Asia/Dhaka': 6, 'Asia/Kathmandu': 5.75,

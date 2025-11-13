@@ -1,0 +1,142 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": null,
+    "created_at": "2025-10-26T21:39:51.598506",
+    "status": "active",
+    "total_sessions": 0,
+    "last_seen": null,
+    "relationship_established": false
+  },
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2025-10-26T21:39:51.598510",
+      "description": "Mem0 AI Memory Engine - Event-based user memory management system"
+    },
+    "memory_events": [
+      {
+        "event_id": "evt_68f2560a",
+        "type": "ADD",
+        "summary": "User enjoys reading science fiction novels",
+        "timestamp": "2025-10-26T21:39:51.598783",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [
+            "interest"
+          ],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.85
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.85,
+          "context_type": "new_fact",
+          "semantic_tags": [
+            "likes"
+          ],
+          "similarity_hash": "3a6434fd"
+        },
+        "importance_score": 0.8,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "enjoys reading science fiction novels",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-26T21:39:51.598783",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I love reading sci-fi novels.",
+            "event_index": 0
+          },
+          "source_conversation_timestamp": "2025-10-26T21:39:51.598783"
+        },
+        "Added_preference": "enjoys reading science fiction novels"
+      }
+    ],
+    "vector_index": {
+      "evt_68f2560a": [
+        -0.2698920647568302,
+        0.14994003597601677,
+        -0.2698920647568302,
+        0.38984409353764365,
+        -0.2698920647568302,
+        -0.44982010792805033,
+        -0.44982010792805033,
+        -0.44982010792805033
+      ]
+    },
+    "clusters": {},
+    "update_log": []
+  },
+  "conversation": [],
+  "sessions": {},
+  "current_session": null,
+  "conversation_state": {
+    "greeting_completed": false,
+    "introduction_phase": true,
+    "established_user": false
+  },
+  "fact_history": {
+    "personal_preferences": {
+      "likes": [
+        {
+          "item": "enjoys reading science fiction novels",
+          "added": "2025-10-26",
+          "score": 0.85
+        }
+      ],
+      "dislikes": [],
+      "avoid": [],
+      "always": [],
+      "style": [],
+      "conditional": [],
+      "interests": []
+    }
+  },
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {},
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+  "category_relationships": {},
+  "behavioral_adaptation": {},
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  }
+}
