@@ -1,0 +1,48 @@
+{
+    "api_keys": {
+        "groq": "",
+        "serpapi": "",
+        "mem0": ""
+    },
+    "memory": {
+        "vector_memory": {
+            "enabled": true,
+            "max_short_term_size": 15,
+            "max_mid_term_size": 50,
+            "max_long_term_size": 500,
+            "similarity_threshold": 0.6
+        },
+        "mem0_ai": {
+            "enabled": true,
+            "api_key": "",
+            "batch_size": 3,
+            "batch_timeout": 5,
+            "cache_timeout": 300,
+            "max_cache_size": 1000,
+            "retry_attempts": 3,
+            "retry_delay": 1,
+            "output_format": "v1.1"
+        }
+    },
+    "response": {
+        "timing": {
+            "min_response_time": 0.05,
+            "max_response_time": 0.2,
+            "typing_speed_variation": 0.001
+        },
+        "style": {
+            "repetition_threshold": 0.7,
+            "max_generation_attempts": 2
+        }
+    },
+    "logging": {
+        "level": "INFO",
+        "file": "alebot.log",
+        "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    },
+    "paths": {
+        "data_dir": "data",
+        "self_improving_ai_dir": "data/self_improving_ai",
+        "memory_dir": "data/memory"
+    }
+} 

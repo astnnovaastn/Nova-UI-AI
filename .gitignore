@@ -51,6 +51,8 @@ logs/
 config/config.json
 voice_recordings/
 transcriptions/
+New folder/
+New folder/*
 
 # OS-specific
 .DS_Store

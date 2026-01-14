@@ -1,0 +1,590 @@
+/* ================================================================================= */
+/*                            ASTRA AI - SEARCH WIDGET STYLES                          */
+/* ================================================================================= */
+/* 
+   This stylesheet implements the high-fidelity Cyberpunk aesthetic for the Search Widget.
+   It includes dynamic resizing via CSS variables, neon glow effects, and strictly defined
+   layout spacing matching the provided design references.
+*/
+
+/* --------------------------------------------------------------------------------- */
+/* 1. MAIN WIDGET CONTAINER */
+/* --------------------------------------------------------------------------------- */
+.enhanced-widget.search-widget {
+  /* Dynamic Background with Glassmorphism */
+  background: linear-gradient(135deg, rgba(0, 40, 80, 0.4) 0%, rgba(0, 20, 40, 0.6) 100%) !important;
+  border: 1px solid rgba(0, 255, 255, 0.3) !important;
+  border-radius: 12px !important;
+
+  /* Text & Fonts */
+  color: white !important;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+
+  /* Neon Glow Box Shadow */
+  box-shadow:
+    0 0 20px rgba(0, 255, 255, 0.15),
+    inset 0 0 30px rgba(0, 255, 255, 0.05) !important;
+
+  /* Blurring for Glass Effect */
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+
+  /* Animation */
+  animation: searchWidgetPulse 4s ease-in-out infinite !important;
+
+  /* Position & Layout */
+  position: fixed !important;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow: visible !important;
+  /* Allow controls to float outside */
+  padding: 0 !important;
+  /* Zero padding to allow header to touch edges */
+
+  /* Default Scale Variables (set by JS) */
+  --text-scale: 1;
+  --element-scale: 1;
+  --base-scale: 1;
+}
+
+/* Hover State for Main Container */
+.enhanced-widget.search-widget:hover {
+  box-shadow:
+    0 0 30px rgba(0, 255, 255, 0.25),
+    inset 0 0 40px rgba(0, 255, 255, 0.1) !important;
+  border-color: rgba(0, 255, 255, 0.5) !important;
+}
+
+/* Dragging State */
+.widget-dragging {
+  cursor: grabbing !important;
+  opacity: 0.95;
+  transform: scale(1.005);
+  transition: transform 0.1s;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* --------------------------------------------------------------------------------- */
+/* 2. CORNER BRACKETS (DECORATIVE) */
+/* --------------------------------------------------------------------------------- */
+.enhanced-widget.search-widget::before,
+.enhanced-widget.search-widget::after,
+.enhanced-widget.search-widget .corner-top-right,
+.enhanced-widget.search-widget .corner-bottom-left {
+  content: '';
+  position: absolute;
+  width: calc(16px * var(--element-scale));
+  height: calc(16px * var(--element-scale));
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  transition: all 0.3s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Individual Corner Placement */
+.enhanced-widget.search-widget::before {
+  top: -2px;
+  left: -2px;
+  border-width: 2px 0 0 2px;
+  border-top-left-radius: 4px;
+}
+
+.enhanced-widget.search-widget::after {
+  bottom: -2px;
+  right: -2px;
+  border-width: 0 2px 2px 0;
+  border-bottom-right-radius: 4px;
+}
+
+.enhanced-widget.search-widget .corner-top-right {
+  top: -2px;
+  right: -2px;
+  border-width: 2px 2px 0 0;
+  border-top-right-radius: 4px;
+}
+
+.enhanced-widget.search-widget .corner-bottom-left {
+  bottom: -2px;
+  left: -2px;
+  border-width: 0 0 2px 2px;
+  border-bottom-left-radius: 4px;
+}
+
+/* --------------------------------------------------------------------------------- */
+/* 3. WIDGET CONTROLS (HOVER ONLY) */
+/* --------------------------------------------------------------------------------- */
+.widget-controls {
+  position: absolute;
+  top: -30px;
+  /* Floating above the widget */
+  right: 0;
+  display: flex;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(0, 20, 40, 0.6);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 255, 255, 0.2);
+  backdrop-filter: blur(4px);
+
+  /* Hiding Logic */
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1002;
+}
+
+/* Show on Hover */
+.enhanced-widget.search-widget:hover .widget-controls {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+/* Control Buttons (Traffic Light Style) */
+.widget-control-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s, box-shadow 0.2s;
+  color: white;
+}
+
+.widget-control-btn:hover {
+  transform: scale(1.15);
+  z-index: 10;
+}
+
+.widget-control-btn:active {
+  transform: scale(0.95);
+}
+
+/* Specific Colors for Controls */
+.widget-control-btn[title="Make Bigger"] {
+  background: linear-gradient(135deg, #00C853 0%, #009624 100%);
+  border-color: #00E676;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.widget-control-btn[title="Make Bigger"]:hover {
+  box-shadow: 0 0 10px rgba(0, 230, 118, 0.6);
+}
+
+.widget-control-btn[title="Make Smaller"] {
+  background: linear-gradient(135deg, #FF6F00 0%, #E65100 100%);
+  border-color: #FFAB40;
+}
+
+.widget-control-btn[title="Make Smaller"]:hover {
+  box-shadow: 0 0 10px rgba(255, 171, 64, 0.6);
+}
+
+.widget-control-btn[title="Close"] {
+  background: linear-gradient(135deg, #D50000 0%, #B71C1C 100%);
+  border-color: #FF5252;
+}
+
+.widget-control-btn[title="Close"]:hover {
+  box-shadow: 0 0 10px rgba(255, 82, 82, 0.6);
+}
+
+/* --------------------------------------------------------------------------------- */
+/* 4. LAYOUT & STRUCTURE */
+/* --------------------------------------------------------------------------------- */
+.search-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+/* --------------------------------------------------------------------------------- */
+/* 5. HEADER BAR ("SEARCH") - BLUE BAR */
+/* --------------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------------- */
+/* 5. HEADER BAR ("SEARCH") - BLUE BAR */
+/* --------------------------------------------------------------------------------- */
+.search-label {
+  /* Measurements */
+  width: 100%;
+  padding: calc(12px * var(--element-scale)) calc(20px * var(--element-scale));
+  box-sizing: border-box;
+
+  /* Look & Feel - The Blue Bar */
+  /* Using a solid bright blue as seen in reference */
+  background: #0088ff;
+  color: #ffffff;
+
+  /* Typography */
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: calc(14px * var(--text-scale));
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+
+  /* Layout Position - The Image shows it inset or at the top */
+  /* We remove the top radius to make it a distinct bar inside the widget if padding exists, 
+     or keep it if it is the widget header. The user image implies it is a bar inside. */
+  margin-top: calc(10px * var(--element-scale));
+  /* Slight inset from top if needed */
+  margin-bottom: 0;
+
+  /* Shadow for depth */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+
+  /* Interaction */
+  cursor: grab;
+  user-select: none;
+}
+
+.search-label:active {
+  cursor: grabbing;
+}
+
+/* --------------------------------------------------------------------------------- */
+/* 6. TABS NAVIGATION ("Current" / "History") */
+/* --------------------------------------------------------------------------------- */
+.controls-section {
+  /* The "Space" requested by user - "gap of space between up and down" */
+  padding-top: calc(25px * var(--element-scale));
+  padding-bottom: calc(10px * var(--element-scale));
+  padding-left: calc(20px * var(--element-scale));
+  padding-right: calc(20px * var(--element-scale));
+
+  /* The separator line is part of the tabs container in the image */
+  position: relative;
+}
+
+/* The Line under the tabs */
+.controls-section::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20px;
+  right: 20px;
+  height: 1px;
+  background: rgba(0, 255, 255, 0.3);
+}
+
+.search-tabs {
+  display: flex;
+  width: 100%;
+  /* Space between Current and History */
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.tab-button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+
+  /* Typography */
+  color: rgba(255, 255, 255, 0.7);
+  font-size: calc(13px * var(--text-scale));
+  font-weight: 600;
+  text-transform: capitalize;
+  /* "Current" vs "CURRENT" - image shows Title Case or close to it? Users says "Current" */
+
+  /* Spacing */
+  padding: 8px 0;
+  text-align: center;
+  position: relative;
+
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.tab-button:hover {
+  color: #ffffff;
+  text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+}
+
+/* Active Tab Styling - "Blue Gradient Block" look */
+.tab-button.active {
+  color: #ffffff;
+  font-weight: 700;
+  /* Specific gradient background matching the image's "Current" tab */
+  background: linear-gradient(180deg, rgba(0, 100, 150, 0.0) 0%, rgba(0, 180, 255, 0.2) 100%);
+  border-bottom: 2px solid #00ffff;
+  box-shadow: 0 4px 8px rgba(0, 255, 255, 0.1);
+}
+
+/* The horizontal bar indicator for active tab */
+.tab-button.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: #00ffff;
+  box-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+  border-radius: 2px;
+  animation: tabGlow 2s infinite alternate;
+}
+
+/* --------------------------------------------------------------------------------- */
+/* 7. CONTENT AREA ("SEARCH RESULT" and Content) */
+/* --------------------------------------------------------------------------------- */
+.search-screen-area {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0 calc(24px * var(--element-scale)) calc(24px * var(--element-scale)) calc(24px * var(--element-scale));
+}
+
+.search-result-label {
+  font-size: calc(11px * var(--text-scale));
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: calc(16px * var(--element-scale));
+  font-weight: 700;
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+}
+
+/* Scroll Area for Results */
+.search-current-view,
+.search-history-view {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  /* Fix padding for scrollbar */
+  padding-right: 12px;
+}
+
+/* Actual Text Content */
+.search-content {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: calc(14px * var(--text-scale));
+  line-height: 1.6;
+  color: rgba(220, 240, 255, 0.95);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Paragraph styling within content */
+.search-content p {
+  margin-bottom: 12px;
+}
+
+/* --------------------------------------------------------------------------------- */
+/* 8. SCROLLBARS (NEON STYLE) */
+/* --------------------------------------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 20, 40, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #00cccc 0%, #0088ff 100%);
+  border-radius: 4px;
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.4);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #00ffff 0%, #00aaff 100%);
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.6);
+}
+
+/* --------------------------------------------------------------------------------- */
+/* 9. HISTORY ITEMS */
+/* --------------------------------------------------------------------------------- */
+.search-history-item {
+  padding: calc(12px * var(--element-scale));
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(0, 255, 255, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.search-history-item:hover {
+  background: rgba(0, 255, 255, 0.1);
+  border-left: 3px solid #00ffff;
+  padding-left: calc(9px * var(--element-scale));
+  /* Adjust for border */
+}
+
+.search-history-query {
+  font-weight: 700;
+  color: #00ffff;
+  font-size: calc(13px * var(--text-scale));
+  margin-bottom: 4px;
+}
+
+.search-history-date {
+  font-size: calc(10px * var(--text-scale));
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 4px;
+}
+
+.search-history-preview {
+  font-size: calc(12px * var(--text-scale));
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --------------------------------------------------------------------------------- */
+/* 10. COPY BUTTON (FLOATING NEON) */
+/* --------------------------------------------------------------------------------- */
+.copy-button {
+  position: absolute;
+  bottom: calc(24px * var(--element-scale));
+  right: calc(24px * var(--element-scale));
+  width: calc(40px * var(--element-scale));
+  height: calc(40px * var(--element-scale));
+  border-radius: 12px;
+
+  /* Glassmorphism & Neon */
+  background: rgba(0, 200, 255, 0.15);
+  border: 1px solid rgba(0, 255, 255, 0.5);
+  color: #00ffff;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  backdrop-filter: blur(8px);
+  font-size: calc(18px * var(--text-scale));
+
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.copy-button:hover {
+  background: rgba(0, 200, 255, 0.3);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.5), inset 0 0 10px rgba(0, 255, 255, 0.2);
+  transform: translateY(-3px) scale(1.05);
+  border-color: #00ffff;
+}
+
+.copy-button:active {
+  transform: translateY(0) scale(0.95);
+}
+
+/* --------------------------------------------------------------------------------- */
+/* 11. RESIZE HANDLE */
+/* --------------------------------------------------------------------------------- */
+.resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 25px;
+  height: 25px;
+  cursor: se-resize;
+  z-index: 1001;
+  border-bottom-right-radius: 12px;
+}
+
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 10px;
+  height: 10px;
+  border-right: 3px solid rgba(0, 255, 255, 0.6);
+  border-bottom: 3px solid rgba(0, 255, 255, 0.6);
+  border-bottom-right-radius: 2px;
+  transition: all 0.2s;
+}
+
+.resize-handle:hover::after {
+  border-color: #00ffff;
+  box-shadow: 2px 2px 5px rgba(0, 255, 255, 0.5);
+}
+
+/* --------------------------------------------------------------------------------- */
+/* 12. LOADING & EMPTY STATES */
+/* --------------------------------------------------------------------------------- */
+.search-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #00ffff;
+  font-size: calc(14px * var(--text-scale));
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(0, 255, 255, 0.2);
+  border-top: 3px solid #00ffff;
+  border-radius: 50%;
+  animation: searchSpin 1s linear infinite;
+  margin-bottom: 15px;
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+}
+
+.search-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+  font-size: calc(14px * var(--text-scale));
+  text-align: center;
+  padding: 40px;
+}
+
+/* --------------------------------------------------------------------------------- */
+/* 13. ANIMATIONS */
+/* --------------------------------------------------------------------------------- */
+@keyframes searchWidgetPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.15), inset 0 0 30px rgba(0, 255, 255, 0.05);
+  }
+
+  50% {
+    box-shadow: 0 0 35px rgba(0, 255, 255, 0.25), inset 0 0 50px rgba(0, 255, 255, 0.1);
+  }
+}
+
+@keyframes tabGlow {
+  from {
+    box-shadow: 0 0 5px #00ffff;
+  }
+
+  to {
+    box-shadow: 0 0 15px #00ffff, 0 0 5px white;
+  }
+}
+
+@keyframes searchSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}

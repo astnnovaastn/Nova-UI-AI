@@ -1,0 +1,82 @@
+.camera-widget {
+  position: absolute;
+  top: 12vh;
+  right: 6vh;
+  width: 320px;
+  height: 380px;
+  background: linear-gradient(135deg, rgba(255, 165, 0, 0.15), rgba(255, 69, 0, 0.15));
+  border: 2px solid #FFA500;
+  color: #FFA500;
+  padding: 20px;
+  border-radius: 8px;
+  overflow-y: auto;
+  box-shadow: 
+    0 0 20px rgba(255, 165, 0, 0.3),
+    inset 0 0 20px rgba(255, 165, 0, 0.05);
+  animation: cameraGlow 4s ease-in-out infinite;
+}
+
+@keyframes cameraGlow {
+  0% {
+    box-shadow: 
+      0 0 20px rgba(255, 165, 0, 0.3),
+      inset 0 0 20px rgba(255, 165, 0, 0.05);
+  }
+  50% {
+    box-shadow: 
+      0 0 30px rgba(255, 165, 0, 0.5),
+      inset 0 0 30px rgba(255, 165, 0, 0.1);
+  }
+  100% {
+    box-shadow: 
+      0 0 20px rgba(255, 165, 0, 0.3),
+      inset 0 0 20px rgba(255, 165, 0, 0.05);
+  }
+}
+
+.camera-widget .corner-top-left,
+.camera-widget .corner-bottom-right {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #FFA500;
+  opacity: 0.6;
+}
+
+.camera-widget .corner-top-left {
+  top: 10px;
+  left: 10px;
+  border-top: 2px solid #FFA500;
+  border-left: 2px solid #FFA500;
+  border-bottom: none;
+  border-right: none;
+}
+
+.camera-widget .corner-bottom-right {
+  bottom: 10px;
+  right: 10px;
+  border-bottom: 2px solid #FFA500;
+  border-right: 2px solid #FFA500;
+  border-top: none;
+  border-left: none;
+}
+
+.camera-header {
+  margin-top: 0;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(255, 165, 0, 0.3);
+  text-align: center;
+}
+
+.camera-header h2 {
+  margin: 0;
+  font-size: 18px;
+  text-shadow: 0 0 10px rgba(255, 165, 0, 0.5);
+  font-weight: bold;
+}
+
+.camera-content {
+  margin-top: 15px;
+  color: #FFA500;
+  font-size: 14px;
+}

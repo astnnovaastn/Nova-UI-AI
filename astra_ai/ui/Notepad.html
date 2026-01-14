@@ -1,0 +1,3112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notepad Manager Widget</title>
+    <!-- FontAwesome for better icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&display=swap');
+
+        body {
+            margin: 0;
+            padding: 20px;
+            background: radial-gradient(ellipse at 30% 50%, #0C294F 0%, #061D3B 70%, #041529 100%);
+            min-height: 100vh;
+            font-family: 'Orbitron', 'Segoe UI', monospace;
+            overflow-x: hidden;
+        }
+
+        /* Main Notepad Widget Container */
+        .notepad-widget {
+            position: absolute;
+            top: 15vh;
+            left: 50%;
+            transform: translateX(-50%);
+            min-width: 500px;
+            max-width: 700px;
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.15) 0%, rgba(0, 200, 120, 0.1) 100%);
+            border: 1px solid rgba(0, 255, 136, 0.4);
+            border-radius: 12px;
+            font-family: 'Orbitron', monospace;
+            color: white;
+            box-shadow:
+                0 0 20px rgba(0, 255, 136, 0.3),
+                inset 0 0 15px rgba(0, 255, 136, 0.1);
+            backdrop-filter: blur(8px);
+            animation: notepadGlow 4s ease-in-out infinite;
+            z-index: 25;
+        }
+
+        /* Corner brackets for the notepad widget */
+        .notepad-widget::before,
+        .notepad-widget::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            z-index: 1;
+        }
+
+        .notepad-widget::before {
+            top: -6px;
+            left: -6px;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .notepad-widget::after {
+            bottom: -6px;
+            right: -6px;
+            border-left: none;
+            border-top: none;
+        }
+
+        .notepad-widget .corner-top-right {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            border-left: none;
+            border-bottom: none;
+            z-index: 1;
+        }
+
+        .notepad-widget .corner-bottom-left {
+            position: absolute;
+            bottom: -6px;
+            left: -6px;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            border-right: none;
+            border-top: none;
+            z-index: 1;
+        }
+
+        /* Header Section */
+        .notepad-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px 12px 24px;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+            position: relative;
+        }
+
+        .notepad-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .notepad-logo {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #00FF88 0%, #00CC66 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 16px;
+            color: #041529;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+            box-shadow:
+                0 0 10px rgba(0, 255, 136, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .notepad-logo::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            right: 2px;
+            bottom: 2px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
+            border-radius: 6px;
+            pointer-events: none;
+        }
+
+        .notepad-logo i {
+            position: relative;
+            z-index: 2;
+            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+        }
+
+        .notepad-brand {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: white;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+        }
+
+        .notepad-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .notepad-status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00FF88;
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 8px #00FF88;
+        }
+
+        /* Navigation Tabs */
+        .notepad-nav {
+            display: flex;
+            padding: 0 24px;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+            background: rgba(0, 255, 136, 0.05);
+        }
+
+        .notepad-nav-tab {
+            padding: 12px 16px;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .notepad-nav-tab:hover {
+            color: rgba(0, 255, 136, 0.9);
+            background: rgba(0, 255, 136, 0.1);
+        }
+
+        .notepad-nav-tab.active {
+            color: #00FF88;
+            border-bottom-color: #00FF88;
+            background: rgba(0, 255, 136, 0.1);
+            text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+        }
+
+        /* Content Area */
+        .notepad-content-area {
+            padding: 20px 24px;
+            min-height: 300px;
+            max-height: 450px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            will-change: scroll-position;
+        }
+
+        .notepad-item {
+            margin-bottom: 18px;
+            padding: 16px;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            border-radius: 8px;
+            background: rgba(0, 255, 136, 0.05);
+            animation: slideIn 0.5s ease-out;
+            transition: all 0.3s ease;
+        }
+
+        .notepad-item:hover {
+            background: rgba(0, 255, 136, 0.1);
+            border-color: rgba(0, 255, 136, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .notepad-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .notepad-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .notepad-id {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.4) 0%, rgba(0, 200, 120, 0.3) 100%);
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 8px;
+            border: 1px solid rgba(0, 255, 136, 0.5);
+            color: #FFF;
+        }
+
+        .notepad-time {
+            font-weight: 500;
+            font-size: 10px;
+            color: rgba(0, 255, 136, 0.8);
+            text-shadow: 0 0 4px rgba(0, 255, 136, 0.4);
+        }
+
+        .notepad-preview {
+            font-size: 12px;
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.85);
+            margin-bottom: 10px;
+            text-shadow: 0 0 4px rgba(255, 255, 255, 0.2);
+        }
+
+        .notepad-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .notepad-action-btn {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.3) 0%, rgba(0, 200, 120, 0.2) 100%);
+            border: 1px solid rgba(0, 255, 136, 0.4);
+            border-radius: 4px;
+            color: white;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .notepad-action-btn:hover {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.5) 0%, rgba(0, 200, 120, 0.3) 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 0 8px rgba(0, 255, 136, 0.4);
+        }
+
+        .notepad-action-btn.danger {
+            background: linear-gradient(135deg, rgba(255, 100, 100, 0.3) 0%, rgba(255, 50, 50, 0.2) 100%);
+            border-color: rgba(255, 100, 100, 0.4);
+        }
+
+        .notepad-action-btn.danger:hover {
+            background: linear-gradient(135deg, rgba(255, 100, 100, 0.5) 0%, rgba(255, 50, 50, 0.3) 100%);
+            border-color: rgba(255, 100, 100, 0.6);
+        }
+
+        .notepad-action-btn.summarize-single-btn {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.3) 0%, rgba(255, 100, 0, 0.2) 100%);
+            border-color: rgba(255, 136, 0, 0.4);
+        }
+
+        .notepad-action-btn.summarize-single-btn:hover {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.5) 0%, rgba(255, 100, 0, 0.3) 100%);
+            border-color: rgba(255, 136, 0, 0.6);
+            box-shadow: 0 0 8px rgba(255, 136, 0, 0.4);
+        }
+
+        .notepad-action-btn.summarize-single-btn.loading {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.6) 0%, rgba(255, 100, 0, 0.4) 100%);
+            animation: summarizeLoading 1.5s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        /* Empty State */
+        .notepad-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .notepad-empty i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            color: rgba(0, 255, 136, 0.4);
+        }
+
+        .notepad-empty h3 {
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .notepad-empty p {
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        /* Add Note Form */
+        .notepad-add-note-form {
+            padding: 20px;
+            border-top: 1px solid rgba(0, 255, 136, 0.2);
+            background: rgba(0, 255, 136, 0.05);
+        }
+
+        .notepad-add-note-textarea {
+            width: 100%;
+            min-height: 250px;
+            max-height: none; /* Unlimited height */
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 8px;
+            color: white !important;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+            padding: 16px;
+            resize: vertical;
+            box-sizing: border-box;
+            margin-bottom: 12px;
+            transition: all 0.3s ease;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            white-space: pre-wrap; /* Preserve formatting */
+            word-wrap: break-word;
+            user-select: text !important; /* Ensure text selection works */
+            pointer-events: auto !important; /* Ensure mouse events work */
+            cursor: text !important; /* Show text cursor */
+            caret-color: #00FF88 !important; /* Visible cursor */
+            -webkit-user-select: text !important;
+            -moz-user-select: text !important;
+            -ms-user-select: text !important;
+            /* Additional fixes for cursor positioning */
+            touch-action: manipulation;
+            -webkit-touch-callout: default;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .notepad-add-note-textarea:focus {
+            outline: none !important;
+            border-color: rgba(0, 255, 136, 0.6) !important;
+            box-shadow:
+                0 0 15px rgba(0, 255, 136, 0.4),
+                inset 0 0 5px rgba(0, 255, 136, 0.1) !important;
+            background: rgba(0, 0, 0, 0.4) !important;
+            transform: scale(1.01);
+            caret-color: #00FF88 !important;
+        }
+
+        .notepad-add-note-textarea:hover {
+            border-color: rgba(0, 255, 136, 0.5);
+            box-shadow: 0 0 8px rgba(0, 255, 136, 0.2);
+        }
+
+        .notepad-add-note-textarea::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .notepad-add-note-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .notepad-add-note-btn {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.6) 0%, rgba(0, 200, 120, 0.7) 100%);
+            border: none;
+            border-radius: 6px;
+            color: #041529;
+            font-weight: 700;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 11px;
+        }
+
+        .notepad-add-note-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+        }
+
+        .notepad-add-note-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .notepad-char-count {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* Footer Controls */
+        .notepad-footer {
+            padding: 12px 24px;
+            border-top: 1px solid rgba(0, 255, 136, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 255, 136, 0.05);
+        }
+
+        .notepad-count {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+        }
+
+        .notepad-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .notepad-control-btn {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.3) 0%, rgba(0, 200, 120, 0.2) 100%);
+            border: 1px solid rgba(0, 255, 136, 0.4);
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            transition: all 0.3s ease;
+            font-family: 'Orbitron', monospace;
+        }
+
+        .notepad-control-btn:hover {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.5) 0%, rgba(0, 200, 120, 0.3) 100%);
+            box-shadow: 0 0 12px rgba(0, 255, 136, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .notepad-control-btn.export-btn {
+            background: linear-gradient(135deg, rgba(0, 200, 255, 0.3) 0%, rgba(0, 150, 255, 0.2) 100%);
+            border-color: rgba(0, 200, 255, 0.4);
+        }
+
+        .notepad-control-btn.export-btn:hover {
+            background: linear-gradient(135deg, rgba(0, 200, 255, 0.5) 0%, rgba(0, 150, 255, 0.3) 100%);
+            box-shadow: 0 0 12px rgba(0, 200, 255, 0.4);
+            border-color: rgba(0, 200, 255, 0.6);
+            transform: translateY(-1px) scale(1.05);
+        }
+
+        .notepad-control-btn.summarize-btn {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.3) 0%, rgba(255, 100, 0, 0.2) 100%);
+            border-color: rgba(255, 136, 0, 0.4);
+        }
+
+        .notepad-control-btn.summarize-btn:hover {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.5) 0%, rgba(255, 100, 0, 0.3) 100%);
+            box-shadow: 0 0 12px rgba(255, 136, 0, 0.4);
+            border-color: rgba(255, 136, 0, 0.6);
+            transform: translateY(-1px) scale(1.05);
+        }
+
+        .notepad-control-btn.summarize-btn.loading {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.6) 0%, rgba(255, 100, 0, 0.4) 100%);
+            animation: summarizeLoading 1.5s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes summarizeLoading {
+            0%, 100% {
+                box-shadow: 0 0 8px rgba(255, 136, 0, 0.4);
+                transform: translateY(-1px) scale(1);
+            }
+            50% {
+                box-shadow: 0 0 20px rgba(255, 136, 0, 0.8);
+                transform: translateY(-1px) scale(1.1);
+            }
+        }
+
+        .notepad-control-btn.import-btn {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(22, 163, 74, 0.2) 100%);
+            border-color: rgba(34, 197, 94, 0.4);
+        }
+
+        .notepad-control-btn.import-btn:hover {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.5) 0%, rgba(22, 163, 74, 0.3) 100%);
+            box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+            border-color: rgba(34, 197, 94, 0.6);
+            transform: translateY(-1px) scale(1.05);
+        }
+
+        .notepad-control-btn.export-txt-btn {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.3) 0%, rgba(147, 51, 234, 0.2) 100%);
+            border-color: rgba(168, 85, 247, 0.4);
+        }
+
+        .notepad-control-btn.export-txt-btn:hover {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.5) 0%, rgba(147, 51, 234, 0.3) 100%);
+            box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
+            border-color: rgba(168, 85, 247, 0.6);
+            transform: translateY(-1px) scale(1.05);
+        }
+
+        /* Enhanced AI Summary specific controls */
+        .notepad-ai-count {
+            font-size: 12px;
+            color: rgba(255, 136, 0, 0.9);
+            font-weight: 600;
+            font-family: 'Orbitron', monospace;
+        }
+
+        .notepad-ai-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .notepad-control-btn.import-ai-btn {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.3) 0%, rgba(245, 101, 0, 0.2) 100%);
+            border-color: rgba(255, 136, 0, 0.4);
+        }
+
+        .notepad-control-btn.import-ai-btn:hover {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.5) 0%, rgba(245, 101, 0, 0.3) 100%);
+            box-shadow: 0 0 12px rgba(255, 136, 0, 0.4);
+            border-color: rgba(255, 136, 0, 0.6);
+            transform: translateY(-1px) scale(1.05);
+        }
+
+        .notepad-control-btn.export-ai-btn {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.3) 0%, rgba(245, 101, 0, 0.2) 100%);
+            border-color: rgba(255, 136, 0, 0.4);
+        }
+
+        .notepad-control-btn.export-ai-btn:hover {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.5) 0%, rgba(245, 101, 0, 0.3) 100%);
+            box-shadow: 0 0 12px rgba(255, 136, 0, 0.4);
+            border-color: rgba(255, 136, 0, 0.6);
+            transform: translateY(-1px) scale(1.05);
+        }
+
+        /* Dual-pane view for AI summaries */
+        .notepad-dual-pane {
+            padding: 16px 24px;
+            border-top: 1px solid rgba(0, 255, 136, 0.3);
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.05) 0%, rgba(0, 200, 120, 0.03) 100%);
+            animation: dualPaneSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .dual-pane-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+        }
+
+        .dual-pane-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #00FF88;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dual-pane-close {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 16px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .dual-pane-close:hover {
+            color: #00FF88;
+            background: rgba(0, 255, 136, 0.1);
+        }
+
+        .dual-pane-content {
+            display: flex;
+            gap: 16px;
+            height: 300px;
+        }
+
+        .dual-pane-left,
+        .dual-pane-right {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pane-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(0, 255, 136, 0.1);
+            border-radius: 6px;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+        }
+
+        .ai-summary-controls {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .ai-summary-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: rgba(255, 255, 255, 0.8);
+            padding: 4px 6px;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ai-summary-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.4);
+            color: white;
+            transform: scale(1.05);
+        }
+
+        .copy-summary-btn:hover {
+            background: rgba(0, 150, 255, 0.3);
+            border-color: rgba(0, 150, 255, 0.5);
+            color: rgba(0, 200, 255, 1);
+        }
+
+        .save-summary-btn:hover {
+            background: rgba(34, 197, 94, 0.3);
+            border-color: rgba(34, 197, 94, 0.5);
+            color: rgba(34, 197, 94, 1);
+        }
+
+        .dual-pane-left .pane-label {
+            background: rgba(0, 150, 255, 0.1);
+            border-color: rgba(0, 150, 255, 0.2);
+            color: rgba(0, 200, 255, 0.9);
+        }
+
+        .dual-pane-right .pane-label {
+            background: rgba(255, 136, 0, 0.1);
+            border-color: rgba(255, 136, 0, 0.2);
+            color: rgba(255, 180, 0, 0.9);
+        }
+
+        .pane-content {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.9);
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            will-change: scroll-position;
+        }
+
+        .dual-pane-divider {
+            width: 2px;
+            background: linear-gradient(180deg,
+                rgba(0, 255, 136, 0.3) 0%,
+                rgba(0, 255, 136, 0.6) 50%,
+                rgba(0, 255, 136, 0.3) 100%);
+            border-radius: 1px;
+            box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+        }
+
+        /* Search bar */
+        .notepad-search {
+            display: flex;
+            padding: 0 24px 12px 24px;
+        }
+
+        .notepad-search-input {
+            width: 100%;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 6px;
+            color: white;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-size: 12px;
+        }
+
+        .notepad-search-input:focus {
+            outline: none;
+            border-color: rgba(0, 255, 136, 0.6);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+        }
+
+        .notepad-search-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Notification system */
+        .notepad-notification {
+            position: absolute;
+            top: -60px;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg,
+                rgba(0, 255, 136, 0.95) 0%,
+                rgba(0, 200, 120, 0.9) 100%);
+            border: 1px solid rgba(0, 255, 136, 0.6);
+            border-radius: 8px 8px 0 0;
+            box-shadow:
+                0 4px 20px rgba(0, 255, 136, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            z-index: 1000;
+            transform: translateY(-100%);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+
+        .notepad-notification.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .notepad-notification.success {
+            background: linear-gradient(135deg,
+                rgba(0, 255, 136, 0.95) 0%,
+                rgba(0, 200, 120, 0.9) 100%);
+            border-color: rgba(0, 255, 136, 0.6);
+        }
+
+        .notepad-notification.error {
+            background: linear-gradient(135deg,
+                rgba(255, 68, 68, 0.95) 0%,
+                rgba(220, 38, 38, 0.9) 100%);
+            border-color: rgba(255, 68, 68, 0.6);
+            box-shadow:
+                0 4px 20px rgba(255, 68, 68, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .notepad-notification.warning {
+            background: linear-gradient(135deg,
+                rgba(255, 136, 0, 0.95) 0%,
+                rgba(245, 101, 0, 0.9) 100%);
+            border-color: rgba(255, 136, 0, 0.6);
+            box-shadow:
+                0 4px 20px rgba(255, 136, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .notepad-notification.info {
+            background: linear-gradient(135deg,
+                rgba(0, 150, 255, 0.95) 0%,
+                rgba(0, 120, 220, 0.9) 100%);
+            border-color: rgba(0, 150, 255, 0.6);
+            box-shadow:
+                0 4px 20px rgba(0, 150, 255, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .notification-content {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            gap: 12px;
+        }
+
+        .notification-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            color: white;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .notification-message {
+            flex: 1;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: 'Orbitron', monospace;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .notification-close {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .notification-close:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .notification-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 0 0 8px 8px;
+            transform-origin: left;
+            animation: notificationProgress 4s linear forwards;
+        }
+
+        /* Enhanced Neon Scrollbar for Notepad Widget */
+        .notepad-content-area::-webkit-scrollbar {
+            width: 8px;
+            background: transparent;
+        }
+
+        .notepad-content-area::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg,
+                rgba(0, 255, 136, 0.6) 0%,
+                rgba(0, 200, 120, 0.5) 100%);
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .notepad-content-area::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg,
+                rgba(0, 255, 136, 0.8) 0%,
+                rgba(0, 200, 120, 0.7) 100%);
+        }
+
+        .notepad-content-area::-webkit-scrollbar-track {
+            background: rgba(0, 255, 136, 0.05);
+            border-radius: 4px;
+        }
+
+        /* Animations */
+        @keyframes notepadGlow {
+            0%, 100% {
+                box-shadow:
+                    0 0 20px rgba(0, 255, 136, 0.3),
+                    inset 0 0 15px rgba(0, 255, 136, 0.1);
+            }
+            50% {
+                box-shadow:
+                    0 0 35px rgba(0, 255, 136, 0.5),
+                    inset 0 0 20px rgba(0, 255, 136, 0.2);
+            }
+        }
+
+        @keyframes dualPaneSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+                max-height: 0;
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+                max-height: 400px;
+            }
+        }
+
+        @keyframes notificationProgress {
+            from {
+                transform: scaleX(1);
+            }
+            to {
+                transform: scaleX(0);
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 0.7;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        /* Enhanced AI Summary Generation Panel */
+        .ai-summary-generation-panel {
+            padding: 16px 24px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.1) 0%, rgba(255, 100, 0, 0.05) 100%);
+            border: 1px solid rgba(255, 136, 0, 0.2);
+            border-radius: 8px;
+            animation: slideIn 0.4s ease-out;
+        }
+
+        .ai-generation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 136, 0, 0.2);
+        }
+
+        .ai-generation-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255, 180, 0, 0.9);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ai-option-btn {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.3) 0%, rgba(255, 100, 0, 0.2) 100%);
+            border: 1px solid rgba(255, 136, 0, 0.4);
+            border-radius: 6px;
+            color: white;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .ai-option-btn:hover {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.5) 0%, rgba(255, 100, 0, 0.3) 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 0 12px rgba(255, 136, 0, 0.4);
+        }
+
+        .ai-option-btn.active {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.6) 0%, rgba(255, 100, 0, 0.4) 100%);
+            box-shadow: 0 0 15px rgba(255, 136, 0, 0.5);
+            font-weight: 600;
+        }
+
+        .ai-generation-options {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .ai-summary-length-control {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .ai-length-label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .ai-length-slider {
+            flex: 1;
+            height: 4px;
+            background: rgba(255, 136, 0, 0.3);
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .ai-length-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #FF8800;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .ai-length-value {
+            font-size: 11px;
+            color: rgba(255, 136, 0, 0.9);
+            font-weight: 600;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .ai-custom-prompt {
+            width: 100%;
+            min-height: 80px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 136, 0, 0.3);
+            border-radius: 6px;
+            color: white;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-size: 12px;
+            padding: 10px;
+            resize: vertical;
+            margin-bottom: 12px;
+        }
+
+        .ai-custom-prompt:focus {
+            outline: none;
+            border-color: rgba(255, 136, 0, 0.6);
+            box-shadow: 0 0 10px rgba(255, 136, 0, 0.3);
+        }
+
+        .ai-generation-actions {
+            display: flex;
+            justify-content: center;
+        }
+
+        .ai-generate-btn {
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.8) 0%, rgba(255, 100, 0, 0.9) 100%);
+            border: none;
+            border-radius: 6px;
+            color: #041529;
+            font-weight: 700;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ai-generate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 20px rgba(255, 136, 0, 0.6);
+        }
+
+        /* Enhanced AI Summary Search Panel */
+        .ai-summary-search-panel {
+            padding: 16px 24px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.1) 0%, rgba(255, 100, 0, 0.05) 100%);
+            border: 1px solid rgba(255, 136, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .ai-search-input {
+            width: 100%;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 136, 0, 0.3);
+            border-radius: 6px;
+            color: white;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-size: 12px;
+            margin-bottom: 12px;
+        }
+
+        .ai-search-input:focus {
+            outline: none;
+            border-color: rgba(255, 136, 0, 0.6);
+            box-shadow: 0 0 10px rgba(255, 136, 0, 0.3);
+        }
+
+        .ai-search-filters {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .ai-filter-btn {
+            background: rgba(255, 136, 0, 0.2);
+            border: 1px solid rgba(255, 136, 0, 0.3);
+            border-radius: 12px;
+            color: rgba(255, 180, 0, 0.8);
+            padding: 4px 10px;
+            cursor: pointer;
+            font-size: 9px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .ai-filter-btn:hover {
+            background: rgba(255, 136, 0, 0.3);
+            border-color: rgba(255, 136, 0, 0.5);
+            color: rgba(255, 180, 0, 1);
+        }
+
+        .ai-filter-btn.active {
+            background: rgba(255, 136, 0, 0.4);
+            border-color: rgba(255, 136, 0, 0.7);
+            color: white;
+            font-weight: 600;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ================= DRAGGABLE & RESIZABLE WIDGET STYLES ================= */
+        .widget-draggable {
+            position: absolute;
+            transition: opacity 0.3s ease;
+        }
+
+        .widget-draggable:active {
+            z-index: 1000 !important;
+        }
+
+        .widget-draggable:hover:not(.widget-dragging) {
+            /* No automatic size scaling on hover - only manual resize allowed */
+        }
+
+        /* ================= RESIZE HANDLE STYLES ================= */
+        .resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 24px;
+            height: 24px;
+            background:
+                linear-gradient(135deg, transparent 50%, rgba(0, 255, 255, 0.4) 50%),
+                linear-gradient(45deg, transparent 50%, rgba(0, 255, 255, 0.4) 50%);
+            background-size: 8px 8px;
+            background-position: 0 0, 4px 4px;
+            cursor: se-resize;
+            z-index: 100;
+            border-bottom-right-radius: 15px;
+            opacity: 0.7;
+            transition: opacity 0.2s ease;
+        }
+
+        .resize-handle:hover {
+            opacity: 1;
+            background:
+                linear-gradient(135deg, transparent 50%, rgba(0, 255, 255, 0.7) 50%),
+                linear-gradient(45deg, transparent 50%, rgba(0, 255, 255, 0.7) 50%);
+            background-size: 8px 8px;
+            background-position: 0 0, 4px 4px;
+            transform: scale(1.1);
+        }
+
+        .widget-dragging {
+            opacity: 0.95;
+            z-index: 1000 !important;
+            transition: opacity 0.1s ease !important;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4) !important;
+            filter: brightness(1.05);
+            cursor: grabbing !important;
+        }
+
+        /* Widget Controls */
+        .widget-controls {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            display: none;
+            gap: 6px;
+            z-index: 10;
+            padding: 4px;
+            background: rgba(12, 41, 79, 0.3);
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .widget-draggable:hover .widget-controls {
+            display: flex;
+            animation: controlsSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes controlsSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px) scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .widget-control-btn {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.3) 0%, rgba(0, 200, 255, 0.2) 100%);
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            transition: all 0.3s ease;
+            font-family: 'Orbitron', monospace;
+        }
+
+        .widget-control-btn:hover {
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.5) 0%, rgba(0, 200, 255, 0.3) 100%);
+            box-shadow: 0 0 12px rgba(0, 255, 255, 0.4);
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Notepad Widget -->
+    <div class="notepad-widget widget-draggable widget-size-normal" id="notepadWidget" style="display: block;">
+        <div class="corner-top-right"></div>
+        <div class="corner-bottom-left"></div>
+        <div class="widget-controls">
+            <div class="widget-control-btn" onclick="increaseWidgetSize('notepadWidget')" title="Make Bigger">⧨</div>
+            <div class="widget-control-btn" onclick="decreaseWidgetSize('notepadWidget')" title="Make Smaller">⧩</div>
+            <div class="widget-control-btn" onclick="hideNotepadWidget()" title="Close">⧬</div>
+        </div>
+        <div class="resize-handle"></div>
+
+        <!-- Notification System -->
+        <div class="notepad-notification" id="notepadNotification">
+            <div class="notification-content">
+                <div class="notification-icon" id="notificationIcon">
+                    <i class="fa-solid fa-check"></i>
+                </div>
+                <div class="notification-message" id="notificationMessage">
+                    Operation completed successfully
+                </div>
+                <button class="notification-close" onclick="hideNotification()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="notification-progress" id="notificationProgress"></div>
+        </div>
+
+        <!-- Header -->
+        <div class="notepad-header">
+            <div class="notepad-title">
+                <div class="notepad-logo"><i class="fa-solid fa-book-open"></i></div>
+                <div class="notepad-brand">Notepad Manager</div>
+            </div>
+            <div class="notepad-status">
+                <div class="notepad-status-indicator"></div>
+                <span>Active</span>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="notepad-nav">
+            <div class="notepad-nav-tab active" onclick="switchNotepadTab('view')">View Notes</div>
+            <div class="notepad-nav-tab" onclick="switchNotepadTab('add')">Add Note</div>
+            <div class="notepad-nav-tab" onclick="switchNotepadTab('ai-summaries')">
+                <i class="fa-solid fa-brain"></i>
+                AI Summaries
+            </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="notepad-search" id="notepadSearch">
+            <input type="text" class="notepad-search-input" placeholder="Search notes..." id="notepadSearchInput" onkeyup="searchNotepadNotes()">
+        </div>
+
+        <!-- Content Area -->
+        <div class="notepad-content-area" id="notepadContentArea">
+            <!-- Notes will be populated here -->
+        </div>
+
+        <!-- Dual-Pane View for AI Summary -->
+        <div class="notepad-dual-pane" id="notepadDualPane" style="display: none;">
+            <div class="dual-pane-header">
+                <div class="dual-pane-title">
+                    <i class="fa-solid fa-brain"></i>
+                    AI Summary View
+                </div>
+                <button class="dual-pane-close" onclick="hideDualPaneView()" title="Close Summary View">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="dual-pane-content">
+                <div class="dual-pane-left">
+                    <div class="pane-label">
+                        <i class="fa-solid fa-sticky-note"></i>
+                        Your Notes
+                    </div>
+                    <div class="pane-content" id="dualPaneOriginalNotes">
+                        <!-- Original notes will be displayed here -->
+                    </div>
+                </div>
+                <div class="dual-pane-divider"></div>
+                <div class="dual-pane-right">
+                    <div class="pane-label">
+                        <i class="fa-solid fa-magic-wand-sparkles"></i>
+                        AI Summary
+                        <div class="ai-summary-controls">
+                            <button class="ai-summary-btn copy-summary-btn" onclick="copyAISummary()" title="Copy AI Summary">
+                                <i class="fa-solid fa-copy"></i>
+                            </button>
+                            <button class="ai-summary-btn save-summary-btn" onclick="saveAISummary()" title="Save AI Summary">
+                                <i class="fa-solid fa-bookmark"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="pane-content" id="dualPaneAISummary">
+                        <!-- AI summary will be displayed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Note Form -->
+        <div class="notepad-add-note-form" id="notepadAddNoteForm" style="display: none;">
+            <textarea
+                class="notepad-add-note-textarea"
+                id="notepadAddNoteTextarea"
+                placeholder="Write your note here... Click anywhere to position cursor and edit text"
+                spellcheck="true"
+                wrap="soft"
+                tabindex="0"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+            ></textarea>
+            <div class="notepad-add-note-controls">
+                <div class="notepad-char-count" id="notepadCharCount">0 characters • 0 words • 0 lines</div>
+                <button class="notepad-add-note-btn" id="notepadAddNoteBtn" onclick="saveNotepadNote()">Save Note</button>
+            </div>
+        </div>
+
+        <!-- AI Summaries View -->
+        <div class="notepad-ai-summaries-area" id="notepadAISummariesArea" style="display: none;">
+            <!-- AI summaries will be populated here -->
+        </div>
+
+        <!-- Footer Controls -->
+        <div class="notepad-footer">
+            <div class="notepad-count" id="notepadCount">0 notes</div>
+            <div class="notepad-ai-count" id="notepadAICount" style="display: none;">0 AI summaries</div>
+            <div class="notepad-controls" id="notepadControls">
+                <div class="notepad-control-btn import-btn" onclick="importTextFile()" title="Import .txt file">
+                    <i class="fa-solid fa-file-import"></i>
+                </div>
+                <div class="notepad-control-btn export-txt-btn" onclick="exportNotesToTxt()" title="Export as .txt file">
+                    <i class="fa-solid fa-file-text"></i>
+                </div>
+                <div class="notepad-control-btn export-btn" onclick="exportNotepadNotes()" title="Export all notes to JSON file">
+                    <i class="fa-solid fa-download"></i>
+                </div>
+                <div class="notepad-control-btn" onclick="clearAllNotepadNotes()" title="Clear All Notes">
+                    <i class="fa-solid fa-trash"></i>
+                </div>
+            </div>
+            <!-- AI Summary Controls (shown when on AI summaries tab) -->
+            <div class="notepad-ai-controls" id="notepadAIControls" style="display: none;">
+                <div class="notepad-control-btn" onclick="toggleAISummaryGenerationPanel()" title="Advanced AI Generation">
+                    <i class="fa-solid fa-cog"></i>
+                </div>
+                <div class="notepad-control-btn" onclick="toggleAISummarySearchPanel()" title="Search AI Summaries">
+                    <i class="fa-solid fa-search"></i>
+                </div>
+                <div class="notepad-control-btn import-ai-btn" onclick="importAISummaries()" title="Import AI summaries">
+                    <i class="fa-solid fa-file-import"></i>
+                </div>
+                <div class="notepad-control-btn export-ai-btn" onclick="exportAISummaries()" title="Export AI summaries">
+                    <i class="fa-solid fa-download"></i>
+                </div>
+                <div class="notepad-control-btn" onclick="clearAllAISummaries()" title="Clear All AI Summaries">
+                    <i class="fa-solid fa-trash"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hidden file input for import -->
+        <input type="file" id="notepadFileInput" accept=".txt" style="display: none;" onchange="handleFileImport(event)">
+    </div>
+
+    <script>
+        // File-based storage configuration for desktop environment
+        const NOTEPAD_FILE_PATH = 'data/notepad_notes.json';
+
+        // Try multiple possible API ports
+        const possiblePorts = ['5001', '5000', '8000', '3000'];
+        const notepadUrlParams = new URLSearchParams(window.location.search);
+        const specifiedPort = notepadUrlParams.get('api_port');
+
+        let API_BASE_URL;
+        if (specifiedPort) {
+            API_BASE_URL = `http://127.0.0.1:${specifiedPort}`;
+        } else {
+            // Default to 5001 (most common for this app)
+            API_BASE_URL = 'http://127.0.0.1:5001';
+        }
+
+        let notepadCurrentTab = 'view';
+        let allNotepadNotes = [];
+        let filteredNotepadNotes = [];
+        let notepadStorageReady = false;
+
+        // Desktop environment detection and logging
+        console.log('📝 [DESKTOP] Notepad widget script loaded with file-based storage');
+        console.log('📝 [DESKTOP] Storage configuration:', {
+            filePath: NOTEPAD_FILE_PATH,
+            apiBaseUrl: API_BASE_URL,
+            userAgent: navigator.userAgent,
+            location: window.location.href
+        });
+
+        // Show notepad widget
+        function showNotepadWidget() {
+            const notepadWidget = document.getElementById('notepadWidget');
+            notepadWidget.style.display = 'block';
+
+            // Ensure notes are loaded and displayed
+            loadNotepadNotes();
+            setupNotepadEventListeners();
+
+            // Make sure we're on the view tab to show existing notes
+            switchNotepadTab('view');
+
+            // Render the notes
+            renderNotepadNotes();
+
+            console.log('📝 Notepad widget shown with', allNotepadNotes.length, 'notes');
+        }
+
+        // Hide notepad widget
+        function hideNotepadWidget() {
+            const notepadWidget = document.getElementById('notepadWidget');
+            notepadWidget.style.display = 'none';
+            console.log('📝 Notepad widget hidden');
+        }
+
+        // Track if event listeners have been set up to prevent duplicates
+        let notepadEventListenersSetup = false;
+
+        function setupNotepadEventListeners() {
+            // Prevent duplicate event listeners
+            if (notepadEventListenersSetup) {
+                return;
+            }
+
+            // Add note textarea enhanced character count and event handling
+            const textarea = document.getElementById('notepadAddNoteTextarea');
+            if (textarea) {
+                console.log('📝 [DEBUG] Setting up textarea event listeners');
+
+                // Ensure textarea is properly enabled
+                textarea.disabled = false;
+                textarea.readOnly = false;
+                textarea.setAttribute('contenteditable', 'true');
+
+                // Remove any existing event listeners to prevent duplicates
+                textarea.removeEventListener('input', updateCharacterCount);
+                textarea.removeEventListener('keydown', handleTextareaKeydown);
+                textarea.removeEventListener('focus', handleTextareaFocus);
+                textarea.removeEventListener('blur', handleTextareaBlur);
+                textarea.removeEventListener('click', handleTextareaClick);
+                textarea.removeEventListener('mousedown', handleTextareaMouseDown);
+                textarea.removeEventListener('mouseup', handleTextareaMouseUp);
+
+                // Add event listeners
+                textarea.addEventListener('input', function(e) {
+                    console.log('📝 [DEBUG] Input event triggered, value length:', e.target.value.length);
+                    updateCharacterCount();
+                });
+
+                textarea.addEventListener('keydown', function(e) {
+                    console.log('📝 [DEBUG] Keydown event:', e.key);
+                    handleTextareaKeydown(e);
+                });
+
+                textarea.addEventListener('focus', function(e) {
+                    console.log('📝 [DEBUG] Focus event triggered');
+                    handleTextareaFocus(e);
+                });
+
+                textarea.addEventListener('blur', function(e) {
+                    console.log('📝 [DEBUG] Blur event triggered');
+                    handleTextareaBlur(e);
+                });
+
+                // Mouse events for cursor positioning
+                textarea.addEventListener('click', function(e) {
+                    console.log('📝 [DEBUG] Click event triggered');
+                    handleTextareaClick(e);
+                });
+
+                textarea.addEventListener('mousedown', function(e) {
+                    console.log('📝 [DEBUG] Mousedown event triggered');
+                    handleTextareaMouseDown(e);
+                });
+
+                textarea.addEventListener('mouseup', function(e) {
+                    console.log('📝 [DEBUG] Mouseup event triggered');
+                    handleTextareaMouseUp(e);
+                });
+
+                // Paste event for clipboard operations
+                textarea.addEventListener('paste', function(e) {
+                    console.log('📝 [DEBUG] Paste event triggered');
+                    setTimeout(updateCharacterCount, 10);
+                });
+
+                // Initialize character count
+                updateCharacterCount();
+
+                console.log('✅ [DEBUG] Textarea event listeners set up successfully');
+            } else {
+                console.error('❌ [DEBUG] Textarea element not found during setup');
+            }
+
+            // Search input
+            const searchInput = document.getElementById('notepadSearchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', searchNotepadNotes);
+            }
+
+            // Modal close on click outside (if modal exists)
+            const modal = document.getElementById('notepadModal');
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closeNotepadModal();
+                    }
+                });
+            }
+
+            notepadEventListenersSetup = true;
+            console.log('📝 Notepad event listeners set up');
+        }
+
+        // File-based storage availability check for desktop environment
+        async function checkStorageAvailability() {
+            try {
+                console.log('📝 [DESKTOP] Checking file storage availability...');
+
+                // Test API connectivity
+                const response = await fetch(`${API_BASE_URL}/api/status`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (response.ok) {
+                    console.log('✅ [DESKTOP] File storage API is available and working');
+                    notepadStorageReady = true;
+                    return true;
+                } else {
+                    console.warn('⚠️ [DESKTOP] File storage API test failed:', response.status);
+                    return false;
+                }
+            } catch (error) {
+                console.error('❌ [DESKTOP] File storage API not available:', error);
+                return false;
+            }
+        }
+
+        async function loadNotepadNotes() {
+            console.log('📝 [DESKTOP] Starting to load notepad notes from file...');
+            console.log('📝 [DESKTOP] File path:', NOTEPAD_FILE_PATH);
+
+            try {
+                // Try local storage first as fallback
+                const localStorageNotes = localStorage.getItem('notepad_notes');
+                if (localStorageNotes) {
+                    allNotepadNotes = JSON.parse(localStorageNotes);
+                    console.log('📝 [DESKTOP] Loaded', allNotepadNotes.length, 'notes from localStorage');
+                } else {
+                    console.log('📝 [DESKTOP] No notes in localStorage, starting with empty array');
+                    allNotepadNotes = [];
+                }
+
+                // Then try to load from backend if available
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/notepad/load`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+
+                        if (data.success && data.notes) {
+                            allNotepadNotes = data.notes;
+                            console.log('📝 [DESKTOP] Successfully loaded', allNotepadNotes.length, 'notes from file');
+
+                            // Validate the loaded notes structure
+                            allNotepadNotes = allNotepadNotes.filter(note => {
+                                const isValid = note && note.id && note.content && note.dateCreated;
+                                if (!isValid) {
+                                    console.warn('📝 [DESKTOP] Removing invalid note:', note);
+                                }
+                                return isValid;
+                            });
+
+                            console.log('📝 [DESKTOP] After validation:', allNotepadNotes.length, 'valid notes');
+                        } else {
+                            console.log('📝 [DESKTOP] No notes file found or empty file, using localStorage data');
+                        }
+                    } else if (response.status === 404) {
+                        console.log('📝 [DESKTOP] Notes file does not exist yet, using localStorage data');
+                    } else {
+                        console.log('📝 [DESKTOP] Backend load failed, using localStorage data');
+                    }
+                } catch (backendError) {
+                    console.log('📝 [DESKTOP] Backend not available, using localStorage data');
+                }
+
+                filteredNotepadNotes = [...allNotepadNotes];
+
+                // Log detailed info about loaded notes
+                if (allNotepadNotes.length > 0) {
+                    console.log('📝 [DESKTOP] Loaded notes details:');
+                    allNotepadNotes.forEach((note, index) => {
+                        console.log(`  ${index + 1}. ID: ${note.id}, Preview: "${note.preview}", Date: ${note.dateCreated}`);
+                    });
+                } else {
+                    console.log('📝 [DESKTOP] No notes to display');
+                }
+
+                notepadStorageReady = true;
+
+            } catch (error) {
+                console.error('❌ [DESKTOP] Error loading notepad notes from file:', error);
+                allNotepadNotes = [];
+                filteredNotepadNotes = [];
+                notepadStorageReady = false;
+            }
+        }
+
+        async function saveNotepadNotesToStorage() {
+            console.log('📝 [DESKTOP] Starting to save', allNotepadNotes.length, 'notepad notes to storage...');
+
+            try {
+                // Save to localStorage first
+                localStorage.setItem('notepad_notes', JSON.stringify(allNotepadNotes));
+
+                // Try to save to backend as well
+                try {
+                    const saveUrl = `${API_BASE_URL}/api/notepad/save`;
+
+                    const response = await fetch(saveUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            notes: allNotepadNotes,
+                            lastSaved: new Date().toISOString(),
+                            totalNotes: allNotepadNotes.length,
+                            saveEnvironment: 'html_file_storage'
+                        })
+                    });
+
+                    console.log('📝 [DESKTOP] Response status:', response.status);
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        console.log('📝 [DESKTOP] Response data:', result);
+                        if (result.success) {
+                            console.log('✅ [DESKTOP] Notes saved successfully to backend');
+                            console.log('📝 [DESKTOP] File path:', result.file_path);
+                            return true;
+                        } else {
+                            console.error('❌ [DESKTOP] Save failed:', result.error);
+                            return false;
+                        }
+                    } else {
+                        const errorText = await response.text();
+                        console.error('❌ [DESKTOP] Save request failed:', response.status, response.statusText);
+                        console.error('❌ [DESKTOP] Error response:', errorText);
+                        return false;
+                    }
+                } catch (backendError) {
+                    console.log('📝 [DESKTOP] Backend not available, using localStorage fallback');
+                    return true;
+                }
+            } catch (error) {
+                console.error('❌ [DESKTOP] Error saving notepad notes to storage:', error);
+                return false;
+            }
+        }
+
+        async function saveNotepadNote() {
+            console.log('📝 [DESKTOP] Save note button clicked');
+            console.log('📝 [DESKTOP] Current storage state:', {
+                storageReady: notepadStorageReady,
+                currentNotesCount: allNotepadNotes.length,
+                filePath: NOTEPAD_FILE_PATH
+            });
+
+            const textarea = document.getElementById('notepadAddNoteTextarea');
+            if (!textarea) {
+                console.error('❌ [DESKTOP] Notepad textarea not found');
+                showErrorNotification('Error: Cannot find notepad textarea element');
+                return;
+            }
+
+            const content = textarea.value.trim();
+            console.log('📝 [DESKTOP] Note content to save:', content.substring(0, 100) + '...');
+            console.log('📝 [DESKTOP] Content length:', content.length);
+            console.log('📝 [DESKTOP] Raw textarea value:', JSON.stringify(textarea.value));
+
+            if (!content) {
+                showWarningNotification('Please write something before saving!');
+                return;
+            }
+
+            // Show saving notification
+            showInfoNotification('Saving note...', 2000);
+
+            // Create note with enhanced metadata
+            const now = new Date();
+            const newNote = {
+                id: Date.now().toString(),
+                content: content,
+                timestamp: now.toISOString(),
+                dateCreated: now.toLocaleString(),
+                preview: content.substring(0, 120) + (content.length > 120 ? '...' : ''),
+                wordCount: content.split(/\s+/).filter(word => word.length > 0).length,
+            };
+
+            console.log('📝 [DESKTOP] Created new note object:', {
+                id: newNote.id,
+                contentLength: newNote.content.length,
+                preview: newNote.preview,
+                dateCreated: newNote.dateCreated,
+                wordCount: newNote.wordCount
+            });
+
+            // Add to arrays
+            allNotepadNotes.unshift(newNote);
+            filteredNotepadNotes = [...allNotepadNotes];
+
+            console.log('📝 [DESKTOP] Added note to arrays. Total notes now:', allNotepadNotes.length);
+
+            // Save to storage
+            try {
+                console.log('📝 [DESKTOP] Attempting to save to storage...');
+                const saveSuccess = await saveNotepadNotesToStorage();
+                console.log('📝 [DESKTOP] Save result:', saveSuccess);
+
+                if (saveSuccess) {
+                    console.log('✅ [DESKTOP] Note saved successfully to storage');
+
+                    // Clear form
+                    textarea.value = '';
+                    const charCountElement = document.getElementById('notepadCharCount');
+                    if (charCountElement) {
+                        charCountElement.textContent = '0 characters • 0 words • 0 lines';
+                    }
+                    const saveBtn = document.getElementById('notepadAddNoteBtn');
+                    if (saveBtn) {
+                        saveBtn.disabled = true;
+                    }
+
+                    // Update character count
+                    updateCharacterCount();
+
+                    // Switch to view tab and render
+                    switchNotepadTab('view');
+                    renderNotepadNotes();
+
+                    // Show success notification
+                    showSuccessNotification(`Note saved successfully! Total notes: ${allNotepadNotes.length}`);
+
+                } else {
+                    console.error('❌ [DESKTOP] Failed to save note to storage');
+                    showErrorNotification('Failed to save note to storage. Please try again.');
+
+                    // Remove from arrays since save failed
+                    allNotepadNotes.shift();
+                    filteredNotepadNotes = [...allNotepadNotes];
+                }
+            } catch (error) {
+                console.error('❌ [DESKTOP] Error during save operation:', error);
+                console.error('❌ [DESKTOP] Error stack:', error.stack);
+                showErrorNotification(`Save operation failed: ${error.message}`);
+
+                // Remove from arrays since save failed
+                allNotepadNotes.shift();
+                filteredNotepadNotes = [...allNotepadNotes];
+            }
+        }
+
+        function renderNotepadNotes() {
+            const contentArea = document.getElementById('notepadContentArea');
+            if (!contentArea) {
+                console.warn('📝 Notepad content area not found');
+                return;
+            }
+
+            console.log('📝 Rendering', filteredNotepadNotes.length, 'notepad notes');
+
+            if (filteredNotepadNotes.length === 0) {
+                contentArea.innerHTML = `
+                    <div class="notepad-empty">
+                        <i class="fas fa-sticky-note"></i>
+                        <h3>No Notes Yet</h3>
+                        <p>Click "Add Note" to create your first note!</p>
+                    </div>
+                `;
+            } else {
+                contentArea.innerHTML = filteredNotepadNotes.map(note => `
+                    <div class="notepad-item">
+                        <div class="notepad-meta">
+                            <span class="notepad-id">ID: ${note.id.slice(-4)}</span>
+                            <span class="notepad-time">${note.dateCreated}</span>
+                        </div>
+                        <div class="notepad-preview">${note.preview}</div>
+                        <div class="notepad-actions">
+                            <button class="notepad-action-btn" onclick="viewNotepadNote('${note.id}')">
+                                <i class="fas fa-eye"></i> View
+                            </button>
+                            <button class="notepad-action-btn" onclick="editNotepadNote('${note.id}')">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="notepad-action-btn" onclick="copyNotepadNote('${note.id}')">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                            <button class="notepad-action-btn summarize-single-btn" onclick="summarizeSingleNote('${note.id}')">
+                                <i class="fas fa-robot"></i> AI Summarize
+                            </button>
+                            <button class="notepad-action-btn danger" onclick="deleteNotepadNote('${note.id}')">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            updateNotepadNotesCount();
+        }
+
+        function switchNotepadTab(tabName) {
+            // Update active tab
+            document.querySelectorAll('.notepad-nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Find and activate the clicked tab
+            const tabs = document.querySelectorAll('.notepad-nav-tab');
+            tabs.forEach(tab => {
+                if ((tabName === 'view' && tab.textContent.includes('View Notes')) ||
+                    (tabName === 'add' && tab.textContent.includes('Add Note')) ||
+                    (tabName === 'ai-summaries' && tab.textContent.includes('AI Summaries'))) {
+                    tab.classList.add('active');
+                }
+            });
+
+            // Show/hide content based on tab
+            const contentArea = document.getElementById('notepadContentArea');
+            const addNoteForm = document.getElementById('notepadAddNoteForm');
+            const aiSummariesArea = document.getElementById('notepadAISummariesArea');
+            const searchArea = document.getElementById('notepadSearch');
+            const notepadCount = document.getElementById('notepadCount');
+            const aiCount = document.getElementById('notepadAICount');
+            const notepadControls = document.getElementById('notepadControls');
+            const aiControls = document.getElementById('notepadAIControls');
+
+            if (tabName === 'view') {
+                if (contentArea) contentArea.style.display = 'block';
+                if (addNoteForm) addNoteForm.style.display = 'none';
+                if (aiSummariesArea) aiSummariesArea.style.display = 'none';
+                if (searchArea) searchArea.style.display = 'block';
+                if (notepadCount) notepadCount.style.display = 'block';
+                if (aiCount) aiCount.style.display = 'none';
+                if (notepadControls) notepadControls.style.display = 'flex';
+                if (aiControls) aiControls.style.display = 'none';
+                renderNotepadNotes();
+            } else if (tabName === 'add') {
+                if (contentArea) contentArea.style.display = 'none';
+                if (addNoteForm) addNoteForm.style.display = 'block';
+                if (aiSummariesArea) aiSummariesArea.style.display = 'none';
+                if (searchArea) searchArea.style.display = 'none';
+                if (notepadCount) notepadCount.style.display = 'block';
+                if (aiCount) aiCount.style.display = 'none';
+                if (notepadControls) notepadControls.style.display = 'flex';
+                if (aiControls) aiControls.style.display = 'none';
+
+                // Focus textarea with proper setup
+                const textarea = document.getElementById('notepadAddNoteTextarea');
+                if (textarea) {
+                    console.log('📝 [DEBUG] Switching to add tab, focusing textarea');
+
+                    // Ensure textarea is properly enabled
+                    textarea.disabled = false;
+                    textarea.readOnly = false;
+                    textarea.style.pointerEvents = 'auto';
+                    textarea.style.userSelect = 'text';
+
+                    // Focus with a slight delay to ensure DOM is ready
+                    setTimeout(() => {
+                        textarea.focus();
+                        textarea.click(); // Additional click to ensure focus
+                        console.log('📝 [DEBUG] Textarea focused, active element:', document.activeElement.id);
+                    }, 100);
+                }
+            } else if (tabName === 'ai-summaries') {
+                if (contentArea) {
+                    contentArea.style.display = 'block';
+                    // Make sure AI summary panels are visible in the content area
+                    contentArea.innerHTML = `
+                        <div class="ai-summary-generation-panel" id="aiSummaryGenerationPanel">
+                            <div class="ai-generation-header">
+                                <div class="ai-generation-title">
+                                    <i class="fa-solid fa-brain"></i>
+                                    Advanced AI Summary Generation
+                                </div>
+                                <button class="ai-option-btn" onclick="toggleAISummaryGenerationPanel()" title="Close Panel">
+                                    <i class="fa-solid fa-times"></i>
+                                </button>
+                            </div>
+
+                            <div class="ai-generation-options">
+                                <button class="ai-option-btn active" data-type="comprehensive" onclick="selectSummaryType('comprehensive')">
+                                    Comprehensive
+                                </button>
+                                <button class="ai-option-btn" data-type="bullet" onclick="selectSummaryType('bullet')">
+                                    Bullet Points
+                                </button>
+                                <button class="ai-option-btn" data-type="timeline" onclick="selectSummaryType('timeline')">
+                                    Timeline
+                                </button>
+                                <button class="ai-option-btn" data-type="themes" onclick="selectSummaryType('themes')">
+                                    Key Themes
+                                </button>
+                                <button class="ai-option-btn" data-type="custom" onclick="selectSummaryType('custom')">
+                                    Custom
+                                </button>
+                            </div>
+
+                            <div class="ai-summary-length-control">
+                                <span class="ai-length-label">Length:</span>
+                                <input type="range" class="ai-length-slider" id="aiLengthSlider" min="1" max="5" value="3" onchange="updateLengthValue()">
+                                <span class="ai-length-value" id="aiLengthValue">Medium</span>
+                            </div>
+
+                            <textarea class="ai-custom-prompt" id="aiCustomPrompt" placeholder="Enter custom summarization instructions..." style="display: none;"></textarea>
+
+                            <div class="ai-generation-actions">
+                                <button class="ai-generate-btn" onclick="generateAdvancedAISummary()">
+                                    <i class="fa-solid fa-magic-wand-sparkles"></i>
+                                    Generate Summary
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Enhanced AI Summary Search Panel -->
+                        <div class="ai-summary-search-panel" id="aiSummarySearchPanel">
+                            <input type="text" class="ai-search-input" id="aiSearchInput" placeholder="Search AI summaries..." onkeyup="searchAISummaries()">
+                            <div class="ai-search-filters">
+                                <button class="ai-filter-btn active" data-filter="all" onclick="filterAISummaries('all')">All</button>
+                                <button class="ai-filter-btn" data-filter="comprehensive" onclick="filterAISummaries('comprehensive')">Comprehensive</button>
+                                <button class="ai-filter-btn" data-filter="bullet" onclick="filterAISummaries('bullet')">Bullet Points</button>
+                                <button class="ai-filter-btn" data-filter="timeline" onclick="filterAISummaries('timeline')">Timeline</button>
+                                <button class="ai-filter-btn" data-filter="themes" onclick="filterAISummaries('themes')">Key Themes</button>
+                                <button class="ai-filter-btn" data-filter="recent" onclick="filterAISummaries('recent')">Recent</button>
+                            </div>
+                        </div>
+
+                        <div class="notepad-empty">
+                            <i class="fas fa-brain"></i>
+                            <h3>AI Summaries</h3>
+                            <p>AI summaries would appear here when connected to the backend service.</p>
+                        </div>
+                    `;
+                }
+                if (addNoteForm) addNoteForm.style.display = 'none';
+                if (aiSummariesArea) aiSummariesArea.style.display = 'none'; // We're using the main content area now
+                if (searchArea) searchArea.style.display = 'none';
+                if (notepadCount) notepadCount.style.display = 'none';
+                if (aiCount) aiCount.style.display = 'block';
+                if (notepadControls) notepadControls.style.display = 'none';
+                if (aiControls) aiControls.style.display = 'flex';
+            }
+
+            notepadCurrentTab = tabName;
+        }
+
+        function searchNotepadNotes() {
+            const searchTerm = document.getElementById('notepadSearchInput').value.toLowerCase();
+
+            if (searchTerm === '') {
+                filteredNotepadNotes = [...allNotepadNotes];
+            } else {
+                filteredNotepadNotes = allNotepadNotes.filter(note =>
+                    note.content.toLowerCase().includes(searchTerm) ||
+                    note.dateCreated.toLowerCase().includes(searchTerm)
+                );
+            }
+
+            renderNotepadNotes();
+        }
+
+        function viewNotepadNote(noteId) {
+            const note = allNotepadNotes.find(n => n.id === noteId);
+            if (note) {
+                alert(`Note Content:\n\n${note.content}`);
+            }
+        }
+
+        function editNotepadNote(noteId) {
+            const note = allNotepadNotes.find(n => n.id === noteId);
+            if (note) {
+                document.getElementById('notepadAddNoteTextarea').value = note.content;
+                const charCountElement = document.getElementById('notepadCharCount');
+                if (charCountElement) {
+                    const wordCount = note.content.split(/\s+/).filter(word => word.length > 0).length;
+                    charCountElement.textContent = `${note.content.length} characters • ${wordCount} words • ${note.content.split('\n').length} lines`;
+                }
+                const saveBtn = document.getElementById('notepadAddNoteBtn');
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                }
+
+                // Remove the old note
+                allNotepadNotes = allNotepadNotes.filter(n => n.id !== noteId);
+                filteredNotepadNotes = [...allNotepadNotes];
+                saveNotepadNotesToStorage();
+
+                // Switch to add tab
+                switchNotepadTab('add');
+            }
+        }
+
+        function copyNotepadNote(noteId) {
+            const note = allNotepadNotes.find(n => n.id === noteId);
+            if (note) {
+                navigator.clipboard.writeText(note.content).then(() => {
+                    showSuccessNotification('Note copied to clipboard!');
+                }).catch(err => {
+                    console.error('Failed to copy text:', err);
+                    showErrorNotification('Failed to copy note. Please try again.');
+                });
+            }
+        }
+
+        function deleteNotepadNote(noteId) {
+            if (confirm('Are you sure you want to delete this note?')) {
+                allNotepadNotes = allNotepadNotes.filter(n => n.id !== noteId);
+                filteredNotepadNotes = [...allNotepadNotes];
+                saveNotepadNotesToStorage();
+                renderNotepadNotes();
+                console.log('📝 Notepad note deleted:', noteId);
+            }
+        }
+
+        function updateNotepadNotesCount() {
+            const count = filteredNotepadNotes.length;
+            const countElement = document.getElementById('notepadCount');
+            if (countElement) {
+                countElement.textContent = `${count} note${count !== 1 ? 's' : ''}`;
+            }
+        }
+
+        function exportNotepadNotes() {
+            console.log('📝 [EXPORT] Starting notes export...');
+
+            if (allNotepadNotes.length === 0) {
+                showWarningNotification('No notes to export! Please create some notes first.');
+                return;
+            }
+
+            try {
+                // Create comprehensive export data
+                const now = new Date();
+                const exportData = {
+                    exportInfo: {
+                        exportDate: now.toISOString(),
+                        exportDateFormatted: now.toLocaleString(),
+                        totalNotes: allNotepadNotes.length,
+                        exportedBy: 'Astra AI Notepad Manager',
+                        version: '1.0',
+                        storageType: 'html_local_storage'
+                    },
+                    notes: allNotepadNotes.map(note => ({
+                        ...note,
+                        exportedAt: now.toISOString()
+                    })),
+                    statistics: {
+                        totalWords: allNotepadNotes.reduce((sum, note) => sum + (note.wordCount || 0), 0),
+                        averageWordsPerNote: Math.round(allNotepadNotes.reduce((sum, note) => sum + (note.wordCount || 0), 0) / allNotepadNotes.length),
+                        oldestNote: allNotepadNotes.length > 0 ? allNotepadNotes[allNotepadNotes.length - 1].dateCreated : null,
+                        newestNote: allNotepadNotes.length > 0 ? allNotepadNotes[0].dateCreated : null
+                    }
+                };
+
+                // Create and download the file
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(dataBlob);
+
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `notepad-export-${now.toISOString().split('T')[0]}-${now.getHours()}${now.getMinutes().toString().padStart(2, '0')}.json`;
+
+                // Add the link to the document temporarily
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // Clean up the URL
+                URL.revokeObjectURL(url);
+
+                // Show success notification
+                showSuccessNotification(`${allNotepadNotes.length} notes exported to JSON file successfully!`);
+
+                console.log('✅ [EXPORT] Notepad notes exported successfully:', {
+                    filename: link.download,
+                    notesCount: allNotepadNotes.length,
+                    fileSize: `${Math.round(dataStr.length / 1024)} KB`
+                });
+
+            } catch (error) {
+                console.error('❌ [EXPORT] Export failed:', error);
+                showErrorNotification('Export failed. Please try again.');
+            }
+        }
+
+        function clearAllNotepadNotes() {
+            if (allNotepadNotes.length === 0) {
+                showWarningNotification('No notes to clear!');
+                return;
+            }
+
+            if (confirm(`Are you sure you want to delete all ${allNotepadNotes.length} notes? This action cannot be undone.`)) {
+                const clearedCount = allNotepadNotes.length;
+                allNotepadNotes = [];
+                filteredNotepadNotes = [];
+                saveNotepadNotesToStorage();
+                renderNotepadNotes();
+                showSuccessNotification(`All ${clearedCount} notes cleared successfully`);
+                console.log('📝 All notepad notes cleared');
+            }
+        }
+
+        // ================= NOTIFICATION SYSTEM =================
+        function showSuccessNotification(message) {
+            showNotification(message, 'success');
+        }
+
+        function showErrorNotification(message) {
+            showNotification(message, 'error');
+        }
+
+        function showWarningNotification(message) {
+            showNotification(message, 'warning');
+        }
+
+        function showInfoNotification(message, duration = 4000) {
+            showNotification(message, 'info', duration);
+        }
+
+        function showNotification(message, type = 'info', duration = 4000) {
+            const notification = document.getElementById('notepadNotification');
+            const notificationMessage = document.getElementById('notificationMessage');
+            const notificationIcon = document.getElementById('notificationIcon');
+
+            // Update message
+            notificationMessage.textContent = message;
+
+            // Update icon based on type
+            if (type === 'success') {
+                notificationIcon.innerHTML = '<i class="fa-solid fa-check"></i>';
+            } else if (type === 'error') {
+                notificationIcon.innerHTML = '<i class="fa-solid fa-exclamation-circle"></i>';
+            } else if (type === 'warning') {
+                notificationIcon.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i>';
+            } else {
+                notificationIcon.innerHTML = '<i class="fa-solid fa-info-circle"></i>';
+            }
+
+            // Remove any existing type classes
+            notification.classList.remove('success', 'error', 'warning', 'info');
+            // Add the appropriate type class
+            notification.classList.add(type);
+
+            // Show notification
+            notification.classList.add('show');
+
+            // Hide after specified duration
+            setTimeout(() => {
+                hideNotification();
+            }, duration);
+        }
+
+        function hideNotification() {
+            const notification = document.getElementById('notepadNotification');
+            notification.classList.remove('show');
+        }
+
+        // Character count functionality
+        function updateCharacterCount() {
+            const textarea = document.getElementById('notepadAddNoteTextarea');
+            const charCountElement = document.getElementById('notepadCharCount');
+
+            if (textarea && charCountElement) {
+                const content = textarea.value;
+                const words = content.trim() ? content.trim().split(/\s+/).filter(word => word.length > 0).length : 0;
+                const lines = content.split('\n').length;
+                charCountElement.textContent = `${content.length} characters • ${words} words • ${lines} lines`;
+            }
+        }
+
+        // Additional functions for import/export
+        function importTextFile() {
+            const fileInput = document.getElementById('notepadFileInput');
+            fileInput.click();
+        }
+
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const content = e.target.result;
+                    if (content.trim()) {
+                        const now = new Date();
+                        const newNote = {
+                            id: Date.now().toString(),
+                            content: content,
+                            timestamp: now.toISOString(),
+                            dateCreated: now.toLocaleString(),
+                            preview: content.substring(0, 120) + (content.length > 120 ? '...' : ''),
+                            wordCount: content.split(/\s+/).filter(word => word.length > 0).length,
+                        };
+
+                        allNotepadNotes.unshift(newNote);
+                        filteredNotepadNotes = [...allNotepadNotes];
+
+                        await saveNotepadNotesToStorage();
+                        renderNotepadNotes();
+
+                        showSuccessNotification(`Imported note added successfully! Total notes: ${allNotepadNotes.length}`);
+                    }
+                } catch (error) {
+                    console.error('Error importing file:', error);
+                    showErrorNotification('Error importing file. Please try again.');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function exportNotesToTxt() {
+            if (allNotepadNotes.length === 0) {
+                showWarningNotification('No notes to export! Please create some notes first.');
+                return;
+            }
+
+            try {
+                const txtContent = allNotepadNotes.map(note => {
+                    return `Note - ${note.dateCreated}\n${note.content}\n\n${'='.repeat(50)}\n\n`;
+                }).join('');
+
+                const dataBlob = new Blob([txtContent], { type: 'text/plain' });
+                const url = URL.createObjectURL(dataBlob);
+
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `notepad-export-${new Date().toISOString().split('T')[0]}.txt`;
+
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                URL.revokeObjectURL(url);
+                showSuccessNotification(`${allNotepadNotes.length} notes exported to TXT file successfully!`);
+            } catch (error) {
+                console.error('TXT export failed:', error);
+                showErrorNotification('TXT export failed. Please try again.');
+            }
+        }
+
+        function summarizeSingleNote(noteId) {
+            showInfoNotification('AI Summary functionality requires backend connection. This is a frontend-only implementation.');
+        }
+
+        // Advanced AI Summary Functions
+        function toggleAISummaryGenerationPanel() {
+            const panel = document.getElementById('aiSummaryGenerationPanel');
+            if (panel.style.display === 'none' || panel.style.display === '') {
+                panel.style.display = 'block';
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+
+        function toggleAISummarySearchPanel() {
+            const panel = document.getElementById('aiSummarySearchPanel');
+            if (panel.style.display === 'none' || panel.style.display === '') {
+                panel.style.display = 'block';
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+
+        function selectSummaryType(type) {
+            // Update active button
+            document.querySelectorAll('.ai-option-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Since we can't access event from here, we'll handle it differently
+            // Instead of using event.target, we'll use a more specific approach
+            // Find the specific button with the matching data-type
+            const buttons = document.querySelectorAll(`[data-type="${type}"]`);
+            buttons.forEach(btn => {
+                if(btn.classList.contains('ai-option-btn')) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Show custom prompt textarea if custom type is selected
+            const customPrompt = document.getElementById('aiCustomPrompt');
+            if (type === 'custom') {
+                customPrompt.style.display = 'block';
+            } else {
+                customPrompt.style.display = 'none';
+            }
+        }
+
+        function updateLengthValue() {
+            const slider = document.getElementById('aiLengthSlider');
+            const valueDisplay = document.getElementById('aiLengthValue');
+            const values = ['Very Short', 'Short', 'Medium', 'Long', 'Very Long'];
+            valueDisplay.textContent = values[slider.value - 1];
+        }
+
+        // Initialize length value display
+        document.addEventListener('DOMContentLoaded', function() {
+            updateLengthValue(); // Set initial value display
+        });
+
+        function generateAdvancedAISummary() {
+            showInfoNotification('Advanced AI Summary functionality requires backend connection.');
+        }
+
+        function searchAISummaries() {
+            showInfoNotification('AI Summary search requires backend connection and saved summaries.');
+        }
+
+        function filterAISummaries(filter) {
+            // Update active filter button
+            document.querySelectorAll('.ai-filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Find the specific button with the matching data-filter
+            const buttons = document.querySelectorAll(`[data-filter="${filter}"]`);
+            buttons.forEach(btn => {
+                if(btn.classList.contains('ai-filter-btn')) {
+                    btn.classList.add('active');
+                }
+            });
+
+            showInfoNotification('AI Summary filtering requires backend connection and saved summaries.');
+        }
+
+        // Widget resize functions
+        function increaseWidgetSize(widgetId) {
+            const widget = document.getElementById(widgetId);
+            if (!widget) return;
+
+            const currentWidth = parseInt(getComputedStyle(widget).width) || 500;
+            const currentHeight = parseInt(getComputedStyle(widget).height) || 600;
+
+            // Increase size by 50px in both dimensions, with maximum limits
+            const newWidth = Math.min(1000, currentWidth + 50);
+            const newHeight = Math.min(800, currentHeight + 50);
+
+            widget.style.width = newWidth + 'px';
+            widget.style.height = newHeight + 'px';
+
+            console.log(`🔍 Widget ${widgetId} increased to: ${newWidth}px x ${newHeight}px`);
+        }
+
+        function decreaseWidgetSize(widgetId) {
+            const widget = document.getElementById(widgetId);
+            if (!widget) return;
+
+            const currentWidth = parseInt(getComputedStyle(widget).width) || 500;
+            const currentHeight = parseInt(getComputedStyle(widget).height) || 600;
+
+            // Decrease size by 50px in both dimensions, with minimum limits
+            const newWidth = Math.max(350, currentWidth - 50);
+            const newHeight = Math.max(300, currentHeight - 50);
+
+            widget.style.width = newWidth + 'px';
+            widget.style.height = newHeight + 'px';
+
+            console.log(`🔍 Widget ${widgetId} decreased to: ${newWidth}px x ${newHeight}px`);
+        }
+
+        // Initialize the notepad widget when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            showNotepadWidget();
+
+            // Add event listeners for drag and resize functionality
+            initializeDragAndResize();
+        });
+
+        // Drag and resize functionality
+        let dragState = {
+            isDragging: false,
+            isResizing: false,
+            currentWidget: null,
+            startX: 0,
+            startY: 0,
+            startLeft: 0,
+            startTop: 0,
+            startWidth: 0,
+            startHeight: 0,
+            currentX: 0,
+            currentY: 0,
+            animationFrame: null,
+            resizeAnimationFrame: null,
+            positionUpdateFrame: null
+        };
+
+        // Track if global event listeners have been added
+        let globalEventListenersAdded = false;
+
+        function initializeDragAndResize() {
+            const widgets = document.querySelectorAll('.widget-draggable');
+
+            widgets.forEach(widget => {
+                // Remove existing event listeners to prevent duplicates
+                widget._mousedownListener = function(e) {
+                    // Don't drag if clicking on control buttons or resize handle
+                    if (e.target.classList.contains('widget-control-btn') ||
+                        e.target.classList.contains('resize-handle') ||
+                        e.target.closest('.widget-controls') ||
+                        e.target.closest('.resize-handle')) {
+                        return;
+                    }
+
+                    // Enhanced check: make sure we're not near the resize corner
+                    const cornerRect = widget.getBoundingClientRect();
+                    const cornerSize = 25; // 25px corner area reserved for resize handle
+                    const distanceFromRight = cornerRect.right - e.clientX;
+                    const distanceFromBottom = cornerRect.bottom - e.clientY;
+
+                    if (distanceFromRight < cornerSize && distanceFromBottom < cornerSize) {
+                        console.log('🚫 Click in resize corner area, not dragging');
+                        return;
+                    }
+
+                    // Don't drag if clicking on interactive content
+                    if (e.target.tagName === 'BUTTON' ||
+                        e.target.tagName === 'INPUT' ||
+                        e.target.tagName === 'TEXTAREA' ||
+                        e.target.contentEditable === 'true') {
+                        console.log('🚫 Click on interactive element, not dragging');
+                        return;
+                    }
+
+                    const rect = widget.getBoundingClientRect();
+                    dragState.isDragging = true;
+                    dragState.currentWidget = widget;
+                    dragState.startX = e.clientX;
+                    dragState.startY = e.clientY;
+                    dragState.startLeft = rect.left;
+                    dragState.startTop = rect.top;
+
+                    widget.classList.add('widget-dragging');
+                    document.body.style.userSelect = 'none'; // Prevent text selection during drag
+                    console.log('🔄 Starting drag for widget:', widget.id);
+                    e.preventDefault();
+                };
+
+                // Remove any existing listener before adding new one
+                if (widget._hasDragListener) {
+                    widget.removeEventListener('mousedown', widget._mousedownListener);
+                }
+
+                widget.addEventListener('mousedown', widget._mousedownListener);
+                widget._hasDragListener = true;
+
+                // Mouse down on resize handle (for resizing)
+                const resizeHandle = widget.querySelector('.resize-handle');
+                if (resizeHandle) {
+                    // Store reference to prevent duplicate listeners
+                    if (resizeHandle._hasResizeListener) {
+                        resizeHandle.removeEventListener('mousedown', handleResizeMouseDown);
+                    }
+
+                    resizeHandle.addEventListener('mousedown', handleResizeMouseDown);
+                    resizeHandle._hasResizeListener = true;
+                }
+            });
+
+            // Add global mouse move and up event handlers only once
+            if (!globalEventListenersAdded) {
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+                globalEventListenersAdded = true;
+            }
+        }
+
+        function handleResizeMouseDown(e) {
+            const widget = e.target.closest('.widget-draggable');
+            if (!widget) return;
+
+            dragState.isResizing = true;
+            dragState.currentWidget = widget;
+            dragState.startX = e.clientX;
+            dragState.startY = e.clientY;
+
+            const rect = widget.getBoundingClientRect();
+            dragState.startWidth = rect.width;
+            dragState.startHeight = rect.height;
+
+            widget.classList.add('widget-resizing');
+            document.body.style.userSelect = 'none'; // Prevent text selection during resize
+            document.body.style.cursor = 'se-resize'; // Change cursor during resize
+            console.log('📏 Starting resize for widget:', widget.id);
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function handleMouseMove(e) {
+            if (dragState.isDragging && dragState.currentWidget) {
+                e.preventDefault();
+
+                dragState.currentX = e.clientX;
+                dragState.currentY = e.clientY;
+
+                // Use requestAnimationFrame for smooth dragging
+                if (!dragState.animationFrame) {
+                    dragState.animationFrame = requestAnimationFrame(() => {
+                        const deltaX = dragState.currentX - dragState.startX;
+                        const deltaY = dragState.currentY - dragState.startY;
+
+                        const newLeft = Math.max(0, Math.min(window.innerWidth - 150, dragState.startLeft + deltaX));
+                        const newTop = Math.max(0, Math.min(window.innerHeight - 100, dragState.startTop + deltaY));
+
+                        // Use transform for smooth movement
+                        const translateX = Math.round(newLeft - dragState.startLeft);
+                        const translateY = Math.round(newTop - dragState.startTop);
+
+                        dragState.currentWidget.style.transform = `translate3d(${translateX}px, ${translateY}px, 0)`;
+                        dragState.currentWidget.style.willChange = 'transform';
+                        dragState.currentWidget.style.pointerEvents = 'none';
+
+                        // Update actual position periodically
+                        if (!dragState.positionUpdateFrame) {
+                            dragState.positionUpdateFrame = setTimeout(() => {
+                                if (dragState.currentWidget) {
+                                    dragState.currentWidget.style.left = newLeft + 'px';
+                                    dragState.currentWidget.style.top = newTop + 'px';
+                                }
+                                dragState.positionUpdateFrame = null;
+                            }, 32);
+                        }
+
+                        dragState.animationFrame = null;
+                    });
+                }
+            }
+
+            if (dragState.isResizing && dragState.currentWidget) {
+                e.preventDefault();
+
+                const deltaX = e.clientX - dragState.startX;
+                const deltaY = e.clientY - dragState.startY;
+
+                const newWidth = Math.max(200, dragState.startWidth + deltaX);
+                const newHeight = Math.max(150, dragState.startHeight + deltaY);
+
+                // Use requestAnimationFrame for smooth resizing
+                if (!dragState.resizeAnimationFrame) {
+                    dragState.resizeAnimationFrame = requestAnimationFrame(() => {
+                        if (dragState.currentWidget) {
+                            dragState.currentWidget.style.width = newWidth + 'px';
+                            dragState.currentWidget.style.height = newHeight + 'px';
+                        }
+                        dragState.resizeAnimationFrame = null;
+                    });
+                }
+            }
+        }
+
+        function handleMouseUp(e) {
+            if (dragState.isDragging && dragState.currentWidget) {
+                // Cancel any pending animation frames
+                if (dragState.animationFrame) {
+                    cancelAnimationFrame(dragState.animationFrame);
+                    dragState.animationFrame = null;
+                }
+                if (dragState.positionUpdateFrame) {
+                    clearTimeout(dragState.positionUpdateFrame);
+                    dragState.positionUpdateFrame = null;
+                }
+
+                // Apply final position
+                const rect = dragState.currentWidget.getBoundingClientRect();
+                const finalLeft = rect.left + rect.width/2 - dragState.currentWidget.offsetWidth/2;
+                const finalTop = rect.top + rect.height/2 - dragState.currentWidget.offsetHeight/2;
+
+                dragState.currentWidget.style.left = finalLeft + 'px';
+                dragState.currentWidget.style.top = finalTop + 'px';
+                dragState.currentWidget.style.transform = 'none';
+                dragState.currentWidget.style.willChange = 'none';
+                dragState.currentWidget.style.pointerEvents = 'auto';
+
+                dragState.isDragging = false;
+                dragState.currentWidget.classList.remove('widget-dragging');
+                dragState.currentWidget = null;
+
+                document.body.style.userSelect = '';
+                console.log('✅ Drag ended');
+            }
+
+            if (dragState.isResizing && dragState.currentWidget) {
+                // Cancel any pending resize animation frames
+                if (dragState.resizeAnimationFrame) {
+                    cancelAnimationFrame(dragState.resizeAnimationFrame);
+                    dragState.resizeAnimationFrame = null;
+                }
+
+                dragState.isResizing = false;
+                dragState.currentWidget.classList.remove('widget-resizing');
+                dragState.currentWidget = null;
+
+                document.body.style.userSelect = '';
+                document.body.style.cursor = '';
+                console.log('✅ Resize ended');
+            }
+        }
+    </script>
+</body>
+</html>
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .note-modal-content {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.15) 0%, rgba(0, 200, 120, 0.1) 100%);
+            border: 1px solid rgba(0, 255, 136, 0.4);
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80%;
+            overflow-y: auto;
+            color: white;
+            font-family: 'Orbitron', monospace;
+        }
+
+        .note-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .note-modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #00FF88;
+        }
+
+        .note-modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .note-modal-close:hover {
+            color: #00FF88;
+        }
+
+        .note-modal-body {
+            font-size: 14px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.9);
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <!-- Enhanced Notes Widget -->
+    <div class="notes-widget" id="notesWidget">
+        <div class="corner-top-right"></div>
+        <div class="corner-bottom-left"></div>
+        
+        <!-- Header -->
+        <div class="notes-header">
+            <div class="notes-title">
+                <div class="notes-logo"><i class="fa-solid fa-notebook"></i></div>
+                <div class="notes-brand">Notes Manager</div>
+            </div>
+            <div class="notes-status">
+                <div class="status-indicator"></div>
+                <span>Active</span>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="notes-nav">
+            <div class="nav-tab active" onclick="switchTab('view')">View Notes</div>
+            <div class="nav-tab" onclick="switchTab('add')">Add Note</div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="notes-search" id="notesSearch">
+            <input type="text" class="search-input" placeholder="Search notes..." id="searchInput" onkeyup="searchNotes()">
+        </div>
+
+        <!-- Content Area -->
+        <div class="notes-content-area" id="notesContentArea">
+            <!-- Notes will be populated here -->
+        </div>
+
+        <!-- Add Note Form -->
+        <div class="add-note-form" id="addNoteForm" style="display: none;">
+            <textarea class="add-note-textarea" id="addNoteTextarea" placeholder="Write your note here..."></textarea>
+            <div class="add-note-controls">
+                <div class="char-count" id="charCount">0 characters</div>
+                <button class="add-note-btn" id="addNoteBtn" onclick="saveNote()">Save Note</button>
+            </div>
+        </div>
+
+        <!-- Footer Controls -->
+        <div class="notes-footer">
+            <div class="notes-count" id="notesCount">0 notes</div>
+            <div class="notes-controls">
+                <div class="control-btn" onclick="exportNotes()" title="Export Notes">
+                    <i class="fa-solid fa-file-export"></i>
+                </div>
+                <div class="control-btn" onclick="clearAllNotes()" title="Clear All">
+                    <i class="fa-solid fa-trash"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Note Modal -->
+    <div class="note-modal" id="noteModal">
+        <div class="note-modal-content">
+            <div class="note-modal-header">
+                <div class="note-modal-title" id="noteModalTitle">Note Details</div>
+                <button class="note-modal-close" onclick="closeNoteModal()">×</button>
+            </div>
+            <div class="note-modal-body" id="noteModalBody"></div>
+        </div>
+    </div>
+
+    <script>
+        // Constants
+        const NOTES_STORAGE_KEY = 'astra_enhanced_notes';
+        let currentTab = 'view';
+        let allNotes = [];
+        let filteredNotes = [];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadNotes();
+            setupEventListeners();
+            renderNotes();
+        });
+
+        function setupEventListeners() {
+            // Add note textarea character count
+            const textarea = document.getElementById('addNoteTextarea');
+            textarea.addEventListener('input', function() {
+                const charCount = this.value.length;
+                document.getElementById('charCount').textContent = `${charCount} characters`;
+                
+                const saveBtn = document.getElementById('addNoteBtn');
+                saveBtn.disabled = charCount === 0;
+            });
+
+            // Search input
+            document.getElementById('searchInput').addEventListener('input', searchNotes);
+
+            // Modal close on click outside
+            document.getElementById('noteModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeNoteModal();
+                }
+            });
+        }
+
+        function loadNotes() {
+            try {
+                const savedNotes = localStorage.getItem(NOTES_STORAGE_KEY);
+                allNotes = savedNotes ? JSON.parse(savedNotes) : [];
+                filteredNotes = [...allNotes];
+            } catch (error) {
+                console.error('Error loading notes:', error);
+                allNotes = [];
+                filteredNotes = [];
+            }
+        }
+
+        function saveNotesToStorage() {
+            try {
+                localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(allNotes));
+            } catch (error) {
+                console.error('Error saving notes:', error);
+                alert('Error saving notes. Please try again.');
+            }
+        }
+
+        function saveNote() {
+            const content = document.getElementById('addNoteTextarea').value.trim();
+            
+            if (!content) {
+                alert('Please write something before saving!');
+                return;
+            }
+
+            const newNote = {
+                id: Date.now().toString(),
+                content: content,
+                timestamp: new Date().toISOString(),
+                dateCreated: new Date().toLocaleString(),
+                preview: content.substring(0, 120) + (content.length > 120 ? '...' : ''),
+                wordCount: content.split(/\s+/).filter(word => word.length > 0).length
+            };
+
+            allNotes.unshift(newNote);
+            filteredNotes = [...allNotes];
+            saveNotesToStorage();
+            
+            // Clear form
+            document.getElementById('addNoteTextarea').value = '';
+            document.getElementById('charCount').textContent = '0 characters';
+            document.getElementById('addNoteBtn').disabled = true;
+            
+            // Switch to view tab
+            switchTab('view');
+            renderNotes();
+            
+            console.log('📝 Note saved successfully:', newNote.id);
+        }
+
+        function renderNotes() {
+            const contentArea = document.getElementById('notesContentArea');
+            
+            if (filteredNotes.length === 0) {
+                contentArea.innerHTML = `
+                    <div class="notes-empty">
+                        <i class="fas fa-sticky-note"></i>
+                        <h3>No Notes Yet</h3>
+                        <p>Click "Add Note" to create your first note!</p>
+                    </div>
+                `;
+            } else {
+                contentArea.innerHTML = filteredNotes.map(note => `
+                    <div class="notes-item">
+                        <div class="notes-meta">
+                            <span class="notes-id">ID: ${note.id.slice(-4)}</span>
+                            <span class="notes-time">${note.dateCreated}</span>
+                        </div>
+                        <div class="notes-preview">${note.preview}</div>
+                        <div class="notes-actions">
+                            <button class="notes-action-btn" onclick="viewNote('${note.id}')">
+                                <i class="fas fa-eye"></i> View
+                            </button>
+                            <button class="notes-action-btn" onclick="editNote('${note.id}')">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="notes-action-btn" onclick="copyNote('${note.id}')">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                            <button class="notes-action-btn danger" onclick="deleteNote('${note.id}')">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            updateNotesCount();
+        }
+
+        function switchTab(tabName) {
+            // Update active tab
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Show/hide content based on tab
+            const contentArea = document.getElementById('notesContentArea');
+            const addNoteForm = document.getElementById('addNoteForm');
+            const searchArea = document.getElementById('notesSearch');
+
+            if (tabName === 'view') {
+                contentArea.style.display = 'block';
+                addNoteForm.style.display = 'none';
+                searchArea.style.display = 'block';
+                renderNotes();
+            } else if (tabName === 'add') {
+                contentArea.style.display = 'none';
+                addNoteForm.style.display = 'block';
+                searchArea.style.display = 'none';
+                document.getElementById('addNoteTextarea').focus();
+            }
+
+            currentTab = tabName;
+        }
+
+        function searchNotes() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            if (searchTerm === '') {
+                filteredNotes = [...allNotes];
+            } else {
+                filteredNotes = allNotes.filter(note => 
+                    note.content.toLowerCase().includes(searchTerm) ||
+                    note.dateCreated.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            renderNotes();
+        }
+
+        function viewNote(noteId) {
+            const note = allNotes.find(n => n.id === noteId);
+            if (note) {
+                document.getElementById('noteModalTitle').textContent = `Note - ${note.dateCreated}`;
+                document.getElementById('noteModalBody').textContent = note.content;
+                document.getElementById('noteModal').style.display = 'flex';
+            }
+        }
+
+        function editNote(noteId) {
+            const note = allNotes.find(n => n.id === noteId);
+            if (note) {
+                document.getElementById('addNoteTextarea').value = note.content;
+                document.getElementById('charCount').textContent = `${note.content.length} characters`;
+                document.getElementById('addNoteBtn').disabled = false;
+                
+                // Remove the old note
+                allNotes = allNotes.filter(n => n.id !== noteId);
+                filteredNotes = [...allNotes];
+                saveNotesToStorage();
+                
+                // Switch to add tab
+                switchTab('add');
+            }
+        }
+
+        function copyNote(noteId) {
+            const note = allNotes.find(n => n.id === noteId);
+            if (note) {
+                navigator.clipboard.writeText(note.content).then(() => {
+                    alert('Note copied to clipboard!');
+                }).catch(err => {
+                    console.error('Failed to copy text:', err);
+                    alert('Failed to copy note. Please try again.');
+                });
+            }
+        }
+
+        function deleteNote(noteId) {
+            if (confirm('Are you sure you want to delete this note?')) {
+                allNotes = allNotes.filter(n => n.id !== noteId);
+                filteredNotes = [...allNotes];
+                saveNotesToStorage();
+                renderNotes();
+                console.log('📝 Note deleted:', noteId);
+            }
+        }
+
+        function updateNotesCount() {
+            const count = filteredNotes.length;
+            document.getElementById('notesCount').textContent = `${count} note${count !== 1 ? 's' : ''}`;
+        }
+
+        function exportNotes() {
+            if (allNotes.length === 0) {
+                alert('No notes to export!');
+                return;
+            }
+
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                totalNotes: allNotes.length,
+                notes: allNotes
+            };
+
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `notes-export-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            
+            URL.revokeObjectURL(url);
+            console.log('📝 Notes exported successfully');
+        }
+
+        function clearAllNotes() {
+            if (allNotes.length === 0) {
+                alert('No notes to clear!');
+                return;
+            }
+
+            if (confirm(`Are you sure you want to delete all ${allNotes.length} notes? This action cannot be undone.`)) {
+                allNotes = [];
+                filteredNotes = [];
+                saveNotesToStorage();
+                renderNotes();
+                console.log('📝 All notes cleared');
+            }
+        }
+
+        function closeNoteModal() {
+            document.getElementById('noteModal').style.display = 'none';
+        }
+
+        // Initialize the widget
+        setTimeout(() => {
+            console.log('📝 Enhanced Notes Widget initialized');
+        }, 100);
+    </script>
+</body>
+</html>

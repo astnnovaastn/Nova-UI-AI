@@ -1,0 +1,83 @@
+.task-widget {
+  position: absolute;
+  left: 50%;
+  bottom: 12vh;
+  transform: translateX(-50%);
+  width: 320px;
+  height: 380px;
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.15), rgba(0, 200, 136, 0.15));
+  border: 2px solid #00FF88;
+  color: #00FF88;
+  padding: 20px;
+  border-radius: 8px;
+  overflow-y: auto;
+  box-shadow: 
+    0 0 20px rgba(0, 255, 136, 0.3),
+    inset 0 0 20px rgba(0, 255, 136, 0.05);
+  animation: taskGlow 4s ease-in-out infinite;
+}
+
+@keyframes taskGlow {
+  0% {
+    box-shadow: 
+      0 0 20px rgba(0, 255, 136, 0.3),
+      inset 0 0 20px rgba(0, 255, 136, 0.05);
+  }
+  50% {
+    box-shadow: 
+      0 0 30px rgba(0, 255, 136, 0.5),
+      inset 0 0 30px rgba(0, 255, 136, 0.1);
+  }
+  100% {
+    box-shadow: 
+      0 0 20px rgba(0, 255, 136, 0.3),
+      inset 0 0 20px rgba(0, 255, 136, 0.05);
+  }
+}
+
+.task-widget .corner-top-left,
+.task-widget .corner-bottom-right {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #00FF88;
+  opacity: 0.6;
+}
+
+.task-widget .corner-top-left {
+  top: 10px;
+  left: 10px;
+  border-top: 2px solid #00FF88;
+  border-left: 2px solid #00FF88;
+  border-bottom: none;
+  border-right: none;
+}
+
+.task-widget .corner-bottom-right {
+  bottom: 10px;
+  right: 10px;
+  border-bottom: 2px solid #00FF88;
+  border-right: 2px solid #00FF88;
+  border-top: none;
+  border-left: none;
+}
+
+.task-header {
+  margin-top: 0;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+  text-align: center;
+}
+
+.task-header h2 {
+  margin: 0;
+  font-size: 18px;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+  font-weight: bold;
+}
+
+.task-content {
+  margin-top: 15px;
+  color: #00FF88;
+  font-size: 14px;
+}

@@ -1,0 +1,1066 @@
+/* ================= NOTEPAD WIDGET STYLES ================= */
+
+/* Main Notepad Widget Container */
+.notepad-widget {
+    position: fixed;
+    /* Changed from absolute to fixed for React widget */
+    top: 15vh;
+    left: 50%;
+    transform: translateX(-50%);
+    transform: translateX(-50%);
+    min-width: 400px;
+    max-width: none;
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.15) 0%, rgba(0, 200, 120, 0.1) 100%);
+    border: 1px solid rgba(0, 255, 136, 0.4);
+    border-radius: 12px;
+    font-family: 'Orbitron', monospace;
+    color: white;
+    box-shadow:
+        0 0 20px rgba(0, 255, 136, 0.3),
+        inset 0 0 15px rgba(0, 255, 136, 0.1);
+    backdrop-filter: blur(8px);
+    animation: notepadGlow 4s ease-in-out infinite;
+    z-index: 25;
+    display: flex;
+    /* Changed from none to flex */
+    flex-direction: column;
+}
+
+/* Header Section */
+.notepad-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px 12px 24px;
+    border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+    position: relative;
+    flex-shrink: 0;
+}
+
+.notepad-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.notepad-logo {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #00FF88 0%, #00CC66 100%);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 16px;
+    color: #041529;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+    box-shadow:
+        0 0 10px rgba(0, 255, 136, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.notepad-logo::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    right: 2px;
+    bottom: 2px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
+    border-radius: 6px;
+    pointer-events: none;
+}
+
+.notepad-logo i {
+    position: relative;
+    z-index: 2;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+.notepad-brand {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: white;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+}
+
+.notepad-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.notepad-status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #00FF88;
+    animation: pulse 2s infinite;
+    box-shadow: 0 0 8px #00FF88;
+}
+
+/* Navigation Tabs */
+.notepad-nav {
+    display: flex;
+    padding: 0 24px;
+    border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+    background: rgba(0, 255, 136, 0.05);
+    flex-shrink: 0;
+}
+
+.notepad-nav-tab {
+    padding: 12px 16px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.3s ease;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.notepad-nav-tab:hover {
+    color: rgba(0, 255, 136, 0.9);
+    background: rgba(0, 255, 136, 0.1);
+}
+
+.notepad-nav-tab.active {
+    color: #00FF88;
+    border-bottom-color: #00FF88;
+    background: rgba(0, 255, 136, 0.1);
+    text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+}
+
+/* Content Area */
+.notepad-content-area {
+    padding: 20px 24px;
+    /* Removed fixed min/max heights to allow flex resizing */
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    will-change: scroll-position;
+    flex: 1;
+    /* Grow to fill remaining space */
+    height: 0;
+    /* Important for scrollable flex child */
+}
+
+.notepad-item {
+    margin-bottom: 18px;
+    padding: 16px;
+    border: 1px solid rgba(0, 255, 136, 0.2);
+    border-radius: 8px;
+    background: rgba(0, 255, 136, 0.05);
+    animation: slideIn 0.5s ease-out;
+    transition: all 0.3s ease;
+}
+
+.notepad-item:hover {
+    background: rgba(0, 255, 136, 0.1);
+    border-color: rgba(0, 255, 136, 0.3);
+    transform: translateY(-2px);
+}
+
+.notepad-item:last-child {
+    margin-bottom: 0;
+}
+
+.notepad-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.notepad-id {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.4) 0%, rgba(0, 200, 120, 0.3) 100%);
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 8px;
+    border: 1px solid rgba(0, 255, 136, 0.5);
+    color: #FFF;
+}
+
+.notepad-time {
+    font-weight: 500;
+    font-size: 10px;
+    color: rgba(0, 255, 136, 0.8);
+    text-shadow: 0 0 4px rgba(0, 255, 136, 0.4);
+}
+
+.notepad-preview {
+    font-size: 12px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.85);
+    margin-bottom: 10px;
+    text-shadow: 0 0 4px rgba(255, 255, 255, 0.2);
+}
+
+.notepad-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.notepad-action-btn {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.3) 0%, rgba(0, 200, 120, 0.2) 100%);
+    border: 1px solid rgba(0, 255, 136, 0.4);
+    border-radius: 4px;
+    color: white;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 10px;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.notepad-action-btn:hover {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.5) 0%, rgba(0, 200, 120, 0.3) 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 0 8px rgba(0, 255, 136, 0.4);
+}
+
+.notepad-action-btn.danger {
+    background: linear-gradient(135deg, rgba(255, 100, 100, 0.3) 0%, rgba(255, 50, 50, 0.2) 100%);
+    border-color: rgba(255, 100, 100, 0.4);
+}
+
+.notepad-action-btn.danger:hover {
+    background: linear-gradient(135deg, rgba(255, 100, 100, 0.5) 0%, rgba(255, 50, 50, 0.3) 100%);
+    border-color: rgba(255, 100, 100, 0.6);
+}
+
+.notepad-action-btn.summarize-single-btn {
+    background: linear-gradient(135deg, rgba(255, 136, 0, 0.3) 0%, rgba(255, 100, 0, 0.2) 100%);
+    border-color: rgba(255, 136, 0, 0.4);
+}
+
+.notepad-action-btn.summarize-single-btn:hover {
+    background: linear-gradient(135deg, rgba(255, 136, 0, 0.5) 0%, rgba(255, 100, 0, 0.3) 100%);
+    border-color: rgba(255, 136, 0, 0.6);
+    box-shadow: 0 0 8px rgba(255, 136, 0, 0.4);
+}
+
+.notepad-action-btn.summarize-single-btn.loading {
+    background: linear-gradient(135deg, rgba(255, 136, 0, 0.6) 0%, rgba(255, 100, 0, 0.4) 100%);
+    animation: summarizeLoading 1.5s ease-in-out infinite;
+    pointer-events: none;
+}
+
+/* Category Tags */
+.notepad-tag {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    background: rgba(0, 200, 255, 0.2);
+    border: 1px solid rgba(0, 200, 255, 0.4);
+    color: rgba(0, 200, 255, 0.9);
+    margin-right: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.notepad-input-group {
+    margin-bottom: 12px;
+}
+
+.notepad-input-label {
+    display: block;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+}
+
+.notepad-text-input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: white;
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+}
+
+/* Markdown Toolbar */
+.markdown-toolbar {
+    display: flex;
+    gap: 4px;
+    padding: 6px;
+    background: rgba(0, 255, 136, 0.1);
+    border: 1px solid rgba(0, 255, 136, 0.2);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+}
+
+.markdown-btn {
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    font-size: 12px;
+    border-radius: 4px;
+}
+
+.markdown-btn:hover {
+    background: rgba(0, 255, 136, 0.2);
+    color: #fff;
+}
+
+
+/* Empty State */
+.notepad-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.notepad-empty i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    color: rgba(0, 255, 136, 0.4);
+}
+
+.notepad-empty h3 {
+    font-size: 16px;
+    margin-bottom: 8px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.notepad-empty p {
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+/* Add Note Form */
+.notepad-add-note-form {
+    padding: 20px;
+    border-top: 1px solid rgba(0, 255, 136, 0.2);
+    background: rgba(0, 255, 136, 0.05);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 0;
+    /* Important for flex child */
+}
+
+.notepad-add-note-textarea {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    /* Allow shrinking */
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    border-radius: 8px;
+    color: white !important;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 16px;
+    resize: none;
+    /* Resize via widget handle instead */
+    box-sizing: border-box;
+    margin-bottom: 12px;
+    transition: all 0.3s ease;
+    scroll-behavior: smooth;
+    white-space: pre-wrap;
+}
+
+.notepad-add-note-textarea:focus {
+    outline: none !important;
+    border-color: rgba(0, 255, 136, 0.6) !important;
+    box-shadow:
+        0 0 15px rgba(0, 255, 136, 0.4),
+        inset 0 0 5px rgba(0, 255, 136, 0.1) !important;
+    background: rgba(0, 0, 0, 0.4) !important;
+    transform: scale(1.01);
+}
+
+.notepad-add-note-textarea:hover {
+    border-color: rgba(0, 255, 136, 0.5);
+    box-shadow: 0 0 8px rgba(0, 255, 136, 0.2);
+}
+
+.notepad-add-note-textarea::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.notepad-add-note-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.notepad-add-note-btn {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.6) 0%, rgba(0, 200, 120, 0.7) 100%);
+    border: none;
+    border-radius: 6px;
+    color: #041529;
+    font-weight: 700;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 11px;
+}
+
+.notepad-add-note-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+}
+
+.notepad-char-count {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* Footer Controls */
+.notepad-footer {
+    padding: 12px 24px;
+    border-top: 1px solid rgba(0, 255, 136, 0.3);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0, 255, 136, 0.05);
+    flex-shrink: 0;
+}
+
+.notepad-count {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 500;
+}
+
+.notepad-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.notepad-control-btn {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.3) 0%, rgba(0, 200, 120, 0.2) 100%);
+    border: 1px solid rgba(0, 255, 136, 0.4);
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    transition: all 0.3s ease;
+    font-family: 'Orbitron', monospace;
+}
+
+.notepad-control-btn:hover {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.5) 0%, rgba(0, 200, 120, 0.3) 100%);
+    box-shadow: 0 0 12px rgba(0, 255, 136, 0.4);
+    transform: translateY(-1px);
+}
+
+.notepad-control-btn.export-btn {
+    background: linear-gradient(135deg, rgba(0, 200, 255, 0.3) 0%, rgba(0, 150, 255, 0.2) 100%);
+    border-color: rgba(0, 200, 255, 0.4);
+}
+
+.notepad-control-btn.export-btn:hover {
+    background: linear-gradient(135deg, rgba(0, 200, 255, 0.5) 0%, rgba(0, 150, 255, 0.3) 100%);
+    box-shadow: 0 0 12px rgba(0, 200, 255, 0.4);
+    border-color: rgba(0, 200, 255, 0.6);
+    transform: translateY(-1px) scale(1.05);
+}
+
+.notepad-control-btn.import-btn {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(22, 163, 74, 0.2) 100%);
+    border-color: rgba(34, 197, 94, 0.4);
+}
+
+.notepad-control-btn.import-btn:hover {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.5) 0%, rgba(22, 163, 74, 0.3) 100%);
+    box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+    border-color: rgba(34, 197, 94, 0.6);
+    transform: translateY(-1px) scale(1.05);
+}
+
+.notepad-control-btn.export-txt-btn {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.3) 0%, rgba(147, 51, 234, 0.2) 100%);
+    border-color: rgba(168, 85, 247, 0.4);
+}
+
+.notepad-control-btn.export-txt-btn:hover {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.5) 0%, rgba(147, 51, 234, 0.3) 100%);
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
+    border-color: rgba(168, 85, 247, 0.6);
+    transform: translateY(-1px) scale(1.05);
+}
+
+/* ================= HIDDEN NOTEPAD ACCESS BUTTON STYLES ================= */
+
+.hidden-notepad-access {
+    position: fixed;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 100;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.notepad-access-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(0, 200, 120, 0.05) 100%);
+    border-radius: 0 8px 8px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.2;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(0, 255, 136, 0.2);
+    border-left: none;
+    box-shadow:
+        0 0 10px rgba(0, 255, 136, 0.1),
+        inset 0 0 5px rgba(0, 255, 136, 0.05);
+}
+
+.notepad-access-icon i {
+    color: #00FF88;
+    font-size: 18px;
+    filter: drop-shadow(0 0 5px rgba(0, 255, 136, 0.5));
+    opacity: 0.8;
+    transition: all 0.3s ease;
+}
+
+.notepad-access-icon:hover {
+    opacity: 1;
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.3) 0%, rgba(0, 200, 120, 0.2) 100%);
+    box-shadow:
+        0 0 15px rgba(0, 255, 136, 0.3),
+        inset 0 0 8px rgba(0, 255, 136, 0.1);
+    transform: translateX(3px);
+    border-color: rgba(0, 255, 136, 0.4);
+}
+
+.notepad-access-icon:hover i {
+    opacity: 1;
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 8px rgba(0, 255, 136, 0.8));
+}
+
+.notepad-access-icon:active {
+    transform: translateX(1px) scale(0.95);
+}
+
+/* ================= NOTIFICATION SYSTEM STYLES ================= */
+
+.notepad-notification {
+    position: absolute;
+    top: -60px;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg,
+            rgba(0, 255, 136, 0.95) 0%,
+            rgba(0, 200, 120, 0.9) 100%);
+    border: 1px solid rgba(0, 255, 136, 0.6);
+    border-radius: 8px 8px 0 0;
+    box-shadow:
+        0 4px 20px rgba(0, 255, 136, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    z-index: 1000;
+    transform: translateY(-100%);
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.notepad-notification.show {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.notepad-notification.success {
+    background: linear-gradient(135deg,
+            rgba(0, 255, 136, 0.95) 0%,
+            rgba(0, 200, 120, 0.9) 100%);
+    border-color: rgba(0, 255, 136, 0.6);
+}
+
+.notepad-notification.error {
+    background: linear-gradient(135deg,
+            rgba(255, 68, 68, 0.95) 0%,
+            rgba(220, 38, 38, 0.9) 100%);
+    border-color: rgba(255, 68, 68, 0.6);
+    box-shadow:
+        0 4px 20px rgba(255, 68, 68, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.notepad-notification.warning {
+    background: linear-gradient(135deg,
+            rgba(255, 136, 0, 0.95) 0%,
+            rgba(245, 101, 0, 0.9) 100%);
+    border-color: rgba(255, 136, 0, 0.6);
+    box-shadow:
+        0 4px 20px rgba(255, 136, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.notepad-notification.info {
+    background: linear-gradient(135deg,
+            rgba(0, 150, 255, 0.95) 0%,
+            rgba(0, 120, 220, 0.9) 100%);
+    border-color: rgba(0, 150, 255, 0.6);
+    box-shadow:
+        0 4px 20px rgba(0, 150, 255, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.notification-content {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    gap: 12px;
+}
+
+.notification-icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    color: white;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.notification-message {
+    flex: 1;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Orbitron', monospace;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.notification-close {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.notification-close:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.notification-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 0 0 8px 8px;
+    transform-origin: left;
+    animation: notificationProgress 4s linear forwards;
+}
+
+@keyframes notificationProgress {
+    from {
+        transform: scaleX(1);
+    }
+
+    to {
+        transform: scaleX(0);
+    }
+}
+
+/* ================= AI SUMMARIES STYLING ================= */
+
+.notepad-ai-summaries-area {
+    padding: 20px 24px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    flex: 1;
+    height: 0;
+}
+
+/* Dual Pane */
+.notepad-dual-pane {
+    padding: 16px 24px;
+    border-top: 1px solid rgba(0, 255, 136, 0.3);
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.05) 0%, rgba(0, 200, 120, 0.03) 100%);
+    animation: dualPaneSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    /* Fill remaining space */
+    height: 0;
+    /* Allow scrolling */
+}
+
+.dual-pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.dual-pane-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #00FF88;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dual-pane-close {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.dual-pane-close:hover {
+    color: #00FF88;
+    background: rgba(0, 255, 136, 0.1);
+}
+
+.dual-pane-content {
+    display: flex;
+    gap: 16px;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.dual-pane-left,
+.dual-pane-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.pane-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(0, 255, 136, 0.1);
+    border-radius: 6px;
+    border: 1px solid rgba(0, 255, 136, 0.2);
+    flex-shrink: 0;
+}
+
+.ai-summary-controls {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.ai-summary-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: rgba(255, 255, 255, 0.8);
+    padding: 4px 6px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ai-summary-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+    color: white;
+    transform: scale(1.05);
+}
+
+.dual-pane-left .pane-label {
+    background: rgba(0, 150, 255, 0.1);
+    border-color: rgba(0, 150, 255, 0.2);
+    color: rgba(0, 200, 255, 0.9);
+}
+
+.dual-pane-right .pane-label {
+    background: rgba(255, 136, 0, 0.1);
+    border-color: rgba(255, 136, 0, 0.2);
+    color: rgba(255, 180, 0, 0.9);
+}
+
+.pane-content {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(0, 255, 136, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.9);
+    scroll-behavior: smooth;
+    white-space: pre-wrap;
+}
+
+.dual-pane-divider {
+    width: 2px;
+    background: linear-gradient(180deg,
+            rgba(0, 255, 136, 0.3) 0%,
+            rgba(0, 255, 136, 0.6) 50%,
+            rgba(0, 255, 136, 0.3) 100%);
+    border-radius: 1px;
+    box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+    flex-shrink: 0;
+}
+
+@keyframes dualPaneSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+        max-height: 0;
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        max-height: 400px;
+    }
+}
+
+/* Animations */
+@keyframes notepadGlow {
+
+    0%,
+    100% {
+        box-shadow:
+            0 0 20px rgba(0, 255, 136, 0.3),
+            inset 0 0 15px rgba(0, 255, 136, 0.1);
+    }
+
+    50% {
+        box-shadow:
+            0 0 35px rgba(0, 255, 136, 0.5),
+            inset 0 0 20px rgba(0, 255, 136, 0.2);
+    }
+}
+
+/* Corner brackets */
+.notepad-widget::before,
+.notepad-widget::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    z-index: 1;
+    pointer-events: none;
+}
+
+.notepad-widget::before {
+    top: -6px;
+    left: -6px;
+    border-right: none;
+    border-bottom: none;
+}
+
+.notepad-widget::after {
+    bottom: -6px;
+    right: -6px;
+    border-left: none;
+    border-top: none;
+}
+
+.corner-top-right {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    border-left: none;
+    border-bottom: none;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.corner-bottom-left {
+    position: absolute;
+    bottom: -6px;
+    left: -6px;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    border-right: none;
+    border-top: none;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Search Bar */
+.notepad-search {
+    padding: 12px 24px;
+    border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+    flex-shrink: 0;
+}
+
+.notepad-search-input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    border-radius: 6px;
+    color: white;
+    font-size: 12px;
+    padding: 8px 12px;
+    box-sizing: border-box;
+}
+
+.notepad-search-input:focus {
+    outline: none;
+    border-color: rgba(0, 255, 136, 0.5);
+    box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+}
+
+.notepad-search-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* Widget Controls (Draggable/Resizable) */
+/* These are shared generic widget controls, adding here for completeness */
+.widget-controls {
+    position: absolute;
+    top: -8px;
+    /* Adjusted */
+    right: -8px;
+    /* Adjusted */
+    display: none;
+    gap: 6px;
+    background: rgba(12, 41, 79, 0.9);
+    padding: 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    backdrop-filter: blur(10px);
+    z-index: 100;
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+}
+
+.notepad-widget:hover .widget-controls {
+    display: flex;
+}
+
+.widget-control-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 200, 120, 0.1));
+    border: 1px solid rgba(0, 255, 136, 0.4);
+    color: #00FF88;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.2s ease;
+}
+
+.widget-control-btn[title="Make Bigger"] {
+    background: linear-gradient(135deg, rgba(0, 100, 50, 0.9) 0%, rgba(0, 150, 75, 0.95) 100%);
+    border-color: rgba(0, 255, 150, 0.6);
+    color: rgba(0, 255, 150, 1);
+}
+
+.widget-control-btn[title="Make Smaller"] {
+    background: linear-gradient(135deg, rgba(100, 50, 0, 0.9) 0%, rgba(150, 75, 0, 0.95) 100%);
+    border-color: rgba(255, 150, 0, 0.6);
+    color: rgba(255, 180, 0, 1);
+}
+
+.widget-control-btn[title="Close"] {
+    background: linear-gradient(135deg, rgba(100, 20, 20, 0.9) 0%, rgba(150, 30, 30, 0.95) 100%);
+    border-color: rgba(255, 80, 80, 0.6);
+    color: rgba(255, 100, 100, 1);
+}
+
+.resize-handle {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 24px;
+    height: 24px;
+    background: repeating-linear-gradient(45deg,
+            rgba(0, 255, 136, 0.3),
+            rgba(0, 255, 136, 0.3) 2px,
+            transparent 2px,
+            transparent 4px);
+    cursor: se-resize;
+    z-index: 100;
+    opacity: 0.5;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    border-radius: 0 0 12px 0;
+}
+
+.resize-handle:hover {
+    opacity: 1;
+    transform: scale(1.15);
+}
+
+.resize-handle::before {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 6px;
+    height: 6px;
+    background: #00FF88;
+    opacity: 0.7;
+    border-radius: 50%;
+}

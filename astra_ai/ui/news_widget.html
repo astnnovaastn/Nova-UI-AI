@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced News Widget</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&display=swap');
+        
+        body {
+            margin: 0;
+            padding: 20px;
+            background: radial-gradient(ellipse at 30% 50%, #0C294F 0%, #061D3B 70%, #041529 100%);
+            min-height: 100vh;
+            font-family: 'Orbitron', 'Segoe UI', monospace;
+            overflow-x: hidden;
+        }
+
+        /* Main News Widget Container */
+        .news-widget {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            min-width: 400px;
+            max-width: 600px;
+            background: linear-gradient(135deg, rgba(255, 150, 0, 0.15) 0%, rgba(255, 100, 0, 0.1) 100%);
+            border: 1px solid rgba(255, 165, 0, 0.4);
+            border-radius: 12px;
+            font-family: 'Orbitron', monospace;
+            color: white;
+            box-shadow: 
+                0 0 20px rgba(255, 165, 0, 0.3),
+                inset 0 0 15px rgba(255, 165, 0, 0.1);
+            backdrop-filter: blur(8px);
+            animation: newsGlow 4s ease-in-out infinite;
+            z-index: 25;
+        }
+
+        /* Header Section */
+        .news-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px 12px 24px;
+            border-bottom: 1px solid rgba(255, 165, 0, 0.3);
+            position: relative;
+        }
+
+        .news-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .news-logo {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, #FF9500 0%, #FF6500 100%);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 14px;
+            color: white;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+        }
+
+        .news-brand {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: white;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+        }
+
+        .news-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00FF88;
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 8px #00FF88;
+        }
+
+        /* Navigation Tabs */
+        .news-nav {
+            display: flex;
+            padding: 0 24px;
+            border-bottom: 1px solid rgba(255, 165, 0, 0.2);
+            background: rgba(255, 165, 0, 0.05);
+        }
+
+        .nav-tab {
+            padding: 12px 16px;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .nav-tab:hover {
+            color: rgba(255, 165, 0, 0.9);
+            background: rgba(255, 165, 0, 0.1);
+        }
+
+        .nav-tab.active {
+            color: #FF9500;
+            border-bottom-color: #FF9500;
+            background: rgba(255, 165, 0, 0.1);
+            text-shadow: 0 0 8px rgba(255, 149, 0, 0.6);
+        }
+
+        /* Content Area */
+        .news-content-area {
+            padding: 20px 24px;
+            min-height: 200px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .news-item {
+            margin-bottom: 18px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(255, 165, 0, 0.2);
+            animation: slideIn 0.5s ease-out;
+        }
+
+        .news-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .news-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        .news-category {
+            background: linear-gradient(135deg, rgba(255, 165, 0, 0.4) 0%, rgba(255, 100, 0, 0.3) 100%);
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-weight: 700;
+            font-size: 9px;
+            border: 1px solid rgba(255, 165, 0, 0.5);
+            text-shadow: 0 0 6px rgba(255, 165, 0, 0.8);
+            color: #FFF;
+        }
+
+        .news-time {
+            font-weight: 500;
+            font-size: 10px;
+            color: rgba(0, 255, 136, 0.8);
+            text-shadow: 0 0 4px rgba(0, 255, 136, 0.4);
+        }
+
+        .news-headline {
+            font-size: 15px;
+            font-weight: 600;
+            line-height: 1.3;
+            color: rgba(255, 255, 255, 1);
+            text-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+            font-family: 'Orbitron', monospace;
+        }
+
+        .news-summary {
+            font-size: 12px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.85);
+            font-weight: 400;
+            letter-spacing: 0.3px;
+            text-shadow: 0 0 4px rgba(255, 255, 255, 0.2);
+        }
+
+        /* Loading State */
+        .news-loading {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .loading-spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid rgba(255, 165, 0, 0.3);
+            border-top: 2px solid #FF9500;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 12px auto;
+        }
+
+        /* Footer Controls */
+        .news-footer {
+            padding: 12px 24px;
+            border-top: 1px solid rgba(255, 165, 0, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 165, 0, 0.05);
+        }
+
+        .news-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .control-btn {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, rgba(255, 150, 0, 0.3) 0%, rgba(255, 100, 0, 0.2) 100%);
+            border: 1px solid rgba(255, 165, 0, 0.4);
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            transition: all 0.3s ease;
+            font-family: 'Orbitron', monospace;
+        }
+
+        .control-btn:hover {
+            background: linear-gradient(135deg, rgba(255, 150, 0, 0.5) 0%, rgba(255, 100, 0, 0.3) 100%);
+            box-shadow: 0 0 12px rgba(255, 165, 0, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .news-count {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+        }
+
+        /* Corner Brackets */
+        .news-widget::before,
+        .news-widget::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            z-index: 1;
+        }
+
+        .news-widget::before {
+            top: -6px;
+            left: -6px;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .news-widget::after {
+            bottom: -6px;
+            right: -6px;
+            border-left: none;
+            border-top: none;
+        }
+
+        .corner-top-right {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            border-left: none;
+            border-bottom: none;
+            z-index: 1;
+        }
+
+        .corner-bottom-left {
+            position: absolute;
+            bottom: -6px;
+            left: -6px;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            border-right: none;
+            border-top: none;
+            z-index: 1;
+        }
+
+        /* Animations */
+        @keyframes newsGlow {
+            0%, 100% { 
+                box-shadow: 
+                    0 0 20px rgba(255, 165, 0, 0.3),
+                    inset 0 0 15px rgba(255, 165, 0, 0.1);
+            }
+            50% { 
+                box-shadow: 
+                    0 0 35px rgba(255, 165, 0, 0.5),
+                    inset 0 0 20px rgba(255, 165, 0, 0.2);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Scrollbar Styling */
+        .news-content-area::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .news-content-area::-webkit-scrollbar-track {
+            background: rgba(255, 165, 0, 0.1);
+            border-radius: 3px;
+        }
+
+        .news-content-area::-webkit-scrollbar-thumb {
+            background: rgba(255, 165, 0, 0.5);
+            border-radius: 3px;
+        }
+
+        .news-content-area::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 165, 0, 0.7);
+        }
+    </style>
+</head>
+<body>
+    <!-- Enhanced News Widget -->
+    <div class="news-widget" id="newsWidget">
+        <div class="corner-top-right"></div>
+        <div class="corner-bottom-left"></div>
+        
+        <!-- Header -->
+        <div class="news-header">
+            <div class="news-title">
+                <div class="news-logo">N</div>
+                <div class="news-brand">News Feed</div>
+            </div>
+            <div class="news-status">
+                <div class="status-indicator"></div>
+                <span>Live</span>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="news-nav">
+            <div class="nav-tab active" onclick="switchTab('breaking')">Breaking</div>
+            <div class="nav-tab" onclick="switchTab('sports')">Sports</div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="news-content-area" id="newsContentArea">
+            <!-- News items will be populated here -->
+        </div>
+
+        <!-- Loading State -->
+        <div class="news-loading" id="newsLoading">
+            <div class="loading-spinner"></div>
+            <div>Fetching latest headlines...</div>
+        </div>
+
+        <!-- Footer Controls -->
+        <div class="news-footer">
+            <div class="news-controls">
+            </div>
+            <div class="news-count" id="newsCount">0 stories</div>
+        </div>
+    </div>
+
+    <script>
+
+        // Show/hide loading (optional, can be used if fetching async)
+        function showLoading() {
+            document.getElementById('newsContentArea').style.display = 'none';
+            document.getElementById('newsLoading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('newsContentArea').style.display = 'block';
+            document.getElementById('newsLoading').style.display = 'none';
+        }
+
+        // Render the news summary as plain text (from backend)
+        function renderNewsSummary(summaryText) {
+            const contentArea = document.getElementById('newsContentArea');
+            // Escape HTML for safety
+            const safeText = summaryText
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/\n/g, "<br>");
+            contentArea.innerHTML = `<div class="news-summary" style="white-space:pre-line;">${safeText}</div>`;
+            updateNewsCount(1);
+        }
+
+        // This function should be called by the backend (Python/pywebview)
+        // Example: window.setNewsSummary(summaryText)
+        window.setNewsSummary = function(summaryText) {
+            hideLoading();
+            renderNewsSummary(summaryText);
+        }
+
+        // Optionally, show loading on startup
+        showLoading();
+
+    </script>
+</body>
+</html>

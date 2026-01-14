@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Management Widget</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&display=swap');
+        
+        body {
+            margin: 0;
+            padding: 20px;
+            background: radial-gradient(ellipse at 30% 50%, #0C294F 0%, #061D3B 70%, #041529 100%);
+            min-height: 100vh;
+            font-family: 'Orbitron', 'Segoe UI', monospace;
+            overflow-x: hidden;
+        }
+
+        /* Main Task Widget Container */
+        .task-widget {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            min-width: 600px;
+            max-width: 800px;
+            background: linear-gradient(135deg, rgba(255, 136, 0, 0.15) 0%, rgba(200, 100, 0, 0.1) 100%);
+            border: 1px solid rgba(255, 136, 0, 0.4);
+            border-radius: 12px;
+            font-family: 'Orbitron', monospace;
+            color: white;
+            box-shadow: 
+                0 0 20px rgba(255, 136, 0, 0.3),
+                inset 0 0 15px rgba(255, 136, 0, 0.1);
+            backdrop-filter: blur(8px);
+            animation: taskGlow 4s ease-in-out infinite;
+            z-index: 25;
+            resize: both;
+            overflow: hidden;
+            min-height: 400px;
+        }
+
+        /* Header Section */
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px 12px 24px;
+            border-bottom: 1px solid rgba(255, 136, 0, 0.3);
+            position: relative;
+            cursor: move;
+        }
+
+        .task-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .task-logo {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, #FF8800 0%, #CC6600 100%);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 14px;
+            color: #041529;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+        }
+
+        .task-brand {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: white;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+        }
+
+        .task-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .control-btn {
+            width: 24px;
+            height: 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .minimize-btn {
+            background: rgba(255, 193, 7, 0.2);
+            color: #FFC107;
+        }
+
+        .close-btn {
+            background: rgba(220, 53, 69, 0.2);
+            color: #DC3545;
+        }
+
+        .control-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 8px currentColor;
+        }
+
+        /* Task Status */
+        .task-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #FF8800;
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 8px #FF8800;
+        }
+
+        /* Navigation Tabs */
+        .task-nav {
+            display: flex;
+            padding: 0 24px;
+            border-bottom: 1px solid rgba(255, 136, 0, 0.2);
+        }
+
+        .nav-tab {
+            padding: 12px 20px;
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            font-family: 'Orbitron', monospace;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-bottom: 2px solid transparent;
+        }
+
+        .nav-tab.active {
+            color: #FF8800;
+            border-bottom-color: #FF8800;
+            text-shadow: 0 0 8px rgba(255, 136, 0, 0.6);
+        }
+
+        .nav-tab:hover {
+            color: rgba(255, 136, 0, 0.8);
+        }
+
+        /* Content Area */
+        .task-content {
+            padding: 20px 24px;
+            height: calc(100% - 140px);
+            overflow-y: auto;
+        }
+
+        /* Task Creation Form */
+        .task-form {
+            display: none;
+            gap: 16px;
+            flex-direction: column;
+        }
+
+        .task-form.active {
+            display: flex;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: #FF8800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .form-input, .form-textarea, .form-select {
+            background: rgba(255, 136, 0, 0.1);
+            border: 1px solid rgba(255, 136, 0, 0.3);
+            border-radius: 6px;
+            padding: 12px;
+            color: white;
+            font-family: 'Orbitron', monospace;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus, .form-textarea:focus, .form-select:focus {
+            outline: none;
+            border-color: #FF8800;
+            box-shadow: 0 0 8px rgba(255, 136, 0, 0.3);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-button {
+            background: linear-gradient(135deg, #FF8800 0%, #CC6600 100%);
+            border: none;
+            border-radius: 6px;
+            padding: 12px 24px;
+            color: white;
+            font-family: 'Orbitron', monospace;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .form-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 136, 0, 0.4);
+        }
+
+        /* Task List */
+        .task-list {
+            display: none;
+        }
+
+        .task-list.active {
+            display: block;
+        }
+
+        .task-item {
+            background: rgba(255, 136, 0, 0.1);
+            border: 1px solid rgba(255, 136, 0, 0.2);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .task-item:hover {
+            border-color: rgba(255, 136, 0, 0.4);
+            box-shadow: 0 0 12px rgba(255, 136, 0, 0.2);
+        }
+
+        .task-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .task-item-title {
+            font-weight: 600;
+            color: #FF8800;
+            font-size: 16px;
+        }
+
+        .task-item-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-pending {
+            background: rgba(255, 193, 7, 0.2);
+            color: #FFC107;
+        }
+
+        .status-completed {
+            background: rgba(40, 167, 69, 0.2);
+            color: #28A745;
+        }
+
+        .status-overdue {
+            background: rgba(220, 53, 69, 0.2);
+            color: #DC3545;
+        }
+
+        .task-item-description {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .task-item-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .task-item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 4px;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .complete-btn {
+            background: rgba(40, 167, 69, 0.2);
+            color: #28A745;
+        }
+
+        .delete-btn {
+            background: rgba(220, 53, 69, 0.2);
+            color: #DC3545;
+        }
+
+        .action-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 8px currentColor;
+        }
+
+        /* Animations */
+        @keyframes taskGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 136, 0, 0.3), inset 0 0 15px rgba(255, 136, 0, 0.1); }
+            50% { box-shadow: 0 0 30px rgba(255, 136, 0, 0.4), inset 0 0 20px rgba(255, 136, 0, 0.15); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Loading State */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 136, 0, 0.3);
+            border-top: 2px solid #FF8800;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .task-widget {
+                min-width: 90vw;
+                max-width: 95vw;
+                left: 50%;
+                transform: translateX(-50%);
+                top: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="task-widget" id="taskWidget">
+        <!-- Header -->
+        <div class="task-header" id="taskHeader">
+            <div class="task-title">
+                <div class="task-logo">
+                    <i class="fas fa-tasks"></i>
+                </div>
+                <div class="task-brand">Task Manager</div>
+                <div class="task-status">
+                    <div class="status-indicator"></div>
+                    <span id="taskCount">0 Tasks</span>
+                </div>
+            </div>
+            <div class="task-controls">
+                <button class="control-btn minimize-btn" id="minimizeBtn" title="Minimize">
+                    <i class="fas fa-minus"></i>
+                </button>
+                <button class="control-btn close-btn" id="closeBtn" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="task-nav">
+            <button class="nav-tab active" data-tab="list">
+                <i class="fas fa-list"></i> Tasks
+            </button>
+            <button class="nav-tab" data-tab="create">
+                <i class="fas fa-plus"></i> Create
+            </button>
+            <button class="nav-tab" data-tab="stats">
+                <i class="fas fa-chart-bar"></i> Stats
+            </button>
+        </div>
+
+        <!-- Content Area -->
+        <div class="task-content">
+            <!-- Task List Tab -->
+            <div class="task-list active" id="taskListTab">
+                <div class="loading" id="taskLoading">
+                    <div class="spinner"></div>
+                    Loading tasks...
+                </div>
+                <div id="taskContainer"></div>
+            </div>
+
+            <!-- Create Task Tab -->
+            <div class="task-form" id="createTaskTab">
+                <div class="form-group">
+                    <label class="form-label">Task Title</label>
+                    <input type="text" class="form-input" id="taskTitle" placeholder="Enter task title..." maxlength="100">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <textarea class="form-textarea" id="taskDescription" placeholder="Enter task description..." maxlength="500"></textarea>
+                </div>
+
+                <div style="display: flex; gap: 16px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label">Due Date</label>
+                        <input type="datetime-local" class="form-input" id="taskDueDate">
+                    </div>
+
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label">Priority</label>
+                        <select class="form-select" id="taskPriority">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Tags (comma-separated)</label>
+                    <input type="text" class="form-input" id="taskTags" placeholder="work, personal, urgent...">
+                </div>
+
+                <button class="form-button" id="createTaskBtn">
+                    <i class="fas fa-plus"></i> Create Task
+                </button>
+            </div>
+
+            <!-- Statistics Tab -->
+            <div class="task-stats" id="statsTab" style="display: none;">
+                <div id="statsContainer">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        Loading statistics...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class TaskWidget {
+            constructor() {
+                this.apiPort = new URLSearchParams(window.location.search).get('api_port') || '5000';
+                this.apiBase = `http://127.0.0.1:${this.apiPort}/api`;
+                this.tasks = [];
+                this.currentTab = 'list';
+
+                this.initializeWidget();
+                this.setupEventListeners();
+                this.loadTasks();
+
+                // Auto-refresh tasks every 30 seconds
+                setInterval(() => this.loadTasks(), 30000);
+            }
+
+            initializeWidget() {
+                // Make widget draggable
+                this.makeDraggable();
+
+                // Set default due date to tomorrow 9 AM
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(9, 0, 0, 0);
+                document.getElementById('taskDueDate').value = tomorrow.toISOString().slice(0, 16);
+            }
+
+            makeDraggable() {
+                const widget = document.getElementById('taskWidget');
+                const header = document.getElementById('taskHeader');
+                let isDragging = false;
+                let currentX;
+                let currentY;
+                let initialX;
+                let initialY;
+                let xOffset = 0;
+                let yOffset = 0;
+
+                header.addEventListener('mousedown', (e) => {
+                    if (e.target.closest('.task-controls')) return;
+
+                    initialX = e.clientX - xOffset;
+                    initialY = e.clientY - yOffset;
+
+                    if (e.target === header || header.contains(e.target)) {
+                        isDragging = true;
+                        widget.style.cursor = 'grabbing';
+                    }
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (isDragging) {
+                        e.preventDefault();
+                        currentX = e.clientX - initialX;
+                        currentY = e.clientY - initialY;
+
+                        xOffset = currentX;
+                        yOffset = currentY;
+
+                        widget.style.transform = `translate(${currentX}px, ${currentY}px)`;
+                    }
+                });
+
+                document.addEventListener('mouseup', () => {
+                    initialX = currentX;
+                    initialY = currentY;
+                    isDragging = false;
+                    widget.style.cursor = 'default';
+                });
+            }
+
+            setupEventListeners() {
+                // Tab navigation
+                document.querySelectorAll('.nav-tab').forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        const tabName = tab.dataset.tab;
+                        this.switchTab(tabName);
+                    });
+                });
+
+                // Control buttons
+                document.getElementById('minimizeBtn').addEventListener('click', () => {
+                    this.minimizeWidget();
+                });
+
+                document.getElementById('closeBtn').addEventListener('click', () => {
+                    this.closeWidget();
+                });
+
+                // Create task form
+                document.getElementById('createTaskBtn').addEventListener('click', () => {
+                    this.createTask();
+                });
+
+                // Enter key in title field
+                document.getElementById('taskTitle').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.createTask();
+                    }
+                });
+            }
+
+            switchTab(tabName) {
+                // Update nav tabs
+                document.querySelectorAll('.nav-tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+                // Update content
+                document.querySelectorAll('.task-list, .task-form, .task-stats').forEach(content => {
+                    content.classList.remove('active');
+                    content.style.display = 'none';
+                });
+
+                const targetContent = {
+                    'list': document.getElementById('taskListTab'),
+                    'create': document.getElementById('createTaskTab'),
+                    'stats': document.getElementById('statsTab')
+                };
+
+                if (targetContent[tabName]) {
+                    targetContent[tabName].classList.add('active');
+                    targetContent[tabName].style.display = 'block';
+                }
+
+                this.currentTab = tabName;
+
+                // Load data for specific tabs
+                if (tabName === 'stats') {
+                    this.loadStatistics();
+                }
+            }
+
+            async loadTasks() {
+                try {
+                    const response = await fetch(`${this.apiBase}/tasks`);
+                    const data = await response.json();
+
+                    if (data.tasks) {
+                        this.tasks = data.tasks;
+                        this.renderTasks();
+                        this.updateTaskCount();
+                    }
+                } catch (error) {
+                    console.error('Error loading tasks:', error);
+                    this.showError('Failed to load tasks');
+                }
+            }
+
+            renderTasks() {
+                const container = document.getElementById('taskContainer');
+                const loading = document.getElementById('taskLoading');
+
+                loading.style.display = 'none';
+
+                if (this.tasks.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: rgba(255, 255, 255, 0.6);">
+                            <i class="fas fa-tasks" style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;"></i>
+                            <p>No tasks yet. Create your first task!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Sort tasks: overdue first, then by due date
+                const sortedTasks = [...this.tasks].sort((a, b) => {
+                    const now = new Date();
+                    const aDate = new Date(a.due_date);
+                    const bDate = new Date(b.due_date);
+
+                    const aOverdue = aDate < now && a.status === 'pending';
+                    const bOverdue = bDate < now && b.status === 'pending';
+
+                    if (aOverdue && !bOverdue) return -1;
+                    if (!aOverdue && bOverdue) return 1;
+
+                    return aDate - bDate;
+                });
+
+                container.innerHTML = sortedTasks.map(task => this.renderTaskItem(task)).join('');
+            }
+
+            renderTaskItem(task) {
+                const dueDate = new Date(task.due_date);
+                const now = new Date();
+                const isOverdue = dueDate < now && task.status === 'pending';
+
+                const statusClass = {
+                    'pending': isOverdue ? 'status-overdue' : 'status-pending',
+                    'completed': 'status-completed',
+                    'cancelled': 'status-pending',
+                    'overdue': 'status-overdue'
+                }[task.status] || 'status-pending';
+
+                const statusText = {
+                    'pending': isOverdue ? 'Overdue' : 'Pending',
+                    'completed': 'Completed',
+                    'cancelled': 'Cancelled',
+                    'overdue': 'Overdue'
+                }[task.status] || 'Pending';
+
+                const priorityIcon = {
+                    'urgent': '🔥',
+                    'high': '⚡',
+                    'medium': '',
+                    'low': ''
+                }[task.priority] || '';
+
+                const dueDateStr = dueDate.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                return `
+                    <div class="task-item" data-task-id="${task.id}">
+                        <div class="task-item-header">
+                            <div class="task-item-title">
+                                ${priorityIcon} ${task.title}
+                            </div>
+                            <div class="task-item-status ${statusClass}">
+                                ${statusText}
+                            </div>
+                        </div>
+                        <div class="task-item-description">
+                            ${task.description}
+                        </div>
+                        <div class="task-item-meta">
+                            <span>Due: ${dueDateStr}</span>
+                            <div class="task-item-actions">
+                                ${task.status === 'pending' ? `
+                                    <button class="action-btn complete-btn" onclick="taskWidget.completeTask('${task.id}')">
+                                        <i class="fas fa-check"></i> Complete
+                                    </button>
+                                ` : ''}
+                                <button class="action-btn delete-btn" onclick="taskWidget.deleteTask('${task.id}')">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            async createTask() {
+                const title = document.getElementById('taskTitle').value.trim();
+                const description = document.getElementById('taskDescription').value.trim();
+                const dueDate = document.getElementById('taskDueDate').value;
+                const priority = document.getElementById('taskPriority').value;
+                const tagsInput = document.getElementById('taskTags').value.trim();
+
+                if (!title) {
+                    this.showError('Please enter a task title');
+                    return;
+                }
+
+                if (!dueDate) {
+                    this.showError('Please select a due date');
+                    return;
+                }
+
+                const tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
+
+                try {
+                    const response = await fetch(`${this.apiBase}/tasks`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            title,
+                            description,
+                            due_date: new Date(dueDate).toISOString(),
+                            priority,
+                            tags
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        this.showSuccess('Task created successfully!');
+                        this.clearForm();
+                        this.loadTasks();
+                        this.switchTab('list');
+                    } else {
+                        this.showError(result.error || 'Failed to create task');
+                    }
+                } catch (error) {
+                    console.error('Error creating task:', error);
+                    this.showError('Failed to create task');
+                }
+            }
+
+            async completeTask(taskId) {
+                try {
+                    const response = await fetch(`${this.apiBase}/tasks/${taskId}/complete`, {
+                        method: 'POST'
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        this.showSuccess('Task completed!');
+                        this.loadTasks();
+                    } else {
+                        this.showError(result.error || 'Failed to complete task');
+                    }
+                } catch (error) {
+                    console.error('Error completing task:', error);
+                    this.showError('Failed to complete task');
+                }
+            }
+
+            async deleteTask(taskId) {
+                if (!confirm('Are you sure you want to delete this task?')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${this.apiBase}/tasks/${taskId}`, {
+                        method: 'DELETE'
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        this.showSuccess('Task deleted!');
+                        this.loadTasks();
+                    } else {
+                        this.showError(result.error || 'Failed to delete task');
+                    }
+                } catch (error) {
+                    console.error('Error deleting task:', error);
+                    this.showError('Failed to delete task');
+                }
+            }
+
+            async loadStatistics() {
+                const container = document.getElementById('statsContainer');
+
+                try {
+                    const response = await fetch(`${this.apiBase}/tasks`);
+                    const data = await response.json();
+
+                    if (data.statistics) {
+                        this.renderStatistics(data.statistics);
+                    }
+                } catch (error) {
+                    console.error('Error loading statistics:', error);
+                    container.innerHTML = '<div class="loading">Failed to load statistics</div>';
+                }
+            }
+
+            renderStatistics(stats) {
+                const container = document.getElementById('statsContainer');
+
+                container.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.total_tasks}</div>
+                            <div class="stat-label">Total Tasks</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.pending_tasks}</div>
+                            <div class="stat-label">Pending</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.completed_tasks}</div>
+                            <div class="stat-label">Completed</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.overdue_tasks}</div>
+                            <div class="stat-label">Overdue</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${Math.round(stats.completion_rate)}%</div>
+                            <div class="stat-label">Completion Rate</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            updateTaskCount() {
+                const pendingCount = this.tasks.filter(task => task.status === 'pending').length;
+                document.getElementById('taskCount').textContent = `${pendingCount} Pending`;
+            }
+
+            clearForm() {
+                document.getElementById('taskTitle').value = '';
+                document.getElementById('taskDescription').value = '';
+                document.getElementById('taskTags').value = '';
+                document.getElementById('taskPriority').value = 'medium';
+
+                // Reset due date to tomorrow 9 AM
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(9, 0, 0, 0);
+                document.getElementById('taskDueDate').value = tomorrow.toISOString().slice(0, 16);
+            }
+
+            showSuccess(message) {
+                this.showNotification(message, 'success');
+            }
+
+            showError(message) {
+                this.showNotification(message, 'error');
+            }
+
+            showNotification(message, type) {
+                // Simple notification system
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    padding: 12px 20px;
+                    border-radius: 6px;
+                    color: white;
+                    font-family: 'Orbitron', monospace;
+                    font-size: 14px;
+                    z-index: 1000;
+                    animation: slideIn 0.3s ease;
+                    ${type === 'success' ?
+                        'background: linear-gradient(135deg, #28a745, #20c997);' :
+                        'background: linear-gradient(135deg, #dc3545, #e74c3c);'
+                    }
+                `;
+
+                notification.textContent = message;
+                document.body.appendChild(notification);
+
+                setTimeout(() => {
+                    notification.remove();
+                }, 3000);
+            }
+
+            minimizeWidget() {
+                const widget = document.getElementById('taskWidget');
+                widget.style.transform = 'translate(-50%, -50%) scale(0.1)';
+                widget.style.opacity = '0.3';
+
+                setTimeout(() => {
+                    widget.style.transform = 'translate(-50%, -50%) scale(1)';
+                    widget.style.opacity = '1';
+                }, 2000);
+            }
+
+            closeWidget() {
+                if (confirm('Close Task Manager?')) {
+                    window.close();
+                }
+            }
+        }
+
+        // Initialize the widget when page loads
+        let taskWidget;
+        document.addEventListener('DOMContentLoaded', () => {
+            taskWidget = new TaskWidget();
+        });
+
+        // Add CSS for statistics cards
+        const additionalStyles = `
+            <style>
+                .stat-card {
+                    background: rgba(255, 136, 0, 0.1);
+                    border: 1px solid rgba(255, 136, 0, 0.3);
+                    border-radius: 8px;
+                    padding: 20px;
+                    text-align: center;
+                    transition: all 0.3s ease;
+                }
+
+                .stat-card:hover {
+                    border-color: rgba(255, 136, 0, 0.5);
+                    box-shadow: 0 0 12px rgba(255, 136, 0, 0.2);
+                }
+
+                .stat-number {
+                    font-size: 32px;
+                    font-weight: 700;
+                    color: #FF8800;
+                    margin-bottom: 8px;
+                }
+
+                .stat-label {
+                    font-size: 12px;
+                    color: rgba(255, 255, 255, 0.8);
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                }
+
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+            </style>
+        `;
+
+        document.head.insertAdjacentHTML('beforeend', additionalStyles);
+    </script>
+</body>
+</html>

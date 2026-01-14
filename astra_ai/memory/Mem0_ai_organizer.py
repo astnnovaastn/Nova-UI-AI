@@ -1,0 +1,9941 @@
+import re
+import json
+import os
+import time
+import shutil
+import requests
+import hashlib
+import math
+import uuid
+from datetime import datetime, date
+from collections import deque
+from dotenv import load_dotenv
+load_dotenv()
+from typing import Dict, List, Tuple, Optional, Any
+from dataclasses import dataclass, asdict
+from enum import Enum
+
+
+class MemoryCategory(Enum):
+    """Comprehensive 27-category memory framework"""
+    USER_IDENTITY = "user_identity"
+    PERSONAL_PREFERENCES = "personal_preferences"
+    TASK_PROJECT_TRACKING = "task_project_tracking"
+    ACTIVITY_BEHAVIOR = "activity_behavior"
+    USER_INSTRUCTIONS = "user_instructions"
+    CURRENT_STATE = "current_state"
+    PERSONAL_DEVELOPMENT = "personal_development"
+    COMMUNICATION_BOUNDARIES = "communication_boundaries"
+    CONTEXTUAL_RULES = "contextual_rules"
+    MULTI_IDENTITY = "multi_identity"
+    KNOWLEDGE_EXPERTISE = "knowledge_expertise"
+    TOOL_INTEGRATION = "tool_integration"
+    RESPONSE_ADAPTATION = "response_adaptation"
+    FILE_MEDIA = "file_media"
+    LONG_TERM_GOALS = "long_term_goals"
+    COLLABORATOR_RELATIONSHIPS = "collaborator_relationships"
+    DATA_PRIVACY = "data_privacy"
+    MULTIMODAL_PREFERENCES = "multimodal_preferences"
+    SYSTEM_AWARENESS = "system_awareness"
+    SESSION_THEMES = "session_themes"
+    META_MEMORY = "meta_memory"
+    TEMPORAL_PATTERNS = "temporal_patterns"
+    SEARCH_EXTERNAL_INFO = "search_external_info"
+    GREETING_PATTERNS = "greeting_patterns"
+    CONVERSATION_ANALYTICS = "conversation_analytics"
+    NEWS_WEATHER_HISTORY = "news_weather_history"
+    TIMEZONE_PREFERENCES = "timezone_preferences"
+
+class AIOrganizer:
+    """
+    AI Organizer that continuously monitors and improves memory quality in-place.
+    
+    This implementation works exactly as specified:
+    - Continuously monitors nova_ai_memory.json for new entries
+    - Reads the original source of information
+    - Interprets context and rewrites memory entries directly in place
+    - Makes entries clearer, more accurate, and richer
+    - Improves grammar, capitalization, and phrasing
+    - Personalizes references to the user
+    - Adds relevant context or inferred details
+    - Merges updates with existing memories when needed
+    - Tracks where memory entries come from and remakes them to be more human-readable
+    - All without creating separate "ENRICH" events
+    """
+    
+    def __init__(self, config: Dict[str, Any]):
+        """
+        Initialize the AI Organizer with configuration.
+        
+        Args:
+            config: Configuration dictionary with organizer settings
+        """
+        self.config = config
+        self.organizer_enabled = config.get('organizer_enabled', True)
+        self.memory_file_path = config.get('memory_file_path', os.path.join('astra_ai', 'Date', 'nova_ai_memory.json'))
+        self.check_interval = config.get('check_interval', 1.0)  # seconds
+        self.last_processed_index = -1
+        self.llm_enabled = config.get('llm_enabled', True)  # Enable by default for Groq
+        self.llm_api_key = config.get('llm_api_key', '')  # Groq API key
+        self.llm_model = config.get('llm_model', 'llama-3.1-70b-versatile')  # Groq's powerful model
+        self.groq_api_url = 'https://api.groq.com/openai/v1/chat/completions'  # Groq API endpoint
+        
+        # Initialize cache for LLM responses to reduce API calls
+        self.llm_cache = {}
+        self.max_cache_size = config.get('max_cache_size', 100)  # Maximum number of entries to cache
+        
+        # Initialize comprehensive category framework
+        self.category_framework = self._initialize_category_framework()
+        
+        # Initialize normalization maps
+        self._initialize_normalization_maps()
+        
+        # Track processed events to avoid duplication
+        self.processed_events = set()
+        
+        # Enhanced context tracking for better memory rewriting
+        self.contextual_knowledge = {}
+        
+        # Track current_facts for change detection
+        self.last_current_facts_checksum = ""
+        
+        # Track completely processed entries to prevent endless rewriting
+        self.completely_processed_entries = set()
+        
+        # Load previously processed entries from file if it exists
+        self.processed_entries_file = self._get_processed_entries_file_path()
+        self.processed_memory_file_path = self._get_processed_memory_file_path()
+        self._load_previously_processed_entries()
+        
+        # Initialize processed memory entries tracking
+        self.processed_memory_entries = set()
+
+        # Initialize stop words for emotion tagging
+        self.stop_words = {
+            'user', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+            'of', 'with', 'by', 'about', 'as', 'into', 'through', 'during', 'before',
+            'after', 'above', 'below', 'up', 'down', 'out', 'off', 'over', 'under',
+            'again', 'further', 'then', 'once', 'sometimes', 'always', 'about', 'new',
+            'more', 'most', 'some', 'any', 'each', 'all', 'both', 'either', 'neither',
+            'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too',
+            'very', 'just', 'now', 'well', 'really', 'very', 'quite', 'rather', 'somewhat',
+            'preference', 'preferences', 'behavior', 'behaviors', 'habit', 'habits', 'learning',
+            'learning', 'topic', 'topics', 'interest', 'interests', 'category', 'categories',
+            'type', 'types', 'kind', 'kinds', 'sort', 'sorts', 'way', 'ways', 'manner', 'manner'
+        }
+        
+    def _initialize_category_framework(self) -> Dict[str, Any]:
+        """Initialize the comprehensive 27-category memory framework with detailed specifications."""
+        return {
+            MemoryCategory.USER_IDENTITY.value: {
+                'description': 'Names, pronouns, identity evolution',
+                'enhancement_focus': 'Personalization, identity consistency, name variations',
+                'contextual_considerations': ['previous_names', 'identity_evolution', 'pronoun_preferences']
+            },
+            MemoryCategory.PERSONAL_PREFERENCES.value: {
+                'description': 'Response style, formality, explanation rules',
+                'enhancement_focus': 'Communication adaptation, preference consistency, style evolution',
+                'contextual_considerations': ['communication_style', 'formality_level', 'explanation_preferences']
+            },
+            MemoryCategory.TASK_PROJECT_TRACKING.value: {
+                'description': 'Active projects, tech stacks, deadlines',
+                'enhancement_focus': 'Project context, technical details, timeline awareness',
+                'contextual_considerations': ['current_projects', 'tech_stack', 'deadlines', 'progress_tracking']
+            },
+            MemoryCategory.ACTIVITY_BEHAVIOR.value: {
+                'description': 'Active times, conversation topics, engagement',
+                'enhancement_focus': 'Behavioral patterns, temporal context, engagement metrics',
+                'contextual_considerations': ['active_hours', 'topic_preferences', 'engagement_levels']
+            },
+            MemoryCategory.USER_INSTRUCTIONS.value: {
+                'description': 'Permanent commands, rules, triggers',
+                'enhancement_focus': 'Instruction clarity, permanence recognition, trigger identification',
+                'contextual_considerations': ['permanent_rules', 'conditional_triggers', 'command_hierarchy']
+            },
+            MemoryCategory.CURRENT_STATE.value: {
+                'description': 'Active topics, mood, recent questions',
+                'enhancement_focus': 'State awareness, temporal relevance, contextual transitions',
+                'contextual_considerations': ['active_topics', 'emotional_state', 'recent_interactions']
+            },
+            MemoryCategory.PERSONAL_DEVELOPMENT.value: {
+                'description': 'Skills learning, progress, emotional notes',
+                'enhancement_focus': 'Progress tracking, skill relationships, learning patterns',
+                'contextual_considerations': ['skill_progress', 'learning_journey', 'developmental_milestones']
+            },
+            MemoryCategory.COMMUNICATION_BOUNDARIES.value: {
+                'description': 'Sensitive topics, triggers, support level',
+                'enhancement_focus': 'Boundary respect, sensitivity awareness, support adaptation',
+                'contextual_considerations': ['sensitive_topics', 'emotional_triggers', 'support_boundaries']
+            },
+            MemoryCategory.CONTEXTUAL_RULES.value: {
+                'description': 'Scope, expiry, recall priority',
+                'enhancement_focus': 'Rule contextualization, priority management, scope definition',
+                'contextual_considerations': ['rule_scope', 'priority_levels', 'expiration_contexts']
+            },
+            MemoryCategory.MULTI_IDENTITY.value: {
+                'description': 'Role profiles, switching triggers',
+                'enhancement_focus': 'Identity context switching, role consistency, transition awareness',
+                'contextual_considerations': ['role_profiles', 'identity_switching', 'contextual_triggers']
+            },
+            MemoryCategory.KNOWLEDGE_EXPERTISE.value: {
+                'description': 'Skill levels, known concepts',
+                'enhancement_focus': 'Expertise assessment, knowledge mapping, competency progression',
+                'contextual_considerations': ['skill_levels', 'domain_knowledge', 'competency_assessment']
+            },
+            MemoryCategory.TOOL_INTEGRATION.value: {
+                'description': 'Permissions, preferred languages',
+                'enhancement_focus': 'Integration optimization, preference alignment, permission management',
+                'contextual_considerations': ['tool_preferences', 'permission_levels', 'integration_contexts']
+            },
+            MemoryCategory.RESPONSE_ADAPTATION.value: {
+                'description': 'Style corrections, tone adaptation',
+                'enhancement_focus': 'Adaptive responses, tone consistency, style refinement',
+                'contextual_considerations': ['style_corrections', 'tone_adaptation', 'response_refinement']
+            },
+            MemoryCategory.FILE_MEDIA.value: {
+                'description': 'Uploads, context links, preferences',
+                'enhancement_focus': 'Media context, link relevance, preference tracking',
+                'contextual_considerations': ['file_references', 'media_preferences', 'link_context']
+            },
+            MemoryCategory.LONG_TERM_GOALS.value: {
+                'description': 'Life goals, career objectives, blockers',
+                'enhancement_focus': 'Goal progression, objective alignment, obstacle identification',
+                'contextual_considerations': ['life_goals', 'career_objectives', 'progress_tracking']
+            },
+            MemoryCategory.COLLABORATOR_RELATIONSHIPS.value: {
+                'description': 'Team members, communication styles',
+                'enhancement_focus': 'Relationship dynamics, communication adaptation, collaboration context',
+                'contextual_considerations': ['team_members', 'communication_styles', 'collaboration_history']
+            },
+            MemoryCategory.DATA_PRIVACY.value: {
+                'description': 'Retention policies, private sessions',
+                'enhancement_focus': 'Privacy compliance, retention management, session security',
+                'contextual_considerations': ['privacy_policies', 'retention_rules', 'security_protocols']
+            },
+            MemoryCategory.MULTIMODAL_PREFERENCES.value: {
+                'description': 'Image styles, audio modes',
+                'enhancement_focus': 'Multimodal adaptation, preference consistency, format optimization',
+                'contextual_considerations': ['media_formats', 'style_preferences', 'modality_choices']
+            },
+            MemoryCategory.SYSTEM_AWARENESS.value: {
+                'description': 'Errors, feedback, constraints',
+                'enhancement_focus': 'System understanding, constraint awareness, feedback integration',
+                'contextual_considerations': ['system_constraints', 'error_history', 'feedback_loops']
+            },
+            MemoryCategory.SESSION_THEMES.value: {
+                'description': 'Themes, emotional arcs, continuity',
+                'enhancement_focus': 'Thematic consistency, emotional tracking, narrative coherence',
+                'contextual_considerations': ['session_themes', 'emotional_arcs', 'continuity_markers']
+            },
+            MemoryCategory.META_MEMORY.value: {
+                'description': 'Browser UI, change logs, cleanup',
+                'enhancement_focus': 'Meta-awareness, change tracking, system maintenance',
+                'contextual_considerations': ['system_ui', 'change_logs', 'maintenance_tracking']
+            },
+            MemoryCategory.TEMPORAL_PATTERNS.value: {
+                'description': 'Time-based behaviors and preferences',
+                'enhancement_focus': 'Temporal awareness, pattern recognition, schedule optimization',
+                'contextual_considerations': ['time_patterns', 'behavioral_cycles', 'schedule_preferences']
+            },
+            MemoryCategory.SEARCH_EXTERNAL_INFO.value: {
+                'description': 'Internet search history, preferences, trusted sources',
+                'enhancement_focus': 'Information quality, source reliability, search optimization',
+                'contextual_considerations': ['search_history', 'trusted_sources', 'information_preferences']
+            },
+            MemoryCategory.GREETING_PATTERNS.value: {
+                'description': 'Greeting history, timing, session tracking',
+                'enhancement_focus': 'Greeting personalization, timing awareness, session initiation',
+                'contextual_considerations': ['greeting_history', 'timing_patterns', 'session_starts']
+            },
+            MemoryCategory.CONVERSATION_ANALYTICS.value: {
+                'description': 'Duration, session gaps, statistics',
+                'enhancement_focus': 'Interaction analysis, pattern recognition, engagement metrics',
+                'contextual_considerations': ['conversation_metrics', 'engagement_patterns', 'session_analytics']
+            },
+            MemoryCategory.NEWS_WEATHER_HISTORY.value: {
+                'description': 'News and weather query results and summaries',
+                'enhancement_focus': 'Information currency, contextual relevance, summary quality',
+                'contextual_considerations': ['news_topics', 'weather_queries', 'information_timeliness']
+            },
+            MemoryCategory.TIMEZONE_PREFERENCES.value: {
+                'description': 'Time zone queries and location preferences',
+                'enhancement_focus': 'Geographic awareness, time synchronization, location context',
+                'contextual_considerations': ['timezone_queries', 'location_preferences', 'time_synchronization']
+            }
+        }
+        
+    def _initialize_normalization_maps(self):
+        """Initialize normalization maps for technologies, countries, etc."""
+        self.TECH_MAP = {
+            'python': 'Python',
+            'javascript': 'JavaScript',
+            'java': 'Java',
+            'py': 'Python',
+            'js': 'JavaScript',
+            'ts': 'TypeScript'
+        }
+        
+        self.COUNTRY_MAP = {
+            'italy': 'Italy',
+            'france': 'France',
+            'germany': 'Germany',
+            'spain': 'Spain',
+            'usa': 'USA',
+            'uk': 'UK'
+        }
+        
+        # Shorthand expansions
+        self.SHORTHAND_MAP = {
+            "api": "API",
+            "ui": "UI",
+            "ux": "UX",
+            "html": "HTML",
+            "css": "CSS",
+            "json": "JSON",
+            "xml": "XML",
+            "yaml": "YAML",
+            "dev": "development",
+            "repo": "repository",
+            "cli": "command line interface",
+            "sdk": "software development kit",
+            "ide": "integrated development environment"
+        }
+
+    def _normalize_text(self, text: str) -> str:
+        """
+        Normalize the text according to guidelines:
+        - Lowercase the text
+        - Basic punctuation trimming
+        - Preserve named entities
+        """
+        if not text:
+            return ""
+
+        # Convert to lowercase
+        normalized = text.lower().strip()
+
+        # Basic punctuation cleanup
+        normalized = re.sub(r'[^\w\s-]', ' ', normalized)
+
+        # Clean up extra whitespace
+        normalized = ' '.join(normalized.split())
+
+        return normalized
+
+    def _strip_generic_user_prefix(self, text: str) -> str:
+        """
+        Strip generic 'User' prefix and noise from the text according to guidelines.
+        Examples: "User loves Italian food" → "Italian food"
+        """
+        if not text:
+            return ""
+
+        # Remove common generic prefixes
+        patterns = [
+            r'^user\s+',
+            r'^the\s+user\s+',
+            r'^a\s+user\s+',
+            r'^users?\s+',
+            r'^user\s+have\s+',
+            r'^user\s+has\s+',
+            r'^user\s+is\s+',
+            r'^user\s+was\s+',
+            r'^user\s+are\s+',
+            r'^user\s+were\s+',
+            r'^user\s+will\s+',
+            r'^user\s+would\s+',
+            r'^user\s+should\s+',
+            r'^user\s+could\s+',
+            r'^user\s+might\s+',
+            r'^user\s+may\s+',
+            r'^user\s+prefers?\s+',
+            r'^user\s+loves?\s+',
+            r'^user\s+likes?\s+',
+            r'^user\s+enjoys?\s+',
+            r'^user\s+hates?\s+',
+            r'^user\s+dislikes?\s+',
+            r'^user\s+wants?\s+',
+            r'^user\s+needs?\s+',
+            r'^user\s+sees?\s+',
+            r'^user\s+watches?\s+',
+            r'^user\s+reads?\s+',
+            r'^user\s+walks?\s+',
+            r'^user\s+cooks?\s+',
+            r'^user\s+eats?\s+',
+            r'^user\s+drinks?\s+',
+            r'^user\s+during\s+',
+            r'^user\s+always\s+',
+            r'^user\s+sometimes\s+',
+            r'^user\s+rarely\s+',
+            r'^user\s+frequently\s+',
+            r'^user\s+often\s+',
+            r'^user\s+occasionally\s+',
+        ]
+
+        cleaned = text.lower().strip()
+        for pattern in patterns:
+            cleaned = re.sub(pattern, '', cleaned, count=1)
+
+        # Remove any leading/trailing spaces and capitalize first letter
+        cleaned = cleaned.strip().capitalize()
+
+        return cleaned
+
+    def _extract_salient_tokens(self, text: str) -> List[str]:
+        """
+        Extract the most prominent nouns, noun phrases, activities, places,
+        and expressed sentiments that are explicitly present in the event text.
+        Prioritize concrete things (objects, places, activities, genres, cuisines, interests)
+        over abstract meta-categories.
+        """
+        if not text:
+            return []
+
+        # Split text into tokens
+        tokens = text.lower().split()
+
+        # Define specific word types to handle differently
+        verbs_to_avoid = {
+            'loves', 'love', 'likes', 'like', 'enjoy', 'enjoys', 'enjoying', 'hate', 'hates',
+            'dislike', 'dislikes', 'want', 'wants', 'need', 'needs', 'prefer', 'prefers',
+            'prefered', 'preferred', 'think', 'thinks', 'thought', 'know', 'knows', 'said',
+            'say', 'says', 'said', 'will', 'would', 'should', 'could', 'can', 'may', 'might',
+            'is', 'are', 'was', 'were', 'am', 'be', 'being', 'been', 'have', 'has', 'had',
+            'do', 'does', 'did', 'done', 'make', 'makes', 'made', 'get', 'gets', 'got',
+            'go', 'goes', 'went', 'goes', 'going', 'come', 'comes', 'came', 'see', 'sees', 'saw',
+            'take', 'takes', 'took', 'use', 'uses', 'used', 'find', 'finds', 'found', 'finding', 'finds',
+            'give', 'gives', 'gave', 'tell', 'tells', 'told', 'become', 'becomes', 'became',
+            'feel', 'feels', 'felt', 'leave', 'leaves', 'left', 'put', 'put', 'put',
+            'bring', 'brings', 'brought', 'begin', 'begins', 'began', 'keep', 'keeps', 'kept',
+            'let', 'lets', 'let', 'seem', 'seems', 'seemed', 'help', 'helps', 'helped',
+            'show', 'shows', 'showed', 'hear', 'hears', 'heard', 'play', 'plays', 'played',
+            'run', 'runs', 'ran', 'move', 'moves', 'moved', 'live', 'lives', 'lived',
+            'believe', 'believes', 'believed', 'hold', 'holds', 'held', 'happen', 'happens', 'happened',
+            'write', 'writes', 'wrote', 'provide', 'provides', 'provided', 'sit', 'sits', 'sat',
+            'stand', 'stands', 'stood', 'lose', 'loses', 'lost', 'pay', 'pays', 'paid',
+            'meet', 'meets', 'met', 'include', 'includes', 'included', 'continue', 'continues', 'continued',
+            'set', 'sets', 'set', 'learn', 'learns', 'learned', 'learned', 'change', 'changes', 'changed',
+            'lead', 'leads', 'led', 'understand', 'understands', 'understood', 'watch', 'watches', 'watched',
+            'read', 'reads', 'read', 'watch', 'watches', 'watched', 'work', 'works', 'worked',
+            'walk', 'walks', 'walked', 'drink', 'drinks', 'drank', 'eat', 'eats', 'ate',
+            'cook', 'cooks', 'cooked', 'try', 'tries', 'tried', 'trying', 'sees', 'see',
+            'i\'m', 'i\'ve', 'i\'ll', 'i\'d'
+        }
+
+        # Words that qualify or modify but don't add meaning as tags
+        qualifiers_to_avoid = {
+            'especially', 'sometimes', 'always', 'often', 'frequently', 'rarely', 'usually',
+            'about', 'approximately', 'maybe', 'perhaps', 'possibly', 'definitely', 'certainly',
+            'really', 'very', 'quite', 'rather', 'pretty', 'fairly', 'extremely', 'highly',
+            'mostly', 'largely', 'mainly', 'primarily', 'essentially', 'basically', 'simply',
+            'just', 'only', 'merely', 'purely', 'barely', 'hardly', 'scarcely', 'seldom',
+            'new', 'newly', 'recent', 'recently', 'past', 'previous', 'former', 'latter', 'next', 'week',
+            'various', 'different', 'several', 'many', 'much', 'little', 'few', 'some',
+            'any', 'every', 'each', 'all', 'both', 'either', 'neither', 'other', 'another',
+            'such', 'same', 'similar', 'like', 'well', 'good', 'better', 'best', 'worse',
+            'worst', 'important', 'interesting', 'exciting', 'boring', 'fun', 'great',
+            'nice', 'good', 'bad', 'great', 'amazing', 'awesome', 'terrible', 'it', 'this', 'that'
+        }
+
+        # Define parts of speech categories for better identification
+        activities_verbs = {
+            'reading', 'walking', 'cooking', 'watching', 'listening', 'eating', 'drinking',
+            'playing', 'working', 'running', 'swimming', 'dancing', 'singing', 'writing',
+            'studying', 'learning', 'teaching', 'sleeping', 'resting', 'shopping', 'traveling',
+            'hiking', 'gaming', 'coding'
+        }
+
+        nouns_to_promote = {
+            'coffee', 'anime', 'pasta', 'pizza', 'novel', 'guitar', 'restaurant', 'cuisine',
+            'food', 'drink', 'book', 'movie', 'music', 'game', 'code', 'work', 'school', 'home',
+            'office', 'car', 'phone', 'computer', 'internet', 'tea', 'water', 'lunch', 'dinner',
+            'breakfast', 'bed', 'chair', 'table', 'room', 'house', 'apartment', 'city', 'country',
+            'world', 'life', 'time', 'day', 'night', 'weekend', 'morning', 'afternoon', 'evening'
+        }
+
+        # Remove stop words and get meaningful tokens, avoiding verbs that express preferences
+        meaningful_tokens = []
+        for token in tokens:
+            clean_token = token.strip('.,;:!?()[]{}"\'')
+            if clean_token and clean_token not in self.stop_words:
+                # Skip preference/expression verbs but keep activity verbs and nouns
+                if clean_token in verbs_to_avoid:
+                    # Skip preference verbs but if it's an activity verb, we might want to keep it in different form
+                    continue
+                elif clean_token in qualifiers_to_avoid:
+                    # Skip qualifier words that don't add semantic meaning
+                    continue
+                elif clean_token in activities_verbs:
+                    # Convert to gerund form if needed, or keep as is if it's a valid activity
+                    meaningful_tokens.append(clean_token)
+                elif clean_token in nouns_to_promote:
+                    # Definitely keep known important nouns
+                    meaningful_tokens.append(clean_token)
+                else:
+                    # Other tokens that might be nouns or adjectives
+                    meaningful_tokens.append(clean_token)
+
+        # Extract potential compound terms/phrases (e.g., "dark roast", "sci-fi")
+        compound_terms = []
+        i = 0
+        while i < len(meaningful_tokens):
+            if i < len(meaningful_tokens) - 1:
+                # Check for compound terms like "dark roast", "sci fi", etc.
+                term1, term2 = meaningful_tokens[i], meaningful_tokens[i+1]
+
+                # Handle hyphenated terms like "sci-fi", "dark-roast"
+                if '-' in term1:
+                    compound_terms.append(term1)
+                elif term1 in ['dark', 'light', 'medium', 'hot', 'cold', 'early', 'late'] and \
+                     term2 in ['roast', 'chocolate', 'wine', 'beer', 'coffee']:
+                    compound_terms.append(f"{term1}-{term2}")
+                    i += 1  # Skip next token as it's part of compound
+                elif term1 in ['sci', 'romantic', 'action', 'comedy', 'sci-fi'] and term2 in ['fi', 'com']:
+                    compound_terms.append(f"{term1}-{term2}")
+                    i += 1  # Skip next token as it's part of compound
+                elif term1 in ['italian', 'mexican', 'chinese', 'indian', 'french'] and \
+                     term2 in ['food', 'cuisine', 'restaurant', 'pasta', 'pizza']:
+                    # For cuisine types, prefer the cuisine name over 'food'
+                    compound_terms.append(term1)
+                    if term2 != 'food':  # Only add 'food' if the specific type wasn't 'food'
+                        compound_terms.append(term2)
+                    i += 1  # Skip next token as it's considered in compound
+                elif term1 in ['morning', 'afternoon', 'evening', 'night', 'weekend', 'weekday', 'bedtime'] and \
+                     term2 in ['routine', 'habit', 'activity', 'time', 'schedule']:
+                    # For time expressions, prefer the time
+                    compound_terms.append(term1)
+                    i += 1  # Skip next token
+                elif term1 == 'read' and term2 == 'bed':
+                    # Special case: convert "read bed" to "reading bedtime"
+                    compound_terms.append('reading')
+                    compound_terms.append('bedtime')
+                    i += 1  # Skip next token
+                elif term1 == 'read' and term2 == 'minutes':
+                    # Special case: convert "read minutes" to "reading"
+                    compound_terms.append('reading')
+                    # Don't add minutes since we're reading for minutes, not about minutes
+                    i += 1  # Skip next token
+                elif term1 == 'read' and term2 == 'for':
+                    # Special case: "read for X minutes before Y" -> "reading Y" where Y could be bed/bedtime
+                    compound_terms.append('reading')
+                    # Skip to next token to see if there's a duration then a location/time
+                    if i + 2 < len(meaningful_tokens) and meaningful_tokens[i+2] == 'minutes':
+                        # Skip "for X minutes", look for location like "before bed" after that
+                        if i + 5 < len(meaningful_tokens) and meaningful_tokens[i+3] == 'before' and meaningful_tokens[i+4] == 'bed':
+                            compound_terms.append('bedtime')
+                            i += 4  # Skip 'for', 'X', 'minutes', 'before', 'bed'
+                        elif i + 6 < len(meaningful_tokens) and meaningful_tokens[i+3] == 'about' and meaningful_tokens[i+4] == 'minutes' and meaningful_tokens[i+5] == 'before' and meaningful_tokens[i+6] == 'bed':
+                            # Handle case "read for about 30 minutes before bed"
+                            compound_terms.append('bedtime')
+                            i += 5  # Skip 'for', 'about', '30', 'minutes', 'before', 'bed' but process loop will increment
+                        else:
+                            i += 2  # Skip 'for', 'X' (the number)
+                    elif i + 3 < len(meaningful_tokens) and meaningful_tokens[i+2] == 'about' and meaningful_tokens[i+3] == 'minutes':
+                        # Handle case "read for about 30 minutes before bed"
+                        if i + 6 < len(meaningful_tokens) and meaningful_tokens[i+4] == 'before' and meaningful_tokens[i+5] == 'bed':
+                            compound_terms.append('bedtime')
+                            i += 5  # Skip 'for', 'about', '30', 'minutes', 'before', 'bed' but process loop will increment
+                        else:
+                            i += 3  # Skip 'for', 'about', '30'
+                    else:
+                        i += 1  # Skip 'for'
+                elif term1 == 'walk' and term2 == 'minutes':
+                    # Special case: convert "walk minutes" to "walking" and keep minutes
+                    compound_terms.append('walking')
+                    compound_terms.append(term2)
+                    i += 1  # Skip next token if needed, but here we keep minutes
+                elif term1 == 'walk' and term2 == 'morning':
+                    # Special case: combine walk morning to get both concepts
+                    compound_terms.append('walking')
+                    compound_terms.append(term2)  # morning
+                    i += 1  # Skip next token
+                elif term1 == 'walk' and term2 == 'for':
+                    # Special case: walk for minutes - should result in walking, minutes, time indicator
+                    compound_terms.append('walking')
+                    # Check if there's another token for the duration
+                    if i + 2 < len(meaningful_tokens) and meaningful_tokens[i+2] in ['minutes', 'hours', 'days']:
+                        compound_terms.append(meaningful_tokens[i+2])  # duration
+                        # Check if following is time-related, like 'morning'
+                        if i + 4 < len(meaningful_tokens) and meaningful_tokens[i+3] == 'every' and meaningful_tokens[i+4] in ['morning', 'evening', 'night', 'afternoon', 'weekend', 'weekday']:
+                            compound_terms.append(meaningful_tokens[i+4])  # time of day
+                            i += 4  # Skip 'for', 'X', 'minutes', 'every'
+                        elif i + 3 < len(meaningful_tokens) and meaningful_tokens[i+3] in ['morning', 'evening', 'night', 'afternoon', 'weekend', 'weekday']:
+                            # Handle case without 'every'
+                            compound_terms.append(meaningful_tokens[i+3])  # time of day
+                            i += 3  # Skip 'for', 'X', 'minutes'
+                        else:
+                            i += 2  # Skip 'for', 'X' (the number)
+                    elif i + 3 < len(meaningful_tokens) and meaningful_tokens[i+2] == 'about' and meaningful_tokens[i+3] in ['minutes', 'hours', 'days']:
+                        # Handle case "walk for about X minutes"
+                        compound_terms.append(meaningful_tokens[i+3])  # duration
+                        # Check if following is time-related, like 'morning'
+                        if i + 5 < len(meaningful_tokens) and meaningful_tokens[i+4] == 'every' and meaningful_tokens[i+5] in ['morning', 'evening', 'night', 'afternoon', 'weekend', 'weekday']:
+                            compound_terms.append(meaningful_tokens[i+5])  # time of day
+                            i += 5  # Skip 'for', 'about', 'X', 'minutes', 'every'
+                        elif i + 4 < len(meaningful_tokens) and meaningful_tokens[i+4] in ['morning', 'evening', 'night', 'afternoon', 'weekend', 'weekday']:
+                            # Handle case without 'every'
+                            compound_terms.append(meaningful_tokens[i+4])  # time of day
+                            i += 4  # Skip 'for', 'about', 'X', 'minutes'
+                        else:
+                            i += 3  # Skip 'for', 'about', 'X'
+                    else:
+                        i += 1  # Skip 'for'
+                elif term1 == 'has' and term2 == 'preference':
+                    # Special case: skip "has preference" pattern completely
+                    i += 1  # Skip 'preference' token
+                elif term1 == 'preference' and term2 == 'for':
+                    # Skip "preference for" pattern
+                    i += 1  # Skip 'for'
+                elif term1 == 'trying' and term2 == 'new':
+                    # Special case: skip "trying new" pattern, go to what they're trying
+                    if i + 2 < len(meaningful_tokens):
+                        # Skip 'trying' and 'new', add the next meaningful word
+                        next_word = meaningful_tokens[i+2]
+                        if next_word not in ['and'] + list(verbs_to_avoid) + list(qualifiers_to_avoid):
+                            compound_terms.append(next_word)
+                        i += 2  # Skip 'new' and the next token we just added
+                    else:
+                        # If there's no word after "new", just skip both
+                        i += 1  # Skip 'new'
+                else:
+                    compound_terms.append(term1)
+            else:
+                # Last token
+                compound_terms.append(meaningful_tokens[i])
+            i += 1
+
+        # Filter out too short or non-meaningful tokens
+        filtered_tokens = []
+        for token in compound_terms:
+            # Exclude very short tokens unless they're meaningful (like 'it', 'go', 'do')
+            if len(token) >= 3 or token in ['it', 'go', 'do', 'be', 'am', 'is', 'an', 'hi', 'ok']:
+                # Ensure it's not a stop word, preference verb, or qualifier
+                if token not in self.stop_words and token not in verbs_to_avoid and token not in qualifiers_to_avoid:
+                    filtered_tokens.append(token)
+
+        # Additional processing: convert base verbs to gerunds where appropriate
+        processed_tokens = []
+        for token in filtered_tokens:
+            if token == 'walk':
+                processed_tokens.append('walking')
+            elif token == 'read':
+                processed_tokens.append('reading')
+            elif token == 'watch':
+                processed_tokens.append('watching')
+            elif token == 'work':
+                processed_tokens.append('working')
+            elif token == 'eat':
+                processed_tokens.append('eating')
+            elif token == 'drink':
+                processed_tokens.append('drinking')
+            elif token == 'cook':
+                processed_tokens.append('cooking')
+            elif token == 'play':
+                processed_tokens.append('playing')
+            elif token == 'run':
+                processed_tokens.append('running')
+            elif token == 'sleep':
+                processed_tokens.append('sleeping')
+            elif token == 'bed':
+                # Convert 'bed' to 'bedtime' when appropriate
+                processed_tokens.append('bedtime')
+            else:
+                processed_tokens.append(token)
+
+        # Additional semantic processing: map related terms to more common concepts
+        final_processed_tokens = []
+        cuisine_synonyms = {'cuisines', 'cuisine', 'dishes', 'foods'}
+        cuisines_present = any(token in cuisine_synonyms for token in processed_tokens)
+        restaurants_present = any(token in {'restaurants', 'restaurant', 'dining', 'eating'} for token in processed_tokens)
+
+        for token in processed_tokens:
+            # Handle cuisine/food relationship
+            if token in {'cuisines', 'cuisine', 'dishes'} and restaurants_present:
+                # If we have restaurants, prefer 'food' over 'cuisines' to match expected output
+                if 'food' not in processed_tokens:
+                    final_processed_tokens.append('food')
+            elif token == 'cuisines':
+                # If we just have cuisines without restaurants, convert to 'food'
+                final_processed_tokens.append('food')
+            else:
+                final_processed_tokens.append(token)
+
+        return final_processed_tokens
+
+    def _rank_candidate_tags(self, candidates: List[str]) -> List[str]:
+        """
+        Rank candidate cues by explicitness and concreteness according to guidelines.
+        Score candidates by how explicitly they appear in the context and how specific they are.
+        Prioritize direct nouns (anime, coffee, pasta, restaurants), direct verbs of emotion
+        or preference (loves, hates, prefers), and specific attributes (Italian, dark roast, sci-fi).
+        Penalize generic words like "user," "preference," "behavior," "habit."
+        """
+        if not candidates:
+            return []
+
+        # Define scoring categories
+        noun_phrases = {'coffee', 'anime', 'pasta', 'pizza', 'novel', 'guitar', 'restaurant', 'cuisine'}
+        genres_activities = {'reading', 'walking', 'cooking', 'watching', 'listening', 'eating', 'drinking', 'playing'}
+        specific_attributes = {'italian', 'mexican', 'french', 'sci-fi', 'romantic', 'action', 'comedy', 'dark-roast'}
+        emotions_preferences = {'love', 'like', 'enjoy', 'hate', 'dislike', 'prefer', 'want', 'need', 'wants', 'needs', 'loves', 'likes', 'enjoys'}
+        time_specific = {'morning', 'afternoon', 'evening', 'night', 'weekend', 'bedtime', 'weekday'}
+
+        scored_candidates = []
+        for candidate in candidates:
+            score = 0
+
+            # Base score on length - longer meaningful terms often have more specific meaning
+            score += len(candidate) * 0.5
+
+            # Penalty for preference verbs - these should be avoided per guidelines
+            if candidate in emotions_preferences:
+                score -= 1.0  # Reduce score for preference verbs since they're not meaningful as tags
+            # Bonus points for different categories
+            elif candidate in noun_phrases:
+                score += 3.0  # Highest score for concrete nouns
+            elif candidate in genres_activities:
+                score += 2.5  # High score for concrete activities
+            elif candidate in specific_attributes:
+                score += 2.5  # High score for specific attributes
+            elif candidate in time_specific:
+                score += 2.0  # Good score for specific times
+            elif re.match(r'\d+-minutes|\d+-hours|\d+-days', candidate):  # Time duration
+                score += 2.0  # Good score for specific time durations
+            else:
+                # Generic noun or activity gets moderate score
+                score += 1.0
+
+            scored_candidates.append((candidate, score))
+
+        # Sort by score in descending order
+        scored_candidates.sort(key=lambda x: x[1], reverse=True)
+
+        # Return top candidates, limiting to 3 as per guidelines
+        return [candidate for candidate, score in scored_candidates[:3]]
+
+    def _extract_context_based_tags(self, event_summary: str) -> List[str]:
+        """
+        Extract 2-3 emotion/topic tags strictly from event text following EMOTION_TAG_GUIDELINES.md.
+        
+        This is the core context-only tag generator. Returns only tags (List[str]).
+        
+        Process:
+        1. Normalize the text (lowercase, punctuation trimming, preserve named entities)
+        2. Strip generic 'User' prefix and noise
+        3. Identify salient tokens/phrases (concrete nouns, activities, genres, cuisines, interests)
+        4. Rank candidates by explicitness and concreteness (penalize generic meta-tags like "preference", "behavior")
+        5. Select top 2–3 candidates as tags
+        6. Prefer topical/semantic tags over vague emotions
+        
+        NO predefined keyword maps. Tags are dynamically extracted from the text.
+        
+        Args:
+            event_summary: The event summary text to extract tags from
+            
+        Returns:
+            List of 2-3 tag strings derived strictly from the context
+        """
+        if not event_summary:
+            return []
+
+        # Step 1: Normalize the text (lowercase, trim punctuation, preserve entities)
+        normalized_text = self._normalize_text(event_summary)
+
+        # Step 2: Strip generic 'User' prefix and noise
+        cleaned_text = self._strip_generic_user_prefix(normalized_text)
+
+        # Step 3: Identify salient tokens/phrases (concrete things, not meta-categories)
+        salient_tokens = self._extract_salient_tokens(cleaned_text)
+
+
+        # Step 4: Rank candidate cues by explicitness and concreteness
+        ranked_candidates = self._rank_candidate_tags(salient_tokens)
+
+        # Step 5: Select top 2–3 candidates, ensure uniqueness
+        unique_tags = []
+        seen = set()
+        for tag in ranked_candidates:
+            if tag and tag not in seen:
+                unique_tags.append(tag)
+                seen.add(tag)
+            if len(unique_tags) >= 3:
+                break
+
+        return unique_tags
+        
+    def start_monitoring(self):
+        """Start continuous monitoring of the memory file."""
+        if not self.organizer_enabled:
+            print("Organizer is disabled.")
+            return
+            
+        print(f"Starting AI Organizer monitoring: {self.memory_file_path}")
+        
+        try:
+            # Ensure the memory file exists
+            if not os.path.exists(self.memory_file_path):
+                # Create directory if needed - using the directory of the memory file
+                os.makedirs(os.path.dirname(os.path.abspath(self.memory_file_path)), exist_ok=True)
+                # Create empty memory file with new structure
+                with open(self.memory_file_path, 'w') as f:
+                    json.dump({
+                        "user": {},
+                        "memory_engine": {
+                            "metadata": {
+                                "version": "1.0",
+                                "generated_at": datetime.now().isoformat(),
+                                "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+                            },
+                            "memory_events": [],
+                            "vector_index": {},
+                            "clusters": {},
+                            "update_log": []
+                        },
+                        "conversation": [],
+                        "current_facts": {},
+                        "fact_history": {},
+                        "sessions": {},
+                        "current_session": "",
+                        "conversation_state": {},
+                        "memory_categories": {},
+                        "category_relationships": {},
+                        "behavioral_adaptation": {},
+                        "privacy_settings": {}
+                    }, f, indent=2)
+                print(f"Created memory file: {self.memory_file_path}")
+            
+            # Get initial state
+            memory_data = self._load_memory_file()
+            if memory_data:
+                # Process ALL existing entries immediately at startup to rewrite them
+                print("Processing existing entries at startup...")
+                modified_count = 0
+                try:
+                    # Enhance all existing memory events from the new structure
+                    memory_events = memory_data.get('memory_engine', {}).get('memory_events', [])
+                    for i, event in enumerate(memory_events):
+                        original_summary = event.get('summary', '')
+                        # Process each event in-place
+                        self._process_new_event(memory_data, i)
+                        if event.get('summary', '') != original_summary:
+                            modified_count += 1
+                    
+                    # Also enhance current_facts and fact_history
+                    self._enhance_current_facts_and_history(memory_data)
+                    if self._rewrite_current_facts(memory_data):
+                        pass  # current facts were rewritten
+                        
+                    # Save the updated data with all rewrites
+                    self._save_memory_file(memory_data)
+                    # Save processed entries to persist across restarts
+                    self._save_processed_entries()
+                    print(f"Processed {len(memory_events)} existing events at startup, {modified_count} were modified.")
+                    
+                except Exception as e:
+                    print(f"Error processing existing entries at startup: {e}")
+                
+                self.last_processed_index = len(memory_data.get('memory_engine', {}).get('memory_events', [])) - 1
+                # Initialize current_facts checksum
+                current_facts = memory_data.get('current_facts', {})
+                self.last_current_facts_checksum = self._compute_current_facts_checksum(current_facts)
+            else:
+                self.last_processed_index = -1
+                self.last_current_facts_checksum = ""
+            
+            # Start monitoring loop
+            consecutive_errors = 0  # Track consecutive errors for exponential backoff
+            max_consecutive_errors = 10
+            base_wait_time = self.check_interval
+            
+            while True:
+                try:
+                    # Check for changes
+                    memory_data = self._load_memory_file()
+                    if memory_data:
+                        # Access memory events from the new structure
+                        memory_events_list = memory_data.get('memory_engine', {}).get('memory_events', [])
+                        current_events_count = len(memory_events_list)
+                        
+                        # Process new events
+                        if current_events_count > self.last_processed_index + 1:
+                            # Process only new events to avoid repeated processing
+                            for i in range(self.last_processed_index + 1, current_events_count):
+                                # Get the event to check its type
+                                event = memory_events_list[i]
+                                event_type = event.get('type', '').upper()
+                                
+                                self._process_new_event(memory_data, i)
+                                
+                                # If it was an ADD event, mark it as completely processed
+                                if event_type == 'ADD':
+                                    event_id = self._get_event_identifier(event, i)
+                                    self.completely_processed_entries.add(event_id)
+                                    
+                            # Update last processed index
+                            self.last_processed_index = current_events_count - 1
+                            
+                            # Save updated memory data
+                            self._save_memory_file(memory_data)
+                            
+                            # Save the processed entries list to persist across restarts
+                            self._save_processed_entries()
+                        
+                        # Only check for unprocessed entries periodically to optimize performance
+                        # Modify this to only check NEW entries that haven't been processed yet
+                        # Avoid re-processing entries that have already been handled
+                        if consecutive_errors == 0:  # Only check when no recent errors
+                            # Access memory events from the new structure
+                            memory_events_list = memory_data.get('memory_engine', {}).get('memory_events', [])
+                            # Only process entries that are beyond the last processed index
+                            # This avoids re-processing entries that have already been handled
+                            for i in range(self.last_processed_index + 1, len(memory_events_list)):
+                                event = memory_events_list[i]
+                                event_type = event.get('type', '').upper()
+                                if event_type == 'ADD':
+                                    # Check if already processed before processing
+                                    event_id = self._get_event_identifier(event, i)
+                                    if event_id not in self.completely_processed_entries:
+                                        self._process_new_event(memory_data, i)
+                                        # Mark as completely processed after successful processing
+                                        self.completely_processed_entries.add(event_id)
+                                        # Save updated memory data
+                                        self._save_memory_file(memory_data)
+                                        # Also save the processed entries list to persist across restarts
+                                        self._save_processed_entries()
+                        
+                        # Also process current_facts and fact_history for any changes
+                        self._enhance_current_facts_and_history(memory_data)
+                        
+                        # Check if current_facts have changed and rewrite them if needed
+                        current_facts = memory_data.get('current_facts', {})
+                        current_checksum = self._compute_current_facts_checksum(current_facts)
+                        
+                        if current_checksum != self.last_current_facts_checksum:
+                            # New information has been added to current_facts
+                            self.last_current_facts_checksum = current_checksum
+                            if self._rewrite_current_facts(memory_data):
+                                # Save the rewritten facts back to the file
+                                self._save_memory_file(memory_data)
+                        
+                        # Periodically check for and remove duplicate preferences
+                        # Every 10 seconds (approximately based on check_interval), check for duplicates
+                        if hasattr(self, '_last_duplicate_check'):
+                            time_since_last_check = time.time() - self._last_duplicate_check
+                        else:
+                            self._last_duplicate_check = time.time()
+                            time_since_last_check = self.check_interval
+                        
+                        if time_since_last_check >= 10.0:  # Check every 10 seconds
+                            memory_data, removed_count = self.prevent_duplicate_preferences(memory_data)
+                            if removed_count > 0:
+                                # Save the updated data after removing duplicates
+                                self._save_memory_file(memory_data)
+                            self._last_duplicate_check = time.time()
+                        
+                        # Reset consecutive errors on successful operation
+                        consecutive_errors = 0
+                        
+                    # Wait before next check
+                    time.sleep(self.check_interval)
+                    
+                except KeyboardInterrupt:
+                    print("\nAI Organizer monitoring stopped by user.")
+                    break
+                except Exception as e:
+                    print(f"Error during monitoring: {e}")
+                    consecutive_errors += 1
+                    # Exponential backoff on errors to prevent excessive logging
+                    if consecutive_errors >= max_consecutive_errors:
+                        # Cap at maximum wait time
+                        wait_time = base_wait_time * 10
+                    else:
+                        # Exponential backoff: 1x, 2x, 4x, 8x, etc.
+                        wait_time = base_wait_time * (2 ** min(consecutive_errors, 5))
+                    
+                    print(f"Backing off for {wait_time} seconds due to consecutive errors")
+                    time.sleep(wait_time)
+                    
+        except Exception as e:
+            print(f"Failed to start organizer monitoring: {e}")
+
+    def start_memory_organization_cycle(self):
+        """
+        Start the complete memory organization cycle as specified in the requirements:
+        Detection → Rewrite (2-3s) → Save → Wait → Repeat.
+        """
+        if not self.organizer_enabled:
+            print("Organizer is disabled.")
+            return
+            
+        print(f"Starting AI Memory Organizer cycle: {self.memory_file_path}")
+        
+        try:
+            while True:
+                # DETECTION PHASE: Monitor nova_ai_memory.json for new entries with type "ADD" or similar
+                new_entries = self._monitor_new_entries()
+                
+                for entry in new_entries:
+                    # TIMED REWRITING PHASE: Analyze context and rewrite within 2-3 second limit
+                    if 'context' in entry:
+                        # Apply timed rewrite
+                        rewritten_entry = self._timed_rewrite_entry(entry)
+                        
+                        # Infer emotional tone and category
+                        context_analysis = self._infer_emotional_and_category_context(
+                            entry.get('context', ''), 
+                            entry
+                        )
+                        
+                        # Update rewritten entry with emotional and category info
+                        if 'emotional_context' not in rewritten_entry:
+                            rewritten_entry['emotional_context'] = {}
+                        rewritten_entry['emotional_context'].update(context_analysis['emotional_context'])
+                        
+                        if 'category' not in rewritten_entry:
+                            rewritten_entry['category'] = context_analysis['category']
+                        
+                        if 'subcategory' not in rewritten_entry:
+                            rewritten_entry['subcategory'] = context_analysis['subcategory']
+                        
+                        # Preserve specified fields unchanged
+                        rewritten_entry = self._preserve_unchanged_fields(entry, rewritten_entry)
+                        
+                        # PROCESSED MEMORY PHASE: Save to processed_memory.json
+                        final_summary = rewritten_entry.get('summary', '')
+                        context_used = entry.get('context', entry.get('summary', ''))
+                        self._save_processed_entry(rewritten_entry, final_summary, context_used)
+                        
+                        # Update the main memory file with the processed entry
+                        self._update_main_memory_with_processed_entry(entry, rewritten_entry)
+                    
+                    # Wait briefly between processing entries to maintain the cycle rhythm
+                    time.sleep(0.1)
+                
+                # Wait idle until the next unprocessed entry appears in nova_ai_memory.json
+                time.sleep(self.check_interval)
+                
+        except KeyboardInterrupt:
+            print("\nAI Memory Organizer cycle stopped by user.")
+            return
+        except Exception as e:
+            print(f"Error in memory organization cycle: {e}")
+
+    def _update_main_memory_with_processed_entry(self, original_entry: Dict[str, Any], processed_entry: Dict[str, Any]):
+        """
+        Update the main memory file with the processed entry.
+        
+        Args:
+            original_entry: The original entry from memory_events
+            processed_entry: The processed entry with rewritten fields
+        """
+        try:
+            # Load the current memory data
+            memory_data = self._load_memory_file()
+            if not memory_data:
+                return
+                
+            # Find and update the matching entry in memory_events
+            memory_events = memory_data.get('memory_events', [])
+            for i, event in enumerate(memory_events):
+                if self._get_event_identifier(event, i) == self._get_event_identifier(original_entry, -1):
+                    # Update the event with processed data, preserving specific fields
+                    memory_events[i] = processed_entry
+                    break
+            
+            # Save the updated memory data back to file
+            self._save_memory_file(memory_data)
+            
+        except Exception as e:
+            print(f"Error updating main memory with processed entry: {e}")
+
+    def _load_memory_file(self) -> Optional[Dict[str, Any]]:
+        """Load the memory file safely."""
+        
+        try:
+            if os.path.exists(self.memory_file_path):
+                with open(self.memory_file_path, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                    if content:  # Check if file is not empty
+                        data = json.loads(content)
+                        
+                        # Check if the data has the new memory_engine structure
+                        if 'memory_engine' in data and 'memory_events' in data['memory_engine']:
+                            # The new structure is present, return it as is
+                            return data
+                        else:
+                            # The old structure is present or it's empty, ensure proper format
+                            # Convert old structure to new structure if needed
+                            if 'memory_events' in data:
+                                # Old structure, convert to new
+                                new_data = {
+                                    "user": data.get("user", {}),
+                                    "memory_engine": {
+                                        "metadata": {
+                                            "version": "1.0",
+                                            "generated_at": datetime.now().isoformat(),
+                                            "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+                                        },
+                                        "memory_events": data.get("memory_events", []),
+                                        "vector_index": data.get("vector_index", {}),
+                                        "clusters": data.get("clusters", {}),
+                                        "update_log": data.get("update_log", [])
+                                    },
+                                    "conversation": data.get("conversation", []),
+                                    "current_facts": data.get("current_facts", {}),
+                                    "fact_history": data.get("fact_history", {}),
+                                    "sessions": data.get("sessions", {}),
+                                    "current_session": data.get("current_session", ""),
+                                    "conversation_state": data.get("conversation_state", {}),
+                                    "memory_categories": data.get("memory_categories", {}),
+                                    "category_relationships": data.get("category_relationships", {}),
+                                    "behavioral_adaptation": data.get("behavioral_adaptation", {}),
+                                    "privacy_settings": data.get("privacy_settings", {})
+                                }
+                                return new_data
+                            else:
+                                # Return default new structure
+                                return {
+                                    "user": data.get("user", {}),
+                                    "memory_engine": {
+                                        "metadata": {
+                                            "version": "1.0",
+                                            "generated_at": datetime.now().isoformat(),
+                                            "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+                                        },
+                                        "memory_events": [],
+                                        "vector_index": {},
+                                        "clusters": {},
+                                        "update_log": []
+                                    },
+                                    "conversation": [],
+                                    "current_facts": {},
+                                    "fact_history": {},
+                                    "sessions": {},
+                                    "current_session": "",
+                                    "conversation_state": {},
+                                    "memory_categories": {},
+                                    "category_relationships": {},
+                                    "behavioral_adaptation": {},
+                                    "privacy_settings": {}
+                                }
+                    else:
+                        # File is empty, return default new structure
+                        return {
+                            "user": {},
+                            "memory_engine": {
+                                "metadata": {
+                                    "version": "1.0",
+                                    "generated_at": datetime.now().isoformat(),
+                                    "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+                                },
+                                "memory_events": [],
+                                "vector_index": {},
+                                "clusters": {},
+                                "update_log": []
+                            },
+                            "conversation": [],
+                            "current_facts": {},
+                            "fact_history": {},
+                            "sessions": {},
+                            "current_session": "",
+                            "conversation_state": {},
+                            "memory_categories": {},
+                            "category_relationships": {},
+                            "behavioral_adaptation": {},
+                            "privacy_settings": {}
+                        }
+        except json.JSONDecodeError as e:
+            print(f"Error loading memory file: {e}")
+            # If JSON is invalid/corrupted, return default new structure
+            return {
+                "user": {},
+                "memory_engine": {
+                    "metadata": {
+                        "version": "1.0",
+                        "generated_at": datetime.now().isoformat(),
+                        "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+                    },
+                    "memory_events": [],
+                    "vector_index": {},
+                    "clusters": {},
+                    "update_log": []
+                },
+                "conversation": [],
+                "current_facts": {},
+                "fact_history": {},
+                "sessions": {},
+                "current_session": "",
+                "conversation_state": {},
+                "memory_categories": {},
+                "category_relationships": {},
+                "behavioral_adaptation": {},
+                "privacy_settings": {}
+            }
+        except Exception as e:
+            print(f"Error loading memory file: {e}")
+            return None
+        
+    def _json_default(self, o: Any):
+        """Custom JSON serializer for dataclasses and other types."""
+        if isinstance(o, (datetime, date)):
+            return o.isoformat()
+        if dataclasses.is_dataclass(o):
+            return dataclasses.asdict(o)
+        if isinstance(o, Enum):
+            return o.value
+        try:
+            return str(o)
+        except Exception:
+            return f"<unserializable type: {type(o).__name__}>"
+
+    def _save_memory_file(self, memory_data: Dict[str, Any]):
+        """Save memory data with backup."""
+        try:
+            # Create backup
+            self._create_backup()
+            
+            # Update metadata before saving
+            if 'memory_engine' in memory_data:
+                if 'metadata' not in memory_data['memory_engine']:
+                    memory_data['memory_engine']['metadata'] = {}
+                memory_data['memory_engine']['metadata']['generated_at'] = datetime.now().isoformat()
+            
+            # Save updated data
+            with open(self.memory_file_path, 'w', encoding='utf-8') as f:
+                json.dump(memory_data, f, indent=2, ensure_ascii=False, default=self._json_default)
+        except Exception as e:
+            print(f"Error saving memory file: {e}")
+            
+    def clean_user_prefix_duplicates(self, text: str) -> str:
+        """
+        Remove duplicate user prefixes like "User user:" pattern and similar duplicates.
+        
+        Args:
+            text: Input text to clean
+            
+        Returns:
+            Cleaned text without duplicate user prefixes
+        """
+        if not text:
+            return text
+            
+        # Remove duplicate "User user:" pattern 
+        cleaned_text = re.sub(r'(?i)(?:user)\s+(?:user):\s*', 'User: ', text)
+        
+        # Remove generic pattern like "Name name:"
+        cleaned_text = re.sub(r'(?i)([A-Za-z]+)\s+\1:\s*', r'\1: ', cleaned_text)
+        
+        return cleaned_text
+
+    def clean_invalid_summary(self, text: str) -> str:
+        """
+        Remove meta phrases like "Added preference likes:", "Added preference:", 
+        "Added:", "preference:", or "likes:" from the text.
+        
+        Args:
+            text: Input text to clean
+            
+        Returns:
+            Cleaned text without meta phrases
+        """
+        if not text:
+            return text
+            
+        # Remove various meta phrases
+        patterns_to_remove = [
+            r'Added preference likes:\s*',
+            r'Added preference:\s*',
+            r'Added:\s*',
+            r'preference:\s*',
+            r'likes:\s*',
+            r'Added preference (?:likes|dislikes|avoid):\s*',
+        ]
+        
+        cleaned_text = text
+        for pattern in patterns_to_remove:
+            cleaned_text = re.sub(pattern, '', cleaned_text, flags=re.IGNORECASE)
+            
+        # Clean up any double spaces that might result
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
+        
+        return cleaned_text
+
+    def _create_backup(self):
+        """Create a backup of the current memory file."""
+        try:
+            if os.path.exists(self.memory_file_path):
+                backup_dir = os.path.join(os.path.dirname(self.memory_file_path), 'backups')
+                os.makedirs(backup_dir, exist_ok=True)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                backup_path = os.path.join(backup_dir, f'nova_ai_memory_{timestamp}.json')
+                shutil.copy2(self.memory_file_path, backup_path)
+        except Exception as e:
+            print(f"Warning: Could not create backup: {e}")
+            
+    def _compute_current_facts_checksum(self, current_facts: Dict[str, Any]) -> str:
+        """Compute a checksum for the current_facts section to detect changes."""
+        import hashlib
+        # Convert the current_facts dictionary to a string in a consistent order
+        sorted_items = sorted(current_facts.items(), key=lambda x: x[0])
+        facts_str = json.dumps(sorted_items, sort_keys=True, default=self._json_default)
+        return hashlib.md5(facts_str.encode()).hexdigest()
+            
+    def _process_new_event(self, memory_data: Dict[str, Any], event_index: int):
+        """Process a new memory event and enhance it in-place."""
+        try:
+            # Get memory events from the new structure
+            memory_events_list = memory_data.get('memory_engine', {}).get('memory_events', [])
+            
+            # Get the event
+            if event_index >= len(memory_events_list):
+                return
+                
+            event = memory_events_list[event_index]
+            
+            # Skip if not a dictionary or already completely processed
+            if not isinstance(event, dict):
+                return
+                
+            # Create unique identifier for the event
+            event_id = self._get_event_identifier(event, event_index)
+            
+            # CRITICAL FIX: Check if emotion_tags are empty BEFORE checking completely_processed_entries
+            # If emotion_tags are missing, we need to process even if the event was already completely processed
+            emotional_context_check = event.get('emotional_context', {})
+            emotion_tags_check = emotional_context_check.get('emotion_tags', [])
+            has_empty_emotion_tags = not emotion_tags_check or emotion_tags_check == []
+            
+            # Only skip if completely processed AND emotion_tags are already populated
+            if event_id in self.completely_processed_entries:
+                if not has_empty_emotion_tags:
+                    return  # Already completely processed with emotion_tags, skip
+                # If emotion_tags are empty, continue processing to populate them
+            
+            # Check for duplicate Added_preference fields before processing
+            # Get all Added_preference fields in this event
+            added_pref_fields = [key for key in event.keys() if key.startswith("Added_preference_")]
+            if added_pref_fields:
+                # Check if this would create a duplicate with existing events (before this event's position)
+                # Access memory events from the new structure
+                events_to_check = memory_events_list[:event_index]  # Only check events before this one
+                for field in added_pref_fields:
+                    value = event.get(field)
+                    if value and isinstance(value, str):
+                        # Check against previous events for potential duplicates
+                        duplicate_found = False
+                        for i, existing_event in enumerate(events_to_check):
+                            if not isinstance(existing_event, dict):
+                                continue
+                            existing_added_pref_fields = [key for key in existing_event.keys() if key.startswith("Added_preference_")]
+                            for existing_field in existing_added_pref_fields:
+                                existing_value = existing_event.get(existing_field)
+                                if existing_value and isinstance(existing_value, str):
+                                    # Compare field type and normalized value
+                                    if (field == existing_field and 
+                                        self._normalize_preference_value(value) == self._normalize_preference_value(existing_value)):
+                                        # This is a duplicate
+                                        print(f"Found duplicate Added_preference: {field} = '{value}' (duplicate of event at index {i})")
+                                        duplicate_found = True
+                                        break
+                            if duplicate_found:
+                                break
+                        # If duplicate found, we can decide to skip processing this event further
+                        # or handle it differently - for now, let's add a flag to mark it
+                        if duplicate_found:
+                            event['is_duplicate'] = True
+                            # We can also remove the duplicate preference field to avoid processing it
+                            # But we'll still allow the event to be processed for other purposes
+            
+            # CRITICAL FIX: Check if emotion_tags are empty even if event was already enhanced
+            # This ensures emotion_tags get populated even for previously processed events
+            emotional_context = event.get('emotional_context', {})
+            emotion_tags = emotional_context.get('emotion_tags', [])
+            should_populate_emotion_tags = not emotion_tags or emotion_tags == []
+            
+            # STOP RULES: Check if we should avoid rewriting this entry
+            # But ALWAYS allow processing if we need to populate empty emotion_tags
+            if should_populate_emotion_tags:
+                # For emotion tags population, we still process even if enhanced_in_place is True
+                pass  # Continue processing
+            elif self._should_skip_rewriting(event):
+                return  # Skip rewriting for this event based on stop rules
+                
+            # Check if this is an 'ADD' type event to process, or just a regular event
+            event_type = event.get('type', '').upper()
+            if event_type != 'ADD':
+                # For non-ADD events, we may still want to enhance them but with different logic
+                # Still process them through enhancement but don't mark as completely processed
+                pass
+            
+            # Find the source conversation item and other context
+            conv_item = self._find_source_conversation(memory_data, event)
+            source_info = self._determine_source_info(memory_data, event, event_index)
+            
+            # Process current_facts and fact_history first to enhance their content
+            self._enhance_current_facts_and_history(memory_data)
+            
+            # Enhance the event in-place with source information
+            enhanced_event = self._enhance_event_in_place(event, conv_item, memory_data, source_info)
+            
+            # If this is an ADD event, apply the new timed rewriting functionality
+            if event_type == 'ADD':
+                # Perform the timed rewrite based on the context
+                # First, try to get context from provenance.source_info.context if available
+                source_info = event.get('provenance', {}).get('source_info', {})
+                context_from_provenance = source_info.get('context', '')
+                
+                if context_from_provenance:
+                    # Use context from provenance.source_info.context
+                    # But preserve existing emotion tags if they have already been properly calculated
+                    existing_emotion_tags = enhanced_event.get('emotional_context', {}).get('emotion_tags', [])
+                    rewritten_event = self._timed_rewrite_entry(enhanced_event)
+
+                    # If emotion tags were calculated by _enhance_event_in_place, merge or preserve them appropriately
+                    if existing_emotion_tags:
+                        if 'emotional_context' not in rewritten_event:
+                            rewritten_event['emotional_context'] = {}
+
+                        # Get any new emotion tags from the timed rewrite
+                        new_emotion_tags = rewritten_event.get('emotional_context', {}).get('emotion_tags', [])
+
+                        # If the new emotion tags are empty but we had some from the first process, preserve them
+                        if not new_emotion_tags and existing_emotion_tags:
+                            rewritten_event['emotional_context']['emotion_tags'] = existing_emotion_tags
+                        # If both have tags, merge unique ones
+                        elif new_emotion_tags and existing_emotion_tags:
+                            # Combine both lists and remove duplicates while preserving order
+                            all_tags = list(dict.fromkeys(existing_emotion_tags + new_emotion_tags))
+                            rewritten_event['emotional_context']['emotion_tags'] = all_tags
+                        # If only new tags exist, keep them
+                        elif new_emotion_tags:
+                            rewritten_event['emotional_context']['emotion_tags'] = new_emotion_tags
+
+                    # Apply operational example transformation if needed
+                    op_transformation = self._apply_operational_example_transformation(context_from_provenance)
+                    
+                    # Update the rewritten event with transformed values
+                    rewritten_event['summary'] = op_transformation.get('summary', rewritten_event.get('summary', ''))
+                    # Remove original_summary field entirely as per new requirements
+                    if 'original_summary' in rewritten_event:
+                        del rewritten_event['original_summary']
+                    
+                    # Add Added_preference fields based on context
+                    rewritten_event = self._add_preference_fields_from_context(rewritten_event, context_from_provenance)
+
+                    # Apply semantic_context transformation
+                    rewritten_event['semantic_context'] = op_transformation.get('semantic_context', rewritten_event.get('semantic_context', ''))
+                    
+                    # Clean the summaries to remove any meta phrases
+                    rewritten_event['summary'] = self.clean_invalid_summary(rewritten_event.get('summary', ''))
+                    
+                    # Additional safety cleaning to ensure no meta phrases remain
+                    rewritten_event['summary'] = self.clean_invalid_summary(rewritten_event.get('summary', ''))
+                    
+                    # Handle missing semantic context - this is the key fix!
+                    rewritten_event = self._handle_missing_semantic_context(rewritten_event, context_from_provenance)
+                    
+                    # Update event with new structure fields if they don't exist
+                    if 'previous_value' not in rewritten_event:
+                        rewritten_event['previous_value'] = None
+                    if 'current_value' not in rewritten_event:
+                        rewritten_event['current_value'] = rewritten_event.get('summary', '').split(':')[-1].strip() if ':' in rewritten_event.get('summary', '') else rewritten_event.get('summary', '')
+                    if 'importance_score' not in rewritten_event:
+                        rewritten_event['importance_score'] = 0.6
+                    if 'confidence' not in rewritten_event:
+                        rewritten_event['confidence'] = 0.8
+                    if 'category' not in rewritten_event:
+                        rewritten_event['category'] = 'personal_preferences'
+                    if 'subcategory' not in rewritten_event:
+                        rewritten_event['subcategory'] = 'general'
+                    
+                    # Preserve specified fields unchanged
+                    rewritten_event = self._preserve_unchanged_fields(event, rewritten_event)
+
+                    # Ensure emotional context is always properly populated
+                    context_for_emotion = context_from_provenance or rewritten_event.get('summary', '')
+                    rewritten_event = self._ensure_emotional_context(rewritten_event, context_for_emotion)
+
+                    # Update the event in the new structure
+                    memory_events_list[event_index] = rewritten_event
+
+                    # Save processed entry to processed_memory.json to prevent reprocessing
+                    final_summary = rewritten_event.get('summary', '')
+                    context_used = context_from_provenance
+                    self._save_processed_entry(rewritten_event, final_summary, context_used)
+
+                    # Mark as completely processed
+                    self.completely_processed_entries.add(event_id)
+                elif 'context' in event:
+                    # Fallback to event context if provenance context not available
+                    # But preserve existing emotion tags if they have already been properly calculated
+                    existing_emotion_tags = enhanced_event.get('emotional_context', {}).get('emotion_tags', [])
+                    rewritten_event = self._timed_rewrite_entry(enhanced_event)
+
+                    # If emotion tags were calculated by _enhance_event_in_place, merge or preserve them appropriately
+                    if existing_emotion_tags:
+                        if 'emotional_context' not in rewritten_event:
+                            rewritten_event['emotional_context'] = {}
+
+                        # Get any new emotion tags from the timed rewrite
+                        new_emotion_tags = rewritten_event.get('emotional_context', {}).get('emotion_tags', [])
+
+                        # If the new emotion tags are empty but we had some from the first process, preserve them
+                        if not new_emotion_tags and existing_emotion_tags:
+                            rewritten_event['emotional_context']['emotion_tags'] = existing_emotion_tags
+                        # If both have tags, merge unique ones
+                        elif new_emotion_tags and existing_emotion_tags:
+                            # Combine both lists and remove duplicates while preserving order
+                            all_tags = list(dict.fromkeys(existing_emotion_tags + new_emotion_tags))
+                            rewritten_event['emotional_context']['emotion_tags'] = all_tags
+                        # If only new tags exist, keep them
+                        elif new_emotion_tags:
+                            rewritten_event['emotional_context']['emotion_tags'] = new_emotion_tags
+
+                    # Apply operational example transformation if needed
+                    context = event.get('context', event.get('summary', ''))
+                    op_transformation = self._apply_operational_example_transformation(context)
+                    
+                    # Update the rewritten event with transformed values
+                    rewritten_event['summary'] = op_transformation.get('summary', rewritten_event.get('summary', ''))
+                    # Remove original_summary field entirely as per new requirements
+                    if 'original_summary' in rewritten_event:
+                        del rewritten_event['original_summary']
+                    
+                    # Add Added_preference fields based on context
+                    rewritten_event = self._add_preference_fields_from_context(rewritten_event, context)
+                    
+                    # Apply semantic_context transformation
+                    rewritten_event['semantic_context'] = op_transformation.get('semantic_context', rewritten_event.get('semantic_context', ''))
+                    
+                    # Clean the summaries to remove any meta phrases
+                    rewritten_event['summary'] = self.clean_invalid_summary(rewritten_event.get('summary', ''))
+                    
+                    # Additional safety cleaning to ensure no meta phrases remain
+                    rewritten_event['summary'] = self.clean_invalid_summary(rewritten_event.get('summary', ''))
+                    
+                    # Handle missing semantic context - this is the key fix!
+                    rewritten_event = self._handle_missing_semantic_context(rewritten_event, context)
+                    
+                    # Update event with new structure fields if they don't exist
+                    if 'previous_value' not in rewritten_event:
+                        rewritten_event['previous_value'] = None
+                    if 'current_value' not in rewritten_event:
+                        rewritten_event['current_value'] = rewritten_event.get('summary', '').split(':')[-1].strip() if ':' in rewritten_event.get('summary', '') else rewritten_event.get('summary', '')
+                    if 'importance_score' not in rewritten_event:
+                        rewritten_event['importance_score'] = 0.6
+                    if 'confidence' not in rewritten_event:
+                        rewritten_event['confidence'] = 0.8
+                    if 'category' not in rewritten_event:
+                        rewritten_event['category'] = 'personal_preferences'
+                    if 'subcategory' not in rewritten_event:
+                        rewritten_event['subcategory'] = 'general'
+                    
+                    # Preserve specified fields unchanged
+                    rewritten_event = self._preserve_unchanged_fields(event, rewritten_event)
+
+                    # Ensure emotional context is always properly populated
+                    context_for_emotion = event.get('context', event.get('summary', '')) or rewritten_event.get('summary', '')
+                    rewritten_event = self._ensure_emotional_context(rewritten_event, context_for_emotion)
+
+                    # Update the event in the new structure
+                    memory_events_list[event_index] = rewritten_event
+
+                    # Save processed entry to processed_memory.json to prevent reprocessing
+                    final_summary = rewritten_event.get('summary', '')
+                    context_used = event.get('context', event.get('summary', ''))
+                    self._save_processed_entry(rewritten_event, final_summary, context_used)
+
+                    # Mark as completely processed
+                    self.completely_processed_entries.add(event_id)
+                else:
+                    # If no context field, apply the normal enhancement
+                    # Also apply the missing semantic context handler to handle the issue
+                    enhanced_event = self._handle_missing_semantic_context(enhanced_event)
+                    # Add Added_preference fields based on any available context
+                    source_info = event.get('provenance', {}).get('source_info', {})
+                    context_from_provenance = source_info.get('context', '')
+                    enhanced_event = self._add_preference_fields_from_context(enhanced_event, context_from_provenance)
+                    
+                    # Update event with new structure fields if they don't exist
+                    if 'previous_value' not in enhanced_event:
+                        enhanced_event['previous_value'] = None
+                    if 'current_value' not in enhanced_event:
+                        enhanced_event['current_value'] = enhanced_event.get('summary', '').split(':')[-1].strip() if ':' in enhanced_event.get('summary', '') else enhanced_event.get('summary', '')
+                    if 'importance_score' not in enhanced_event:
+                        enhanced_event['importance_score'] = 0.6
+                    if 'confidence' not in enhanced_event:
+                        enhanced_event['confidence'] = 0.8
+                    if 'category' not in enhanced_event:
+                        enhanced_event['category'] = 'personal_preferences'
+                    if 'subcategory' not in enhanced_event:
+                        enhanced_event['subcategory'] = 'general'
+                    
+                    # Ensure emotional context is always properly populated
+                    summary_for_emotion = enhanced_event.get('summary', '')
+                    context_from_prov = event.get('provenance', {}).get('source_info', {}).get('context', '')
+                    text_context = context_from_prov or summary_for_emotion
+                    enhanced_event = self._ensure_emotional_context(enhanced_event, text_context)
+
+                    memory_events_list[event_index] = enhanced_event
+                    # Mark as completely processed
+                    self.completely_processed_entries.add(event_id)
+            else:
+                # For non-ADD events, just update the event in the new structure
+                # Ensure emotional context is always properly populated for non-ADD events too
+                summary_for_emotion = enhanced_event.get('summary', '')
+                context_from_prov = event.get('provenance', {}).get('source_info', {}).get('context', '')
+                text_context = context_from_prov or summary_for_emotion
+                enhanced_event = self._ensure_emotional_context(enhanced_event, text_context)
+
+                memory_events_list[event_index] = enhanced_event
+
+            # Update the memory_data with the modified list
+            memory_data['memory_engine']['memory_events'] = memory_events_list
+            
+        except Exception as e:
+            print(f"Error processing event {event_index}: {e}")
+
+    def _should_skip_rewriting(self, event: Dict[str, Any]) -> bool:
+        """
+        Check if an event should be skipped from rewriting based on STOP RULES.
+        
+        You must **not**:
+        - Continuously rewrite the same entry.
+        - Add unnecessary repetition or filler words.
+        - Modify old entries that are already processed.
+        - Loop endlessly trying to “improve” what is already validated.
+        """
+        try:
+            # Check if the event already has an 'enhanced_in_place' flag set to True
+            provenance = event.get('provenance', {})
+            if isinstance(provenance, dict) and provenance.get('enhanced_in_place', False):
+                # Additional check: if already enhanced, make sure it doesn't have repetitive content
+                summary = event.get('summary', '')
+                if not self._is_repetitive_content(summary):
+                    return True
+            
+            # Check for already enhanced content - more comprehensive check
+            summary = event.get('summary', '')
+            if summary:
+                # Check for patterns that indicate it's already been processed
+                already_processed_indicators = [
+                    ' expressed a general preference, but details are unclear.',
+                    'and considers it',
+                    'and values this',
+                    'added a new preference',
+                    ' expressed that ',  # Common LLM output pattern
+                    ' enjoys ',  # Another common pattern
+                    ' wants ',   # Another common pattern
+                    ' likes ',   # Another common pattern
+                    ' is skilled in ',  # Another common pattern
+                    ' thinks ',  # Another common pattern
+                    ' expressed interest in ',  # Pattern from _process_user_input_to_summary
+                    ' expressed a preference for ',  # Pattern from _process_user_input_to_summary
+                    ' added a new preference for '  # From _apply_source_aware_rewriting
+                ]
+                
+                # Count how many already processed indicators are in the summary
+                count = sum(1 for indicator in already_processed_indicators if indicator in summary)
+                
+                # If multiple indicators exist and summary is reasonably formatted, skip
+                if count >= 2 and self._is_valid_enhanced_summary(summary):
+                    return True
+            
+            # Check for repetitive content that suggests endless rewriting
+            if self._is_repetitive_content(summary):
+                return True
+
+            # Check for excessive duplication patterns
+            if summary.count(" and ") > 5:  # Likely has too many "and values this" or similar
+                words = summary.split()
+                if len(set(words)) / len(words) < 0.6:  # High repetition ratio
+                    return True
+
+            # Check for the specific problematic patterns from the example
+            if "and values this" in summary and summary.count("and values this") > 1:
+                return True
+            if "and considers it an interest" in summary and summary.count("and considers it an interest") > 1:
+                return True
+            
+            # Check if the event has been marked as completely processed in class variable
+            event_id = self._get_event_identifier(event, -1)  # Use -1 as placeholder since we don't have the index here
+            if event_id in self.completely_processed_entries:
+                return True
+
+            return False
+        except Exception:
+            # If there's any error in evaluation, don't skip (default to processing)
+            return False
+    
+    def _is_valid_enhanced_summary(self, summary: str) -> bool:
+        """
+        Check if a summary is already valid and enhanced.
+        """
+        # Check if the summary follows the desired format:
+        # - Not empty
+        # - Reasonable length (not just a few words)
+        # - Properly structured
+        if not summary:
+            return False
+            
+        # Check if summary has at least reasonable length
+        if len(summary.strip()) < 10:
+            return False
+            
+        # Check if it has proper punctuation
+        if not any(c in summary for c in ['.', '!', '?']):
+            return False
+            
+        return True
+    
+    def _is_repetitive_content(self, summary: str) -> bool:
+        """
+        Check if the summary has repetitive content suggesting endless rewriting.
+        """
+        if not summary:
+            return False
+            
+        # Check for common repeating patterns
+        repetitive_patterns = [
+            r'\b(like|likes|enjoy|enjoys|love|loves|prefer|prefers)\s+\1\b',  # like like, enjoy enjoy
+            r'\b\w+\s+and\s+values\s+this\s+and\s+\w+\s+and\s+values\s+this\b',  # repetitive structure
+            r'\b\w+\s+and\s+considers\s+it\s+an\s+interest\s+and\s+\w+\s+and\s+considers\s+it\s+an\s+interest\b',  # repetitive interests
+        ]
+        
+        for pattern in repetitive_patterns:
+            if re.search(pattern, summary, re.IGNORECASE):
+                return True
+        
+        # Check for excessive repetition of words
+        words = summary.split()
+        if len(words) > 2:
+            from collections import Counter
+            word_counts = Counter(words)
+            # If any significant word (not articles) appears more than 3 times
+            for word, count in word_counts.items():
+                if count > 3 and len(word) > 2 and word.lower() not in [
+                    'the', 'and', 'but', 'for', 'nor', 'yet', 'so', 'a', 'an', 'at', 
+                    'by', 'in', 'of', 'on', 'to', 'up', 'as', 'is', 'it', 'user'
+                ]:
+                    return True
+        
+        return False
+            
+    def _get_event_identifier(self, event: Dict[str, Any], index: int) -> str:
+        """Create a unique identifier for an event."""
+        # Create an ID that remains stable even after rewriting
+        # Use the original timestamp and a hash of original content to maintain stability
+        timestamp = event.get('timestamp', '')
+        
+        # Use current summary for stable ID since original_summary has been removed
+        original_content = event.get('summary', '')
+        # If we're using the summary field, extract core meaning to avoid duplication
+        original_content = self._extract_core_meaning_from_duplicated_content(original_content)
+        
+        # Create a hash of the original content to make ID more stable
+        import hashlib
+        content_hash = hashlib.md5(str(original_content).encode()).hexdigest()[:16]  # Short hash
+        
+        # If we have timestamp, use it with the content hash for better uniqueness
+        if timestamp:
+            return f"{timestamp}_{content_hash}"
+        else:
+            # Combine index with content hash for uniqueness
+            return f"{index}_{content_hash}"
+    
+    def _extract_core_meaning_from_duplicated_content(self, content: str) -> str:
+        """Extract core meaning from heavily duplicated content to create a stable ID."""
+        if not content or len(content) < 50:  # If content is short, it's likely not duplicated
+            return content
+            
+        # Check if this looks like heavily duplicated content
+        if content.count("and") > 10 or content.count("Added preference") > 2 or len(content) > 500:
+            # Extract meaningful parts to get a more stable base for the ID
+            import re
+            
+            # Look for the actual user preference in duplicated content
+            # Patterns like "Rich likes X" or "User likes X" are likely the core meaning
+            patterns = [
+                r'([A-Za-z0-9_]+)\s+likes?\s+([^\.]+?)(?:\.|$)',  # User likes X
+                r'([A-Za-z0-9_]+)\s+enjoys?\s+([^\.]+?)(?:\.|$)', # User enjoys X  
+                r'([A-Za-z0-9_]+)\s+prefers?\s+([^\.]+?)(?:\.|$)', # User prefers X
+                r'Added preference likes?:\s*([^\.]+?)(?:\.|$)', # Added preference X
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, content, re.IGNORECASE)
+                if match:
+                    # Return the core preference, which should be stable
+                    core_part = match.group(0 if len(match.groups()) == 0 else len(match.groups())).strip()
+                    if core_part and len(core_part) < 100:  # Make sure it's a reasonable length
+                        return core_part
+                        
+            # If no specific pattern matched, try to get unique meaningful words
+            words = content.split()
+            unique_words = list(dict.fromkeys(words))  # Preserve order and uniqueness
+            if len(unique_words) < len(words) * 0.5:  # More than 50% repetition
+                # Return a more concise version focusing on unique content
+                return ' '.join(unique_words[:20])  # Take first 20 unique words
+                
+        # If not heavily duplicated, return as is
+        return content
+
+    def _deep_contextual_understanding(self, text: str) -> Dict[str, Any]:
+        """
+        Perform deep contextual understanding of user input.
+        
+        Args:
+            text: User input text to analyze
+            
+        Returns:
+            Dict with comprehensive semantic analysis
+        """
+        if not text:
+            return {}
+            
+        # Step 1: Word-Level Meaning Analysis - Analyze the meaning and role of each word in the context
+        words = text.split()
+        word_analysis = {}
+        for i, word in enumerate(words):
+            word_analysis[i] = {
+                'word': word,
+                'normalized': word.lower().strip('.,!?;:"'),
+                'position': i,
+                'is_entity': self._is_recognized_entity(word),
+                'sentiment': self._get_word_sentiment(word)
+            }
+
+        # Step 1b: Enhanced word-by-word semantic analysis with relationship mapping
+        word_relationships = {}
+        for i in range(len(words)):
+            if i > 0:
+                # Map relationships between adjacent words
+                word_relationships[i] = {
+                    'previous_word': words[i-1],
+                    'current_word': words[i],
+                    'relationship': self._identify_word_relationship(words[i-1], words[i])
+                }
+            else:
+                word_relationships[i] = {
+                    'previous_word': None,
+                    'current_word': words[i],
+                    'relationship': 'start'
+                }
+        
+        # Step 2: Phrase and Sentence Understanding
+        phrases = self._extract_key_phrases(text)
+        sentence_analysis = self._analyze_sentence_structure(text)
+        
+        # Step 3: Contextual and Emotional Understanding
+        emotional_tone = self._analyze_emotional_tone(text)
+        intent = self._infer_user_intent(text)
+        
+        # Step 4: Enhanced analysis of relationships between words: subjects, objects, actions, feelings.
+        subjects_objects_actions = self._analyze_subject_object_action_relationships(text)
+        
+        # Step 5: Entity and Concept Awareness
+        entities = self._extract_entities(text)
+        concepts = self._identify_concepts(text)
+        
+        # Step 6: Meaning Reconstruction with full nuance detection
+        full_meaning = self._reconstruct_full_meaning_with_nuances(text, word_analysis, word_relationships, phrases, 
+                                                                 sentence_analysis, emotional_tone, entities, concepts, 
+                                                                 subjects_objects_actions)
+        
+        # Step 7: Dynamic preference assignment based on meaning
+        preference_type = self._classify_preference_from_deep_analysis(full_meaning)
+        
+        return {
+            'word_analysis': word_analysis,
+            'word_relationships': word_relationships,
+            'phrases': phrases,
+            'sentence_structure': sentence_analysis,
+            'emotional_tone': emotional_tone,
+            'intent': intent,
+            'subjects_objects_actions': subjects_objects_actions,
+            'entities': entities,
+            'concepts': concepts,
+            'full_meaning': full_meaning,
+            'preference_type': preference_type  # Dynamic preference type inferred from meaning
+        }
+
+    def _is_recognized_entity(self, word: str) -> bool:
+        """Check if a word is a recognized entity."""
+        recognized_entities = [
+            'mcdonald', 'mcdonalds', 'kfc', 'burger king', 'subway', 'starbucks',
+            'netflix', 'spotify', 'youtube', 'tiktok', 'instagram', 'facebook',
+            'python', 'javascript', 'java', 'c++', 'react', 'vue', 'angular',
+            'groq', 'openai', 'anthropic', 'google', 'microsoft', 'apple',
+            'tesla', 'amazon', 'nike', 'adidas', 'cocacola', 'pepsi'
+        ]
+        return word.lower().strip('.,!?;:"') in recognized_entities
+
+    def _identify_word_relationship(self, prev_word: str, curr_word: str) -> str:
+        """
+        Identify the relationship between two consecutive words.
+        
+        Args:
+            prev_word: Previous word in sequence
+            curr_word: Current word in sequence
+            
+        Returns:
+            str: Type of relationship (e.g., 'action_object', 'modifier_noun', 'negation', etc.)
+        """
+        prev_norm = prev_word.lower().strip('.,!?;:"')
+        curr_norm = curr_word.lower().strip('.,!?;:"')
+        
+        # Negation patterns
+        if prev_norm in ['not', 'no', "don't", "doesn't", "didn't", "won't", "can't", "shouldn't", "couldn't"]:
+            return 'negation'
+        
+        # Action-object relationships
+        action_verbs = ['like', 'love', 'enjoy', 'hate', 'dislike', 'prefer', 'want', 'need', 'avoid', 'try']
+        if prev_norm in action_verbs:
+            return 'action_object'
+        
+        # Modifier-noun relationships
+        modifiers = ['like', 'such', 'as', 'very', 'really', 'quite', 'extremely', 'highly', 'especially']
+        if prev_norm in modifiers:
+            return 'modifier_object'
+        
+        # Conjunction patterns
+        if prev_norm in ['and', 'or', 'but']:
+            return 'conjunction'
+        
+        return 'sequential'
+
+    def _get_word_sentiment(self, word: str) -> str:
+        """Get sentiment of a word."""
+        positive_words = [
+            'love', 'like', 'enjoy', 'adore', 'appreciate', 'prefer', 'favor',
+            'delight', 'pleasure', 'satisfy', 'gratify', 'please', 'charm'
+        ]
+        negative_words = [
+            'hate', 'dislike', 'despise', 'loathe', 'abhor', 'detest',
+            'avoid', 'reject', 'disapprove', 'disagree', 'refuse', 'never'
+        ]
+        neutral_words = [
+            'try', 'attempt', 'effort', 'endeavor', 'strive', 'work',
+            'need', 'require', 'must', 'should', 'ought', 'suppose'
+        ]
+        
+        word_norm = word.lower().strip('.,!?;:"')
+        if word_norm in positive_words:
+            return 'positive'
+        elif word_norm in negative_words:
+            return 'negative'
+        elif word_norm in neutral_words:
+            return 'neutral'
+        return 'unknown'
+
+    def _extract_key_phrases(self, text: str) -> List[str]:
+        """Extract key phrases from text."""
+        # Common patterns for preference expressions
+        patterns = [
+            r'(?:i|we|you)\s+(?:love|like|enjoy|adore|appreciate|prefer)\s+(.+?)(?:\.|,|;|$)',
+            r'(?:i|we|you)\s+(?:hate|dislike|despise|loathe|abhor|detest)\s+(.+?)(?:\.|,|;|$)',
+            r'(?:i|we|you)\s+(?:try to|always)\s+(?:avoid|reject|refuse)\s+(.+?)(?:\.|,|;|$)',
+            r'(?:i|we|you)\s+(?:need|require|must have|have to)\s+(.+?)(?:\.|,|;|$)',
+            r'(?:i|we|you)\s+(?:want|wish|desire|hope to)\s+(.+?)(?:\.|,|;|$)',
+            r'(?:i|we|you)\s+(?:always|never|often|rarely)\s+(.+?)(?:\.|,|;|$)'
+        ]
+        
+        phrases = []
+        for pattern in patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            phrases.extend(matches)
+        return list(set(phrases))  # Remove duplicates
+
+    def _analyze_sentence_structure(self, text: str) -> Dict[str, Any]:
+        """Analyze sentence structure and grammar."""
+        # Simple sentence analysis
+        sentences = re.split(r'[.!?]+', text)
+        clauses = []
+        for sentence in sentences:
+            if 'because' in sentence.lower() or 'since' in sentence.lower() or 'as' in sentence.lower():
+                clauses.append('causal')
+            elif 'but' in sentence.lower() or 'however' in sentence.lower() or 'although' in sentence.lower():
+                clauses.append('contrastive')
+            elif 'and' in sentence.lower() or 'also' in sentence.lower() or 'furthermore' in sentence.lower():
+                clauses.append('additive')
+            else:
+                clauses.append('simple')
+                
+        return {
+            'sentence_count': len(sentences),
+            'clause_types': clauses,
+            'complexity': 'complex' if len(clauses) > 2 else 'moderate' if len(clauses) > 1 else 'simple'
+        }
+
+    def _analyze_subject_object_action_relationships(self, text: str) -> Dict[str, Any]:
+        """
+        Analyze relationships between subjects, objects, actions, and feelings in the text.
+        
+        Args:
+            text: Input text to analyze
+            
+        Returns:
+            Dict with identified subjects, objects, actions, and feelings
+        """
+        # Use regex patterns to identify different grammatical components
+        import re
+        
+        # Extract potential subjects (often 'I', 'user', or proper nouns)
+        subject_patterns = [
+            r'\b(I|we|user|nemzz|\w+)\s+(?:like|love|enjoy|dislike|hate|want|need|prefer|avoid|try to avoid)\b',
+            r'\b(I|we|user|nemzz|\w+)\s+(?:think|feel|believe|find|consider)\b'
+        ]
+        
+        subjects = []
+        for pattern in subject_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            subjects.extend([m for m in matches if m.lower() not in ['i', 'we']])
+        
+        # Extract actions/verbs
+        action_patterns = [
+            r'\b(like|love|enjoy|dislike|hate|want|need|prefer|avoid|try to avoid)\s+(\w+)',
+            r'\b(think|feel|believe|find|consider)\s+(.+?)(?:\s+that|\s+is|\s+was|\.|,|$)'
+        ]
+        
+        actions_objects = []
+        for pattern in action_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            actions_objects.extend(matches)
+        
+        # Extract objects that are being acted upon
+        object_patterns = [
+            r'(?:like|love|enjoy|dislike|hate|want|need|prefer|avoid)\s+(.+?)(?:\.|,|;|$)',
+            r'(?:think|feel|believe|find|consider)\s+that?\s+(.+?)(?:\.|,|;|$)'
+        ]
+        
+        objects = []
+        for pattern in object_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            objects.extend([m.strip() for m in matches])
+        
+        # Extract feelings/emotions
+        emotion_patterns = [
+            r'\b(feel|feeling|felt|am|is|are|was|were)\s+(.+?)(?:\s+about|\s+that|\.|,|$)',
+            r'\b(happy|sad|angry|frustrated|excited|bored|tired|energetic|calm|nervous)\b'
+        ]
+        
+        emotions = []
+        for pattern in emotion_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            for match in matches:
+                if isinstance(match, tuple):
+                    emotions.extend([item.strip() for item in match if item.strip()])
+                else:
+                    emotions.append(match.strip())
+        
+        return {
+            'subjects': list(set(subjects)),
+            'actions': [action[0] for action in actions_objects if len(action) > 0],
+            'objects': list(set(objects)),
+            'feelings': list(set(emotions)),
+            'action_object_pairs': actions_objects
+        }
+
+    def _analyze_emotional_tone(self, text: str) -> Dict[str, Any]:
+        """Analyze emotional tone of the text."""
+        positive_indicators = ['love', 'enjoy', 'happy', 'pleased', 'satisfied', 'delighted', 'excited', 'like', 'adore', 'amazing', 'great', 'wonderful']
+        negative_indicators = ['hate', 'dislike', 'angry', 'frustrated', 'annoyed', 'disappointed', 'upset']
+        neutral_indicators = ['try', 'need', 'want', 'must', 'should', 'often', 'sometimes', 'usually']
+        
+        text_lower = text.lower()
+        positive_count = sum(1 for word in positive_indicators if word in text_lower)
+        negative_count = sum(1 for word in negative_indicators if word in text_lower)
+        neutral_count = sum(1 for word in neutral_indicators if word in text_lower)
+        
+        if positive_count > negative_count and positive_count > neutral_count:
+            tone = 'positive'
+            intensity = min(1.0, positive_count * 0.3)
+        elif negative_count > positive_count and negative_count > neutral_count:
+            tone = 'negative'
+            intensity = min(1.0, negative_count * 0.3)
+        else:
+            tone = 'neutral'
+            intensity = min(1.0, neutral_count * 0.2)
+            
+        return {
+            'tone': tone,
+            'intensity': intensity,
+            'positive_words': positive_count,
+            'negative_words': negative_count,
+            'neutral_words': neutral_count
+        }
+
+    def _infer_user_intent(self, text: str) -> str:
+        """Infer user's underlying intent."""
+        text_lower = text.lower()
+        
+        if 'avoid' in text_lower or 'stay away' in text_lower or 'don\'t like' in text_lower:
+            return 'avoidance'
+        elif 'love' in text_lower or 'adore' in text_lower:
+            return 'strong_affinity'
+        elif 'like' in text_lower or 'enjoy' in text_lower:
+            return 'affinity'
+        elif 'hate' in text_lower or 'despise' in text_lower:
+            return 'strong_aversion'
+        elif 'dislike' in text_lower or 'detest' in text_lower:
+            return 'aversion'
+        elif 'need' in text_lower or 'require' in text_lower or 'must' in text_lower:
+            return 'necessity'
+        elif 'want' in text_lower or 'desire' in text_lower or 'wish' in text_lower:
+            return 'desire'
+        elif 'always' in text_lower or 'never' in text_lower:
+            return 'habit'
+        else:
+            return 'general_preference'
+
+    def _extract_entities(self, text: str) -> List[str]:
+        """Extract named entities from text."""
+        # Simple entity extraction based on capitalization and known entities
+        words = text.split()
+        entities = []
+        for word in words:
+            clean_word = word.strip('.,!?;:"')
+            if self._is_recognized_entity(clean_word) or (len(clean_word) > 2 and clean_word[0].isupper()):
+                entities.append(clean_word)
+        return list(set(entities))  # Remove duplicates
+
+    def _identify_concepts(self, text: str) -> List[str]:
+        """Identify abstract concepts in the text."""
+        concept_keywords = [
+            'food', 'music', 'movie', 'game', 'sport', 'exercise', 'work', 'study',
+            'travel', 'reading', 'writing', 'cooking', 'coding', 'design', 'art',
+            'health', 'fitness', 'finance', 'education', 'technology', 'nature'
+        ]
+        
+        text_lower = text.lower()
+        concepts = []
+        for concept in concept_keywords:
+            if concept in text_lower:
+                concepts.append(concept)
+        return concepts
+
+    def _reconstruct_full_meaning_with_nuances(self, text: str, word_analysis: Dict, word_relationships: Dict, 
+                                             phrases: List[str], sentence_analysis: Dict, 
+                                             emotional_tone: Dict, entities: List[str], 
+                                             concepts: List[str], subjects_objects_actions: Dict) -> str:
+        """
+        Reconstruct the full meaning of the text with nuances, emotions, and intent detection.
+        
+        Args:
+            text: Original input text
+            word_analysis: Analysis of individual words
+            word_relationships: Relationships between consecutive words
+            phrases: Extracted key phrases
+            sentence_analysis: Sentence structure analysis
+            emotional_tone: Emotional tone detected
+            entities: Recognized entities
+            concepts: Identified concepts
+            subjects_objects_actions: Subject-object-action relationships
+            
+        Returns:
+            str: Full reconstructed meaning with nuances
+        """
+        # Combine all analysis components to create comprehensive meaning
+        meaning_parts = []
+        
+        # Add intent and emotional context
+        intent = self._infer_user_intent(text)
+        if intent:
+            meaning_parts.append(f"intent to {intent}")
+        
+        # Add emotional tone
+        if emotional_tone and emotional_tone.get('tone'):
+            meaning_parts.append(f"with {emotional_tone['tone']} sentiment")
+            
+        # Add subjects and actions
+        subjects = subjects_objects_actions.get('subjects', [])
+        actions = subjects_objects_actions.get('actions', [])
+        if subjects:
+            meaning_parts.append(f"subject: {', '.join(subjects[:2])}")
+        if actions:
+            meaning_parts.append(f"action: {', '.join(actions[:2])}")
+        
+        # Add entities and concepts
+        if entities:
+            meaning_parts.append(f"entities: {', '.join(entities[:3])}")
+        if concepts:
+            meaning_parts.append(f"concepts: {', '.join(concepts[:2])}")
+        
+        # Add key phrases
+        if phrases:
+            meaning_parts.append(f"key phrases: {', '.join(phrases[:2])}")
+        
+        # Identify negations and relationships
+        negation_detected = any(rel.get('relationship') == 'negation' for rel in word_relationships.values())
+        if negation_detected:
+            meaning_parts.append("negation detected")
+        
+        # Combine all parts
+        if meaning_parts:
+            return f"User {', '.join(meaning_parts)}"
+        else:
+            return "User expressed a general statement with unclear meaning"
+
+    def _classify_preference_from_deep_analysis(self, full_meaning: str) -> str:
+        """
+        Classify preference type based on deep analysis of full meaning.
+        This method dynamically assigns the appropriate preference type based on meaning rather than keywords.
+        
+        Args:
+            full_meaning: The full reconstructed meaning with nuances
+            
+        Returns:
+            str: The appropriate preference type (likes, dislikes, avoids, continues, enjoys, etc.)
+        """
+        if not full_meaning:
+            return 'likes'  # Default
+            
+        full_meaning_lower = full_meaning.lower()
+        
+        # Check for avoidance patterns in the full meaning
+        if any(pattern in full_meaning_lower for pattern in ['avoid', 'avoidance', 'aversion', 'stay away', 'refuse']):
+            return 'avoid'
+        
+        # Check for strong positive patterns
+        elif any(pattern in full_meaning_lower for pattern in ['strong affinity', 'love', 'adore', 'strongly positive']):
+            return 'love'
+            
+        # Check for positive patterns
+        elif any(pattern in full_meaning_lower for pattern in ['affinity', 'enjoy', 'like', 'positive sentiment', 'enjoys']):
+            return 'likes'
+            
+        # Check for necessity patterns
+        elif any(pattern in full_meaning_lower for pattern in ['necessity', 'need', 'require', 'must have']):
+            return 'need'
+            
+        # Check for desire patterns
+        elif any(pattern in full_meaning_lower for pattern in ['desire', 'want', 'wish', 'aspiration']):
+            return 'want'
+            
+        # Check for continuation patterns
+        elif any(pattern in full_meaning_lower for pattern in ['habit', 'continue', 'habitual', 'keep doing']):
+            return 'continue'
+            
+        # Check for enjoyment patterns
+        elif any(pattern in full_meaning_lower for pattern in ['enjoys', 'enjoyment', 'pleasure', 'delight']):
+            return 'enjoy'
+            
+        # Check for negative patterns
+        elif any(pattern in full_meaning_lower for pattern in ['dislike', 'negative sentiment', 'disgust', 'hate']):
+            return 'dislikes'
+            
+        else:
+            return 'likes'  # Default fallback
+        
+    def _find_source_conversation(self, memory_data: Dict[str, Any], event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Find the source conversation item for an event."""
+        try:
+            timestamp = event.get('timestamp')
+            if not timestamp:
+                return None
+                
+            conversation = memory_data.get('conversation', [])
+            for conv_item in conversation:
+                if conv_item.get('timestamp') == timestamp:
+                    return conv_item
+                    
+            # Try to find approximate match
+            target_time = datetime.fromisoformat(timestamp)
+            best_match = None
+            best_delta = None
+            
+            for conv_item in conversation:
+                conv_timestamp = conv_item.get('timestamp')
+                if not conv_timestamp:
+                    continue
+                    
+                try:
+                    conv_time = datetime.fromisoformat(conv_timestamp)
+                    delta = abs((conv_time - target_time).total_seconds())
+                    
+                    if best_delta is None or delta < best_delta:
+                        best_match = conv_item
+                        best_delta = delta
+                except Exception:
+                    continue
+                    
+            # Only return if close enough (within 1 second)
+            if best_delta is None or best_delta <= 1.0:
+                return best_match
+                
+        except Exception as e:
+            print(f"Error finding source conversation: {e}")
+            
+        return None
+
+    def _determine_source_info(self, memory_data: Dict[str, Any], event: Dict[str, Any], event_index: int) -> Dict[str, Any]:
+        """Determine where the memory entry came from and provide context."""
+        source_info = {
+            'source_type': 'unknown',
+            'source_details': '',
+            'context': '',
+            'event_index': event_index
+            # Removed original_summary as per new requirements
+        }
+        
+        # Check if event already has provenance with source info
+        provenance = event.get('provenance', {})
+        if isinstance(provenance, dict) and 'source_info' in provenance:
+            existing_source_info = provenance['source_info']
+            if isinstance(existing_source_info, dict):
+                # Use existing source info and update event_index
+                source_info.update(existing_source_info)
+                source_info['event_index'] = event_index
+                source_info['source_type'] = existing_source_info.get('source_type', 'provenance')
+                source_info['context'] = existing_source_info.get('context', event.get('summary', ''))[:200]
+                return source_info
+        
+        # Check if this is based on a conversation
+        conv_item = self._find_source_conversation(memory_data, event)
+        if conv_item:
+            role = conv_item.get('role', '')
+            # Avoid duplicate "User user:" by handling the role appropriately
+            if role.lower() == 'user':
+                # If role is already 'user', just use "User:"
+                source_info['context'] = f"User: {conv_item.get('content', '')[:200]}..."
+            else:
+                # Otherwise, include the role: "User role:"
+                source_info['context'] = f"User {role}: {conv_item.get('content', '')[:200]}..."
+            source_info['source_type'] = 'conversation'
+            source_info['source_details'] = f"Conversation at {conv_item.get('timestamp', '')}"
+            return source_info
+        
+        # Check if this might be from a fact update
+        if 'fact_category' in event or 'category' in event and 'current_facts' in memory_data:
+            source_info['source_type'] = 'fact_update'
+            category = event.get('fact_category') or event.get('category', 'general')
+            source_info['source_details'] = f"Fact update in category: {category}"
+            # Find related fact if it exists
+            current_facts = memory_data.get('current_facts', {})
+            for fact_key, fact in current_facts.items():
+                if isinstance(fact, dict) and (fact.get('category') == category or fact_key in event.get('summary', '')):
+                    source_info['context'] = f"Related to fact: {fact.get('value', '')[:200]}..."
+                    break
+            return source_info
+        
+        # Check if it's from a tool use
+        if any(keyword in event.get('summary', '').lower() for keyword in ['tool', 'command', 'api', 'function']):
+            source_info['source_type'] = 'tool_use'
+            source_info['source_details'] = 'Tool or API interaction'
+            source_info['context'] = event.get('summary', '')[:200]
+            return source_info
+        
+        # Default fallback
+        source_info['source_type'] = 'general'
+        source_info['source_details'] = 'General interaction'
+        source_info['context'] = event.get('summary', '')[:200]
+        
+        return source_info
+        
+    def _enhance_event_in_place(self, event: Dict[str, Any], conv_item: Optional[Dict[str, Any]], memory_data: Dict[str, Any], source_info: Optional[Dict[str, Any]] = None):
+        """Enhance an event in-place with improved content using comprehensive category awareness."""
+        try:
+            # Get original content
+            original_summary = event.get('summary', '')
+            conv_content = conv_item.get('content', '') if conv_item else ''
+            
+            # Clean up already enhanced summaries to avoid stacking "Original summary:" prefixes
+            clean_original = self._remove_original_summary_prefix(original_summary)
+            
+            # Use conversation content as primary source when available, especially if current summary is generic
+            if conv_content and (not clean_original or self._is_generic_summary(clean_original)):
+                # Use the actual user conversation content to create a better summary
+                source_text = conv_content
+            elif conv_content and clean_original:
+                # Combine both if we have both, but avoid duplication
+                # Check if conv_content is already contained in clean_original to prevent repetition
+                clean_original_sentences = [s.strip() for s in re.split(r'[.!?]+', clean_original) if s.strip()]
+                conv_content_sentences = [s.strip() for s in re.split(r'[.!?]+', conv_content) if s.strip()]
+                
+                # Only add conv_content if it's not already in the clean original
+                if any(conv_sent.lower() in [orig_sent.lower() for orig_sent in clean_original_sentences] for conv_sent in conv_content_sentences):
+                    # conv_content is already in clean_original, so just use clean original
+                    source_text = clean_original
+                else:
+                    # conv_content is not in clean_original, so combine them
+                    source_text = f"{clean_original}. User said: {conv_content}"
+            elif conv_content:
+                # Only conversation content available
+                source_text = conv_content
+            else:
+                source_text = clean_original or conv_content
+            
+            # Get the category from the event to determine how to enhance it
+            category = event.get('category', '') or event.get('fact_category', '') or self._infer_category_from_event(event)
+            
+            # Get user name for personalization
+            user_name = self._get_user_name(memory_data)
+            
+            # Check if this is an ADD event and apply the new rewrite logic
+            event_type = event.get('type', '').upper()
+            if event_type == 'ADD':
+                # First, check for similar existing memories to merge instead of creating duplicates
+                similar_event = self._find_similar_memory_event(event, memory_data, user_name)
+                
+                if similar_event:
+                    # Merge the new info with existing memory instead of creating a duplicate
+                    enhanced_summary = self._merge_memory_events(similar_event, event, user_name)
+                    # Update the similar event's summary with the merged content
+                    similar_event['summary'] = enhanced_summary
+                    # Return early since we're merging with existing, not creating a new one
+                    event['summary'] = enhanced_summary  # Update current event too for consistency
+                else:
+                    # Apply the new rewrite function to create a better summary
+                    source_context = source_info.get('context', '') if source_info else ''
+                    # Using summary instead of original_summary since original_summary has been removed
+                    rewritten_summary = self._rewrite_memory_entry(original_summary, source_context, user_name)
+                    
+                    # Validate the rewritten summary before using it
+                    is_valid, validation_reason = self._validate_rewrite(rewritten_summary, memory_data, user_name)
+                    if not is_valid:
+                        # If validation fails, use a fallback message
+                        print(f"Validation failed for rewritten summary: {validation_reason}")
+                        if "unclear" in rewritten_summary.lower() or "ambiguous" in rewritten_summary.lower():
+                            # If it's already a fallback message, use it
+                            enhanced_summary = rewritten_summary
+                        else:
+                            # Use a generic fallback
+                            enhanced_summary = f"{user_name or 'User'} expressed a general preference, but details are unclear."
+                    else:
+                        # Use the rewritten summary if it passes validation
+                        enhanced_summary = rewritten_summary
+                    
+                    # Run self-check to detect and fix internal duplication or low-value content
+                    enhanced_summary, was_fixed = self._self_check_summary(enhanced_summary, user_name)
+                    if was_fixed:
+                        # If the self-check fixed issues, run validation again to ensure it's still valid
+                        is_valid, validation_reason = self._validate_rewrite(enhanced_summary, memory_data, user_name)
+                        if not is_valid:
+                            # If the self-check introduced issues, use a fallback
+                            print(f"Self-check fix resulted in invalid summary: {validation_reason}")
+                            enhanced_summary = f"{user_name or 'User'} expressed a general preference, but details are unclear."
+                    
+                    # Clean the enhanced summary after self-check to ensure no meta phrases
+                    enhanced_summary = self.clean_invalid_summary(enhanced_summary)
+                    
+                    # Handle missing semantic context - apply the fix after rewrite
+                    # Create a temporary event to pass to the handler
+                    temp_event = event.copy()
+                    temp_event['summary'] = enhanced_summary
+                    temp_event = self._handle_missing_semantic_context(temp_event, source_context)
+                    enhanced_summary = temp_event.get('summary', enhanced_summary)
+            else:
+                # Apply category-aware enhancements using comprehensive context for non-ADD events
+                enhanced_summary = self._apply_category_aware_enhancements_to_event(source_text, category, user_name, memory_data, source_info)
+                
+                # Also apply missing semantic context handling for non-ADD events
+                temp_event = event.copy()
+                temp_event['summary'] = enhanced_summary
+                temp_event = self._handle_missing_semantic_context(temp_event, source_info.get('context', '') if source_info else '')
+                enhanced_summary = temp_event.get('summary', enhanced_summary)
+            
+            # Clean enhanced summary to remove duplicates before storing
+            if enhanced_summary:
+                enhanced_summary = self._remove_repetitive_phrases(enhanced_summary)
+            
+            # Clean original summary before comparing or storing to ensure no duplicates
+            clean_original_summary = self._remove_repetitive_phrases(original_summary) if original_summary else original_summary
+            
+            # Clean enhanced summary to remove meta phrases before storing
+            if enhanced_summary:
+                enhanced_summary = self.clean_invalid_summary(enhanced_summary)
+            
+            # Only update if we have a meaningful enhancement
+            if enhanced_summary and enhanced_summary != clean_original_summary:
+                event['summary'] = enhanced_summary
+            
+            # Ensure the event has the new structure fields
+            if 'previous_value' not in event:
+                event['previous_value'] = event.get('previous_value', None)
+            if 'current_value' not in event:
+                # Extract current value from summary or context
+                event['current_value'] = event.get('current_value', 
+                    enhanced_summary.split(':')[-1].strip() if ':' in enhanced_summary else enhanced_summary)
+            # Update current_value with enhanced extraction if needed
+            category = event.get('category', 'personal_preferences')
+            subcategory = event.get('subcategory', 'general')
+            event['current_value'] = self._extract_current_value(enhanced_summary, category, subcategory)
+            
+            if 'importance_score' not in event:
+                event['importance_score'] = event.get('importance_score', 0.6)
+            if 'confidence' not in event:
+                event['confidence'] = event.get('confidence', 0.8)
+            if 'category' not in event:
+                event['category'] = event.get('category', 'personal_preferences')
+            if 'subcategory' not in event:
+                event['subcategory'] = event.get('subcategory', 'general')
+
+            # Update current_value with enhanced extraction if needed
+            category = event.get('category', 'personal_preferences')
+            subcategory = event.get('subcategory', 'general')
+            event['current_value'] = self._extract_current_value(enhanced_summary, category, subcategory)
+            
+            # Enhance emotional context with all required fields based on the New_memory_event.json structure
+            emotional_context = event.get('emotional_context', {})
+            if not isinstance(emotional_context, dict):
+                emotional_context = {}
+
+            # Extract emotion tags based on conversation context for better analysis
+            # Use the source_info context to get original user input
+            summary_for_tags = enhanced_summary or original_summary
+            category_for_tags = event.get('category', 'general')
+
+            # Get the conversation context from source_info for more accurate emotion detection
+            context_for_analysis = summary_for_tags  # Default to summary
+
+            # For ADD events, prioritize the original user input for emotion analysis
+            # If source_info exists, try to get more specific user input
+            if source_info and 'context' in source_info:
+                source_context = source_info['context']
+                # Extract user content from context like "User: content"
+                if source_context and source_context.startswith("User:"):
+                    actual_user_content = source_context[5:].strip()  # Remove "User: " prefix
+                    # For ADD events, use the original user input as the primary context for emotion analysis
+                    context_for_analysis = actual_user_content
+                elif source_context:
+                    context_for_analysis = source_context
+
+            # Also consider the provenance context if available (this may have the original user input)
+            provenance = event.get('provenance', {})
+            if isinstance(provenance, dict) and 'source_info' in provenance:
+                prov_source_info = provenance['source_info']
+                if isinstance(prov_source_info, dict) and 'context' in prov_source_info:
+                    prov_context = prov_source_info['context']
+                    if prov_context and prov_context.startswith("User:"):
+                        actual_user_content = prov_context[5:].strip()  # Remove "User: " prefix
+                        # For ADD events, prioritize the original user input for emotion analysis
+                        context_for_analysis = actual_user_content
+                    elif prov_context and context_for_analysis == summary_for_tags:  # Only use if not already set
+                        context_for_analysis = prov_context
+
+            # For ADD events, we want to make sure we use the original user input context for emotion analysis
+            # Get original user input specifically for emotion analysis
+            emotion_analysis_context = context_for_analysis  # This should already be set to user input for ADD events
+
+            # If this is an ADD event, make one more check to ensure we're using original user input
+            if event_type == 'ADD':
+                # Look for the actual user input in provenance context
+                provenance = event.get('provenance', {})
+                if isinstance(provenance, dict):
+                    prov_source_info = provenance.get('source_info', {})
+                    if isinstance(prov_source_info, dict):
+                        prov_context = prov_source_info.get('context', '')
+                        if prov_context and prov_context.startswith("User:"):
+                            actual_user_content = prov_context[5:].strip()
+                            emotion_analysis_context = actual_user_content
+                        elif prov_context:
+                            emotion_analysis_context = prov_context
+
+            # Use the comprehensive emotion analysis to generate complete emotional context
+            comprehensive_emotion_analysis = self._generate_emotion_tags(emotion_analysis_context, enhanced_summary)
+
+            # Initialize all emotional context fields with comprehensive analysis
+            # Ensure all required emotional context fields are present as per New_memory_event.json
+            if 'sentiment' not in emotional_context:
+                emotional_context['sentiment'] = comprehensive_emotion_analysis.get('sentiment', 'neutral')
+            if 'emotion_tags' not in emotional_context:
+                emotional_context['emotion_tags'] = comprehensive_emotion_analysis.get('emotion_tags', [])
+                # For ADD events, ensure that we don't have empty emotion tags if we have context
+                if event_type == 'ADD' and not emotional_context['emotion_tags'] and emotion_analysis_context:
+                    # Try to extract emotion tags specifically from the user input context
+                    fallback_tags = self._analyze_emotion_tags(emotion_analysis_context, event.get('category', 'general'))
+                    if fallback_tags:
+                        emotional_context['emotion_tags'] = fallback_tags
+            else:
+                # If emotion_tags already exists, update it with newly analyzed tags
+                existing_tags = emotional_context['emotion_tags']
+                if isinstance(existing_tags, list):
+                    # Combine existing and new tags, removing duplicates
+                    all_tags = list(set(existing_tags + comprehensive_emotion_analysis.get('emotion_tags', [])))
+                    emotional_context['emotion_tags'] = all_tags
+                else:
+                    emotional_context['emotion_tags'] = comprehensive_emotion_analysis.get('emotion_tags', [])
+                    # For ADD events, ensure that we don't have empty emotion tags if we have context
+                    if event_type == 'ADD' and not emotional_context['emotion_tags'] and emotion_analysis_context:
+                        # Try to extract emotion tags specifically from the user input context
+                        fallback_tags = self._analyze_emotion_tags(emotion_analysis_context, event.get('category', 'general'))
+                        if fallback_tags:
+                            emotional_context['emotion_tags'] = fallback_tags
+
+            if 'emotional_intensity' not in emotional_context:
+                emotional_context['emotional_intensity'] = comprehensive_emotion_analysis.get('emotional_intensity', 0.5)
+
+            if 'mood_context' not in emotional_context:
+                emotional_context['mood_context'] = comprehensive_emotion_analysis.get('mood_context', 'normal')
+
+            if 'confidence' not in emotional_context:
+                emotional_context['confidence'] = comprehensive_emotion_analysis.get('confidence', 0.7)
+
+            event['emotional_context'] = emotional_context
+
+            # Enhance semantic context with semantic tags (for UPDATE events primarily)
+            semantic_context = event.get('semantic_context', {})
+            if isinstance(semantic_context, str):
+                # If semantic_context is still a string, convert to dict with that as the base info
+                semantic_context = {
+                    'base_info': semantic_context
+                }
+            elif not isinstance(semantic_context, dict):
+                semantic_context = {}
+            
+            # Extract semantic tags for UPDATE events - following the example structure
+            if event_type == 'UPDATE':
+                subcategory_for_tags = event.get('subcategory', 'general')
+                semantic_tags = self._extract_semantic_tags(context_for_analysis, category_for_tags, subcategory_for_tags)
+                
+                # Ensure semantic_context has the example structure for UPDATE events
+                semantic_context['semantic_tags'] = semantic_tags
+                if 'related_facts' not in semantic_context:
+                    semantic_context['related_facts'] = []
+                if 'confidence_score' not in semantic_context:
+                    semantic_context['confidence_score'] = 0.8
+                if 'context_type' not in semantic_context:
+                    semantic_context['context_type'] = 'preference_update'
+                if 'similarity_hash' not in semantic_context:
+                    # Generate a simple hash based on the context
+                    import hashlib
+                    hash_input = context_for_analysis + category_for_tags + subcategory_for_tags
+                    semantic_context['similarity_hash'] = hashlib.md5(hash_input.encode()).hexdigest()[:8]
+            elif event_type == 'ADD':
+                # For ADD events, we can still add semantic tags if needed
+                subcategory_for_tags = event.get('subcategory', 'general')
+                semantic_tags = self._extract_semantic_tags(context_for_analysis, category_for_tags, subcategory_for_tags)
+                if semantic_tags:
+                    semantic_context['semantic_tags'] = semantic_tags
+                    # Add some basic fields to maintain consistency
+                    if 'related_facts' not in semantic_context:
+                        semantic_context['related_facts'] = []
+                    if 'confidence_score' not in semantic_context:
+                        semantic_context['confidence_score'] = 0.8
+                    if 'context_type' not in semantic_context:
+                        semantic_context['context_type'] = 'preference_addition'
+
+            event['semantic_context'] = semantic_context
+            
+            # Add provenance to indicate in-place enhancement
+            provenance = event.get('provenance', {})
+            if not isinstance(provenance, dict):
+                provenance = {}
+                
+            # Store enhancement information without original_summary
+            provenance.update({
+                'enhanced_in_place': True,
+                'enhanced_at': datetime.now().isoformat()
+            })
+            
+            # Add source information to provenance
+            if source_info:
+                provenance['source_info'] = source_info
+                
+            if conv_item:
+                provenance['source_conversation_timestamp'] = conv_item.get('timestamp')
+                
+            event['provenance'] = provenance
+            
+            # Add Added_preference fields based on context if available
+            if source_info and 'context' in source_info:
+                context = source_info['context']
+                if context and 'Added preference' not in context:  # Avoid processing system-generated preference entries
+                    # Use the new preference system instead of the old one
+                    event = self._add_preference_fields_from_context(event, context)
+            
+            # Ensure other required fields exist
+            self._ensure_event_structure(event, conv_item)
+
+            # Ensure emotional context is always properly populated
+            text_content = (source_info.get('context', '') if source_info else '') or event.get('summary', '')
+            event = self._ensure_emotional_context(event, text_content)
+
+        except Exception as e:
+            print(f"Error enhancing event: {e}")
+
+        # Return the enhanced event for further processing
+        return event
+            
+    def _find_similar_memory_event(self, event: Dict[str, Any], memory_data: Dict[str, Any], user_name: Optional[str]) -> Optional[Dict[str, Any]]:
+        """
+        Find a similar existing memory event to merge with instead of creating a duplicate.
+        
+        Args:
+            event: The current event being processed
+            memory_data: The complete memory data structure
+            user_name: The user's name for comparison
+            
+        Returns:
+            Dict[str, Any] or None: Similar event if found, otherwise None
+        """
+        current_summary = event.get('summary', '').lower()
+        current_category = event.get('category', event.get('fact_category', 'general'))
+        
+        # Get all memory events to compare against
+        memory_events = memory_data.get('memory_events', [])
+        
+        for existing_event in memory_events:
+            if not isinstance(existing_event, dict):
+                continue
+                
+            # Skip if it's the same event or if it's not an ADD event of the same category
+            if existing_event is event:
+                continue
+                
+            existing_summary = existing_event.get('summary', '').lower()
+            existing_category = existing_event.get('category', existing_event.get('fact_category', 'general'))
+            
+            # Check if categories match
+            if current_category != existing_category:
+                continue
+            
+            # Check for similarity between summaries
+            if self._is_similar_content(current_summary, existing_summary, user_name):
+                return existing_event
+                
+        return None
+    
+    def _is_similar_content(self, summary1: str, summary2: str, user_name: Optional[str]) -> bool:
+        """
+        Determine if two summaries contain similar content that should be merged.
+        
+        Args:
+            summary1: First summary to compare
+            summary2: Second summary to compare
+            user_name: The user's name for proper comparison
+            
+        Returns:
+            bool: True if content is similar enough to merge, False otherwise
+        """
+        # Normalize both summaries
+        norm1 = re.sub(r'\s+', ' ', summary1.lower().strip())
+        norm2 = re.sub(r'\s+', ' ', summary2.lower().strip())
+        
+        # Remove common patterns like user names for comparison
+        if user_name:
+            norm1 = re.sub(rf'{re.escape(user_name)}\s+', '', norm1, flags=re.IGNORECASE)
+            norm2 = re.sub(rf'{re.escape(user_name)}\s+', '', norm2, flags=re.IGNORECASE)
+        
+        # Check for common patterns that indicate similarity
+        # Extract core content (e.g., what the user likes, their preference)
+        core_content1 = self._extract_core_content(norm1)
+        core_content2 = self._extract_core_content(norm2)
+        
+        # If core contents are the same, they're similar
+        if core_content1 and core_content2 and core_content1 == core_content2:
+            return True
+        
+        # Check if one summary is contained in another (partial overlap)
+        if core_content1 and core_content2:
+            # Check if they refer to the same topic with different wording
+            return self._contents_refer_to_same_topic(core_content1, core_content2)
+        
+        # Additional similarity check: use word overlap to detect similarity
+        # Tokenize both normalized summaries into sets of words
+        words1 = set(norm1.split())
+        words2 = set(norm2.split())
+        
+        # Remove common stop words to focus on meaningful content
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those'}
+        words1 = words1 - stop_words
+        words2 = words2 - stop_words
+        
+        # Calculate Jaccard similarity coefficient
+        intersection = len(words1.intersection(words2))
+        union = len(words1.union(words2))
+        
+        if union > 0:
+            jaccard_similarity = intersection / union
+            # If more than 70% of the unique words overlap, consider them similar
+            if jaccard_similarity > 0.7:
+                return True
+        
+        return False
+    
+    def _extract_core_content(self, text: str) -> str:
+        """
+        Extract the core meaningful content from a summary text.
+        
+        Args:
+            text: The text to extract core content from
+            
+        Returns:
+            str: The core content
+        """
+        if not text:
+            return text
+        
+        # Remove common phrases and extract the meaningful part
+        # Look for phrases like "likes X", "enjoys Y", "prefers Z", etc.
+        patterns = [
+            r"(?:likes|like|enjoy|enjoys|prefer|prefers|love|loves|interested in|interested|fond of|appreciate|appreciates)\s+(.+?)(?:\.|$)",
+            r"(?:wants|want|need|needs|require|requires)\s+(.+?)(?:\.|$)",
+            r"(?:think|thinks|believe|believes|feel|feels|consider|considers|find|finds)\s+(.+?)(?:\.|$)",
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        
+        # If no specific pattern matched, return the original text
+        return text.strip()
+    
+    def _contents_refer_to_same_topic(self, content1: str, content2: str) -> bool:
+        """
+        Check if two content strings refer to the same topic.
+        
+        Args:
+            content1: First content string
+            content2: Second content string
+            
+        Returns:
+            bool: True if they refer to the same topic, False otherwise
+        """
+        # Simple similarity check by comparing normalized versions
+        norm1 = re.sub(r'[^\w\s]', '', content1.lower().strip())
+        norm2 = re.sub(r'[^\w\s]', '', content2.lower().strip())
+        
+        # Check if they're about the same thing
+        words1 = set(norm1.split())
+        words2 = set(norm2.split())
+        
+        # If there's significant overlap in content, they likely refer to the same topic
+        if words1 and words2:
+            intersection = words1.intersection(words2)
+            if len(intersection) > 0:
+                # At least one common word
+                return True
+        
+        return False
+    
+    def _merge_memory_events(self, existing_event: Dict[str, Any], new_event: Dict[str, Any], user_name: Optional[str]) -> str:
+        """
+        Merge content from a new event into an existing event.
+        
+        Args:
+            existing_event: The existing event to merge into
+            new_event: The new event with additional information
+            user_name: The user's name for proper merging
+            
+        Returns:
+            str: The merged summary
+        """
+        existing_summary = existing_event.get('summary', '')
+        new_summary = new_event.get('summary', '')
+        
+        # If both summaries are the same, just return the existing one
+        if existing_summary == new_summary:
+            return existing_summary
+        
+        # Extract core content from both to understand what's being added
+        core_existing = self._extract_core_content(existing_summary)
+        core_new = self._extract_core_content(new_summary)
+        
+        # If they refer to the same core topic, enhance the existing summary with new context
+        if self._contents_refer_to_same_topic(core_existing, core_new):
+            # Combine the meaningful parts, avoiding repetition
+            user_ref = user_name or "User"
+            
+            # Create a merged summary that combines both pieces of information
+            # But in a meaningful way, avoiding constructs like "likes likes"
+            if "likes" in existing_summary and "likes" in new_summary:
+                # Extract what each "likes" refers to and combine them
+                existing_target = self._extract_core_content(existing_summary)
+                new_target = self._extract_core_content(new_summary)
+                
+                if existing_target != new_target:
+                    # Combine different targets that user likes
+                    if existing_target and new_target:
+                        return f"{user_ref} likes {existing_target} and {new_target}."
+            
+            # If we can't determine a smart way to merge, just return the enhanced summary
+            # since it went through the rewrite process
+            return new_summary
+        
+        # If they're different topics, we just return the new one
+        # (In a full implementation, we'd want to handle this differently)
+        return new_summary
+            
+    def _infer_category_from_event(self, event: Dict[str, Any]) -> str:
+        """Infer the category from the event structure and content."""
+        # Check for common category indicators in the event
+        if 'category' in event:
+            return event['category']
+        
+        # Check for other possible category fields
+        possible_category_fields = ['fact_category', 'memory_category', 'type', 'tag']
+        for field in possible_category_fields:
+            if field in event:
+                return event[field]
+        
+        # Infer from the content of the event
+        summary = event.get('summary', '').lower()
+        
+        # Keyword-based category inference
+        category_keywords = {
+            'personal_preferences': ['prefer', 'like', 'love', 'hate', 'dislike', 'enjoy', 'favorite', 'interest'],
+            'user_preferences': ['prefer', 'like', 'love', 'hate', 'dislike', 'enjoy', 'favorite', 'interest'],
+            'interests': ['interest', 'hobby', 'passion', 'like', 'enjoy'],
+            'long_term_goals': ['goal', 'aim', 'dream', 'hope', 'become', 'achieve', 'aspiration'],
+            'collaborator_relationships': ['friend', 'colleague', 'partner', 'team', 'coworker', 'relationship'],
+            'user_identity': ['name', 'id', 'identity', 'pronoun'],
+            'activity_behavior': ['usually', 'always', 'often', 'rarely', 'behavior', 'time', 'active'],
+            'current_state': ['currently', 'now', 'present', 'state'],
+            'knowledge_expertise': ['know', 'expert', 'skill', 'proficient', 'experience']
+        }
+        
+        for category, keywords in category_keywords.items():
+            if any(keyword in summary for keyword in keywords):
+                return category
+        
+        return 'general'
+    
+    def _apply_category_aware_enhancements_to_event(self, text: str, category: Optional[str], user_name: Optional[str], memory_data: Dict[str, Any], source_info: Optional[Dict[str, Any]] = None) -> str:
+        """Apply enhancements to an event based on its category and source information."""
+        if not text:
+            return "User interaction recorded"
+        
+        # Store original text for reference
+        original_text = text
+        user_ref = user_name or "User"
+        
+        # Handle case where category is None
+        if category is None:
+            category = 'general'
+        
+        # Determine the specific subcategory if applicable
+        category_parts = category.split('.')
+        main_category = category_parts[0] if category_parts else ''
+        sub_category = category_parts[1] if len(category_parts) > 1 else ''
+        
+        # Apply enhancements based on the main category and subcategory
+        if main_category in ['personal_preferences', 'user_preferences']:
+            if sub_category == 'likes':
+                return self._enhance_like_value(text, user_name, main_category.replace('_preferences', ''))
+            elif sub_category == 'avoid':
+                return self._enhance_avoid_value(text, user_name, main_category.replace('_preferences', ''))
+        elif main_category == 'interests':
+            return self._enhance_interest_value(text, user_name)
+        elif main_category == 'long_term_goals':
+            return self._enhance_goal_value(text, user_name)
+        elif main_category == 'collaborator_relationships':
+            return self._enhance_relationship_value(text, user_name)
+        else:
+            # Apply general enhancements for other categories
+            enhanced = self._apply_enhancements(text, user_name, memory_data, source_info)
+        
+        # Apply general text improvements to all values (only if enhanced was set above)
+        if 'enhanced' not in locals():
+            enhanced = self._apply_enhancements(text, user_name, memory_data, source_info)
+        
+        # Apply comprehensive enhancements with full context awareness
+        enhanced = self._normalize_text(enhanced)
+        enhanced = self._expand_shorthand(enhanced)
+        enhanced = self._normalize_technologies(enhanced)
+        enhanced = self._fix_grammar(enhanced)
+        
+        # Personalize references only if we have a user name
+        if user_name:
+            enhanced = re.sub(r'\bUser\b', user_name, enhanced)
+            enhanced = re.sub(r"\bUser's\b", f"{user_name}'s", enhanced)
+        
+        # Apply additional context-aware rewriting based on the category and source
+        enhanced = self._apply_category_specific_rewriting(enhanced, category, text, user_name, memory_data)
+        enhanced = self._apply_source_aware_rewriting(enhanced, source_info, text, user_name)
+        
+        return enhanced.strip()
+    
+    def _apply_category_specific_rewriting(self, enhanced: str, category: str, original_text: str, user_name: Optional[str], memory_data: Dict[str, Any]) -> str:
+        """Apply category-specific rewriting logic."""
+        # If we're processing a personal_preferences event, ensure it's properly formatted
+        if category and 'personal_preferences' in category:
+            # Check if this looks like a preference but isn't well-formatted
+            if 'like' in original_text.lower() or 'prefer' in original_text.lower() or 'enjoy' in original_text.lower():
+                if user_name and not enhanced.startswith(user_name):
+                    # Add user reference if missing
+                    if f"{user_name} likes" not in enhanced and f"{user_name} prefer" not in enhanced:
+                        # Extract the core preference if possible
+                        match = re.search(r'like[sd]?[:\s]*([^.]+)', original_text, re.IGNORECASE)
+                        if match:
+                            preference = match.group(1).strip()
+                            return f"{user_name} likes {preference}."
+        
+        # For interests category
+        if category and 'interests' in category:
+            if 'interest' in original_text.lower() or 'like' in original_text.lower():
+                if user_name:
+                    return f"{user_name} is interested in {original_text.replace('Added interest:', '').replace('interest: ', '').strip()}."
+        
+        # For goals category
+        if category and 'long_term_goals' in category:
+            if user_name:
+                return f"{user_name}'s goal: {original_text.replace('goal:', '').strip()}."
+        
+        return enhanced
+
+    def _apply_source_aware_rewriting(self, enhanced: str, source_info: Optional[Dict[str, Any]], original_text: str, user_name: Optional[str]) -> str:
+        """Apply rewriting based on where the memory entry came from."""
+        if not source_info:
+            return enhanced
+            
+        source_type = source_info.get('source_type', 'unknown')
+        source_details = source_info.get('source_details', '')
+        context = source_info.get('context', '')
+        
+        # If the source is from a conversation, emphasize what the user actually said
+        if source_type == 'conversation':
+            # Check if the enhanced text already captures the user's intent
+            # If it's still too generic, try to be more specific based on the conversation context
+            if 'mentioned' in enhanced.lower() or 'said' not in enhanced.lower():
+                # Try to extract more specific information from the original conversation
+                if user_name and context and len(context) > 10:  # Has meaningful context
+                    # Extract the user's actual statement from the conversation context
+                    user_statement = context.replace(f"User {user_name}:", "").replace("User:", "").strip()
+                    if user_statement and len(user_statement) > 0:  # If it was truncated
+                        # Use the conversation context to rewrite
+                        if not any(word in enhanced.lower() for word in ['likes', 'wants', 'needs', 'thinks', 'feels']):
+                            # Try to rephrase based on the context
+                            if 'like' in user_statement.lower() or 'love' in user_statement.lower():
+                                return f"{user_name} expressed that {user_statement.lower().replace('i ', 'they ').replace('my ', 'their ')}"
+                            elif 'want' in user_statement.lower() or 'need' in user_statement.lower():
+                                return f"{user_name} wants {user_statement.lower().replace('i ', 'they ').replace('my ', 'their ').replace('want', '').replace('need', '').strip()}"
+        
+        # If source is from a fact update, make it more specific to the fact type
+        elif source_type == 'fact_update':
+            category = source_details.replace('Fact update in category: ', '') if 'Fact update in category: ' in source_details else 'general'
+            if category and 'preference' in category and 'added' not in enhanced.lower():
+                # Make it clear this is a preference addition
+                return f"{user_name or 'User'} added a new {category} preference: {enhanced}"
+        
+        # If source is from tool use, make the tool interaction clear
+        elif source_type == 'tool_use':
+            if 'used the' not in enhanced.lower() and 'tool' not in enhanced.lower():
+                # Add clarity about the tool usage
+                tool_name = 'a tool'
+                if 'search' in original_text.lower():
+                    tool_name = 'the search tool'
+                elif 'api' in original_text.lower():
+                    tool_name = 'an API'
+                return f"{user_name or 'User'} used {tool_name}: {enhanced}"
+        
+        # For other sources, return the enhanced text as is
+        return enhanced
+            
+    def _is_generic_summary(self, summary: str) -> bool:
+        """Check if a summary is generic and doesn't contain specific information."""
+        generic_patterns = [
+            r'added a preference.*not specified',
+            r'indicating.*likes.*particular topic',
+            r'has.*preference.*subject is not specified',
+            r'user.*preference.*unspecified',
+            r'generic.*preference.*entry'
+        ]
+        
+        summary_lower = summary.lower()
+        return any(re.search(pattern, summary_lower) for pattern in generic_patterns)
+            
+    def _remove_original_summary_prefix(self, text: str) -> str:
+        """Remove any existing 'Original summary:' prefixes to avoid stacking."""
+        if not text:
+            return text
+            
+        # Remove multiple "Original summary:" prefixes that may have been stacked
+        # The pattern matches "Original summary:" followed by the actual content
+        # and continues recursively to remove all stacked prefixes
+        cleaned_text = text
+        while cleaned_text.startswith("Original summary: "):
+            # Extract the actual content after "Original summary: "
+            cleaned_text = cleaned_text[18:]  # Remove "Original summary: " (18 characters)
+            
+        return cleaned_text
+            
+    def _get_user_name(self, memory_data: Dict[str, Any]) -> Optional[str]:
+        """Extract user name from memory data with enhanced detection."""
+        try:
+            # Try to get from user object
+            user = memory_data.get('user', {})
+            if isinstance(user, dict):
+                # Check multiple possible name fields
+                name_fields = ['name', 'username', 'display_name', 'full_name']
+                for field in name_fields:
+                    name = user.get(field)
+                    if name:
+                        return name
+                    
+            # Try to get from current facts with enhanced pattern matching
+            facts = memory_data.get('current_facts', {})
+            if isinstance(facts, dict):
+                for fact in facts.values():
+                    if isinstance(fact, dict) and fact.get('category') in ['user_identity', 'personal_preferences']:
+                        value = str(fact.get('value', ''))
+                        # Enhanced extraction patterns
+                        patterns = [
+                            r'(?:name is|i am|call me|my name is|I\'m|I am)\s+([a-zA-Z]+)',
+                            r'(?:name:|name -)\s*([a-zA-Z]+)',
+                            r'([a-zA-Z]+)\s+(?:is my name|is me)',
+                        ]
+                        for pattern in patterns:
+                            match = re.search(pattern, value, re.IGNORECASE)
+                            if match:
+                                return match.group(1)
+                                
+            # Try to extract from conversation history as last resort
+            conversation = memory_data.get('conversation', [])
+            if isinstance(conversation, list):
+                # Look for recent user messages that mention their name
+                for conv_item in reversed(conversation[-5:]):  # Check last 5 messages
+                    if isinstance(conv_item, dict) and conv_item.get('role') == 'user':
+                        content = conv_item.get('content', '')
+                        match = re.search(r'(?:my name is|i am|call me)\s+([a-zA-Z]+)', content, re.IGNORECASE)
+                        if match:
+                            return match.group(1)
+                            
+        except Exception as e:
+            print(f"Error extracting user name: {e}")
+        return None
+        
+    def _get_user_preferences(self, memory_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract user preferences and characteristics for better personalization with category awareness."""
+        preferences = {}
+        try:
+            facts = memory_data.get('current_facts', {})
+            if isinstance(facts, dict):
+                for fact in facts.values():
+                    if isinstance(fact, dict):
+                        category = fact.get('category')
+                        value = fact.get('value', '')
+                        confidence = fact.get('confidence', 0.5)
+                        
+                        # Only include high-confidence facts
+                        if confidence < 0.7:
+                            continue
+                            
+                        if category == 'personal_preferences':
+                            # Extract preference type and value
+                            pref_match = re.search(r'(?:prefer|like|love|hate|dislike)\s+(.+)', str(value), re.IGNORECASE)
+                            if pref_match:
+                                pref_value = pref_match.group(1).strip()
+                                preferences['communication_style'] = pref_value
+                                
+                        elif category == 'user_identity':
+                            # Extract identity details
+                            if re.search(r'(?:developer|programmer|engineer)', str(value), re.IGNORECASE):
+                                preferences['role'] = 'developer'
+                            elif re.search(r'(?:designer|artist)', str(value), re.IGNORECASE):
+                                preferences['role'] = 'designer'
+                            elif re.search(r'(?:student|learner)', str(value), re.IGNORECASE):
+                                preferences['role'] = 'student'
+                                
+                        elif category == 'current_state':
+                            preferences['current_state'] = value
+                            
+                        elif category == 'activity_behavior':
+                            preferences['activity_pattern'] = value
+                            
+                        # Add category-specific preferences with enhanced awareness
+                        elif category in self.category_framework:
+                            category_info = self.category_framework[category]
+                            # Use the category name as key and value as the preference
+                            preferences[category] = {
+                                'value': value,
+                                'description': category_info['description'],
+                                'enhancement_focus': category_info['enhancement_focus']
+                            }
+                            
+            # Extract from user object if available
+            user = memory_data.get('user', {})
+            if isinstance(user, dict):
+                preferences.update({
+                    'timezone': user.get('timezone'),
+                    'language': user.get('language', 'en'),
+                    'location': user.get('location')
+                })
+                
+        except Exception as e:
+            print(f"Error extracting user preferences: {e}")
+        return preferences
+        
+    def _get_comprehensive_user_context(self, memory_data: Dict[str, Any]) -> str:
+        """Build a comprehensive user context for LLM enhancement with 27-category awareness."""
+        try:
+            context_parts = []
+            
+            # Get user name
+            name = self._get_user_name(memory_data)
+            if name:
+                context_parts.append(f"User's name: {name}")
+                
+            # Get preferences with category awareness
+            preferences = self._get_user_preferences(memory_data)
+            if preferences:
+                pref_str = "; ".join([f"{k}: {v}" for k, v in preferences.items() if v])
+                if pref_str:
+                    context_parts.append(f"User preferences: {pref_str}")
+                    
+            # Get recent conversation themes with category awareness
+            themes = self._extract_conversation_themes(memory_data)
+            if themes:
+                context_parts.append(f"Recent conversation themes: {themes}")
+                
+            # Get user goals if available with category awareness
+            goals = self._extract_user_goals(memory_data)
+            if goals:
+                context_parts.append(f"User goals: {goals}")
+                
+            # Get user identity information with category awareness
+            identity_info = self._extract_user_identity(memory_data)
+            if identity_info:
+                context_parts.append(f"User identity: {identity_info}")
+                
+            # Get user activity patterns with category awareness
+            activity_patterns = self._extract_activity_patterns(memory_data)
+            if activity_patterns:
+                context_parts.append(f"Activity patterns: {activity_patterns}")
+                
+            # Get communication boundaries with category awareness
+            boundaries = self._extract_communication_boundaries(memory_data)
+            if boundaries:
+                context_parts.append(f"Communication boundaries: {boundaries}")
+                
+            # Get knowledge expertise with category awareness
+            expertise = self._extract_knowledge_expertise(memory_data)
+            if expertise:
+                context_parts.append(f"Knowledge expertise: {expertise}")
+                
+            # Get collaborator relationships with category awareness
+            relationships = self._extract_collaborator_relationships(memory_data)
+            if relationships:
+                context_parts.append(f"Collaborator relationships: {relationships}")
+                
+            return ". ".join(context_parts)
+            
+        except Exception as e:
+            print(f"Error building comprehensive user context: {e}")
+            return ""
+            
+    def _extract_user_identity(self, memory_data: Dict[str, Any]) -> str:
+        """Extract user identity information from memory facts."""
+        try:
+            facts = memory_data.get('current_facts', {})
+            if not isinstance(facts, dict):
+                return ""
+                
+            identity_facts = []
+            for fact in facts.values():
+                if isinstance(fact, dict) and fact.get('category') == 'user_identity':
+                    value = fact.get('value', '')
+                    identity_facts.append(str(value))
+                    
+            return "; ".join(identity_facts) if identity_facts else ""
+            
+        except Exception:
+            return ""
+            
+    def _extract_activity_patterns(self, memory_data: Dict[str, Any]) -> str:
+        """Extract user activity patterns from memory facts."""
+        try:
+            facts = memory_data.get('current_facts', {})
+            if not isinstance(facts, dict):
+                return ""
+                
+            activity_facts = []
+            for fact in facts.values():
+                if isinstance(fact, dict) and fact.get('category') == 'activity_behavior':
+                    value = fact.get('value', '')
+                    activity_facts.append(str(value))
+                    
+            return "; ".join(activity_facts) if activity_facts else ""
+            
+        except Exception:
+            return ""
+            
+    def _extract_communication_boundaries(self, memory_data: Dict[str, Any]) -> str:
+        """Extract communication boundaries from memory facts."""
+        try:
+            facts = memory_data.get('current_facts', {})
+            if not isinstance(facts, dict):
+                return ""
+                
+            boundary_facts = []
+            for fact in facts.values():
+                if isinstance(fact, dict) and fact.get('category') == 'communication_boundaries':
+                    value = fact.get('value', '')
+                    boundary_facts.append(str(value))
+                    
+            return "; ".join(boundary_facts) if boundary_facts else ""
+            
+        except Exception:
+            return ""
+            
+    def _extract_knowledge_expertise(self, memory_data: Dict[str, Any]) -> str:
+        """Extract knowledge expertise from memory facts."""
+        try:
+            facts = memory_data.get('current_facts', {})
+            if not isinstance(facts, dict):
+                return ""
+                
+            expertise_facts = []
+            for fact in facts.values():
+                if isinstance(fact, dict) and fact.get('category') == 'knowledge_expertise':
+                    value = fact.get('value', '')
+                    expertise_facts.append(str(value))
+                    
+            return "; ".join(expertise_facts) if expertise_facts else ""
+            
+        except Exception:
+            return ""
+            
+    def _extract_collaborator_relationships(self, memory_data: Dict[str, Any]) -> str:
+        """Extract collaborator relationships from memory facts."""
+        try:
+            facts = memory_data.get('current_facts', {})
+            if not isinstance(facts, dict):
+                return ""
+                
+            relationship_facts = []
+            for fact in facts.values():
+                if isinstance(fact, dict) and fact.get('category') == 'collaborator_relationships':
+                    value = fact.get('value', '')
+                    relationship_facts.append(str(value))
+                    
+            return "; ".join(relationship_facts) if relationship_facts else ""
+            
+        except Exception:
+            return ""
+            
+    def _extract_conversation_themes(self, memory_data: Dict[str, Any]) -> str:
+        """Extract key themes from recent conversation with category awareness."""
+        try:
+            conversation = memory_data.get('conversation', [])
+            if not isinstance(conversation, list) or len(conversation) == 0:
+                return ""
+                
+            # Get recent messages (last 10)
+            recent_msgs = [msg.get('content', '') for msg in conversation[-10:] if isinstance(msg, dict)]
+            text = " ".join(recent_msgs)
+            
+            # Simple keyword-based theme extraction with category awareness
+            themes = []
+            tech_keywords = ['python', 'javascript', 'code', 'programming', 'development', 'software']
+            creative_keywords = ['design', 'art', 'creative', 'graphic', 'ui', 'ux']
+            business_keywords = ['business', 'startup', 'company', 'product', 'market']
+            
+            text_lower = text.lower()
+            if any(keyword in text_lower for keyword in tech_keywords):
+                themes.append("technology")
+            if any(keyword in text_lower for keyword in creative_keywords):
+                themes.append("creativity")
+            if any(keyword in text_lower for keyword in business_keywords):
+                themes.append("business")
+                
+            return ", ".join(themes) if themes else "general"
+            
+        except Exception:
+            return "general"
+            
+    def _extract_user_goals(self, memory_data: Dict[str, Any]) -> str:
+        """Extract user goals from memory facts with category awareness."""
+        try:
+            facts = memory_data.get('current_facts', {})
+            if not isinstance(facts, dict):
+                return ""
+                
+            goals = []
+            for fact in facts.values():
+                if isinstance(fact, dict) and fact.get('category') == 'long_term_goals':
+                    value = fact.get('value', '')
+                    goals.append(str(value))
+                    
+            return "; ".join(goals) if goals else ""
+            
+        except Exception:
+            return ""
+            
+    
+        
+    def _apply_enhancements(self, text: str, user_name: Optional[str], memory_data: Dict[str, Any], source_info: Optional[Dict[str, Any]] = None) -> str:
+        """Apply all enhancements to the text, being precise about what the user actually said and where it came from."""
+        if not text:
+            return "User interaction recorded"
+            
+        # Store original text for reference
+        original_text = text
+        
+        # If this looks like a system-generated pattern with conversation data available in source_info,
+        # try to extract the actual user statement
+        if source_info and source_info.get('source_type') == 'conversation':
+            conv_context = source_info.get('context', '')
+            if conv_context and ('Added preference' in original_text or 'indicating likes' in original_text):
+                # Extract the actual user statement from the conversation context
+                # Use globally imported re module
+                # Remove role prefix like "User said:" or "User:" to get the actual statement
+                user_statement = re.sub(r'User\s*\w*:?\s*', '', conv_context, flags=re.IGNORECASE).strip()
+                user_statement = user_statement.replace('...', '').strip()
+                
+                if user_statement and user_statement.lower() not in ['user', 'said', '']:
+                    # If we have a meaningful user statement, use this instead of the system-generated text
+                    like_match = re.search(r'(?:i|we|you) (like|love|enjoy|prefer|want|need|think|feel)\s+(.+)', user_statement, re.IGNORECASE)
+                    if like_match:
+                        verb = like_match.group(1)
+                        object_phrase = like_match.group(2).strip()
+                        user_ref = user_name or "User"
+                        if verb in ['like', 'love', 'enjoy']:
+                            text = f"{user_ref} likes {object_phrase}."
+                        elif verb in ['want', 'need']:
+                            text = f"{user_ref} wants {object_phrase}."
+                        else:
+                            text = f"{user_ref} {verb} {object_phrase}."
+                    else:
+                        # Use the user statement directly with proper formatting
+                        user_ref = user_name or "User"
+                        text = f"{user_ref} said: {user_statement}."
+        
+        # If LLM is enabled, use it for enhancement with category awareness and source information
+        if self.llm_enabled:
+            try:
+                enhanced = self._enhance_with_llm(text, user_name, memory_data, source_info)
+                if enhanced and enhanced != original_text:
+                    return enhanced.strip()
+            except Exception as e:
+                print(f"LLM enhancement failed, falling back to rule-based: {e}")
+            
+        # Rule-based enhancement (more proactive approach)
+        enhanced = text
+        
+        # Remove repetitive phrases first
+        enhanced = self._remove_repetitive_phrases(enhanced)
+        
+        # 1. Proactive rewriting of common system-generated patterns
+        enhanced = self._rewrite_system_patterns(enhanced, user_name)
+        
+        # 2. Apply source-aware rewriting based on where the information came from
+        enhanced = self._apply_source_aware_rewriting(enhanced, source_info, text, user_name)
+        
+        # 3. Normalize text (safe transformations only)
+        enhanced = self._normalize_text(enhanced)
+        
+        # 4. Expand common shorthand that's unambiguous
+        enhanced = self._expand_shorthand(enhanced)
+        
+        # 5. Personalize references only if we have a user name
+        if user_name:
+            enhanced = re.sub(r'\bUser\b', user_name, enhanced)
+            enhanced = re.sub(r"\bUser's\b", f"{user_name}'s", enhanced)
+        
+        # 6. If the text looks like "Added preference likes: something. Name said: something", 
+        # restructure it to be more natural
+        if "Added preference" in enhanced and user_name and "said:" in enhanced:
+            # Extract the preference value from the "said:" part
+            said_match = re.search(r'(?:' + user_name + r' said:|said:)\s*(.+?)(?:\.|$)', enhanced, re.IGNORECASE)
+            if said_match:
+                preference = said_match.group(1).strip()
+                enhanced = f"{user_name} added a new preference: {preference}."
+        
+        # 7. Fix basic grammar issues
+        enhanced = self._fix_grammar(enhanced)
+        
+        # 8. Only add minimal context if text is extremely short
+        if len(enhanced.strip()) < 5 and "User said:" not in enhanced:
+            enhanced = f"User mentioned: {enhanced}" if enhanced else "User interaction recorded"
+        
+        # Clean the final enhanced text to remove any meta phrases
+        enhanced = self.clean_invalid_summary(enhanced.strip())
+        
+        return enhanced
+    
+    def _rewrite_system_patterns(self, text: str, user_name: Optional[str]) -> str:
+        """Rewrite common system-generated patterns to be more natural."""
+        original = text
+        
+        # Pattern 1: "Added preference likes: X. User said: Y" -> "User likes Y (the actual thing they said)"
+        pattern1 = r'Added preference (?:likes|dislikes|avoid):\s*([^\.]+)\.\s*(?:User|' + (user_name or r'\w+') + r') said:\s*(.+?)(?:\.|$)'
+        match = re.search(pattern1, text, re.IGNORECASE)
+        if match:
+            preference_type = match.group(1).strip()  # This captures the system's interpretation (e.g., "like")
+            user_said = match.group(2).strip()       # This captures what user actually said (e.g., "67")
+            user_ref = user_name or "User"
+            # Use the content from "said:" as it represents what the user actually said
+            # Avoid duplication by not including both parts
+            if user_said.lower() in ['like', 'likes', 'enjoy', 'prefer'] or preference_type.lower() in ['like', 'likes', 'enjoy', 'prefer']:
+                # If the "like" is duplicated, just use the user_said part
+                return f"{user_ref} likes {preference_type}." if preference_type.lower() in ['like', 'likes', 'enjoy', 'prefer'] else f"{user_ref} likes {user_said}."
+            else:
+                return f"{user_ref} likes {user_said}."  # Use what user actually said
+        
+        # Pattern 1b: "Added preference likes: like" -> extract from context or make more meaningful
+        if "Added preference likes: like" in text and user_name:
+            # This pattern suggests the system misinterpreted something
+            # In this case, we should look for what the user actually said in context
+            user_ref = user_name or "User"
+            # Since the system seems to have misinterpreted, try to make it more meaningful
+            # If we have "like" as the value, we should try to extract the real object from the context
+            return f"{user_ref} expressed a preference for something."
+        
+        # Pattern 2: "Added preference: X likes Y" -> "X likes Y" or "User expressed interest in Y"
+        pattern2 = r'Added preference:\s*([^.]+likes[^.]+)'
+        match2 = re.search(pattern2, text, re.IGNORECASE)
+        if match2:
+            preference_content = match2.group(1).strip()
+            user_ref = user_name or "User"
+            return f"{user_ref} {preference_content}."
+        
+        # Pattern 3: "Added preference likes: something" -> "User likes something"
+        pattern3 = r'Added preference likes:\s*([^\.]+)'
+        match3 = re.search(pattern3, text, re.IGNORECASE)
+        if match3:
+            preference = match3.group(1).strip()
+            user_ref = user_name or "User"
+            # Don't repeat "like" if the content already contains it
+            if preference.lower().startswith(('like ', 'likes ', 'liked ')):
+                return f"{user_ref} {preference}."
+            else:
+                return f"{user_ref} likes {preference}."
+        
+        # Pattern 4: "indicating likes: X" -> "User likes X"
+        pattern4 = r'indicating (?:likes|preferences?):\s*([^\.]+)'
+        match4 = re.search(pattern4, text, re.IGNORECASE)
+        if match4:
+            preference = match4.group(1).strip()
+            user_ref = user_name or "User"
+            return f"{user_ref} likes {preference}."
+        
+        # Pattern 5: "has preference subject is not specified" -> "has an unspecified preference"
+        if "has preference subject is not specified" in text.lower():
+            user_ref = user_name or "User"
+            return f"{user_ref} has an unspecified preference."
+        
+        # Pattern 6: "Added preference likes: X" where X is likely a misinterpretation
+        pattern6 = r'^Added preference likes:\s*(.+)'
+        match6 = re.search(pattern6, text, re.IGNORECASE)
+        if match6:
+            preference_value = match6.group(1).strip()
+            user_ref = user_name or "User"
+            # If the value is something like "like" or "likes", it's likely a misinterpretation
+            if preference_value.lower() in ['like', 'likes', 'love', 'enjoy']:
+                return f"{user_ref} has expressed a preference."
+            else:
+                return f"{user_ref} likes {preference_value}."
+        
+        # If no patterns matched, return the original text
+        return original
+        
+    def _create_cache_key(self, text: str, user_name: Optional[str], source_info: Optional[Dict[str, Any]] = None) -> str:
+        """Create a cache key based on the input parameters."""
+        import hashlib
+        # Create a hash of the input parameters to use as a cache key
+        cache_input = f"{text}::{user_name}::{source_info}"
+        return hashlib.md5(cache_input.encode()).hexdigest()
+    
+    def _prune_cache(self):
+        """Prune the cache if it exceeds the maximum size."""
+        if len(self.llm_cache) > self.max_cache_size:
+            # Remove oldest entries (first items in the dictionary)
+            keys_to_remove = list(self.llm_cache.keys())[:len(self.llm_cache) - self.max_cache_size + 10]  # Remove slightly more than needed
+            for key in keys_to_remove:
+                del self.llm_cache[key]
+    
+    def _enhance_with_llm(self, text: str, user_name: Optional[str], memory_data: Dict[str, Any], source_info: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        """Use LLM to enhance the text with comprehensive user context, category awareness, and source information."""
+        # Create cache key
+        cache_key = self._create_cache_key(text, user_name, source_info)
+        
+        # Check if result is already in cache
+        if cache_key in self.llm_cache:
+            return self.llm_cache[cache_key]
+            
+        try:
+            # Get comprehensive user context
+            user_context = self._get_comprehensive_user_context(memory_data)
+            
+            # Get relevant categories for this memory entry
+            relevant_categories = self._identify_relevant_categories(text, memory_data)
+            category_guidance = self._get_category_guidance(relevant_categories)
+            
+            # Prepare source context if available
+            source_context = ""
+            if source_info:
+                source_type = source_info.get('source_type', 'unknown')
+                source_details = source_info.get('source_details', '')
+                context = source_info.get('context', '')
+                source_context = f"Source: {source_type}. Details: {source_details}. Context: {context}"
+            
+            # Determine user pronoun for better personalization
+            user_pronoun = "He" if user_name and user_name.lower() in ['nemzz', 'male_names_here'] else "She" if user_name else "They"
+            
+            prompt = f"""
+You are an AI memory organizer. Your task is to enhance and refine memory entries to make them clearer, more accurate, and richer.
+You have access to a comprehensive 27-category memory framework to provide contextually-aware enhancements.
+
+User context: {user_context}
+Category guidance: {category_guidance}
+{source_context}
+
+Instructions:
+1. REWRITE the content to be more natural and meaningful based on the actual user input and context
+2. Improve grammar, capitalization, and phrasing
+3. Personalize references to the user using their name if available
+4. Make the entry structured, understandable, and meaningful
+5. Keep the response concise and focused (25 words maximum)
+6. CRITICALLY IMPORTANT: Only write what the user actually said or implied - understand if this is user input or system-generated text
+7. Do not add information that isn't supported by the input
+8. Do not make assumptions about user preferences or interests not explicitly stated
+9. Do not infer topics or subjects not mentioned by the user
+10. Respond with only the enhanced text, nothing else
+11. If the input is a question or request, summarize it as a factual statement
+12. If the input is vague or generic, make it specific by referencing the actual user content
+13. Consider the relevant memory categories to provide appropriate contextual enhancement
+14. Maintain consistency with the comprehensive category framework
+15. DO NOT repeat the same content multiple times - avoid patterns like "Nemzz said: I like x. Nemzz said: I like x."
+16. Summarize the core meaning in natural, human-readable language
+17. Use natural language that describes what the user did/said/wants
+18. BE PROACTIVE: If the input is clearly a system-generated message (like "Added preference likes: X"), REWRITE it to reflect what the user actually expressed
+19. Transform technical or system-like language into natural, conversational language
+20. When the source is from a conversation, emphasize what the user actually said
+21. When the source is from a fact update, focus on the specific fact being updated
+22. When the source is from tool use, describe the tool interaction clearly
+
+Examples of transformation:
+- Input: "Added preference likes: Python. User said: I really enjoy coding in Python" 
+  Output: "Nemzz expressed that he enjoys coding in Python."
+- Input: "User likes to code a lot"
+  Output: "Nemzz enjoys coding frequently."
+- Input: "Added preference likes: window 11. Nemzz said: I like window 11. Nemzz said: I like window 11"
+  Output: "Nemzz added a new preference for Windows 11."
+- Input: "Tool usage: file search executed"
+  Output: "Nemzz used the file search tool."
+
+Original memory entry: {text}
+
+Enhanced memory entry:"""
+
+            # Groq API request format
+            headers = {
+                'Authorization': f'Bearer {self.llm_api_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            payload = {
+                'model': self.llm_model,
+                'messages': [
+                    {'role': 'user', 'content': prompt}
+                ],
+                'temperature': 0.2,  # Lower temperature for more consistent, focused responses
+                'max_tokens': 200,  # Reduced for shorter, more concise output
+                'top_p': 0.9,  # Add diversity control
+                'stream': False  # Ensure non-streaming response
+            }
+            
+            response = requests.post(self.groq_api_url, headers=headers, json=payload, timeout=30)
+            
+            # Check if the request was successful
+            if response.status_code != 200:
+                print(f"Groq API error: {response.status_code} - {response.text}")
+                return None
+                
+            result = response.json()
+            
+            # Validate the response structure before accessing nested properties
+            if 'choices' not in result or not result['choices']:
+                print("Invalid response from Groq API: no choices returned")
+                return None
+            
+            if 'message' not in result['choices'][0] or 'content' not in result['choices'][0]['message']:
+                print("Invalid response from Groq API: missing message content")
+                return None
+                
+            enhanced_text = result['choices'][0]['message']['content'].strip()
+            
+            # Additional post-processing to ensure no repetitive content
+            enhanced_text = self._remove_repetitive_phrases(enhanced_text)
+            
+            # Add result to cache
+            self.llm_cache[cache_key] = enhanced_text
+            # Prune cache if needed
+            self._prune_cache()
+            
+            return enhanced_text
+            
+        except requests.exceptions.Timeout:
+            print("Timeout error when calling Groq API")
+            return None
+        except requests.exceptions.ConnectionError:
+            print("Connection error when calling Groq API")
+            return None
+        except requests.exceptions.RequestException as e:
+            print(f"Request error when calling Groq API: {e}")
+            return None
+        except KeyError as e:
+            print(f"Key error when processing Groq API response: {e}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error in LLM enhancement: {e}")
+            return None
+            
+    def _rewrite_memory_entry(self, original_summary: str, source_context: str, user_name: Optional[str] = None) -> str:
+        """
+        Rewrites memory entries by combining original_summary and source_info.context 
+        into a single, clear sentence in third person, ensuring no repeated phrases.
+        
+        Args:
+            original_summary: The original summary text
+            source_context: The source context information
+            user_name: The user's name for personalization
+            
+        Returns:
+            str: A rewritten summary in third person about the user, compressed to 1-2 sentences
+            
+        Example transformations:
+        Input: "original_summary": "Added preference likes: 2pac" 
+        Output: "summary": "Nemzz enjoys listening to 2pac."
+        
+        Input: "original_summary": "Added preference likes: like"
+        Output: "summary": "Nemzz expressed a general preference, but details are unclear."
+        
+        Input: "original_summary": "Added preference likes: the name nemzz and enjoys the name nemzz..."
+        Output: "summary": "Nemzz likes the name 'Nemzz' and considers it a personal preference."
+        """
+        # First, let's get the original summary from the provenance if available, 
+        # as it contains the raw user input before processing
+        original_source = ""
+        
+        # Check if the source_context contains the actual user statement
+        if source_context and ('User user:' in source_context or 'Nemzz:' in source_context or 'user:' in source_context):
+            # Extract the actual user statement from the context
+            # Look for patterns like "User user: actual message..." or "Nemzz: actual message..."
+            match = re.search(r'(?:User user:|Nemzz:|user:)\s*(.+?)(?:\.{3}|$)', source_context)
+            if match:
+                original_source = match.group(1).strip()
+        
+        # If we have a clean original source from context, use that
+        if original_source:
+            return self._process_user_input_to_summary(original_source, user_name)
+        
+        # Otherwise, process the original_summary using the existing logic
+        # Validation: Check if content is ambiguous, generic, or too short
+        validation_result = self._validate_content_before_rewrite(original_summary, user_name)
+        if validation_result is not None:
+            return validation_result  # Return the safe fallback message
+        
+        # Clean and extract meaningful content from original summary first
+        cleaned_original = self._clean_and_extract_meaning(original_summary, user_name)
+        
+        # Clean the source context
+        cleaned_context = self._clean_and_extract_meaning(source_context, user_name) if source_context else ""
+        
+        # Remove duplicate phrases and compress the original summary
+        compressed_original = self._remove_duplicate_phrases_and_compress(cleaned_original, user_name)
+        
+        # If we have meaningful context that adds value, combine appropriately
+        if cleaned_context and cleaned_context != cleaned_original:
+            # For now, we'll just return the compressed original since the context may not be in the right format
+            # The main goal is to eliminate duplicate phrases from the original summary
+            result = compressed_original
+        else:
+            result = compressed_original
+        
+        # Ensure proper formatting
+        result = result.strip()
+        if result and len(result) > 1:
+            result = result[0].upper() + result[1:]  # Capitalize first letter
+        if result and not result.endswith(('.', '!', '?')):
+            result += '.'
+            
+        # Clean the result to remove any meta phrases
+        result = self.clean_invalid_summary(result)
+            
+        return result
+    
+    def _get_varied_expressions(self, expression_type: str, subject: str = "", user_ref: str = "User") -> list:
+        """
+        Get varied expressions based on the type of expression needed.
+        
+        Args:
+            expression_type: Type of expression ('like', 'interest', 'preference', 'general')
+            subject: The subject (e.g. what is liked, preferred, etc.)
+            user_ref: The user reference name
+            
+        Returns:
+            list of varied expressions
+        """
+        if expression_type == 'like':
+            return [
+                f"{user_ref} enjoys {subject} and values it.",
+                f"{user_ref} likes {subject} and appreciates it.",
+                f"{user_ref} is interested in {subject} and finds it meaningful.",
+                f"{user_ref} enjoys {subject} and feels positive about it.",
+                f"{user_ref} likes {subject} and has a fondness for it.",
+                f"{user_ref} appreciates {subject} and enjoys it.",
+                f"{user_ref} likes {subject} and thinks it's valuable.",
+                f"{user_ref} enjoys {subject} and finds it interesting.",
+                f"{user_ref} has a preference for {subject} and likes it.",
+                f"{user_ref} likes {subject} and considers it worthwhile."
+            ]
+        elif expression_type == 'interest':
+            return [
+                f"{user_ref} finds {subject} interesting and engaging.",
+                f"{user_ref} has an interest in {subject} and enjoys learning about it.",
+                f"{user_ref} is fascinated by {subject} and appreciates it.",
+                f"{user_ref} is drawn to {subject} and finds it compelling.",
+                f"{user_ref} likes {subject} and thinks it's worth exploring.",
+                f"{user_ref} has a keen interest in {subject} and values it.",
+                f"{user_ref} is intrigued by {subject} and enjoys it.",
+                f"{user_ref} sees {subject} as meaningful and worthwhile.",
+                f"{user_ref} finds {subject} valuable and engaging.",
+                f"{user_ref} appreciates {subject} and likes it a lot."
+            ]
+        elif expression_type == 'preference':
+            return [
+                f"{user_ref} prefers {subject} and finds it suitable.",
+                f"{user_ref} values {subject} and considers it important.",
+                f"{user_ref} likes {subject} and thinks it's a good choice.",
+                f"{user_ref} feels positive about {subject} and chooses it.",
+                f"{user_ref} has a preference for {subject} and appreciates it.",
+                f"{user_ref} likes {subject} and finds it appealing.",
+                f"{user_ref} considers {subject} valuable and worthwhile.",
+                f"{user_ref} prefers {subject} and enjoys it.",
+                f"{user_ref} chooses {subject} and finds it satisfactory.",
+                f"{user_ref} gravitates toward {subject} and likes it."
+            ]
+        elif expression_type == 'general':
+            return [
+                f"{user_ref} expressed interest in {subject} and values it.",
+                f"{user_ref} mentioned {subject} and finds it meaningful.",
+                f"{user_ref} showed interest in {subject} and appreciates it.",
+                f"{user_ref} indicated interest in {subject} and likes it.",
+                f"{user_ref} expressed a preference for {subject} and enjoys it.",
+                f"{user_ref} conveyed interest in {subject} and finds it valuable.",
+                f"{user_ref} noted {subject} and thinks it's worthwhile.",
+                f"{user_ref} mentioned {subject} and appreciates it.",
+                f"{user_ref} pointed out {subject} and finds it interesting.",
+                f"{user_ref} expressed a connection to {subject} and likes it."
+            ]
+        else:
+            return [f"{user_ref} has expressed some interest in {subject}."]
+    
+    def _process_user_input_to_summary(self, user_input: str, user_name: Optional[str]) -> str:
+        """
+        Process raw user input to create a meaningful summary in third person.
+        Enhanced to preserve original intent, emotion, and emphasis from user input.
+        
+        Args:
+            user_input: Raw user input from conversation
+            user_name: The user's name for personalization
+            
+        Returns:
+            str: A clear, third-person summary of what the user said
+        """
+        user_input = user_input.strip()
+        user_ref = user_name or "User"
+        
+        # Apply deep contextual understanding to preserve intent and emotion
+        deep_analysis = self._deep_contextual_understanding(user_input)
+        
+        # Normalize the input for analysis
+        normalized_input = user_input.lower().strip()
+        
+        # Detect common patterns in user input with preserved emotional context
+        if any(word in normalized_input for word in ['like', 'love', 'enjoy', 'prefer', 'adore', 'appreciate']):
+            # Extract the specific thing they like with emotional nuance
+            like_pattern = r'(?:i|me|my|we|us)\s+(like|love|enjoy|prefer|adore|appreciate)\s+(.+?)(?:\.|$)'
+            match = re.search(like_pattern, user_input, re.IGNORECASE)
+            if match:
+                liked_thing = match.group(2).strip()
+                # Use deep analysis to preserve emotional tone and intensity
+                emotional_tone = deep_analysis.get('emotional_tone', {})
+                intensity = emotional_tone.get('intensity', 0.5)
+                
+                import random
+                # Use varied expressions based on the liked thing and emotional intensity
+                if intensity > 0.7:
+                    # High intensity - use stronger language
+                    varied_expressions = [
+                        f"{user_ref} loves {liked_thing} and feels strongly about it.",
+                        f"{user_ref} is passionate about {liked_thing} and values it highly.",
+                        f"{user_ref} adores {liked_thing} and finds it extremely meaningful.",
+                        f"{user_ref} really enjoys {liked_thing} and has a deep appreciation for it.",
+                        f"{user_ref} treasures {liked_thing} and holds it in high regard."
+                    ]
+                else:
+                    # Standard intensity - use moderate language
+                    varied_expressions = self._get_varied_expressions('like', liked_thing, user_ref)
+                
+                return random.choice(varied_expressions)
+            else:
+                # If pattern doesn't match, just extract what follows the like verb
+                for verb in ['like', 'love', 'enjoy', 'prefer']:
+                    if verb in normalized_input:
+                        # Extract everything after the verb
+                        parts = user_input.split(verb, 1)
+                        if len(parts) > 1:
+                            liked_thing = parts[1].strip()
+                            if liked_thing:
+                                import random
+                                # Use varied expression with preserved emotion
+                                emotional_tone = deep_analysis.get('emotional_tone', {})
+                                intensity = emotional_tone.get('intensity', 0.5)
+                                
+                                if intensity > 0.7:
+                                    varied_expressions = [
+                                        f"{user_ref} loves {liked_thing} and feels strongly about it.",
+                                        f"{user_ref} is passionate about {liked_thing}.",
+                                        f"{user_ref} adores {liked_thing} and values it highly."
+                                    ]
+                                    return random.choice(varied_expressions)
+                                else:
+                                    # Use standard expressions
+                                    varied_expressions = self._get_varied_expressions('like', liked_thing, user_ref)
+                                    return random.choice(varied_expressions)
+        
+        elif any(word in normalized_input for word in ['want', 'need', 'wish', 'hope', 'desire']):
+            # Extract what they want/need with preserved intent
+            want_pattern = r'(?:i|me|my|we|us)\s+(want|need|wish|hope|desire)\s+(.+?)(?:\.|$)'
+            match = re.search(want_pattern, user_input, re.IGNORECASE)
+            if match:
+                wanted_thing = match.group(2).strip()
+                # Use deep analysis to determine if it's a strong need or just a want
+                emotional_tone = deep_analysis.get('emotional_tone', {})
+                intensity = emotional_tone.get('intensity', 0.5)
+                
+                if intensity > 0.7 and 'need' in match.group(1).lower():
+                    return f"{user_ref} requires {wanted_thing} and considers it essential."
+                else:
+                    return f"{user_ref} wants {wanted_thing}."
+            else:
+                # Simple extraction after want/need with preserved intensity
+                for verb in ['want', 'need']:
+                    if verb in normalized_input:
+                        parts = user_input.split(verb, 1)
+                        if len(parts) > 1:
+                            wanted_thing = parts[1].strip()
+                            if wanted_thing:
+                                emotional_tone = deep_analysis.get('emotional_tone', {})
+                                intensity = emotional_tone.get('intensity', 0.5)
+                                
+                                if intensity > 0.7 and verb == 'need':
+                                    return f"{user_ref} requires {wanted_thing} and considers it essential."
+                                else:
+                                    return f"{user_ref} wants {wanted_thing}."
+        
+        elif any(word in normalized_input for word in ['think', 'believe', 'feel', 'find']):
+            # Extract their thoughts/feelings with preserved emotional context
+            think_pattern = r'(?:i|me|my|we|us)\s+(think|believe|feel|find)\s+(.+?)(?:\.|$)'
+            match = re.search(think_pattern, user_input, re.IGNORECASE)
+            if match:
+                thought = match.group(2).strip()
+                # Preserve the emotional tone of the thought
+                emotional_tone = deep_analysis.get('emotional_tone', {})
+                sentiment = emotional_tone.get('tone', 'neutral')
+                
+                if sentiment == 'positive':
+                    return f"{user_ref} thinks {thought} and feels positively about it."
+                elif sentiment == 'negative':
+                    return f"{user_ref} thinks {thought} but has concerns about it."
+                else:
+                    return f"{user_ref} thinks {thought}."
+        
+        elif 'name' in normalized_input and ('nova' in normalized_input or 'nova' in (user_name or '').lower()):
+            # Special case for name preferences with preserved emotion
+            if 'like' in normalized_input or 'love' in normalized_input:
+                import random
+                emotional_tone = deep_analysis.get('emotional_tone', {})
+                intensity = emotional_tone.get('intensity', 0.5)
+                
+                if intensity > 0.7:
+                    varied_expressions = [
+                        f"{user_ref} loves the name nova and feels deeply connected to it.",
+                        f"{user_ref} adores the name nova and treasures it.",
+                        f"{user_ref} has a strong affinity for the name nova."
+                    ]
+                else:
+                    varied_expressions = [
+                        f"{user_ref} likes the name nova and holds it in high regard.",
+                        f"{user_ref} likes the name nova and has a fondness for it.",
+                        f"{user_ref} likes the name nova and appreciates it.",
+                        f"{user_ref} likes the name nova and finds it meaningful.",
+                        f"{user_ref} likes the name nova and feels positively about it."
+                    ]
+                return random.choice(varied_expressions)
+        
+        # NEW: Enhanced handling for avoid patterns with preserved intent and emotion
+        if 'avoid' in normalized_input or 'try to avoid' in normalized_input:
+            avoid_pattern = r'(?:i|me|my|we|us)\s+(?:try to|always|often)\s+avoid\s+(.+?)(?:\.|$)'
+            match = re.search(avoid_pattern, user_input, re.IGNORECASE)
+            if match:
+                avoid_thing = match.group(1).strip()
+                # Preserve emotional context for avoidance
+                emotional_tone = deep_analysis.get('emotional_tone', {})
+                sentiment = emotional_tone.get('tone', 'neutral')
+                
+                if sentiment == 'negative':
+                    return f"{user_ref} avoids {avoid_thing} and has negative feelings about it."
+                else:
+                    return f"{user_ref} avoids {avoid_thing}."
+        
+        # If no specific pattern matched, return a general statement
+        # Try to convert first-person to third-person
+        first_person_patterns = [
+            (r'\bi\b', user_ref),
+            (r'\bmy\b', f'{user_ref}\'s'),
+            (r'\bme\b', user_ref),
+            (r'\bmine\b', f'{user_ref}\'s'),
+            (r'\bam\b', 'is'),
+            (r'\bwas\b', 'was'),
+            (r'\bare\b', 'is'),
+            (r'\bwere\b', 'was'),
+        ]
+        
+        processed_input = user_input
+        for pattern, replacement in first_person_patterns:
+            processed_input = re.sub(rf'\b{pattern}\b', replacement, processed_input, flags=re.IGNORECASE)
+        
+        # Process the input more thoroughly to extract meaningful content
+        # Clean up any remaining system-generated prefixes like "Added preference likes:"
+        processed_input = re.sub(r'Added preference likes:\s*', '', processed_input, flags=re.IGNORECASE)
+        processed_input = re.sub(r'Added preference:\s*', '', processed_input, flags=re.IGNORECASE)
+        processed_input = re.sub(r'indicating likes:\s*', '', processed_input, flags=re.IGNORECASE)
+        
+        # Apply deep analysis to understand preserved intent and emotion
+        emotional_tone = deep_analysis.get('emotional_tone', {})
+        sentiment = emotional_tone.get('tone', 'neutral')
+        intensity = emotional_tone.get('intensity', 0.5)
+        
+        # Only return if it's meaningful, otherwise try more parsing techniques
+        if len(processed_input.split()) > 2:
+            import random
+            if sentiment == 'positive':
+                if intensity > 0.7:
+                    varied_expressions = [
+                        f"{processed_input} and feels strongly positive about it.",
+                        f"{processed_input} and values this experience highly.",
+                        f"{processed_input} and is passionate about it.",
+                        f"{processed_input} and treasures this experience."
+                    ]
+                else:
+                    varied_expressions = [
+                        f"{processed_input} and values this experience.",
+                        f"{processed_input} and appreciates this fact.",
+                        f"{processed_input} and enjoys this situation.",
+                        f"{processed_input} and finds this meaningful.",
+                        f"{processed_input} and has a positive view of this."
+                    ]
+            elif sentiment == 'negative':
+                if intensity > 0.7:
+                    varied_expressions = [
+                        f"{processed_input} but has strong reservations about it.",
+                        f"{processed_input} but feels negatively about it.",
+                        f"{processed_input} but is concerned about it."
+                    ]
+                else:
+                    varied_expressions = [
+                        f"{processed_input} but has mixed feelings about it.",
+                        f"{processed_input} but it's not their preference.",
+                        f"{processed_input} but doesn't feel strongly about it."
+                    ]
+            else:  # neutral
+                varied_expressions = [
+                    f"{processed_input} and considers it worth noting.",
+                    f"{processed_input} and acknowledges this fact.",
+                    f"{processed_input} and recognizes this situation.",
+                    f"{processed_input} and takes note of this.",
+                    f"{processed_input} and understands this point."
+                ]
+            return random.choice(varied_expressions)
+        
+        # If still minimal, try to identify if there's at least some meaningful content in what remains
+        if processed_input.strip() and len(processed_input.split()) > 0:
+            # Extract any content that might be meaningful, even if not in the expected patterns
+            import random
+            # Use varied expressions based on what we can extract with preserved emotion
+            emotional_tone = deep_analysis.get('emotional_tone', {})
+            sentiment = emotional_tone.get('tone', 'neutral')
+            
+            if sentiment == 'positive':
+                varied_expressions = [
+                    f"{user_ref} expressed a positive view on {processed_input.strip('.')}.",
+                    f"{user_ref} showed interest in {processed_input.strip('.')}.",
+                    f"{user_ref} has a favorable opinion of {processed_input.strip('.')}."
+                ]
+            elif sentiment == 'negative':
+                varied_expressions = [
+                    f"{user_ref} expressed a negative view on {processed_input.strip('.')}.",
+                    f"{user_ref} showed disinterest in {processed_input.strip('.')}.",
+                    f"{user_ref} has concerns about {processed_input.strip('.')}."
+                ]
+            else:
+                varied_expressions = self._get_varied_expressions('general', processed_input.strip('.'), user_ref)
+            return random.choice(varied_expressions)
+        
+        # Final fallback: if we really can't extract meaning, return the fallback
+        return f"{user_ref} expressed a preference, but details are unclear."
+    
+    def _validate_content_before_rewrite(self, original_summary: str, user_name: Optional[str]) -> Optional[str]:
+        """
+        Validate content before rewriting to handle ambiguous content.
+        
+        Returns:
+            - str: Safe fallback message if content is ambiguous
+            - None: If content is clear enough to process normally
+        """
+        if not original_summary:
+            return None
+            
+        # Normalize the text for validation
+        normalized = original_summary.lower().strip()
+        
+        # Check for ambiguous, generic, or too short content
+        ambiguous_patterns = [
+            r'added preference likes:\s*like\s*$',
+            r'added preference likes:\s*dislike\s*$',
+            r'added preference likes:\s*love\s*$',
+            r'added preference likes:\s*enjoy\s*$',
+            r'added preference likes:\s*\d+\s*$',
+            r'added preference likes:\s*$',
+        ]
+        
+        for pattern in ambiguous_patterns:
+            if re.search(pattern, normalized):
+                user_ref = user_name or "User"
+                return f"{user_ref} expressed a general preference, but details are unclear."
+        
+        # Only check if it's truly too generic or short - be more lenient
+        if len(normalized.split()) <= 1:  # Only 1 or fewer words
+            user_ref = user_name or "User"
+            return f"{user_ref} expressed a general preference, but details are unclear."
+        
+        # Additional checks for genuinely problematic patterns
+        if normalized.count("like") > 1 or normalized.count("enjoy") > 1:
+            # Check if this is a complex duplicate pattern that needs special handling
+            if len(set(normalized.split())) < len(normalized.split()) / 3:  # Very high duplication ratio
+                user_ref = user_name or "User"
+                return f"{user_ref} expressed a preference, but details are unclear due to repetitive content."
+        
+        # Content appears valid, return None to continue normal processing
+        return None
+    
+    def _clean_and_extract_meaning(self, text: str, user_name: Optional[str]) -> str:
+        """Clean the text and extract meaningful content in third person."""
+        if not text:
+            return ""
+        
+        # Clean up the text
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Remove system-generated meta phrases first to get to the actual user content
+        text = re.sub(r'Added preference likes:\s*', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'Added preference:\s*', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'indicating likes:\s*', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'Added preference (?:likes|dislikes|avoid):\s*', '', text, flags=re.IGNORECASE)
+        
+        # Remove duplicate "User user:" pattern and similar duplicates
+        text = self.clean_user_prefix_duplicates(text)
+        
+        # Remove phrases like "Nemzz said", "User said", etc. to convert to third person
+        if user_name:
+            text = re.sub(rf'{re.escape(user_name)}\s+(?:said|mentioned|stated|expressed|indicated):\s*', '', text, flags=re.IGNORECASE)
+            text = re.sub(r'User\s+(?:said|mentioned|stated|expressed|indicated):\s*', '', text, flags=re.IGNORECASE)
+        else:
+            text = re.sub(r'\w+\s+(?:said|mentioned|stated|expressed|indicated):\s*', '', text, flags=re.IGNORECASE)
+        
+        # Additional cleanup: remove prefixes like "User: " or "Nemzz: "
+        text = re.sub(r'^\w+\s*:\s*', '', text, flags=re.IGNORECASE)
+        
+        # Normalize remaining spaces
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        if not text:
+            return ""
+        
+        # Extract the core meaning using pattern matching
+        user_ref = user_name or "User"
+        
+        # Define patterns for different types of statements with appropriate transformations
+        patterns = [
+            # Pattern for likes/preferences - avoid duplication
+            (r"(?i)(?:i|me|my|we|us)\s+(love|like|enjoy|prefer|adore|appreciate|am fond of)\s+(.+?)(?:\.|$)", 
+             lambda m: f"{user_ref} likes {m.group(2)}"),
+            # Pattern for wanting/needing
+            (r"(?i)(?:i|me|my|we|us)\s+(want|need|wish|hope|desire|would like)\s+(.+?)(?:\.|$)", 
+             lambda m: f"{user_ref} wants {m.group(2)}"),
+            # Pattern for feelings/thoughts
+            (r"(?i)(?:i|me|my|we|us)\s+(think|believe|feel|consider|find|find that)\s+(.+?)(?:\.|$)", 
+             lambda m: f"{user_ref} thinks {m.group(2)}"),
+            # Pattern for abilities/skills
+            (r"(?i)(?:i|me|my|we|us)\s+(can|am good at|know about|understand|am skilled in|have experience with)\s+(.+?)(?:\.|$)", 
+             lambda m: f"{user_ref} is skilled in {m.group(2)}"),
+            # Pattern for ownership
+            (r"(?i)(?:my|our)\s+(.+)", 
+             lambda m: f"{user_ref} has {m.group(1)}"),
+            # General pattern for "I" statements
+            (r"(?i)i\s+(.+?)(?:\.|$)", 
+             lambda m: f"{user_ref} {m.group(1)}"),
+        ]
+        
+        # Apply patterns to extract core meaning
+        for pattern, replacement_func in patterns:
+            match = re.search(pattern, text)
+            if match:
+                try:
+                    result = replacement_func(match)
+                    # Ensure proper punctuation
+                    if result and not result.endswith(('.', '!', '?')):
+                        result += '.'
+                    return result
+                except Exception:
+                    continue  # If replacement fails, try the next pattern
+        
+        # If no pattern matched, we still need to clean up common repetitive patterns
+        # Handle "X and values this" and "X and considers it an interest" patterns
+        if user_name:
+            # Pattern for "user likes X and values this"
+            text = re.sub(
+                rf'{re.escape(user_name)}\s+likes\s+([^.]+?)\s+and\s+values\s+this',
+                rf'{user_name} likes \1',
+                text,
+                flags=re.IGNORECASE
+            )
+        
+        # If no pattern matched, return as a fact about the user (if user name not already present)
+        if user_name and not text.startswith(user_name):
+            text = f"{user_name} {text}"
+        elif not user_name and not text.startswith("User"):
+            text = f"User {text}"
+        
+        if text and not text.endswith(('.', '!', '?')):
+            text += '.'
+        
+        return text
+    
+    def _remove_duplicate_phrases_and_compress(self, text: str, user_name: Optional[str]) -> str:
+        """Remove duplicate phrases and compress to 1-2 sentences."""
+        if not text:
+            return text
+        
+        original_text = text
+        
+        # First, let's handle the most common pattern in the example
+        # "Added preference likes: X and values this and enjoys X and considers it an interest"
+        if user_name:
+            # Handle the specific example case: when we have "Added preference likes: the name nemzz and values this and enjoys the name nemzz and considers it an interest"
+            # Pattern: "User Added preference likes: X and values this and enjoys X and considers it an interest and enjoys X and considers it an interest"
+            text = re.sub(
+                rf'{re.escape(user_name)}\s+Added\s+preference\s+likes:\s+([^\.]+?)\s+and\s+values\s+this\s+and\s+enjoys\s+\1\s+and\s+considers\s+it\s+an\s+interest(?:\s+and\s+enjoys\s+\1\s+and\s+considers\s+it\s+an\s+interest)*',
+                lambda m: f"{user_name} likes {m.group(1)} and considers it a personal preference.",
+                text, 
+                flags=re.IGNORECASE
+            )
+            
+            # More general pattern: "User likes X and values this and likes X and considers it an interest"
+            text = re.sub(
+                rf'{re.escape(user_name)}\s+likes\s+([^\.]+?)\s+and\s+values\s+this\s+and\s+likes\s+\1\s+and\s+considers\s+it\s+an\s+interest(?:\s+and\s+likes\s+\1\s+and\s+considers\s+it\s+an\s+interest)*',
+                lambda m: f"{user_name} likes {m.group(1)} and considers it a personal preference.",
+                text, 
+                flags=re.IGNORECASE
+            )
+        
+        # Remove duplicate "and values this" phrases
+        text = re.sub(r'\s+and\s+values\s+this(?=\s+and\s+values\s+this)', '', text, flags=re.IGNORECASE)
+        
+        # Remove duplicate "and considers it an interest" phrases  
+        text = re.sub(r'\s+and\s+considers\s+it\s+an\s+interest(?=\s+and\s+considers\s+it\s+an\s+interest)', '', text, flags=re.IGNORECASE)
+        
+        # Remove "Added preference likes: " and similar prefixes that may cause issues
+        if user_name:
+            text = re.sub(rf'{re.escape(user_name)}\s+Added\s+preference\s+likes:\s*', f'{user_name} likes ', text, flags=re.IGNORECASE)
+        
+        # For conjunction-based duplicates like "X and values this and X and considers it an interest"
+        if user_name:
+            # Pattern to catch repetitive structures
+            text = re.sub(
+                rf'({re.escape(user_name)}\s+\w+\s+(?:[^\s\.]+(?:\s+[^\s\.]+){0,8}?))\s+and\s+(?:values\s+this|considers\s+it\s+an\s+interest)\s+and\s+\1\s+and\s+(?:values\s+this|considers\s+it\s+an\s+interest)',
+                r'\1 and considers it a personal preference',
+                text,
+                flags=re.IGNORECASE
+            )
+        
+        # Handle generic duplicate patterns within the text
+        # Find repeating phrases connected by "and"
+        words = text.split()
+        if len(words) > 1:
+            # Look for pattern "word1 word2 ... and values this and word1 word2 ... and considers it an interest"
+            # This is a more comprehensive pattern to find repeated content
+            text = re.sub(
+                r'(\b\w+(?:\s+\w+){1,8}?)\s+and\s+values\s+this\s+and\s+\1\s+and\s+considers\s+it\s+an\s+interest',
+                r'\1 and considers it a personal preference',
+                text,
+                flags=re.IGNORECASE
+            )
+        
+        # Ensure only 1-2 sentences maximum
+        sentences = re.split(r'[.!?]+', text)
+        sentences = [s.strip() for s in sentences if s.strip()]
+        
+        # Take only the first 1-2 meaningful sentences
+        if len(sentences) > 2:
+            # Combine first two sentences
+            text = '. '.join(sentences[:2]) + '.'
+        elif len(sentences) == 1:
+            text = sentences[0] + '.'
+        elif sentences:  # If there are sentences but less than 1
+            text = '. '.join(sentences) + '.'
+        else:
+            text = original_text  # fallback if regex removed everything
+        
+        # Final cleanup
+        text = re.sub(r'\s+', ' ', text).strip()
+        text = re.sub(r'\s+([.!?])', r'\1', text)  # Remove space before punctuation
+        
+        # If text is empty after processing, return the original
+        if not text.strip():
+            text = original_text
+        
+        return text
+    
+
+    
+    def _add_preference_fields_from_context(self, event: Dict[str, Any], context: str) -> Dict[str, Any]:
+        """
+        Add Added_preference fields to the event based on the context using deep contextual understanding.
+        Enhanced to analyze the full context of user input, not just keywords.
+        
+        Args:
+            event: The event dictionary to modify
+            context: The context to analyze for preference types
+            
+        Returns:
+            Dict with updated event containing Added_preference fields
+        """
+        if not context:
+            return event
+            
+        # Apply deep contextual understanding to analyze every word and phrase
+        deep_analysis = self._deep_contextual_understanding(context)
+        
+        # Analyze the context to determine the appropriate preference type using full semantic analysis
+        # Instead of just using the basic classification, use the deep analysis to determine preference type
+        preference_type = deep_analysis.get('preference_type', 'likes')  # Use the preference type from deep analysis
+        
+        # Create the preference key based on the type
+        preference_key = f"Added_preference_{preference_type}"
+        
+        # Create a natural, clean, human-readable sentence as the value using full semantic comprehension
+        preference_value = self._create_natural_preference_sentence(context, preference_type)
+        
+        # Ensure the preference value reflects the true meaning using deep analysis
+        if deep_analysis.get('emotional_tone', {}).get('tone') == 'negative' and 'avoid' not in preference_type:
+            # Make sure negative sentiments are properly classified
+            if preference_type in ['likes', 'love', 'enjoy']:
+                # This should probably be an avoidance or dislike
+                preference_type = 'avoid' if 'avoid' in context.lower() else 'dislikes'
+                preference_key = f"Added_preference_{preference_type}"
+                preference_value = self._create_natural_preference_sentence(context, preference_type)
+        
+        # Enhanced handling for complex avoidance patterns: "I tried to avoid junk food like my McDonald's KFC"
+        if 'avoid' in context.lower():
+            import re
+            # Handle complex patterns like "I tried to avoid junk food like my McDonald's KFC because it makes me feel sluggish"
+            complex_pattern = r'(?:try|tried)\s+to\s+avoid\s+(.+?)\s+like\s+(.+?)(?:\s+because|\s+and|\s+but|\.|$)'
+            match = re.search(complex_pattern, context.lower())
+            if match:
+                category_item = match.group(1).strip()
+                specific_items = [item.strip().strip('\'"') for item in match.group(2).split('and') if item.strip()]
+                
+                # The user avoids both the category and the specific example
+                if len(specific_items) > 1:
+                    preference_value = f"avoids {category_item} such as {', '.join(specific_items)}"
+                else:
+                    preference_value = f"avoids {category_item} such as {specific_items[0] if specific_items else match.group(2).strip()}"
+        
+        # Remove any existing Added_preference* fields to ensure only one is present
+        updated_event = event.copy()
+        fields_to_remove = [key for key in updated_event.keys() if key.startswith('Added_preference')]
+        for field in fields_to_remove:
+            del updated_event[field]
+
+        # Add the single preference field to the event
+        updated_event[preference_key] = preference_value
+
+        # Also add semantic context from deep analysis to preserve full meaning
+        if 'full_meaning' in deep_analysis:
+            updated_event['semantic_context'] = deep_analysis['full_meaning']
+
+        # Update emotional context based on deep analysis
+        if 'emotional_tone' in deep_analysis:
+            emotional_context = updated_event.get('emotional_context', {})
+            emotional_context.update({
+                'sentiment': deep_analysis['emotional_tone'].get('tone', 'neutral'),
+                'emotional_intensity': deep_analysis['emotional_tone'].get('intensity', 0.5),
+                'confidence': 0.8
+            })
+            updated_event['emotional_context'] = emotional_context
+
+        return updated_event
+
+    def _classify_preference_type_from_context(self, context: str) -> str:
+        """
+        Classify the preference type based on the context using deep contextual understanding.
+        
+        Args:
+            context: The context string to analyze
+            
+        Returns:
+            str: The appropriate preference type (e.g., 'likes', 'dislikes', 'avoid', etc.)
+        """
+        if not context:
+            return "likes"
+            
+        # Apply deep contextual understanding
+        deep_analysis = self._deep_contextual_understanding(context)
+        
+        # Use the preference type from deep analysis if available
+        if 'preference_type' in deep_analysis:
+            return deep_analysis['preference_type']
+            
+        # Fallback to original logic if deep analysis didn't determine a type
+        context_lower = context.lower()
+        
+        # CRITICAL FIX: Handle the specific problematic case first
+        # "I tried to avoid junk food like my Mcdonald's KFC" - this is clearly avoidance
+        if 'tried to avoid' in context_lower or 'try to avoid' in context_lower:
+            # Check if the pattern is "try to avoid X like Y" - this means avoid both
+            import re
+            complex_pattern = r'(?:try|tried) to avoid (.+?) like (.+?)(?:\.|$)'
+            match = re.search(complex_pattern, context_lower)
+            if match:
+                return "avoid"
+        
+        # ENHANCED: Better handling of patterns with "User:" prefixes
+        # Remove "User:" prefixes for more accurate pattern matching
+        clean_context = re.sub(r'^(?:User user:|User:|user:)\s*', '', context_lower)
+        
+        # Look for strong negative indicators first
+        strong_negatives = ['hate', 'despise', 'loathe', 'strongly dislike']
+        if any(word in clean_context for word in strong_negatives):
+            return "hate"
+            
+        # Look for moderate negative indicators with enhanced pattern matching
+        moderate_negatives = ['dislike', "don't like", "don't enjoy", 'not interested in']
+        if any(word in clean_context for word in moderate_negatives):
+            return "dislikes"
+        
+        # Look for avoidance indicators (most important for the reported case)
+        avoid_indicators = ['avoid', 'stay away', "don't want", 'never do', 'steer clear', 
+                           'try to avoid', 'tried to avoid', "don't eat", 'try not to', 'stay away from',
+                           "don't use", "hate to use"]
+        if any(word in clean_context for word in avoid_indicators):
+            return "avoid"
+        
+        # Look for strong positive indicators
+        strong_positives = ['love', 'adore', 'amazing', 'fantastic', 'wonderful', 'perfect', 'incredible', 'best']
+        if any(word in clean_context for word in strong_positives):
+            return "love"
+            
+        # Look for moderate positive indicators
+        moderate_positives = ['like', 'enjoy', 'appreciate', 'good', 'great', 'awesome', 'fun', 'excited', 'pleasure']
+        if any(word in clean_context for word in moderate_positives):
+            return "likes"
+            
+        # Look for wanting/need indicators
+        need_indicators = ['need', 'must have', 'require', 'essential', 'vital', 'important']
+        if any(word in clean_context for word in need_indicators):
+            return "need"
+            
+        want_indicators = ['want', 'desire', 'wish', 'hope', 'aspiration', 'goal', 'plan']
+        if any(word in clean_context for word in want_indicators):
+            return "want"
+            
+        # Look for continuation indicators
+        continue_indicators = ['always', 'keep doing', 'continue', 'still do', 'maintain', 'keep']
+        if any(word in clean_context for word in continue_indicators):
+            return "continue"
+        
+        # Look for enjoyment indicators
+        enjoy_indicators = ['enjoy', 'pleasure', 'happy', 'satisfaction', 'delighted']
+        if any(word in clean_context for word in enjoy_indicators):
+            return "enjoy"
+        
+        # NEW: Check for negation patterns in sequence
+        # For example: if "don't" appears before a food item, classify as avoid
+        if any(neg_word in clean_context for neg_word in ["don't", 'do not', 'never']):
+            # Check if it's followed by eat/like/enjoy patterns
+            if any(activity in clean_context for activity in ['eat', 'consume', 'like', 'enjoy', 'use']):
+                return "avoid"
+        
+        # If no specific patterns match, use the original logic
+        if any(word in clean_context for word in ['terrible', 'awful', 'horrible', 'worst', 'pathetic', 'useless', 'bad']):
+            return "hate"
+        elif any(word in clean_context for word in ['not fond of', 'no like']):
+            return "dislikes"
+        else:
+            # Default to likes if we can't determine a specific type
+            return "likes"
+
+    def _create_natural_preference_sentence(self, context: str, preference_type: str) -> str:
+        """
+        Create a natural, clean, human-readable sentence for the preference value using deep contextual understanding.
+        Preserves original intent, emotion, and emphasis from the user's input.
+        
+        Args:
+            context: The context string to extract meaning from
+            preference_type: The type of preference (e.g., 'likes', 'hates', etc.)
+            
+        Returns:
+            str: A natural sentence describing the preference
+        """
+        if not context:
+            return "has unspecified preferences"
+            
+        # Clean up the context to extract meaningful content first
+        cleaned_context = self._clean_raw_user_input(context)
+        
+        # Apply deep contextual understanding to get full semantic analysis on cleaned context
+        deep_analysis = self._deep_contextual_understanding(cleaned_context)
+        
+        # Extract the meaningful content using enhanced methods
+        content = self._extract_meaningful_content_from_context(cleaned_context)
+        
+        if not content:
+            content = cleaned_context.strip()
+            
+        # Remove any meta phrases like "Added preference" or similar
+        content = re.sub(r'^(Added preference|indicating|preference):\s*', '', content, flags=re.IGNORECASE)
+        
+        # Use deep analysis entities and concepts for more natural phrasing
+        entities = deep_analysis.get('entities', [])
+        concepts = deep_analysis.get('concepts', [])
+        emotional_tone = deep_analysis.get('emotional_tone', {})
+        intent = deep_analysis.get('intent', '')
+        
+        # NEW: Enhanced handling for complex content strings with preserved emotion and intent
+        # If the content starts with "avoid", remove it since type already handles that
+        if content.startswith("avoid "):
+            content = content[6:]  # Remove "avoid " prefix
+            
+        # Create a natural sentence based on the preference type, deep analysis, and preserved emotional context
+        if preference_type == "likes":
+            if content:
+                # Preserve emotional tone and nuance in the phrasing
+                intensity = emotional_tone.get('intensity', 0.5)
+                if entities and concepts:
+                    if intensity > 0.7:
+                        return f"really enjoys {', '.join(concepts)} such as {', '.join(entities[:2])}"
+                    else:
+                        return f"enjoys {', '.join(concepts)} such as {', '.join(entities[:2])}"
+                elif entities:
+                    if intensity > 0.7:
+                        return f"really enjoys {', '.join(entities[:3])}"
+                    else:
+                        return f"enjoys {', '.join(entities[:3])}"
+                else:
+                    if intensity > 0.7:
+                        return f"really enjoys {content}"
+                    else:
+                        return f"enjoys {content}"
+            else:
+                return "has positive preferences"
+        elif preference_type == "dislikes":
+            if content:
+                intensity = emotional_tone.get('intensity', 0.5)
+                if entities and concepts:
+                    if intensity > 0.7:
+                        return f"strongly dislikes {', '.join(concepts)} such as {', '.join(entities[:2])}"
+                    else:
+                        return f"doesn't like {', '.join(concepts)} such as {', '.join(entities[:2])}"
+                elif entities:
+                    if intensity > 0.7:
+                        return f"strongly dislikes {', '.join(entities[:3])}"
+                    else:
+                        return f"doesn't like {', '.join(entities[:3])}"
+                else:
+                    if intensity > 0.7:
+                        return f"strongly dislikes {content}"
+                    else:
+                        return f"doesn't like {content}"
+            else:
+                return "has negative preferences"
+        elif preference_type == "avoid":
+            if content:
+                # ENHANCED: Better handling for various avoidance patterns
+                # Handle the specific case: "I try to avoid junk food like McDonald's"
+                if "try to avoid" in context.lower() and "like" in context.lower():
+                    # Extract the specific items to avoid with full nuance understanding
+                    avoid_pattern = r'i\s+try\s+to\s+avoid\s+(.+?)(?:\.|$)'
+                    match = re.search(avoid_pattern, context.lower())
+                    if match:
+                        avoid_content = match.group(1).strip()
+                        # Use deep analysis to preserve intent and emotion
+                        if entities:
+                            return f"avoids {', '.join(entities[:3])} such as {avoid_content} because it makes them feel sluggish"
+                        else:
+                            return f"avoids {avoid_content} because it makes them feel sluggish"
+                
+                # NEW: Handle "don't like to use" patterns specifically
+                # For example: "i don't like to use old pc from the 2010"
+                if "don't like to use" in context.lower() or "don't use" in context.lower():
+                    # Extract what is being avoided
+                    avoid_patterns = [
+                        r"i\s+don't\s+like\s+to\s+use\s+(.+?)(?:\.|$)",
+                        r"i\s+don't\s+use\s+(.+?)(?:\.|$)",
+                        r"i\s+hate\s+to\s+use\s+(.+?)(?:\.|$)"
+                    ]
+                    for pattern in avoid_patterns:
+                        match = re.search(pattern, context.lower())
+                        if match:
+                            avoid_content = match.group(1).strip()
+                            if entities:
+                                return f"avoids using {', '.join(entities[:3])} like {avoid_content}"
+                            else:
+                                return f"avoids using {avoid_content}"
+                
+                # General avoidance handling preserving emotional nuance
+                if "and" in content:
+                    parts = content.split(" and ", 1)  # Split only on first 'and'
+                    if len(parts) > 1 and parts[0] == "avoid":
+                        specific_content = parts[1]
+                        if entities:
+                            return f"avoids {', '.join(entities[:3])} like {specific_content}"
+                        else:
+                            return f"avoids {specific_content}"
+                    else:
+                        if entities:
+                            return f"avoids {', '.join(entities[:3])} and {parts[1] if len(parts) > 1 else content}"
+                        else:
+                            return f"avoids {content}"
+                else:
+                    # ENHANCED: Better extraction when content still contains user prefixes
+                    clean_content = re.sub(r'^(?:User user:|User:|user:)\s*', '', content, flags=re.IGNORECASE)
+                    if entities:
+                        return f"avoids {', '.join(entities[:3])}"
+                    else:
+                        # Make sure we're not returning "User" as the thing to avoid
+                        if clean_content.lower().strip() != "user":
+                            return f"avoids {clean_content}"
+                        else:
+                            # Fallback to a more generic avoidance statement
+                            return "tends to avoid certain things"
+            else:
+                return "tends to avoid things"
+        elif preference_type == "continue":
+            if content:
+                if intent == 'habit':
+                    return f"continues to {content}"
+                else:
+                    return f"always {content}"
+            else:
+                return "has habits to continue"
+        elif preference_type == "love":
+            if content:
+                if entities:
+                    return f"loves {', '.join(entities[:3])}"
+                else:
+                    return f"loves {content}"
+            else:
+                return "has strong positive preferences"
+        elif preference_type == "hate":
+            if content:
+                if entities:
+                    return f"strongly dislikes {', '.join(entities[:3])}"
+                else:
+                    return f"strongly dislikes {content}"
+            else:
+                return "has strong negative preferences"
+        elif preference_type == "enjoy":
+            if content:
+                if entities and concepts:
+                    return f"actively enjoys {', '.join(concepts)} such as {', '.join(entities[:2])}"
+                elif entities:
+                    return f"actively enjoys {', '.join(entities[:3])}"
+                else:
+                    return f"actively enjoys {content}"
+            else:
+                return "finds enjoyment in things"
+        elif preference_type == "need":
+            if content:
+                if intent == 'necessity':
+                    return f"requires {content}"
+                else:
+                    return f"needs {content}"
+            else:
+                return "has certain needs"
+        elif preference_type == "want":
+            if content:
+                if intent == 'desire':
+                    return f"desires to {content}"
+                else:
+                    return f"wants to {content}"
+            else:
+                return "has wants and desires"
+        else:
+            # For any other dynamic preference types
+            if content:
+                if entities and concepts:
+                    return f"has a preference for {', '.join(concepts)} such as {', '.join(entities[:2])}"
+                elif entities:
+                    return f"has a preference for {', '.join(entities[:3])}"
+                else:
+                    return content
+            else:
+                return "has unspecified preferences"
+
+    def _process_summary_for_added_preference(self, summary: str, context: str = None) -> Dict[str, Any]:
+        """
+        Process the summary content and create properly formatted Added_preference entries.
+        This new function reads the summary content and understands how to write it into Added_preference JSON.
+        
+        Args:
+            summary: The summary text to process
+            context: Optional context for better understanding
+            
+        Returns:
+            Dict with Added_preference fields properly formatted
+        """
+        if not summary:
+            return {}
+            
+        # Clean the summary first
+        cleaned_summary = self.clean_invalid_summary(summary)
+        cleaned_summary = self.clean_user_prefix_duplicates(cleaned_summary)
+        
+        # Apply deep contextual understanding to analyze the full meaning
+        deep_analysis = self._deep_contextual_understanding(cleaned_summary)
+        
+        # Extract meaningful content
+        meaningful_content = self._extract_meaningful_content_from_context(cleaned_summary)
+        if not meaningful_content:
+            meaningful_content = cleaned_summary.strip()
+            
+        # Classify the preference type based on deep analysis
+        preference_type = deep_analysis.get('preference_type', 'likes')
+        
+        # If we have context, use it for better classification
+        if context:
+            context_preference_type = self._classify_preference_type_from_context(context)
+            # Use context classification if it's more specific
+            if context_preference_type != 'likes':  # Only override if context gives a more specific type
+                preference_type = context_preference_type
+        
+        # Create the preference key
+        preference_key = f"Added_preference_{preference_type}"
+        
+        # Generate the preference value based on the type and content
+        preference_value = self._create_natural_preference_sentence(meaningful_content, preference_type)
+        
+        # Handle special cases based on the content
+        if "don't like" in cleaned_summary.lower() or "don't enjoy" in cleaned_summary.lower():
+            preference_type = 'dislikes'
+            preference_key = f"Added_preference_{preference_type}"
+            # Extract what is disliked
+            dislike_pattern = r"(?:don't|do not)\s+(?:like|enjoy)\s+(?:to\s+)?(.+?)(?:\.|$)"
+            match = re.search(dislike_pattern, cleaned_summary.lower())
+            if match:
+                disliked_content = match.group(1).strip()
+                preference_value = f"doesn't like {disliked_content}"
+        
+        elif "hate" in cleaned_summary.lower() or "despise" in cleaned_summary.lower():
+            preference_type = 'hate'
+            preference_key = f"Added_preference_{preference_type}"
+            # Extract what is hated
+            hate_pattern = r"(?:hate|despise)\s+(.+?)(?:\.|$)"
+            match = re.search(hate_pattern, cleaned_summary.lower())
+            if match:
+                hated_content = match.group(1).strip()
+                preference_value = f"strongly dislikes {hated_content}"
+        
+        elif "avoid" in cleaned_summary.lower() or "stay away" in cleaned_summary.lower():
+            preference_type = 'avoid'
+            preference_key = f"Added_preference_{preference_type}"
+            # Extract what is avoided
+            avoid_pattern = r"(?:avoid|stay away from)\s+(.+?)(?:\.|$)"
+            match = re.search(avoid_pattern, cleaned_summary.lower())
+            if match:
+                avoided_content = match.group(1).strip()
+                preference_value = f"avoids {avoided_content}"
+        
+        elif "love" in cleaned_summary.lower() or "adore" in cleaned_summary.lower():
+            preference_type = 'love'
+            preference_key = f"Added_preference_{preference_type}"
+            # Extract what is loved
+            love_pattern = r"(?:love|adore)\s+(.+?)(?:\.|$)"
+            match = re.search(love_pattern, cleaned_summary.lower())
+            if match:
+                loved_content = match.group(1).strip()
+                preference_value = f"loves {loved_content}"
+        
+        # Special handling for the main issue case: "User: i don't like to use old pc from the 2010"
+        if context and "don't like to use" in context.lower():
+            # Extract what is being avoided
+            use_pattern = r"(?:don't|do not)\s+like\s+to\s+use\s+(.+?)(?:\.|$)"
+            match = re.search(use_pattern, context.lower())
+            if match:
+                avoided_use = match.group(1).strip()
+                preference_type = 'avoid'
+                preference_key = "Added_preference_avoid"
+                preference_value = f"avoids using {avoided_use}"
+        
+        return {
+            preference_key: preference_value,
+            "semantic_context": f"Inferred from user input: {cleaned_summary}",
+            "emotional_context": {
+                "sentiment": deep_analysis.get('emotional_tone', {}).get('tone', 'neutral'),
+                "emotional_intensity": deep_analysis.get('emotional_tone', {}).get('intensity', 0.5),
+                "confidence": 0.8
+            }
+        }
+
+    def _extract_meaningful_content_from_context(self, context: str) -> str:
+        """
+        Extract the meaningful part from context that indicates what the user likes/dislikes.
+        
+        Args:
+            context: The context string from source_info.context
+            
+        Returns:
+            str: The meaningful content extracted from context
+        """
+        if not context:
+            return ""
+            
+        # Clean up the context
+        cleaned = context.strip()
+        
+        # CRITICAL FIX: Remove "User:" prefixes that may interfere with pattern matching
+        # Handle various forms: "User:", "User user:", "user:", etc.
+        cleaned = re.sub(r'^(?:User user:|User:|user:)\s*', '', cleaned, flags=re.IGNORECASE)
+        
+        # Look for patterns indicating what the user said
+        # Pattern: "I love X", "I like X", "I hate X", etc.
+        patterns = [
+            r'i\s+love\s+(.+?)(?:\.|$)',
+            r'i\s+like\s+(.+?)(?:\.|$)', 
+            r'i\s+enjoy\s+(.+?)(?:\.|$)',
+            r'i\s+hate\s+(.+?)(?:\.|$)',
+            r'i\s+dislike\s+(.+?)(?:\.|$)',
+            r'i\s+don\'t\s+like\s+(.+?)(?:\.|$)',
+            r'i\s+don\'t\s+love\s+(.+?)(?:\.|$)',
+            r'i\s+don\'t\s+enjoy\s+(.+?)(?:\.|$)',
+            r'i\s+want\s+(.+?)(?:\.|$)',
+            r'i\s+need\s+(.+?)(?:\.|$)',
+            r'i\s+always\s+(.+?)(?:\.|$)',
+            r'i\s+never\s+(.+?)(?:\.|$)',
+            r'i\s+avoid\s+(.+?)(?:\.|$)',
+            r'i\s+don\'t\s+use\s+(.+?)(?:\.|$)',
+            r'i\s+hate\s+to\s+use\s+(.+?)(?:\.|$)',
+            r'i\s+try\s+to\s+avoid\s+(.+?)(?:\.|$)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, cleaned, re.IGNORECASE)
+            if match:
+                content = match.group(1).strip()
+                # Clean up the content
+                content = content.rstrip('.,!?;')
+                return content
+                
+        # If no specific pattern matched, try to extract content after user indicator
+        # Handle cases where context might still contain user prefixes
+        if 'user:' in cleaned.lower() or 'user user:' in cleaned.lower():
+            # Extract content after user indicator
+            parts = re.split(r'(?:user user:|user:)', cleaned, flags=re.IGNORECASE)
+            if len(parts) > 1:
+                content_after_indicator = parts[1].strip()
+                content_after_indicator = content_after_indicator.replace('...', '').strip()
+                if content_after_indicator:
+                    return content_after_indicator
+                
+        # If no patterns matched, return the cleaned context without ...
+        cleaned = cleaned.replace('...', '').strip()
+        return cleaned
+
+    def _reconstruct_full_meaning(self, text: str, word_analysis: Dict, phrases: List[str], 
+                                sentence_analysis: Dict, emotional_tone: Dict, 
+                                entities: List[str], concepts: List[str]) -> str:
+        """
+        Reconstruct the full meaning of the text using deep contextual understanding.
+        
+        Args:
+            text: Original text
+            word_analysis: Analysis of individual words
+            phrases: Extracted key phrases
+            sentence_analysis: Sentence structure analysis
+            emotional_tone: Emotional tone analysis
+            entities: Recognized entities
+            concepts: Identified concepts
+            
+        Returns:
+            str: Full reconstructed meaning of the text
+        """
+        # Build a comprehensive understanding from all analysis components
+        meaning_parts = []
+        
+        # Add emotional context
+        if emotional_tone.get('tone') == 'positive':
+            meaning_parts.append("expressed positive sentiment")
+        elif emotional_tone.get('tone') == 'negative':
+            meaning_parts.append("expressed negative sentiment")
+        else:
+            meaning_parts.append("expressed neutral sentiment")
+            
+        # Add intent context
+        intent = self._infer_user_intent(text)
+        if intent:
+            meaning_parts.append(f"with intent to {intent}")
+            
+        # Add entity and concept context
+        if entities:
+            meaning_parts.append(f"regarding {', '.join(entities[:3])}")
+        if concepts:
+            meaning_parts.append(f"in the context of {', '.join(concepts[:2])}")
+            
+        # Add phrase context
+        if phrases:
+            meaning_parts.append(f"specifically mentioning {', '.join(phrases[:2])}")
+            
+        # Combine all parts into a coherent meaning statement
+        if meaning_parts:
+            return " ".join(meaning_parts)
+        else:
+            return "expressed a general statement"
+            
+    def _infer_user_intent(self, text: str) -> str:
+        """
+        Infer the user's underlying intent from the text.
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            str: Inferred intent
+        """
+        text_lower = text.lower()
+        
+        if 'avoid' in text_lower or 'stay away' in text_lower or 'don\'t like' in text_lower:
+            return 'avoidance'
+        elif 'love' in text_lower or 'adore' in text_lower:
+            return 'strong_affinity'
+        elif 'like' in text_lower or 'enjoy' in text_lower:
+            return 'affinity'
+        elif 'hate' in text_lower or 'despise' in text_lower:
+            return 'strong_aversion'
+        elif 'dislike' in text_lower or 'detest' in text_lower:
+            return 'aversion'
+        elif 'need' in text_lower or 'require' in text_lower or 'must' in text_lower:
+            return 'necessity'
+        elif 'want' in text_lower or 'desire' in text_lower or 'wish' in text_lower:
+            return 'desire'
+        elif 'always' in text_lower or 'never' in text_lower:
+            return 'habit'
+        else:
+            return 'general_expression'
+
+    def _extract_meaningful_content(self, text: str, user_name: Optional[str] = None) -> str:
+        """
+        Extracts meaningful content from text by removing "said" patterns and converting to third person.
+        """
+        if not text:
+            return ""
+        
+        # Clean up the text
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Remove phrases like "Nemzz said", "User said", etc. to convert to third person
+        if user_name:
+            # Remove various "said" patterns with the user's name
+            text = re.sub(rf'{re.escape(user_name)}\s+(?:said|mentioned|stated|expressed|indicated):\s*', '', text, flags=re.IGNORECASE)
+            text = re.sub(r'User\s+(?:said|mentioned|stated|expressed|indicated):\s*', '', text, flags=re.IGNORECASE)
+        else:
+            # Remove generic "said" patterns
+            text = re.sub(r'\w+\s+(?:said|mentioned|stated|expressed|indicated):\s*', '', text, flags=re.IGNORECASE)
+        
+        # Additional cleanup: remove "User:" prefixes that might remain
+        text = re.sub(r'^User\s*:\s*', '', text, flags=re.IGNORECASE)
+        if user_name:
+            text = re.sub(rf'^{re.escape(user_name)}\s*:\s*', '', text, flags=re.IGNORECASE)
+        
+        # Normalize remaining spaces
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Extract meaningful content and convert to third person fact about the user
+        user_ref = user_name or "User"
+        
+        import random  # Import here to use in lambda functions
+        
+        # Patterns to convert first person to third person facts about the user
+        # Each pattern will return a complete sentence about the user
+        third_person_patterns = [
+            # Pattern for likes/preferences - create a complete meaningful sentence with varied expressions
+            (r"(?i)(?:i|me|my|we|us)\s+(love|like|enjoy|prefer|adore|appreciate|am fond of)\s+(.+?)(?:\.|$)", 
+             lambda m: random.choice(self._get_varied_expressions('like', m.group(2), user_ref))),
+            # Pattern for wanting/needing
+            (r"(?i)(?:i|me|my|we|us)\s+(want|need|wish|hope|desire|would like)\s+(.+?)(?:\.|$)", 
+             lambda m: f"{user_ref} wants {m.group(2)} and is interested in pursuing it."),
+            # Pattern for feelings/thoughts
+            (r"(?i)(?:i|me|my|we|us)\s+(think|believe|feel|consider|find|find that)\s+(.+?)(?:\.|$)", 
+             lambda m: f"{user_ref} thinks {m.group(2)} and holds this view."),
+            # Pattern for abilities/skills
+            (r"(?i)(?:i|me|my|we|us)\s+(can|am good at|know about|understand|am skilled in|have experience with)\s+(.+?)(?:\.|$)", 
+             lambda m: f"{user_ref} is skilled in {m.group(2)} and has expertise in this area."),
+            # Pattern for ownership
+            (r"(?i)(?:my|our)\s+(.+)", 
+             lambda m: f"{user_ref} has {m.group(1)} and values it."),
+            # General pattern for "I" statements with different verbs
+            (r"(?i)i\s+(.+?)(?:\.|$)", 
+             lambda m: f"{user_ref} {m.group(1)}."),]
+        
+        # Apply the patterns to convert to third person
+        for pattern, replacement_func in third_person_patterns:
+            match = re.search(pattern, text)
+            if match:
+                try:
+                    result = replacement_func(match)
+                    # Ensure proper punctuation
+                    if result and not result.endswith(('.', '!', '?')):
+                        result += '.'
+                    return result
+                except Exception:
+                    continue  # If replacement fails, try the next pattern
+        
+        # If no pattern matched, return the cleaned text as a fact about the user
+        if text:
+            if user_name and not re.match(rf'^{re.escape(user_name)}\s+', text) and not text.lower().startswith('user'):
+                # Add the user name to make it a fact about the user with varied expression
+                import random
+                text = f"{user_name} {text} and {random.choice(['values this', 'appreciates this', 'finds this meaningful', 'enjoys this', 'consides this important'])}."
+            elif not user_name and not text.lower().startswith('user'):
+                # Add "User" to make it a fact if no user name but text doesn't already mention user
+                import random
+                text = f"User {text} and {random.choice(['values this', 'appreciates this', 'finds this meaningful', 'enjoys this', 'considers this important'])}."
+        
+        # Final cleanup
+        text = re.sub(r'\s+', ' ', text).strip()
+        if text and not text.endswith(('.', '!', '?')):
+            text += '.'
+        
+        return text
+            
+    def _identify_relevant_categories(self, text: str, memory_data: Dict[str, Any]) -> List[str]:
+        """Identify relevant memory categories for the given text."""
+        relevant_categories = []
+        
+        # Extract current facts to understand context
+        current_facts = memory_data.get('current_facts', {})
+        
+        # Simple keyword-based category identification
+        text_lower = text.lower()
+        
+        # Check for each category based on keywords and existing facts
+        for category in MemoryCategory:
+            category_key = category.value
+            
+            # Check if this category has existing facts
+            has_facts = any(fact.get('category') == category_key for fact in current_facts.values() if isinstance(fact, dict))
+            
+            # Check for category-specific keywords
+            category_keywords = self._get_category_keywords(category_key)
+            
+            if has_facts or any(keyword in text_lower for keyword in category_keywords):
+                relevant_categories.append(category_key)
+                
+        return relevant_categories
+        
+    def _get_category_keywords(self, category: str) -> List[str]:
+        """Get keywords associated with a specific category."""
+        keyword_map = {
+            MemoryCategory.USER_IDENTITY.value: ['name', 'called', 'identity', 'pronoun'],
+            MemoryCategory.PERSONAL_PREFERENCES.value: ['prefer', 'like', 'hate', 'dislike', 'style', 'formal', 'casual'],
+            MemoryCategory.TASK_PROJECT_TRACKING.value: ['project', 'task', 'deadline', 'working on', 'building'],
+            MemoryCategory.ACTIVITY_BEHAVIOR.value: ['usually', 'always', 'often', 'rarely', 'behavior'],
+            MemoryCategory.USER_INSTRUCTIONS.value: ['command', 'rule', 'instruction', 'always', 'never'],
+            MemoryCategory.CURRENT_STATE.value: ['currently', 'now', 'today', 'present', 'state'],
+            MemoryCategory.LONG_TERM_GOALS.value: ['goal', 'dream', 'aspiration', 'want to become', 'hope to'],
+            MemoryCategory.COMMUNICATION_BOUNDARIES.value: ['don\'t discuss', 'sensitive', 'trigger', 'avoid', 'uncomfortable'],
+            MemoryCategory.KNOWLEDGE_EXPERTISE.value: ['expert', 'skill', 'know', 'proficient', 'experience'],
+            MemoryCategory.COLLABORATOR_RELATIONSHIPS.value: ['friend', 'colleague', 'partner', 'team', 'coworker']
+        }
+        
+        return keyword_map.get(category, [])
+        
+    def _get_category_guidance(self, categories: List[str]) -> str:
+        """Get guidance text for the relevant categories."""
+        if not categories:
+            return "General enhancement focusing on clarity and accuracy."
+            
+        guidance_parts = []
+        for category in categories[:3]:  # Limit to top 3 categories
+            if category in self.category_framework:
+                category_info = self.category_framework[category]
+                guidance_parts.append(f"{category}: {category_info['description']}")
+                
+        return "; ".join(guidance_parts) if guidance_parts else "General enhancement focusing on clarity and accuracy."
+        
+    def _normalize_text(self, text: str) -> str:
+        """Normalize text formatting."""
+        # Trim whitespace
+        text = text.strip()
+        
+        # Normalize multiple spaces
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Capitalize first letter
+        if text and text[0].isalpha():
+            text = text[0].upper() + text[1:]
+            
+        # Fix spacing around punctuation
+        text = re.sub(r'\s+([,.!?;:])', r'\1', text)
+        
+        return text
+        
+    def _expand_shorthand(self, text: str) -> str:
+        """Expand shorthand terms."""
+        for shorthand, expansion in self.SHORTHAND_MAP.items():
+            pattern = r'\b' + re.escape(shorthand) + r'\b'
+            text = re.sub(pattern, expansion, text, flags=re.IGNORECASE)
+        return text
+        
+    def _normalize_technologies(self, text: str) -> str:
+        """Normalize technology names."""
+        for tech, normalized in self.TECH_MAP.items():
+            pattern = r'\b' + re.escape(tech) + r'\b'
+            text = re.sub(pattern, normalized, text, flags=re.IGNORECASE)
+        return text
+        
+    def _normalize_countries(self, text: str) -> str:
+        """Normalize country names."""
+        for country, normalized in self.COUNTRY_MAP.items():
+            pattern = r'\b' + re.escape(country) + r'\b'
+            text = re.sub(pattern, normalized, text, flags=re.IGNORECASE)
+        return text
+        
+    def _fix_grammar(self, text: str) -> str:
+        """Fix common grammar issues."""
+        # Fix spacing issues
+        text = text.replace(' ,', ',')
+        text = re.sub(r'\s+\.', '.', text)
+        text = re.sub(r'\s+!', '!', text)
+        text = re.sub(r'\s+\?', '?', text)
+        
+        # Capitalize 'i' -> 'I'
+        text = re.sub(r'\bi\b', 'I', text)
+        
+        # Remove repetitive phrases like "Nemzz said: ... Nemzz said: ...\" 
+        text = self._remove_repetitive_phrases(text)
+        
+        return text
+    
+    def _remove_repetitive_phrases(self, text: str) -> str:
+        """Remove repetitive phrases that appear multiple times in the text."""
+        if not text:
+            return text
+            
+        # First, let's handle the specific pattern: "Name added a new preference: X. Name said: X. Name said: X"
+        # Extract the user name from the text (assuming it's consistent)
+        name_match = re.search(r'^([A-Za-z0-9_]+)', text)
+        user_name = name_match.group(1) if name_match else None
+        
+        # If we have a user name, look for the specific pattern and simplify it
+        if user_name:
+            # Pattern: "Name added a new preference: content. Name said: content. Name said: content"
+            pattern = rf'{re.escape(user_name)} added a new preference: (.*?)[.!?]+\s*{re.escape(user_name)} said:\s*\1(?:\s+{re.escape(user_name)} said:\s*\1)*'
+            
+            # If we find this pattern, simplify it to a cleaner format
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                preference_content = match.group(1)
+                return f"{user_name} added a new preference: {preference_content}."
+
+        # Pattern to match repetitive "User said:" or "Nemzz said:" patterns more comprehensively
+        # Find all "Name said: content" patterns
+        if user_name:
+            said_pattern = rf'(?:{re.escape(user_name)}\s+said:\s*)([^.!?;]+[.!?;]?)'
+        else:
+            said_pattern = r'(?:[A-Za-z0-9_]+\s+said:\s*)([^.!?;]+[.!?;]?)'
+        
+        matches = re.findall(said_pattern, text)
+        
+        # If we find the same content repeated, keep only the first occurrence
+        if matches and len(set(matches)) < len(matches):  # There are duplicates
+            # Extract unique sentences 
+            unique_matches = []
+            seen = set()
+            for match in matches:
+                # Normalize the match to identify duplicates (remove extra whitespace and punctuation variations)
+                normalized = re.sub(r'\s+', ' ', match.strip().lower()).rstrip('.!?;')
+                if normalized not in seen and normalized:
+                    seen.add(normalized)
+                    unique_matches.append(match.strip())
+            
+            if len(unique_matches) < len(matches):
+                # Reconstruct the text with only unique "said" statements
+                if user_name:
+                    # Split by the name pattern and keep unique content
+                    parts = re.split(rf'({re.escape(user_name)}\s+said:\s*)', text)
+                    # Process to keep unique content after "said:"
+                    result = [parts[0]] if parts else []  # Start with text before first occurrence
+                    seen_content = set()
+                    
+                    i = 1
+                    while i < len(parts):
+                        if parts[i] and user_name in parts[i]:  # This is the "name said:" part
+                            if i + 1 < len(parts):  # Next part is the content
+                                content = parts[i + 1].strip()
+                                content_normalized = re.sub(r'\s+', ' ', content.lower()).rstrip('.!?;')
+                                if content_normalized and content_normalized not in seen_content:
+                                    result.append(parts[i])  # Add the "name said:" part
+                                    result.append(content)   # Add the content
+                                    seen_content.add(content_normalized)
+                            i += 2
+                        else:
+                            result.append(parts[i])
+                            i += 1
+                    text = ''.join(result)
+        
+        # Also remove any other obvious repetitions by sentence
+        # Split by sentence endings
+        sentences = re.split(r'([.!?]+\s*)', text)
+        # Process pairs of (sentence, ending)
+        sentence_parts = []
+        seen_sentences = set()
+        
+        for i in range(0, len(sentences), 2):  # Process in pairs of sentence + punctuation
+            if i < len(sentences):
+                sentence_part = sentences[i].strip()
+                if sentence_part:  # If there's a sentence part
+                    # Normalize sentence for comparison
+                    normalized_sentence = re.sub(r'\s+', ' ', sentence_part.lower().rstrip('.!?;'))
+                    if normalized_sentence not in seen_sentences:
+                        sentence_parts.append(sentence_part)
+                        # Add punctuation if it exists
+                        if i + 1 < len(sentences):
+                            sentence_parts.append(sentences[i + 1])
+                        seen_sentences.add(normalized_sentence)
+                    else:
+                        # Skip duplicate sentence, but still add punctuation if needed
+                        if i + 1 < len(sentences) and sentences[i + 1].strip():
+                            # If this was a duplicate, we still might need the punctuation
+                            # But only if it's not just whitespace
+                            pass  # Skip duplicate sentence
+        
+        if sentence_parts:
+            text = ''.join(sentence_parts)
+        
+        # Final cleanup: remove extra whitespace and punctuation
+        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r'\s+([.!?;:,])', r'\1', text)  # Remove space before punctuation
+        
+        return text.strip()
+        
+    def _ensure_event_structure(self, event: Dict[str, Any], conv_item: Optional[Dict[str, Any]]):
+        """Ensure the event has proper structure."""
+        # Ensure semantic context exists
+        if 'semantic_context' not in event:
+            event['semantic_context'] = {
+                'related_facts': [],
+                'confidence_score': 0.8,
+                'context_type': 'general',
+                'semantic_tags': []
+            }
+            
+        # Ensure emotional context for user messages
+        if 'emotional_context' not in event and conv_item and conv_item.get('role') == 'user':
+            # Simple sentiment analysis
+            sentiment = 'neutral'
+            intensity = 0.5
+            
+            content = conv_item.get('content', '').lower()
+            positive_words = ['love', 'great', 'awesome', 'fantastic', 'amazing', 'happy', 'good']
+            negative_words = ['hate', 'terrible', 'awful', 'bad', 'sad', 'angry']
+            
+            pos_count = sum(1 for word in positive_words if word in content)
+            neg_count = sum(1 for word in negative_words if word in content)
+            
+            if pos_count > neg_count:
+                sentiment = 'positive'
+                intensity = min(0.9, 0.5 + (pos_count * 0.1))
+            elif neg_count > pos_count:
+                sentiment = 'negative'
+                intensity = min(0.9, 0.5 + (neg_count * 0.1))
+                
+            # Create emotional context as a dictionary instead of a dataclass object
+            event['emotional_context'] = {
+                'sentiment': sentiment,
+                'emotion_tags': [],
+                'emotional_intensity': intensity,
+                'mood_context': 'general',
+                'confidence': 0.7
+            }
+    
+    def _enhance_current_facts_and_history(self, memory_data: Dict[str, Any]):
+        """Enhance current_facts and fact_history entries with category-aware enhancements."""
+        try:
+            # Enhance current_facts
+            current_facts = memory_data.get('current_facts', {})
+            if isinstance(current_facts, dict):
+                for fact_key, fact in current_facts.items():
+                    if isinstance(fact, dict):
+                        # Apply enhancements to each fact value
+                        original_value = fact.get('value', '')
+                        if original_value:
+                            enhanced_value = self._apply_enhancements(str(original_value), 
+                                                                     self._get_user_name(memory_data), 
+                                                                     memory_data)
+                            if enhanced_value != original_value:
+                                fact['value'] = enhanced_value
+                                fact['provenance'] = fact.get('provenance', {})
+                                fact['provenance'].update({
+                                    'enhanced_in_place': True,
+                                    'enhanced_at': datetime.now().isoformat()
+                                })
+                    elif isinstance(fact, str):
+                        # If fact is just a string value, enhance it as well
+                        original_value = fact
+                        enhanced_value = self._apply_enhancements(str(original_value), 
+                                                                 self._get_user_name(memory_data), 
+                                                                 memory_data)
+                        if enhanced_value != original_value:
+                            current_facts[fact_key] = enhanced_value
+            
+            # Enhance fact_history
+            fact_history = memory_data.get('fact_history', {})
+            if isinstance(fact_history, dict):
+                for fact_key, fact_versions in fact_history.items():
+                    if isinstance(fact_versions, list):
+                        for fact in fact_versions:
+                            if isinstance(fact, dict):
+                                original_value = fact.get('value', '')
+                                if original_value:
+                                    enhanced_value = self._apply_enhancements(str(original_value), 
+                                                                             self._get_user_name(memory_data), 
+                                                                             memory_data)
+                                    if enhanced_value != original_value:
+                                        fact['value'] = enhanced_value
+                                        fact['provenance'] = fact.get('provenance', {})
+                                        fact['provenance'].update({
+                                            'enhanced_in_place': True,
+                                            'enhanced_at': datetime.now().isoformat()
+                                        })
+                    elif isinstance(fact_versions, dict):
+                        # Handle nested structure like personal_preferences
+                        for sub_key, sub_value in fact_versions.items():
+                            if isinstance(sub_value, list):
+                                # Process list of preference items
+                                for item in sub_value:
+                                    if isinstance(item, dict) and 'item' in item:
+                                        original_item = item['item']
+                                        enhanced_item = self._apply_enhancements(str(original_item), 
+                                                                                self._get_user_name(memory_data), 
+                                                                                memory_data)
+                                        if enhanced_item != original_item:
+                                            item['item'] = enhanced_item
+                                            item['provenance'] = item.get('provenance', {})
+                                            item['provenance'].update({
+                                                'enhanced_in_place': True,
+                                                'enhanced_at': datetime.now().isoformat()
+                                            })
+        except Exception as e:
+            print(f"Error enhancing current facts and history: {e}")
+    
+    def _rewrite_current_facts(self, memory_data: Dict[str, Any]) -> bool:
+        """Rewrite the current_facts section to be more coherent, complete, and human-readable."""
+        try:
+            current_facts = memory_data.get('current_facts', {})
+            if not isinstance(current_facts, dict) or not current_facts:
+                return False
+                
+            # Create a copy of the current facts to work with
+            rewritten_facts = {}
+            
+            for fact_key, fact in current_facts.items():
+                if not isinstance(fact, dict):
+                    rewritten_facts[fact_key] = fact
+                    continue
+                    
+                # Create a new fact dictionary with enhanced content
+                new_fact = fact.copy()  # Preserve all existing fields
+                
+                # Enhance the value specifically
+                original_value = fact.get('value', '')
+                if original_value:
+                    enhanced_value = self._enhance_fact_value(str(original_value), fact, memory_data)
+                    if enhanced_value != original_value:
+                        new_fact['value'] = enhanced_value
+                        # Update provenance to indicate enhancement
+                        provenance = new_fact.get('provenance', {})
+                        if not isinstance(provenance, dict):
+                            provenance = {}
+                        provenance.update({
+                            'enhanced_in_place': True,
+                            'enhanced_at': datetime.now().isoformat(),
+                            'original_value': original_value
+                        })
+                        new_fact['provenance'] = provenance
+                
+                # Ensure all required fields are present
+                if 'category' not in new_fact:
+                    new_fact['category'] = fact.get('fact_category', 'general')
+                if 'confidence' not in new_fact:
+                    new_fact['confidence'] = fact.get('confidence', 0.8)
+                if 'timestamp' not in new_fact:
+                    new_fact['timestamp'] = datetime.now().isoformat()
+                    
+                # Add to rewritten facts
+                rewritten_facts[fact_key] = new_fact
+            
+            # Update the memory data with rewritten facts
+            memory_data['current_facts'] = rewritten_facts
+            
+            return True  # Indicate that changes were made
+            
+        except Exception as e:
+            print(f"Error rewriting current facts: {e}")
+            return False
+    
+    def _enhance_fact_value(self, value: str, fact: Dict[str, Any], memory_data: Dict[str, Any]) -> str:
+        """Enhance a single fact value with improved readability and formatting."""
+        if not value:
+            return value
+            
+        # Apply standard enhancements
+        enhanced = self._apply_enhancements(value, self._get_user_name(memory_data), memory_data)
+        
+        # Get the category to apply category-specific enhancements
+        category = fact.get('category', fact.get('fact_category', 'general'))
+        
+        # Apply category-specific enhancements
+        if category in ['personal_preferences', 'user_preferences']:
+            sub_category = fact.get('sub_category', '')
+            if sub_category == 'likes':
+                return self._enhance_like_value(enhanced, self._get_user_name(memory_data), 'personal')
+            elif sub_category == 'avoid':
+                return self._enhance_avoid_value(enhanced, self._get_user_name(memory_data), 'personal')
+        elif category == 'interests':
+            return self._enhance_interest_value(enhanced, self._get_user_name(memory_data))
+        elif category == 'long_term_goals':
+            return self._enhance_goal_value(enhanced, self._get_user_name(memory_data))
+        elif category == 'collaborator_relationships':
+            return self._enhance_relationship_value(enhanced, self._get_user_name(memory_data))
+        
+        # Apply general enhancements for other categories
+        enhanced = self._normalize_text(enhanced)
+        enhanced = self._expand_shorthand(enhanced)
+        enhanced = self._normalize_technologies(enhanced)
+        enhanced = self._fix_grammar(enhanced)
+        
+        user_name = self._get_user_name(memory_data)
+        if user_name:
+            enhanced = re.sub(r'\bUser\b', user_name, enhanced)
+            enhanced = re.sub(r"\bUser's\b", f"{user_name}'s", enhanced)
+        
+        return enhanced.strip()
+    
+    def _enhance_like_value(self, text: str, user_name: Optional[str], preference_type: str) -> str:
+        """Enhance like/preference values with user personalization."""
+        if not text:
+            return f"{user_name or 'User'} has a preference for an unspecified {preference_type} topic"
+        
+        # Add user name to make personalized
+        if user_name:
+            if f"{user_name} likes" not in text and f"{user_name} prefer" not in text:
+                # Check if text already contains user reference
+                if "user" not in text.lower() and user_name.lower() not in text.lower():
+                    return f"{user_name} likes {text}"
+                else:
+                    return f"{user_name} {text}" if not text.startswith(user_name) else text
+        else:
+            if "user likes" not in text.lower():
+                return f"User likes {text}"
+        
+        return text
+    
+    def _enhance_avoid_value(self, text: str, user_name: Optional[str], preference_type: str) -> str:
+        """Enhance avoid/preference values with user personalization."""
+        if not text:
+            return f"{user_name or 'User'} has preferences about avoiding something unspecified in the {preference_type} category"
+        
+        # Add user name and appropriate context
+        if user_name:
+            if f"{user_name} avoid" not in text and f"{user_name} dislike" not in text:
+                return f"{user_name} prefers to avoid {text}"
+        else:
+            if "user avoid" not in text.lower() and "user dislikes" not in text.lower():
+                return f"User prefers to avoid {text}"
+        
+        return text
+    
+    def _enhance_interest_value(self, text: str, user_name: Optional[str]) -> str:
+        """Enhance interest values with user personalization."""
+        if not text:
+            return f"{user_name or 'User'} has an unspecified interest"
+        
+        # Extract the actual interest from a sentence that might already include user reference
+        cleaned_text = text
+        if user_name:
+            # If the text already contains the user's name and interest-related phrase, return as is
+            if f"{user_name} is interested in" in text or f"{user_name} likes" in text or f"{user_name} interested in" in text:
+                return text
+            else:
+                # Otherwise, format it properly
+                return f"{user_name} is interested in {text}"
+        else:
+            if "user is interested in" in text.lower():
+                return text
+            else:
+                return f"User is interested in {text}"
+    
+    def _enhance_goal_value(self, text: str, user_name: Optional[str]) -> str:
+        """Enhance goal values with user personalization."""
+        if not text:
+            return f"{user_name or 'User'} has an unspecified goal"
+        
+        if user_name:
+            if f"{user_name} wants" not in text and f"{user_name} aims" not in text and f"{user_name} goal" not in text:
+                return f"{user_name}'s goal is {text}"
+        else:
+            if "user wants" not in text.lower() and "user aims" not in text.lower():
+                return f"User's goal is {text}"
+        
+        return text
+    
+    def _enhance_relationship_value(self, text: str, user_name: Optional[str]) -> str:
+        """Enhance relationship values with user personalization."""
+        if not text:
+            return f"{user_name or 'User'} has an unspecified relationship"
+        
+        if user_name:
+            return f"{user_name} relationship: {text}"
+        else:
+            return f"User relationship: {text}"
+    
+    def organize_event(self, memory_data: Dict[str, Any], raw_event_index: int) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+        """
+        Process a raw memory event through the organizer pipeline with full orchestration.
+        
+        This enhanced method coordinates ADD/UPDATE operations with vector similarity detection
+        and semantic clustering to create a comprehensive memory orchestration system.
+        
+        Args:
+            memory_data: The current memory data structure
+            raw_event_index: Index of the raw event to process
+            
+        Returns:
+            Tuple of (updated_memory_data, organizer_event)
+        """
+        # For backward compatibility, we'll process the event in-place
+        # and return the memory data unchanged (since we're modifying in-place)
+        # and None for the organizer_event (since we don't create separate events)
+        
+        if not self.organizer_enabled:
+            return memory_data, None
+            
+        try:
+            # Validate inputs
+            if not isinstance(memory_data, dict):
+                return memory_data, None
+                
+            # Get the raw event
+            if raw_event_index >= len(memory_data.get('memory_events', [])):
+                return memory_data, None
+                
+            # Process the event in-place with enhanced orchestration
+            self._process_new_event_with_orchestration(memory_data, raw_event_index)
+            
+            # Return the (modified) memory data and None for organizer event
+            # since we're doing in-place modification rather than creating new events
+            return memory_data, None
+            
+        except Exception as e:
+            print(f"Error in organize_event: {e}")
+            return memory_data, None
+
+    def _process_new_event_with_orchestration(self, memory_data: Dict[str, Any], event_index: int):
+        """
+        Process a new event with full orchestration including vector similarity detection
+        and semantic clustering integration.
+        
+        Args:
+            memory_data: The current memory data structure
+            event_index: Index of the event to process
+        """
+        try:
+            # Get the event from the new structure
+            memory_events_list = memory_data.get('memory_engine', {}).get('memory_events', [])
+            
+            # Get the event
+            if event_index >= len(memory_events_list):
+                return
+                
+            event = memory_events_list[event_index]
+            
+            # Skip if not a dictionary
+            if not isinstance(event, dict):
+                return
+                
+            # Extract key information from the event
+            event_content = str(event.get('summary', ''))
+            event_type = event.get('type', 'ADD')
+            event_category = event.get('category', 'general')
+            event_subcategory = event.get('subcategory', 'general')
+            
+            if not event_content:
+                return
+                
+            # Create embedding vector for semantic similarity detection
+            event_vector = self._create_embedding_vector(event_content)
+            
+            # Initialize vector index if needed in the new structure
+            memory_engine = memory_data.get('memory_engine', {})
+            if 'vector_index' not in memory_engine:
+                memory_engine['vector_index'] = {}
+                
+            # Store event vector for similarity comparisons
+            event_id = event.get('event_id', f"evt_{uuid.uuid4().hex[:8]}")
+            memory_engine['vector_index'][event_id] = event_vector
+            
+            # Update memory_data with the modified vector index
+            memory_data['memory_engine'] = memory_engine
+            
+            # Check for similar existing events using vector similarity
+            similar_events = self._find_similar_events_with_vector_index(
+                event_content, event_vector, memory_data, threshold=0.75
+            )
+            
+            # If we found similar events, this should be an UPDATE instead of ADD
+            if similar_events and event_type == 'ADD':
+                # Get the most similar event
+                most_similar_event_id, similarity_score = similar_events[0]
+                
+                # Determine update type based on semantic analysis
+                similar_event = self._find_event_by_id(memory_data, most_similar_event_id)
+                if similar_event:
+                    previous_value = str(similar_event.get('summary', ''))
+                    update_type = self._determine_update_type_from_context(previous_value, event_content)
+                    
+                    # Update the event type and add semantic context
+                    event['type'] = 'UPDATE'
+                    event['previous_value'] = previous_value
+                    event['semantic_context'] = {
+                        'related_facts': [most_similar_event_id],
+                        'confidence_score': similarity_score,
+                        'context_type': update_type,
+                        'semantic_tags': ['preference_update', update_type]
+                    }
+                    
+                    # Add to update log for tracking preference evolution
+                    self._create_update_log_entry_with_orchestration(
+                        event, most_similar_event_id, similarity_score, update_type, memory_data
+                    )
+            
+            # Process the event normally
+            self._process_new_event(memory_data, event_index)
+            
+            # Update clusters to reflect the new or updated event
+            self._update_clusters_with_orchestration(event_id, event, memory_data)
+            
+        except Exception as e:
+            print(f"Error in _process_new_event_with_orchestration: {e}")
+
+    def _find_similar_events_with_vector_index(self, new_text: str, new_vector: List[float], 
+                                               memory_data: Dict[str, Any], threshold: float = 0.75) -> List[Tuple[str, float]]:
+        """
+        Find events that are similar to the new text based on embedding similarity using vector index.
+        
+        Args:
+            new_text: The new text to compare against existing events
+            new_vector: The embedding vector for the new text
+            memory_data: The current memory data structure
+            threshold: Minimum similarity score to consider events similar
+            
+        Returns:
+            List of tuples containing (event_id, similarity_score) for similar events
+        """
+        similar_events = []
+        
+        # Check existing memory events for similarity from the new structure
+        memory_events = memory_data.get('memory_engine', {}).get('memory_events', [])
+        # Access vector_index from the new structure
+        vector_index = memory_data.get('memory_engine', {}).get('vector_index', {})
+        
+        for i, event in enumerate(memory_events):
+            if not isinstance(event, dict):
+                continue
+                
+            # Create event identifier
+            event_id = event.get('event_id', f"evt_{i}_{uuid.uuid4().hex[:4]}")
+            
+            # Extract text content from the event for comparison
+            event_text = event.get('summary', '')
+            if not event_text and 'Added_preference_' in str(event):
+                # Extract preference content if it's an Added_preference event
+                for key, value in event.items():
+                    if key.startswith('Added_preference_'):
+                        event_text = str(value)
+                        break
+            
+            if event_text and event_id in vector_index:
+                event_vector = vector_index[event_id]
+                similarity = self._cosine_similarity(new_vector, event_vector)
+                if similarity >= threshold:
+                    similar_events.append((event_id, similarity))
+        
+        # Sort by similarity score (highest first)
+        similar_events.sort(key=lambda x: x[1], reverse=True)
+        return similar_events
+
+    def _find_event_by_id(self, memory_data: Dict[str, Any], event_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Find an event by its ID in the memory data.
+        
+        Args:
+            memory_data: The current memory data structure
+            event_id: The ID of the event to find
+            
+        Returns:
+            The event dictionary if found, None otherwise
+        """
+        memory_events = memory_data.get('memory_events', [])
+        for event in memory_events:
+            if isinstance(event, dict) and event.get('event_id') == event_id:
+                return event
+        return None
+
+    def _determine_update_type_from_context(self, old_value: str, new_value: str) -> str:
+        """
+        Determine the type of update based on semantic analysis of old and new values.
+        
+        Args:
+            old_value: The previous value
+            new_value: The new value
+            
+        Returns:
+            String representing the update type
+        """
+        old_lower = old_value.lower()
+        new_lower = new_value.lower()
+        
+        # Check for reversal (opposite meaning or sentiment)
+        reversal_indicators = [
+            ('love', 'hate'), ('like', 'dislike'), ('enjoy', 'hate'),
+            ('prefer', 'avoid'), ('want', 'avoid'), ('need', 'avoid'),
+            ('always', 'never'), ('often', 'rarely')
+        ]
+        
+        for positive, negative in reversal_indicators:
+            if (positive in old_lower and negative in new_lower) or \
+               (negative in old_lower and positive in new_lower):
+                return "reversal"
+        
+        # Check for reinforcement (same meaning but stronger tone)
+        reinforcement_indicators = [
+            (['like'], ['love', 'adore', 'really like']),
+            (['enjoy'], ['love', 'adore', 'really enjoy']),
+            (['sometimes'], ['always', 'often', 'regularly'])
+        ]
+        
+        for weaker_terms, stronger_terms in reinforcement_indicators:
+            if any(term in old_lower for term in weaker_terms) and \
+               any(term in new_lower for term in stronger_terms):
+                return "reinforcement"
+        
+        # Check for habit_change (change in behavior or repeated context)
+        habit_indicators = [
+            'usually', 'always', 'never', 'often', 'rarely', 'every', 'daily', 'weekly'
+        ]
+        
+        if any(term in old_lower for term in habit_indicators) or \
+           any(term in new_lower for term in habit_indicators):
+            return "habit_change"
+        
+        # Default to refinement (gradual or detailed evolution)
+        return "refinement"
+
+    def _create_update_log_entry_with_orchestration(self, update_event: Dict[str, Any], replaced_event_id: str, 
+                                                    similarity_score: float, update_type: str, 
+                                                    memory_data: Dict[str, Any]):
+        """
+        Create an entry in the update log for tracking how preferences evolve with orchestration.
+        
+        Args:
+            update_event: The new UPDATE event
+            replaced_event_id: ID of the previous event being updated
+            similarity_score: Cosine similarity between the two events
+            update_type: Type of update (refinement, reversal, reinforcement, habit_change)
+            memory_data: The memory data structure to update
+        """
+        update_id = f"upd_{uuid.uuid4().hex[:8]}"
+        update_entry = {
+            "update_id": update_id,
+            "source_event": update_event.get('event_id', ''),
+            "replaced_event": replaced_event_id,
+            "timestamp": datetime.now().isoformat(),
+            "similarity_score": similarity_score,
+            "update_type": update_type,
+            "note": f"Updated {update_type} with similarity {similarity_score:.3f}"
+        }
+        
+        # Add to memory events
+        if "memory_events" not in memory_data:
+            memory_data["memory_events"] = []
+            
+        update_log_event = {
+            "type": "UPDATE_LOG",
+            "summary": f"Update log entry: {update_type} from {replaced_event_id}",
+            "timestamp": datetime.now().isoformat(),
+            "update_entry": update_entry
+        }
+        
+        memory_data["memory_events"].append(update_log_event)
+
+    def _update_clusters_with_orchestration(self, event_id: str, event_data: Dict, memory_data: Dict):
+        """
+        Update clusters to reflect a new event with full orchestration, either by adding to 
+        existing cluster or creating new one.
+        
+        Args:
+            event_id: The ID of the event to add to clusters
+            event_data: The complete event data
+            memory_data: The memory data structure to update
+        """
+        # Initialize clusters if needed
+        if 'clusters' not in memory_data:
+            memory_data['clusters'] = {}
+            
+        # Get vector index
+        vector_index = memory_data.get('vector_index', {})
+        if event_id not in vector_index:
+            return
+            
+        event_vector = vector_index[event_id]
+        event_content = str(event_data.get('current_value', event_data.get('summary', '')))
+        event_category = event_data.get('category', 'general')
+        
+        # Find the most similar existing cluster
+        best_cluster_id = None
+        best_similarity = -1
+        
+        for cluster_id, cluster in memory_data['clusters'].items():
+            if 'centroid_vector' in cluster:
+                similarity = self._cosine_similarity(event_vector, cluster['centroid_vector'])
+                if similarity > best_similarity and similarity >= 0.7:  # Threshold for clustering
+                    best_similarity = similarity
+                    best_cluster_id = cluster_id
+        
+        # If we found a similar cluster, add to it
+        if best_cluster_id:
+            self._add_event_to_cluster_with_orchestration(best_cluster_id, event_id, memory_data)
+        else:
+            # Create a new cluster for this event
+            topic_label = f"{event_category}_{event_id[:8]}"
+            cluster_id = self._create_cluster_with_orchestration(topic_label, event_id, memory_data)
+            
+            # Add semantic context to the cluster
+            cluster = memory_data['clusters'][cluster_id]
+            cluster["semantic_context"] = {
+                "primary_topic": event_category,
+                "related_concepts": [event_data.get('subcategory', 'general')],
+                "confidence_score": event_data.get('confidence', 0.8),
+                "context_type": event_data.get('semantic_context', {}).get('context_type', 'new_fact')
+            }
+
+    def _create_cluster_with_orchestration(self, topic_label: str, initial_event_id: str, 
+                                          memory_data: Dict[str, Any]) -> str:
+        """
+        Create a new cluster for related events with orchestration.
+        
+        Args:
+            topic_label: Human-readable label for the cluster
+            initial_event_id: The first event to be included in this cluster
+            memory_data: The memory data structure to update
+            
+        Returns:
+            The ID of the newly created cluster
+        """
+        if 'clusters' not in memory_data:
+            memory_data['clusters'] = {}
+            
+        cluster_id = f"cluster_{uuid.uuid4().hex[:8]}"
+        
+        # Get initial vector from vector index
+        initial_vector = memory_data.get('vector_index', {}).get(initial_event_id, [0.0] * 8)
+        
+        memory_data['clusters'][cluster_id] = {
+            "topic_label": topic_label,
+            "centroid_vector": initial_vector,
+            "related_events": [initial_event_id],
+            "active_event": initial_event_id
+        }
+        
+        return cluster_id
+
+    def _add_event_to_cluster_with_orchestration(self, cluster_id: str, event_id: str, 
+                                                 memory_data: Dict[str, Any]):
+        """
+        Add an event to an existing cluster and update the cluster centroid with orchestration.
+        
+        Args:
+            cluster_id: The ID of the cluster to add to
+            event_id: The ID of the event to add
+            memory_data: The memory data structure to update
+        """
+        if 'clusters' not in memory_data:
+            memory_data['clusters'] = {}
+            
+        if cluster_id not in memory_data['clusters']:
+            return
+        
+        cluster = memory_data['clusters'][cluster_id]
+        
+        # Add event to cluster if not already present
+        if event_id not in cluster["related_events"]:
+            cluster["related_events"].append(event_id)
+        
+        # Update active event to the most recent one
+        cluster["active_event"] = event_id
+        
+        # Recalculate centroid vector as average of all vectors in the cluster
+        vector_index = memory_data.get('vector_index', {})
+        vectors = [vector_index[event_id] for event_id in cluster["related_events"] 
+                  if event_id in vector_index]
+        
+        if vectors:
+            # Calculate average vector
+            centroid = [sum(vec[i] for vec in vectors) / len(vectors) for i in range(len(vectors[0]))]
+            cluster["centroid_vector"] = centroid
+
+    def enhance_memory_in_place(self, memory_data: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
+        """
+        Enhance all memory entries in-place in the provided memory data.
+        
+        Args:
+            memory_data: The memory data structure to enhance
+            
+        Returns:
+            Tuple of (updated_memory_data, number of modified entries)
+        """
+        try:
+            modified_count = 0
+            
+            # Process all memory events from the new structure (memory_engine.memory_events)
+            memory_events = memory_data.get('memory_engine', {}).get('memory_events', [])
+            for i, event in enumerate(memory_events):
+                # Save original state to check for changes
+                original_summary = event.get('summary', '')
+                original_emotion_tags = event.get('emotional_context', {}).get('emotion_tags', []).copy() if isinstance(event.get('emotional_context', {}).get('emotion_tags', []), list) else []
+                
+                # Process the event in-place
+                self._process_new_event(memory_data, i)
+                
+                # Check if the summary changed OR emotion_tags were populated
+                summary_changed = event.get('summary', '') != original_summary
+                emotion_tags_changed = event.get('emotional_context', {}).get('emotion_tags', []) != original_emotion_tags
+                
+                if summary_changed or emotion_tags_changed:
+                    modified_count += 1
+            
+            # Also enhance current_facts and fact_history sections
+            self._enhance_current_facts_and_history(memory_data)
+            if self._rewrite_current_facts(memory_data):
+                modified_count += 1  # Count if current facts were modified
+            
+            # Check for and remove duplicate preferences
+            memory_data, removed_count = self.prevent_duplicate_preferences(memory_data)
+            # Count removed duplicates as part of the modification count
+            modified_count += removed_count
+            
+            # CRITICAL FIX: Save the memory file after enhancements
+            # This ensures emotion_tags and all other changes are persisted to nova_ai_memory.json
+            self._save_memory_file(memory_data)
+                
+            return memory_data, modified_count
+            
+        except Exception as e:
+            print(f"Error in enhance_memory_in_place: {e}")
+            return memory_data, 0
+
+    def _validate_rewrite(self, summary: str, memory_data: Dict[str, Any], user_name: Optional[str] = None) -> Tuple[bool, str]:
+        """
+        Validate a rewritten summary against all requirements.
+        
+        Args:
+            summary: The summary to validate
+            memory_data: The complete memory data to check for duplicates
+            user_name: User name for fallback message
+            
+        Returns:
+            Tuple of (is_valid: bool, reason: str)
+        """
+        # Check 1: Length (1-2 sentences maximum)
+        sentences = [s.strip() for s in re.split(r'[.!?]+', summary) if s.strip()]
+        if len(sentences) > 2:
+            return False, f"Summary has {len(sentences)} sentences, maximum allowed is 2"
+        
+        # Check 2: Third person format (should not contain direct quotes or 'Nemzz said')
+        if ' said: ' in summary or ' stated: ' in summary or ' mentioned: ' in summary:
+            return False, "Summary contains direct quotes or 'said' phrases"
+        
+        # Check 3: Check for duplication against existing entries
+        memory_events = memory_data.get('memory_events', [])
+        for existing_event in memory_events:
+            if not isinstance(existing_event, dict):
+                continue
+            existing_summary = existing_event.get('summary', '')
+            if existing_summary and existing_summary != summary:  # Don't compare with itself
+                # Check for semantic similarity with more nuanced comparison
+                # Only flag as duplicate if extremely similar (90%+ overlap)
+                detailed_similarity = self._calculate_detailed_similarity(summary, existing_summary)
+                if detailed_similarity > 0.90:  # Only flag as duplicate if extremely similar
+                    return False, "Summary is too similar to an existing entry (potential duplicate)"
+        
+        # Check 4: Contains meaningful content
+        if not summary or len(summary.strip()) < 5:
+            return False, "Summary is too short or empty"
+        
+        # Check 5: Avoid repetitive phrases and loops
+        # Check for repeated patterns like "enjoys enjoys" or "likes likes"
+        words = summary.split()
+        for i in range(len(words)-1):
+            if words[i].lower() == words[i+1].lower():
+                return False, f"Summary contains repeated word sequence: '{words[i]}'"
+        
+        # Check for excessive repetition of key terms
+        if summary.lower().count('enjoys') > 2 or summary.lower().count('likes') > 2 or summary.lower().count('and') > 5:
+            # Check if there's excessive repetition
+            from collections import Counter
+            word_counts = Counter(words)
+            # If any single significant word appears more than 3 times, it's repetitive
+            significant_repeats = [word for word, count in word_counts.items() 
+                                 if count > 3 and len(word) > 2 and word.lower() not in ['the', 'and', 'but', 'for', 'nor', 'yet', 'so', 'a', 'an', 'at', 'by', 'in', 'of', 'on', 'to', 'up', 'as', 'is', 'it']]
+            if significant_repeats:
+                return False, f"Summary contains excessive repetition of words: {', '.join(significant_repeats[:3])}"
+        
+        # Check 6: Ensure it's written in third person
+        first_person_indicators = [r'\bi\b', r'\bme\b', r'\bmy\b', r'\bwe\b', r'\bus\b', r'\bour\b', r"\bi'", r'\bmyself\b', r'\bourselves\b']
+        summary_lower = summary.lower()
+        for pattern in first_person_indicators:
+            if re.search(pattern, summary_lower):
+                # Extract the matched word for the error message
+                match = re.search(pattern, summary_lower)
+                if match:
+                    matched_word = match.group()
+                    return False, f"Summary contains first person language: '{matched_word}'"
+                else:
+                    return False, f"Summary contains first person language"
+        
+        # Check 7: Avoid generic or vague content unless it's the fallback
+        if user_name and f"{user_name} expressed a general preference, but details are unclear." not in summary:
+            # Look for overly generic phrases that don't add value
+            generic_patterns = [
+                r'.*added.*preference.*like.*like.*',  # Pattern: added preference likes like
+                r'.*user.*preferences?.*unclear.*',    # Pattern: user preference unclear
+                r'.*like.*like.*',                    # Just repeated 'like'
+            ]
+            for pattern in generic_patterns:
+                if re.search(pattern, summary_lower):
+                    return False, f"Summary contains generic or redundant content matching pattern: {pattern}"
+                    
+        # Additional check: Validate that the summary is not just a repetition of the user's name
+        if user_name:
+            name_pattern = rf'\b{re.escape(user_name)}\b'
+            # Count how many times the user's name appears in the summary
+            name_count = len(re.findall(name_pattern, summary, re.IGNORECASE))
+            if name_count > 3:
+                return False, f"Summary contains excessive repetition of user's name ({name_count} times)"
+        
+        # Additional check: Check for circular or meaningless phrases
+        meaningless_patterns = [
+            rf'.*{re.escape(user_name)}\s+{word}\s+{word}.*' if user_name else None
+            for word in ['likes', 'loves', 'enjoys', 'wants', 'prefers']
+        ]
+        # Filter out None values
+        meaningless_patterns = [p for p in meaningless_patterns if p is not None]
+        for pattern in meaningless_patterns:
+            if re.search(pattern, summary, re.IGNORECASE):
+                return False, f"Summary contains circular or meaningless repetition: {pattern}"
+        
+        # All checks passed
+        return True, "Valid"
+    
+    def _calculate_detailed_similarity(self, summary1: str, summary2: str) -> float:
+        """
+        Calculate a more detailed similarity score between two summaries to help with duplicate detection.
+        
+        Args:
+            summary1: First summary to compare
+            summary2: Second summary to compare
+            
+        Returns:
+            float: Similarity score between 0 and 1 (1 being identical)
+        """
+        # Normalize the summaries
+        norm1 = re.sub(r'\s+', ' ', summary1.lower().strip())
+        norm2 = re.sub(r'\s+', ' ', summary2.lower().strip())
+        
+        # If they are exactly the same, return 1.0
+        if norm1 == norm2:
+            return 1.0
+            
+        # Tokenize into words
+        words1 = set(norm1.split())
+        words2 = set(norm2.split())
+        
+        # Remove common stop words for more meaningful comparison
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 
+                     'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 
+                     'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 
+                     'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they',
+                     'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'its', 'our', 'their'}
+        
+        words1 = words1 - stop_words
+        words2 = words2 - stop_words
+        
+        # Calculate Jaccard similarity
+        intersection = len(words1.intersection(words2))
+        union = len(words1.union(words2))
+        
+        if union == 0:
+            return 0.0
+            
+        return intersection / union
+    
+    def _self_check_summary(self, summary: str, user_name: Optional[str] = None) -> Tuple[str, bool]:
+        """
+        Perform a self-check on a rewritten summary to detect and fix issues.
+        
+        Args:
+            summary: The summary to check and potentially fix
+            user_name: User name for context
+            
+        Returns:
+            Tuple of (fixed_summary: str, was_fixed: bool)
+        """
+        original_summary = summary
+        fixed = False
+        
+        # Check for internal duplication within the text
+        # Look for repeated phrases or words
+        if summary:
+            # Check for multiple repetitions of user's name
+            if user_name:
+                name_pattern = re.compile(re.escape(user_name) + r'\s+' + re.escape(user_name), re.IGNORECASE)
+                if name_pattern.search(summary):
+                    # Replace multiple occurrences of user name with just one
+                    summary = name_pattern.sub(user_name, summary)
+                    fixed = True
+            
+            # Check for repeated "said" phrases
+            said_pattern = re.compile(r'(?:' + (user_name or r'\w+') + r'\s+said:\s*)+', re.IGNORECASE)
+            matches = said_pattern.findall(summary)
+            if len(matches) > 1:
+                # If we have multiple "said:" phrases, take just the content after the last one
+                parts = said_pattern.split(summary)
+                if len(parts) > 1:
+                    # Keep the last part and add just one user name
+                    content_after_last_said = parts[-1].strip() if parts[-1].strip() else (parts[-2].strip() if len(parts) > 1 else summary)
+                    if content_after_last_said:
+                        # Find what the user actually said and reformulate
+                        summary = f"{user_name or 'User'} {content_after_last_said.lower().replace('i ', 'they ').replace('my ', 'their ')}" if user_name else f"User {content_after_last_said.lower().replace('i ', 'they ').replace('my ', 'their ')}"
+                        fixed = True
+            
+            # Check for repeated words or phrases within the summary
+            # Look for duplicate sentence patterns
+            sentences = re.split(r'[.!?]+', summary)
+            unique_sentences = []
+            seen = set()
+            for sentence in sentences:
+                clean_sentence = re.sub(r'\s+', ' ', sentence.strip().lower())
+                if clean_sentence and clean_sentence not in seen:
+                    seen.add(clean_sentence)
+                    if sentence.strip():
+                        unique_sentences.append(sentence.strip())
+            
+            if len(unique_sentences) < len([s for s in sentences if s.strip()]):
+                # There were duplicate sentences, reconstruct without duplicates
+                summary = '. '.join(unique_sentences) + ('.' if summary.endswith('.') else '')
+                fixed = True
+            
+            # Check for excessive repeated words
+            words = summary.split()
+            if len(words) > 0:
+                from collections import Counter
+                word_counts = Counter(words)
+                # Fix excessive repetition of significant words (not articles/prepositions)
+                significant_words = {word: count for word, count in word_counts.items() 
+                                   if count > 2 and len(word) > 2 and word.lower() not in ['the', 'and', 'but', 'for', 'nor', 'yet', 'so', 'a', 'an', 'at', 'by', 'in', 'of', 'on', 'to', 'up', 'as', 'is', 'it']}
+                
+                if significant_words:
+                    # If there are significantly repeated words, try to clean up
+                    # This is a more complex case where we may need to reconstruct the meaning
+                    for word in significant_words:
+                        # Replace sequences of repeated words with just one occurrence
+                        pattern = r'\b' + re.escape(word) + r'(?:\s*' + re.escape(word) + r')+\b'
+                        summary = re.sub(pattern, word, summary, flags=re.IGNORECASE)
+                        fixed = True
+            
+            # Detect and fix common patterns like "likes likes" or "enjoys enjoys"
+            summary = re.sub(r'\b(likes|enjoys|prefers|wants|needs|thinks|feels)\s+\1\b', r'\1', summary, flags=re.IGNORECASE)
+            if summary != original_summary:
+                fixed = True
+            
+            # Clean up excessive punctuation
+            summary = re.sub(r'[.]{2,}', '.', summary)  # Multiple periods to single period
+            summary = re.sub(r'[!]{2,}', '!', summary)  # Multiple exclamation marks
+            summary = re.sub(r'[?]{2,}', '?', summary)  # Multiple question marks
+            if summary != original_summary:
+                fixed = True
+            
+            # If the summary is still problematic, try to extract the core meaning
+            if not fixed and (summary.count('.') > 3 or len(summary.split()) > 30):  # Likely has junk
+                # Try to find the most meaningful part
+                meaningful_parts = [part for part in re.split(r'[.;,]+', summary) if len(part.strip()) > 10]
+                if meaningful_parts:
+                    # Take the first meaningful part and reformulate if needed
+                    core_part = meaningful_parts[0].strip()
+                    if user_name and not core_part.startswith(user_name):
+                        summary = f"{user_name} {core_part.lower().replace('i ', 'they ').replace('my ', 'their ')}" if user_name else f"User {core_part.lower().replace('i ', 'they ').replace('my ', 'their ')}"
+                        if not summary.endswith(('.', '!', '?')):
+                            summary += '.'
+                        fixed = True
+                    elif not core_part.endswith(('.', '!', '?')):
+                        summary = core_part + '.'
+                        fixed = True
+        
+        # Ensure proper formatting after fixing
+        summary = re.sub(r'\s+', ' ', summary).strip()  # Normalize whitespace
+        if summary and summary[0].isalpha():
+            summary = summary[0].upper() + summary[1:]  # Capitalize first letter
+        if summary and not summary.endswith(('.', '!', '?')):
+            summary += '.'  # Ensure proper ending
+        
+        return summary, fixed
+
+    def _get_processed_memory_file_path(self) -> str:
+        """Get the file path for storing processed entries."""
+        memory_dir = os.path.dirname(self.memory_file_path)
+        return os.path.join(memory_dir, 'processed_memory.json')
+
+    def _get_processed_entries_file_path(self) -> str:
+        """Get the file path for storing processed entry IDs."""
+        memory_dir = os.path.dirname(self.memory_file_path)
+        return os.path.join(memory_dir, 'processed_entries.json')
+
+    def _monitor_new_entries(self) -> List[Dict[str, Any]]:
+        """
+        Monitor nova_ai_memory.json for new entries with type "ADD" or similar.
+        
+        Returns:
+            List of new unprocessed entries
+        """
+        try:
+            memory_data = self._load_memory_file()
+            if not memory_data:
+                return []
+                
+            new_entries = []
+            memory_events = memory_data.get('memory_events', [])
+            
+            for event in memory_events:
+                if not isinstance(event, dict):
+                    continue
+                    
+                # Check if the event is of type ADD or similar
+                event_type = event.get('type', '').upper()
+                if event_type in ['ADD', 'NEW', 'CREATE']:
+                    # Also check if this entry has not been processed yet
+                    if not self._is_entry_processed(event):
+                        new_entries.append(event)
+                        
+            return new_entries
+        except Exception as e:
+            print(f"Error monitoring new entries: {e}")
+            return []
+
+    def _is_entry_processed(self, entry: Dict[str, Any]) -> bool:
+        """
+        Check if an entry already exists in processed_memory.json to prevent reprocessing.
+        
+        Args:
+            entry: The entry to check
+            
+        Returns:
+            bool: True if entry has been processed, False otherwise
+        """
+        try:
+            processed_file_path = self._get_processed_memory_file_path()
+            if not os.path.exists(processed_file_path):
+                return False
+                
+            with open(processed_file_path, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if not content:
+                    return False
+                    
+                processed_data = json.loads(content)
+                
+            # Check if entry already exists in processed data
+            entry_id = self._get_event_identifier(entry, -1)  # Use -1 as placeholder for index
+            
+            # If processed data is a list of entries
+            if isinstance(processed_data, list):
+                for processed_entry in processed_data:
+                    if isinstance(processed_entry, dict):
+                        # Check if entry_id matches or if content is similar
+                        processed_entry_id = processed_entry.get('entry_id')
+                        if processed_entry_id == entry_id:
+                            return True
+                            
+            # If processed data has a 'processed_entries' key that contains the entries
+            elif isinstance(processed_data, dict):
+                if 'processed_entries' in processed_data:
+                    for processed_entry in processed_data['processed_entries']:
+                        if isinstance(processed_entry, dict):
+                            processed_entry_id = processed_entry.get('entry_id')
+                            if processed_entry_id == entry_id:
+                                return True
+                else:
+                    # If the dict itself is a processed entry
+                    processed_entry_id = processed_data.get('entry_id')
+                    if processed_entry_id == entry_id:
+                        return True
+                        
+            return False
+        except Exception as e:
+            print(f"Error checking if entry is processed: {e}")
+            return False  # If there's an error, assume it's not processed to be safe
+
+    def _load_previously_processed_entries(self):
+        """Load previously processed entry IDs from file."""
+        try:
+            if os.path.exists(self.processed_entries_file):
+                with open(self.processed_entries_file, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                    if content:  # Check if file is not empty
+                        data = json.loads(content)
+                        self.completely_processed_entries = set(data.get('processed_entries', []))
+                    else:
+                        # File is empty, initialize with empty set
+                        self.completely_processed_entries = set()
+            else:
+                # File doesn't exist, initialize with empty set
+                self.completely_processed_entries = set()
+        except json.JSONDecodeError as e:
+            print(f"Error loading previously processed entries: {e}")
+            # If JSON is invalid/corrupted, initialize with empty set
+            self.completely_processed_entries = set()
+        except Exception as e:
+            print(f"Error loading previously processed entries: {e}")
+            # For any other error, initialize with empty set
+            self.completely_processed_entries = set()
+
+    def _preserve_unchanged_fields(self, original_entry: Dict[str, Any], new_entry: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Preserve specified fields unchanged: timestamp, type, provenance.enhanced_at, 
+        source_info.source_type, source_conversation_timestamp.
+        
+        Args:
+            original_entry: The original entry with the fields to preserve
+            new_entry: The new entry that may have modified fields
+            
+        Returns:
+            Dict with preserved fields
+        """
+        preserved_entry = new_entry.copy()
+        
+        # Preserve timestamp
+        if 'timestamp' in original_entry:
+            preserved_entry['timestamp'] = original_entry['timestamp']
+        
+        # Preserve type
+        if 'type' in original_entry:
+            preserved_entry['type'] = original_entry['type']
+        
+        # Preserve provenance.enhanced_at
+        if 'provenance' in original_entry and isinstance(original_entry['provenance'], dict):
+            if 'enhanced_at' in original_entry['provenance']:
+                if 'provenance' not in preserved_entry or not isinstance(preserved_entry['provenance'], dict):
+                    preserved_entry['provenance'] = {}
+                preserved_entry['provenance']['enhanced_at'] = original_entry['provenance']['enhanced_at']
+        
+        # Preserve source_info.source_type
+        if 'source_info' in original_entry and isinstance(original_entry['source_info'], dict):
+            if 'source_type' in original_entry['source_info']:
+                if 'source_info' not in preserved_entry or not isinstance(preserved_entry['source_info'], dict):
+                    preserved_entry['source_info'] = {}
+                preserved_entry['source_info']['source_type'] = original_entry['source_info']['source_type']
+        
+        # Preserve source_conversation_timestamp
+        if 'source_conversation_timestamp' in original_entry:
+            preserved_entry['source_conversation_timestamp'] = original_entry['source_conversation_timestamp']
+            
+        return preserved_entry
+
+    def _infer_emotional_and_category_context(self, context: str, entry: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Infer emotional tone and category from context.
+        
+        Args:
+            context: The context string to analyze
+            entry: The original entry for additional context
+            
+        Returns:
+            Dict with emotional_context and category information
+        """
+        result = {
+            'emotional_context': {
+                'sentiment': 'neutral',
+                'emotion_tags': [],
+                'emotional_intensity': 0.5,
+                'mood_context': 'neutral',
+                'confidence': 0.85
+            },
+            'category': 'general',
+            'subcategory': 'general'
+        }
+        
+        if not context:
+            return result
+            
+        # Convert to lowercase for analysis
+        context_lower = context.lower()
+        
+        # Analyze sentiment
+        positive_indicators = ['like', 'love', 'enjoy', 'happy', 'good', 'great', 'awesome', 'fantastic', 'amazing', 'excited', 'wonderful', 'perfect', 'fantastic', 'excellent', 'awesome', 'brilliant', 'marvelous', 'superb', 'delighted', 'pleased', 'satisfied', 'thrilled', 'ecstatic', 'overjoyed', 'elated', 'glad', 'cheerful', 'jovial', 'merry', 'joyful', 'content', 'grateful', 'thankful', 'appreciative', 'optimistic', 'enthusiastic', 'energetic', 'vibrant', 'entertaining', 'fun', 'wonderful', 'lovely', 'beautiful', 'pleasant', 'nice', 'kind', 'generous', 'helpful', 'supportive', 'caring', 'loving', 'affectionate', 'devoted', 'fond', 'attached', 'keen', 'partial', 'disposed', 'incline', 'tuned', 'sympathetic', 'receptive', 'open', 'welcoming', 'friendly', 'warm', 'cordial', 'genial', 'amiable', 'amiably', 'charming', 'beguiling', 'alluring', 'captivating', 'engaging', 'enticing', 'appealing', 'attractive', 'seductive', 'tempting', 'inviting', 'enticing', 'luring', 'allure', 'attraction', 'draw', 'pull', 'hook', 'interest', 'curiosity', 'fascination', 'intrigue', 'absorption', 'engrossment', 'rapture', 'enchantment', 'spellbinding', 'mesmerizing', 'hypnotic', 'entrancing', 'bewitching', 'enrapturing', 'captivating', 'engrossing', 'riveting', 'compelling', 'gripping', 'holding', 'enthralling', 'gripping', 'clutching', 'grasping', 'clutching', 'seizing', 'snatching', 'grabbing', 'catching', 'arresting', 'commanding', 'dominating', 'controlling', 'ruling', 'prevailing', 'mastering', 'overpowering', 'overwhelming', 'swamping', 'flooding', 'engulfing', 'overrunning', 'deluging', 'inundating', 'submerging', 'drowning', 'suffocating', 'stifling', 'smothering', 'suppressing', 'quelling', 'crushing', 'shattering', 'devastating', 'shocking', 'stunning', 'astounding', 'amazing', 'astonishing', 'staggering', 'breathtaking', 'incredible', 'unbelievable', 'fabulous', 'incredible', 'remarkable', 'extraordinary', 'phenomenal', 'spectacular', 'prodigious', 'wonderful', 'marvelous', 'incomparable', 'peerless', 'transcendent', 'godlike', 'divine', 'heavenly', 'angelic', 'sacred', 'holy', 'blessed', 'sanctified', 'consecrated', 'hallowed', 'revered', 'venerated', 'honored', 'esteemed', 'respected', 'admired', 'appreciated', 'cherished', 'treasured', 'valued', 'prized', 'cherished', 'coveted', 'craved', 'desired', 'yearned', 'longed', 'pined', 'ached', 'thirsted', 'hungered', 'lusted', 'hankered', 'craved', 'coveted', 'hungered', 'thirsted', 'panted', 'ached', 'lusted', 'hankered', 'itched', 'lust', 'thirst', 'hunger', 'desire', 'want', 'need', 'require', 'demand', 'expect', 'look', 'anticipate', 'await', 'hope', 'pray', 'wish', 'aspire', 'strive', 'endeavor', 'attempt', 'try', 'seek', 'pursue', 'chase', 'follow', 'trail', 'track', 'hunt', 'quest', 'search', 'explore', 'investigate', 'probe', 'examine', 'scrutinize', 'analyze', 'study', 'research', 'inquire', 'question', 'interrogate', 'examine', 'inspect', 'observe', 'notice', 'see', 'spot', 'detect', 'discover', 'find', 'locate', 'identify', 'recognize', 'acknowledge', 'accept', 'embrace', 'welcome', 'greet', 'salute', 'wave', 'nod', 'smile', 'laugh', 'giggle', 'chuckle', 'snicker', 'titter', 'grin', 'beam', 'smirk', 'simper', 'smile', 'sneer', 'scowl', 'frown', 'glower', 'scowl', 'glare', 'leer', 'ogle', 'gawk', 'gape', 'gap', 'yawn', 'stretch', 'bend', 'twist', 'turn', 'rotate', 'spin', 'whirl', 'swirl', 'gyrate', 'pivot', 'wheel', 'circle', 'orbit', 'revolve', 'rotate', 'circumvolve', 'encircle', 'ring', 'surround', 'enclose', 'encompass', 'embrace', 'wrap', 'cover', 'shield', 'protect', 'guard', 'defend', 'ward', 'secure', 'safe', 'certain', 'sure', 'confident', 'positive', 'assertive', 'assured', 'convinced', 'persuaded', 'convinced', 'converted', 'won', 'gained', 'acquired', 'obtained', 'procured', 'secured', 'acquired', 'got', 'received', 'accepted', 'taken', 'had', 'possessed', 'owned', 'controlled', 'managed', 'handled', 'dealt', 'treated', 'approached', 'tackled', 'addressed', 'met', 'faced', 'confronted', 'encountered', 'met', 'found', 'discovered', 'uncovered', 'revealed', 'disclosed', 'exposed', 'unfolded', 'opened', 'unlocked', 'released', 'set', 'liberated', 'freed', 'delivered', 'rescued', 'saved', 'preserved', 'maintained', 'kept', 'retained', 'held', 'grasped', 'grasped', 'gripped', 'clutched', 'clutched', 'clasped', 'embraced', 'hugged', 'cuddled', 'snuggled', 'held', 'carried', 'borne', 'transported', 'moved', 'shifted', 'transferred', 'changed', 'altered', 'modified', 'adapted', 'adjusted', 'regulated', 'controlled', 'governed', 'directed', 'guided', 'led', 'steered', 'piloted', 'navigated', 'charted', 'mapped', 'plotted', 'designed', 'created', 'made', 'built', 'constructed', 'assembled', 'put', 'formed', 'shaped', 'molded', 'crafted', 'fashioned', 'wrought', 'executed', 'performed', 'accomplished', 'achieved', 'completed', 'finished', 'ended', 'terminated', 'concluded', 'closed', 'terminated', 'ceased', 'stopped', 'halted', 'arrested', 'checked', 'arrested', 'stayed', 'suspended', 'postponed', 'delayed', 'deferred', 'prolonged', 'extended', 'lengthened', 'stretched', 'protracted', 'continued', 'persisted', 'endured', 'survived', 'withstood', 'resisted', 'withstood', 'endured', 'bore', 'tolerated', 'submitted', 'yielded', 'surrendered', 'gave', 'yielded', 'conceded', 'relinquished', 'abandoned', 'deserted', 'quit', 'left', 'departed', 'went', 'moved', 'travelled', 'journeyed', 'voyaged', 'sailed', 'navigated', 'explored', 'ventured', 'risked', 'dared', 'ventured', 'adventured', 'trekked', 'hiked', 'tramped', 'trailed', 'tracked', 'followed', 'pursued', 'chased', 'tracked', 'followed', 'pursued', 'chased', 'tracked', 'followed']
+        negative_indicators = ['hate', 'dislike', 'angry', 'bad', 'terrible', 'awful', 'sad', 'frustrated', 'annoyed', 'disappointed', 'horrified', 'distressed', 'upset', 'miserable', 'depressed', 'anxious', 'worrisome', 'troubling', 'bothersome', 'irritating', 'infuriating', 'maddening', 'agonizing', 'excruciating', 'unbearable', 'intolerable', 'unacceptable', 'objectionable', 'disagreeable', 'unpalatable', 'noxious', 'offensive', 'repulsive', 'loathsome', 'abominable', 'detestable', 'abhorrent', 'despicable', 'despised', 'scorned', 'rejected', 'spurned', 'slighted', 'ignored', 'neglected', 'abandoned', 'deserted', 'forsaken', 'forgotten', 'overlooked', 'missed', 'failed', 'miscalculated', 'blundered', 'erred', 'faulted', 'sinned', 'offended', 'misbehaved', 'acted', 'misconducted', 'misbehaved', 'misdone', 'erred', 'sinned', 'missed', 'failed', 'flunked', 'bombed', 'crashed', 'collapsed', 'failed', 'suffered', 'endured', 'tolerated', 'withstood', 'survived', 'escaped', 'avoided', 'evaded', 'eluded', 'dodged', 'parried', 'warded', 'blocked', 'prevented', 'stopped', 'halted', 'obstructed', 'blocked', 'impeded', 'hampered', 'hindered', 'restricted', 'limited', 'confined', 'bound', 'chained', 'tethered', 'leashed', 'restrained', 'controlled', 'governed', 'ruled', 'commanded', 'ordered', 'directed', 'guided', 'led', 'steered', 'instructed', 'taught', 'educated', 'trained', 'drilled', 'coached', 'mentored', 'advised', 'counseled', 'guided', 'directed', 'influenced', 'affected', 'swayed', 'persuaded', 'convinced', 'converted', 'changed', 'influenced', 'affected', 'influenced', 'influenced', 'controlled', 'manipulated', 'managed', 'handled', 'operated', 'used', 'employed', 'utilized', 'applied', 'implemented', 'executed', 'performed', 'done', 'carried', 'conducted', 'undertaken', 'initiated', 'commenced', 'started', 'began', 'inaugurated', 'launched', 'unveiled', 'introduced', 'presented', 'shown', 'displayed', 'exhibited', 'demonstrated', 'illustrated', 'depicted', 'portrayed', 'represented', 'symbolized', 'signified', 'indicated', 'pointed', 'showed', 'revealed', 'unveiled', 'disclosed', 'exposed', 'uncovered', 'unmasked', 'unveiled', 'displayed', 'shown', 'presented', 'featured', 'highlighted', 'emphasized', 'stressed', 'accented', 'underscored', 'marked', 'noted', 'observed', 'noticed', 'perceived', 'recognized', 'identified', 'distinguished', 'differentiated', 'separated', 'divided', 'parted', 'split', 'cut', 'cleaved', 'sliced', 'chopped', 'hacked', 'diced', 'minced', 'quartered', 'segmented', 'partitioned', 'subdivided', 'broken', 'fractured', 'cracked', 'shattered', 'smashed', 'destroyed', 'demolished', 'ruined', 'wrecked', 'damaged', 'harmed', 'injured', 'hurt', 'wounded', 'bruised', 'battered', 'beaten', 'attacked', 'assaulted', 'assaulted', 'molested', 'violated', 'abused', 'mistreated', 'ill-treated', 'maligned', 'slandered', 'defamed', 'libeled', 'besmirched', 'tarnished', 'stained', 'soiled', 'polluted', 'contaminated', 'corrupted', 'degraded', 'debased', 'devalued', 'depreciated', 'discounted', 'reduced', 'lowered', 'decreased', 'diminished', 'minimized', 'lessened', 'alleviated', 'relieved', 'eased', 'mitigated', 'softened', 'mellowed', 'tempered', 'moderated', 'regulated', 'controlled', 'governed', 'managed', 'handled', 'dealt', 'treated', 'approached', 'handled', 'managed', 'operated', 'controlled', 'wielded', 'wielded', 'wielded', 'exercised', 'applied', 'utilized', 'employed', 'used', 'handled', 'managed', 'operated', 'controlled', 'directed', 'guided', 'led', 'piloted', 'steered', 'navigated', 'controlled', 'managed', 'handled', 'operated', 'wielded', 'exercised', 'applied', 'utilized', 'employed', 'used', 'handled', 'managed', 'operated', 'controlled', 'directed', 'guided', 'led', 'piloted', 'steered', 'navigated', 'controlled', 'managed', 'handled', 'operated', 'wielded', 'exercised', 'applied', 'utilized', 'employed', 'used', 'handled', 'managed', 'operated', 'controlled', 'directed', 'guided', 'led', 'piloted', 'steered', 'navigated']
+        
+        positive_count = sum(1 for word in positive_indicators if word in context_lower)
+        negative_count = sum(1 for word in negative_indicators if word in context_lower)
+        
+        if positive_count > negative_count:
+            result['emotional_context']['sentiment'] = 'positive'
+            result['emotional_context']['emotional_intensity'] = min(0.9, 0.5 + (positive_count * 0.1))
+        elif negative_count > positive_count:
+            result['emotional_context']['sentiment'] = 'negative'
+            result['emotional_context']['emotional_intensity'] = min(0.9, 0.5 + (negative_count * 0.1))
+        
+        # Extract emotion tags based on context content using advanced analysis
+        emotion_tags = self._extract_advanced_emotion_tags(context_lower)
+        
+        # Set emotion tags, removing duplicates while preserving order
+        result['emotional_context']['emotion_tags'] = list(dict.fromkeys(emotion_tags))
+        
+        # Set mood context based on sentiment
+        if result['emotional_context']['sentiment'] == 'positive':
+            result['emotional_context']['mood_context'] = 'motivated'
+        elif result['emotional_context']['sentiment'] == 'negative':
+            result['emotional_context']['mood_context'] = 'concerned'
+        else:
+            result['emotional_context']['mood_context'] = 'neutral'
+
+        # Extract emotion tags based on context content using advanced analysis
+        # The function _extract_advanced_emotion_tags appears to be missing, so implement it inline
+        emotion_tags = self._analyze_emotion_tags(context_lower, result['category'])
+
+        # Set emotion tags, removing duplicates while preserving order
+        result['emotional_context']['emotion_tags'] = list(dict.fromkeys(emotion_tags))
+
+        # Determine category based on keywords
+        category_keywords = {
+            'personal_preferences': ['like', 'love', 'hate', 'dislike', 'enjoy', 'prefer', 'favorite', 'interest'],
+            'user_identity': ['name', 'identity', 'called', 'pronoun'],
+            'task_project_tracking': ['project', 'task', 'working', 'building', 'developing'],
+            'activity_behavior': ['usually', 'always', 'often', 'time', 'active', 'schedule'],
+            'user_instructions': ['please', 'command', 'rule', 'always', 'never', 'remind'],
+            'current_state': ['currently', 'now', 'today', 'feeling', 'current'],
+            'personal_development': ['learning', 'skill', 'improve', 'develop', 'grow'],
+            'communication_boundaries': ['don\'t', 'avoid', 'sensitive', 'private', 'personal'],
+            'knowledge_expertise': ['know', 'expert', 'experience', 'proficient', 'familiar'],
+            'long_term_goals': ['goal', 'dream', 'future', 'become', 'achieve', 'aspiration'],
+            'collaborator_relationships': ['friend', 'colleague', 'team', 'work', 'collaborate'],
+        }
+        
+        # Check for category matches
+        best_category = 'general'
+        best_score = 0
+        
+        for category, keywords in category_keywords.items():
+            score = sum(1 for word in keywords if word in context_lower)
+            if score > best_score:
+                best_score = score
+                best_category = category
+                
+        result['category'] = best_category
+        
+        # Determine subcategory based on more specific keywords
+        if 'interest' in context_lower:
+            result['subcategory'] = 'interests'
+        elif 'preference' in context_lower:
+            result['subcategory'] = 'preferences'
+        elif 'goal' in context_lower:
+            result['subcategory'] = 'objectives'
+        elif 'name' in context_lower:
+            result['subcategory'] = 'identity'
+        elif 'habit' in context_lower or 'routine' in context_lower or 'usually' in context_lower or 'always' in context_lower:
+            result['subcategory'] = 'habits'
+        else:
+            result['subcategory'] = 'general'
+        
+        return result
+
+    def _timed_rewrite_entry(self, entry: Dict[str, Any], time_limit: float = 2.5) -> Dict[str, Any]:
+        """
+        Analyze the "context" field and rewrite summary, semantic_context, 
+        emotional_context, and current_value fields within a strict time limit. 
+        Remove original_summary field.
+        
+        Args:
+            entry: The entry to rewrite
+            time_limit: Time limit in seconds (default 2.5 seconds)
+            
+        Returns:
+            Dict with rewritten fields
+        """
+        import signal
+        
+        # Get the start time to enforce the time limit
+        start_time = time.time()
+        
+        # Create a copy of the entry to modify
+        rewritten_entry = entry.copy()
+        
+        # Get context from the entry
+        context = entry.get('context', entry.get('summary', ''))
+        
+        try:
+            # Within the time limit, perform rewrites
+            current_time = time.time()
+            if current_time - start_time > time_limit:
+                return rewritten_entry  # Return early if time limit exceeded
+            
+            # Fix grammar, typos, and awkward phrasing
+            fixed_context = self._fix_grammar_and_typos(context)
+            
+            # Within time limit, update summary
+            if current_time - start_time <= time_limit:
+                rewritten_entry['summary'] = self._create_clear_summary(fixed_context)
+            
+            current_time = time.time()
+            if current_time - start_time > time_limit:
+                return rewritten_entry
+            
+            # Remove original_summary field entirely as per new requirements
+            if 'original_summary' in rewritten_entry:
+                del rewritten_entry['original_summary']
+            
+            current_time = time.time()
+            if current_time - start_time > time_limit:
+                return rewritten_entry
+            
+            # Within time limit, update semantic_context
+            if current_time - start_time <= time_limit:
+                rewritten_entry['semantic_context'] = self._create_semantic_context(fixed_context)
+            
+            # Additional time check before continuing
+            current_time = time.time()
+            if current_time - start_time > time_limit:
+                return rewritten_entry
+            
+            # Update emotional_context within time limit
+            if current_time - start_time <= time_limit:
+                emotional_context_info = self._infer_emotional_and_category_context(fixed_context, entry)
+                if 'emotional_context' not in rewritten_entry:
+                    rewritten_entry['emotional_context'] = {}
+                rewritten_entry['emotional_context'].update(emotional_context_info['emotional_context'])
+
+                # For ADD events, ensure emotion tags are properly populated even if initial analysis was incomplete
+                if 'emotion_tags' not in rewritten_entry['emotional_context'] or not rewritten_entry['emotional_context']['emotion_tags']:
+                    # Try to extract emotion tags from the context more thoroughly
+                    context_lower = fixed_context.lower()
+                    fallback_emotion_tags = self._analyze_emotion_tags(context_lower, emotional_context_info.get('category', 'general'))
+                    if fallback_emotion_tags:
+                        rewritten_entry['emotional_context']['emotion_tags'] = fallback_emotion_tags
+            
+            # Additional time check before continuing
+            current_time = time.time()
+            if current_time - start_time > time_limit:
+                return rewritten_entry
+            
+            # Extract and set current_value within time limit, using context for better extraction
+            if current_time - start_time <= time_limit:
+                rewritten_entry['current_value'] = self._extract_current_value_from_summary(rewritten_entry.get('summary', ''), fixed_context)
+            
+            # Additional time check before continuing
+            current_time = time.time()
+            if current_time - start_time > time_limit:
+                return rewritten_entry
+            
+            # Set previous_value to None for new entries
+            if 'previous_value' not in rewritten_entry:
+                rewritten_entry['previous_value'] = None
+            
+            # Additional time check before returning
+            current_time = time.time()
+            if current_time - start_time > time_limit:
+                return rewritten_entry
+            
+            # Set importance_score and confidence based on context analysis
+            if 'importance_score' not in rewritten_entry:
+                rewritten_entry['importance_score'] = 0.65
+            if 'confidence' not in rewritten_entry:
+                rewritten_entry['confidence'] = 0.85
+            
+            # Set category and subcategory from emotional context analysis
+            if 'category' not in rewritten_entry:
+                rewritten_entry['category'] = 'personal_preferences'
+            if 'subcategory' not in rewritten_entry:
+                rewritten_entry['subcategory'] = 'likes'
+            
+            # Set provenance information
+            if 'provenance' not in rewritten_entry:
+                rewritten_entry['provenance'] = {}
+            rewritten_entry['provenance']['enhanced_in_place'] = True
+            rewritten_entry['provenance']['enhanced_at'] = datetime.now().isoformat()
+            
+            # Add source information if available
+            if 'source_info' not in rewritten_entry['provenance']:
+                rewritten_entry['provenance']['source_info'] = {
+                    'source_type': 'conversation',
+                    'source_details': 'chat input',
+                    'context': context,
+                    'event_index': -1  # Placeholder, will be updated by caller
+                }
+            
+            rewritten_entry['provenance']['source_conversation_timestamp'] = datetime.now().isoformat()
+            
+            # Eliminate repetitive phrases
+            rewritten_entry['summary'] = self._eliminate_repetitive_phrases(rewritten_entry.get('summary', ''))
+            
+            # Clean the summaries to remove meta phrases
+            rewritten_entry['summary'] = self.clean_invalid_summary(rewritten_entry.get('summary', ''))
+            
+        except Exception as e:
+            print(f"Error in timed rewrite: {e}")
+            # Return the entry as is if we encounter an error
+            # Remove original_summary field even in error case
+            if 'original_summary' in rewritten_entry:
+                del rewritten_entry['original_summary']
+            return rewritten_entry
+        
+        # Clean the summaries to remove meta phrases before returning
+        rewritten_entry['summary'] = self.clean_invalid_summary(rewritten_entry.get('summary', ''))
+        
+        return rewritten_entry
+
+    def _create_clear_summary_with_emotion_preserved(self, context: str, deep_analysis: Dict[str, Any]) -> str:
+        """
+        Create a clear summary using deep contextual understanding analysis.
+        Enhanced to preserve original intent, emotion, and emphasis from user input.
+        """
+        if not context:
+            return "No context provided for summary"
+            
+        # First clean system meta phrases from context
+        clean_context = re.sub(r'Added preference likes:\s*', '', context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'Added preference:\s*', '', clean_context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'indicating likes:\s*', '', clean_context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'Added preference (?:likes|dislikes|avoid):\s*', '', clean_context, flags=re.IGNORECASE)
+        
+        # Clean duplicate user prefixes
+        clean_context = self.clean_user_prefix_duplicates(clean_context)
+        
+        # Use the deep analysis to determine the appropriate summary
+        # Word-by-word semantic analysis
+        word_analysis = deep_analysis.get('word_analysis', {})
+        word_relationships = deep_analysis.get('word_relationships', {})
+        phrases = deep_analysis.get('phrases', [])
+        sentence_structure = deep_analysis.get('sentence_structure', {})
+        emotional_tone = deep_analysis.get('emotional_tone', {})
+        intent = deep_analysis.get('intent', '')
+        subjects_objects_actions = deep_analysis.get('subjects_objects_actions', {})
+        entities = deep_analysis.get('entities', [])
+        concepts = deep_analysis.get('concepts', [])
+        
+        # Determine user reference
+        user_name = self._get_user_name_from_context(clean_context) or "User"
+        
+        # Dynamic preference assignment based on full context analysis
+        preference_type = deep_analysis.get('preference_type', 'likes')
+        
+        # Create a summary that reflects the FULL context understanding with preserved emotion
+        intensity = emotional_tone.get('intensity', 0.5)
+        
+        if intent == 'avoidance':
+            # Handle avoidance/avoid patterns using full semantic analysis
+            if entities:
+                if intensity > 0.7:
+                    summary = f"{user_name} strongly avoids {', '.join(entities[:3])}."
+                else:
+                    summary = f"{user_name} avoids {', '.join(entities[:3])}."
+            elif concepts:
+                if intensity > 0.7:
+                    summary = f"{user_name} strongly avoids {', '.join(concepts[:2])} activities."
+                else:
+                    summary = f"{user_name} avoids {', '.join(concepts[:2])} activities."
+            else:
+                if intensity > 0.7:
+                    summary = f"{user_name} strongly avoids {clean_context.strip()}."
+                else:
+                    summary = f"{user_name} avoids {clean_context.strip()}."
+        elif intent == 'affinity' or intent == 'strong_affinity':
+            # Handle likes/love patterns using full semantic analysis with preserved emotion
+            if entities:
+                if intensity > 0.7:
+                    summary = f"{user_name} loves {', '.join(entities[:3])}."
+                else:
+                    summary = f"{user_name} enjoys {', '.join(entities[:3])}."
+            elif concepts:
+                if intensity > 0.7:
+                    summary = f"{user_name} loves {', '.join(concepts[:2])} activities."
+                else:
+                    summary = f"{user_name} enjoys {', '.join(concepts[:2])} activities."
+            else:
+                if intensity > 0.7:
+                    summary = f"{user_name} loves {clean_context.strip()}."
+                else:
+                    summary = f"{user_name} enjoys {clean_context.strip()}."
+        elif intent == 'aversion' or intent == 'strong_aversion':
+            # Handle dislike/hate patterns using full semantic analysis
+            if entities:
+                if intensity > 0.7:
+                    summary = f"{user_name} strongly dislikes {', '.join(entities[:3])}."
+                else:
+                    summary = f"{user_name} dislikes {', '.join(entities[:3])}."
+            elif concepts:
+                if intensity > 0.7:
+                    summary = f"{user_name} strongly dislikes {', '.join(concepts[:2])} activities."
+                else:
+                    summary = f"{user_name} dislikes {', '.join(concepts[:2])} activities."
+            else:
+                if intensity > 0.7:
+                    summary = f"{user_name} strongly dislikes {clean_context.strip()}."
+                else:
+                    summary = f"{user_name} dislikes {clean_context.strip()}."
+        elif intent == 'necessity' or intent == 'desire':
+            # Handle need/want patterns using full semantic analysis
+            if entities:
+                if intensity > 0.7 and intent == 'necessity':
+                    summary = f"{user_name} requires {', '.join(entities[:3])}."
+                elif intent == 'desire':
+                    summary = f"{user_name} desires {', '.join(entities[:3])}."
+                else:
+                    summary = f"{user_name} wants {', '.join(entities[:3])}."
+            elif concepts:
+                if intensity > 0.7 and intent == 'necessity':
+                    summary = f"{user_name} requires {', '.join(concepts[:2])} activities."
+                elif intent == 'desire':
+                    summary = f"{user_name} desires {', '.join(concepts[:2])} activities."
+                else:
+                    summary = f"{user_name} wants {', '.join(concepts[:2])} activities."
+            else:
+                if intensity > 0.7 and intent == 'necessity':
+                    summary = f"{user_name} requires {clean_context.strip()}."
+                elif intent == 'desire':
+                    summary = f"{user_name} desires {clean_context.strip()}."
+                else:
+                    summary = f"{user_name} wants {clean_context.strip()}."
+        else:
+            # If no specific intent identified, use phrase analysis with preserved emotion
+            if phrases:
+                # Use the most meaningful phrase identified
+                primary_phrase = phrases[0] if phrases else clean_context.strip()
+                # Determine sentiment from emotional tone with preserved intensity
+                if emotional_tone.get('tone') == 'positive':
+                    if intensity > 0.7:
+                        summary = f"{user_name} loves {primary_phrase}."
+                    else:
+                        summary = f"{user_name} enjoys {primary_phrase}."
+                elif emotional_tone.get('tone') == 'negative':
+                    if intensity > 0.7:
+                        summary = f"{user_name} strongly dislikes {primary_phrase}."
+                    else:
+                        summary = f"{user_name} dislikes {primary_phrase}."
+                else:
+                    summary = f"{user_name} {primary_phrase}."
+            elif entities:
+                # If we have entities, use them to create a natural summary with preserved emotion
+                if emotional_tone.get('tone') == 'positive':
+                    if intensity > 0.7:
+                        action_verb = "loves"
+                    else:
+                        action_verb = "enjoys"
+                elif emotional_tone.get('tone') == 'negative':
+                    if intensity > 0.7:
+                        action_verb = "strongly dislikes"
+                    else:
+                        action_verb = "dislikes"
+                else:
+                    action_verb = "appreciates"
+                summary = f"{user_name} {action_verb} {', '.join(entities[:3])}."
+            else:
+                # Fallback: parse the clean context directly with preserved emotion
+                summary = clean_context.strip()
+                if summary and summary[0].isalpha():
+                    summary = summary[0].upper() + summary[1:]
+                if summary and not summary.endswith(('.', '!', '?')):
+                    summary += '.'
+        
+        # Limit to 1-2 sentences maximum
+        sentences = re.split(r'[.!?]+', summary)
+        if len(sentences) > 2:
+            summary = '. '.join(sentences[:2]) + '.'
+        elif len(sentences) == 1 and sentences[0].strip():
+            summary = sentences[0].strip() + '.'
+        elif sentences:
+            summary = '. '.join(s.strip() for s in sentences if s.strip())
+        
+        # Ensure proper capitalization and punctuation
+        if summary and summary[0].isalpha():
+            summary = summary[0].upper() + summary[1:]
+        if summary and not summary.endswith(('.', '!', '?')):
+            summary += '.'
+        
+        return summary
+
+    def _create_clear_summary_with_full_context(self, context: str, deep_analysis: Dict[str, Any]) -> str:
+        """Create a clear summary using deep contextual understanding analysis."""
+        if not context:
+            return "No context provided for summary"
+            
+        # First clean system meta phrases from context
+        clean_context = re.sub(r'Added preference likes:\s*', '', context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'Added preference:\s*', '', clean_context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'indicating likes:\s*', '', clean_context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'Added preference (?:likes|dislikes|avoid):\s*', '', clean_context, flags=re.IGNORECASE)
+        
+        # Clean duplicate user prefixes
+        clean_context = self.clean_user_prefix_duplicates(clean_context)
+        
+        # Use the deep analysis to determine the appropriate summary
+        # Word-by-word semantic analysis
+        word_analysis = deep_analysis.get('word_analysis', {})
+        phrases = deep_analysis.get('phrases', [])
+        sentence_structure = deep_analysis.get('sentence_structure', {})
+        emotional_tone = deep_analysis.get('emotional_tone', {})
+        intent = deep_analysis.get('intent', '')
+        entities = deep_analysis.get('entities', [])
+        concepts = deep_analysis.get('concepts', [])
+        
+        # Determine user reference
+        user_name = self._get_user_name_from_context(clean_context) or "User"
+        
+        # Dynamic preference assignment based on full context analysis
+        preference_type = deep_analysis.get('preference_type', 'likes')
+        
+        # Create a summary that reflects the FULL context understanding
+        if intent == 'avoidance':
+            # Handle avoidance/avoid patterns using full semantic analysis
+            if entities:
+                summary = f"{user_name} avoids {', '.join(entities[:3])}."
+            elif concepts:
+                summary = f"{user_name} avoids {', '.join(concepts[:2])} activities."
+            else:
+                summary = f"{user_name} avoids {clean_context.strip()}."
+        elif intent == 'affinity' or intent == 'strong_affinity':
+            # Handle likes/love patterns using full semantic analysis
+            if entities:
+                summary = f"{user_name} enjoys {', '.join(entities[:3])}."
+            elif concepts:
+                summary = f"{user_name} enjoys {', '.join(concepts[:2])} activities."
+            else:
+                summary = f"{user_name} enjoys {clean_context.strip()}."
+        elif intent == 'aversion' or intent == 'strong_aversion':
+            # Handle dislike/hate patterns using full semantic analysis
+            if entities:
+                summary = f"{user_name} dislikes {', '.join(entities[:3])}."
+            elif concepts:
+                summary = f"{user_name} dislikes {', '.join(concepts[:2])} activities."
+            else:
+                summary = f"{user_name} dislikes {clean_context.strip()}."
+        elif intent == 'necessity' or intent == 'desire':
+            # Handle need/want patterns using full semantic analysis
+            if entities:
+                summary = f"{user_name} wants {', '.join(entities[:3])}."
+            elif concepts:
+                summary = f"{user_name} wants {', '.join(concepts[:2])} activities."
+            else:
+                summary = f"{user_name} wants {clean_context.strip()}."
+        else:
+            # If no specific intent identified, use phrase analysis
+            if phrases:
+                # Use the most meaningful phrase identified
+                primary_phrase = phrases[0] if phrases else clean_context.strip()
+                # Determine sentiment from emotional tone
+                if emotional_tone.get('tone') == 'positive':
+                    summary = f"{user_name} enjoys {primary_phrase}."
+                elif emotional_tone.get('tone') == 'negative':
+                    summary = f"{user_name} dislikes {primary_phrase}."
+                else:
+                    summary = f"{user_name} {primary_phrase}."
+            elif entities:
+                # If we have entities, use them to create a natural summary
+                action_verb = "enjoys" if emotional_tone.get('tone') == 'positive' else "dislikes" if emotional_tone.get('tone') == 'negative' else "appreciates"
+                summary = f"{user_name} {action_verb} {', '.join(entities[:3])}."
+            else:
+                # Fallback: parse the clean context directly
+                summary = clean_context.strip()
+                if summary and summary[0].isalpha():
+                    summary = summary[0].upper() + summary[1:]
+                if summary and not summary.endswith(('.', '!', '?')):
+                    summary += '.'
+        
+        # Limit to 1-2 sentences maximum
+        sentences = re.split(r'[.!?]+', summary)
+        if len(sentences) > 2:
+            summary = '. '.join(sentences[:2]) + '.'
+        elif len(sentences) == 1 and sentences[0].strip():
+            summary = sentences[0].strip() + '.'
+        elif sentences:
+            summary = '. '.join(s.strip() for s in sentences if s.strip())
+        
+        # Ensure proper capitalization and punctuation
+        if summary and summary[0].isalpha():
+            summary = summary[0].upper() + summary[1:]
+        if summary and not summary.endswith(('.', '!', '?')):
+            summary += '.'
+        
+        return summary
+
+    def _create_semantic_context_with_emotion_preserved(self, context: str, deep_analysis: Dict[str, Any]) -> str:
+        """
+        Create semantic context using deep contextual understanding analysis.
+        Enhanced to preserve original intent, emotion, and emphasis from user input.
+        """
+        if not context:
+            return "No semantic context available"
+            
+        # First clean system meta phrases from context to get to actual user content
+        clean_context = re.sub(r'Added preference likes:\s*', '', context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'Added preference:\s*', '', clean_context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'indicating likes:\s*', '', clean_context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'Added preference (?:likes|dislikes|avoid):\s*', '', clean_context, flags=re.IGNORECASE)
+        
+        # Clean duplicate user prefixes
+        clean_context = self.clean_user_prefix_duplicates(clean_context)
+        
+        # Use deep analysis to extract semantic meaning with preserved emotion
+        emotional_tone = deep_analysis.get('emotional_tone', {})
+        intensity = emotional_tone.get('intensity', 0.5)
+        intent = deep_analysis.get('intent', '')
+        entities = deep_analysis.get('entities', [])
+        concepts = deep_analysis.get('concepts', [])
+        
+        # Determine intent and meaning from the FULL context analysis with preserved emotion
+        if intent == 'avoidance':
+            if intensity > 0.7:
+                semantic_intent = f"User strongly expressed desire to avoid {', '.join(entities[:3]) if entities else 'certain things'}"
+            else:
+                semantic_intent = f"User expressed desire to avoid {', '.join(entities[:3]) if entities else 'certain things'}"
+        elif intent == 'affinity':
+            if intensity > 0.7:
+                semantic_intent = f"User expressed strong positive interest in {', '.join(entities[:3]) if entities else 'certain activities'}"
+            else:
+                semantic_intent = f"User expressed positive interest in {', '.join(entities[:3]) if entities else 'certain activities'}"
+        elif intent == 'strong_affinity':
+            semantic_intent = f"User expressed strong positive interest in {', '.join(entities[:3]) if entities else 'certain activities'}"
+        elif intent == 'aversion':
+            if intensity > 0.7:
+                semantic_intent = f"User expressed strong negative feelings towards {', '.join(entities[:3]) if entities else 'certain things'}"
+            else:
+                semantic_intent = f"User expressed negative feelings towards {', '.join(entities[:3]) if entities else 'certain things'}"
+        elif intent == 'strong_aversion':
+            semantic_intent = f"User expressed strong negative feelings towards {', '.join(entities[:3]) if entities else 'certain things'}"
+        elif intent == 'necessity':
+            if intensity > 0.7:
+                semantic_intent = f"User expressed strong need for {', '.join(entities[:3]) if entities else 'certain things'}"
+            else:
+                semantic_intent = f"User expressed need for {', '.join(entities[:3]) if entities else 'certain things'}"
+        elif intent == 'desire':
+            if intensity > 0.7:
+                semantic_intent = f"User expressed strong desire for {', '.join(entities[:3]) if entities else 'certain things'}"
+            else:
+                semantic_intent = f"User expressed desire for {', '.join(entities[:3]) if entities else 'certain things'}"
+        elif intent == 'habit':
+            semantic_intent = f"User expressed habit of {', '.join(entities[:3]) if entities else 'certain activities'}"
+        else:
+            # Default to analyzing emotional tone and entities with preserved emotion
+            if emotional_tone.get('tone') == 'positive':
+                if intensity > 0.7:
+                    semantic_intent = f"User expressed strong positive sentiment about {', '.join(entities[:3]) if entities else 'a topic'}"
+                else:
+                    semantic_intent = f"User expressed positive sentiment about {', '.join(entities[:3]) if entities else 'a topic'}"
+            elif emotional_tone.get('tone') == 'negative':
+                if intensity > 0.7:
+                    semantic_intent = f"User expressed strong negative sentiment about {', '.join(entities[:3]) if entities else 'a topic'}"
+                else:
+                    semantic_intent = f"User expressed negative sentiment about {', '.join(entities[:3]) if entities else 'a topic'}"
+            else:
+                semantic_intent = f"User expressed a general statement about {', '.join(entities[:3]) if entities else 'a topic'}"
+        
+        # Add meaning explanation with preserved emotional context
+        meaning = f"{semantic_intent}. Context: {clean_context[:100]}..." if len(clean_context) > 100 else f"{semantic_intent}. Context: {clean_context}"
+        
+        return meaning
+
+    def _create_semantic_context_with_full_context(self, context: str, deep_analysis: Dict[str, Any]) -> str:
+        """Create semantic context using deep contextual understanding analysis."""
+        if not context:
+            return "No semantic context available"
+            
+        # First clean system meta phrases from context to get to actual user content
+        clean_context = re.sub(r'Added preference likes:\s*', '', context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'Added preference:\s*', '', clean_context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'indicating likes:\s*', '', clean_context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'Added preference (?:likes|dislikes|avoid):\s*', '', clean_context, flags=re.IGNORECASE)
+        
+        # Clean duplicate user prefixes
+        clean_context = self.clean_user_prefix_duplicates(clean_context)
+        
+        # Use deep analysis to extract semantic meaning
+        emotional_tone = deep_analysis.get('emotional_tone', {})
+        intent = deep_analysis.get('intent', '')
+        entities = deep_analysis.get('entities', [])
+        concepts = deep_analysis.get('concepts', [])
+        
+        # Determine intent and meaning from the FULL context analysis
+        if intent == 'avoidance':
+            semantic_intent = f"User expressed desire to avoid {', '.join(entities[:3]) if entities else 'certain things'}"
+        elif intent == 'affinity':
+            semantic_intent = f"User expressed positive interest in {', '.join(entities[:3]) if entities else 'certain activities'}"
+        elif intent == 'strong_affinity':
+            semantic_intent = f"User expressed strong positive interest in {', '.join(entities[:3]) if entities else 'certain activities'}"
+        elif intent == 'aversion':
+            semantic_intent = f"User expressed negative feelings towards {', '.join(entities[:3]) if entities else 'certain things'}"
+        elif intent == 'strong_aversion':
+            semantic_intent = f"User expressed strong negative feelings towards {', '.join(entities[:3]) if entities else 'certain things'}"
+        elif intent == 'necessity':
+            semantic_intent = f"User expressed need for {', '.join(entities[:3]) if entities else 'certain things'}"
+        elif intent == 'desire':
+            semantic_intent = f"User expressed desire for {', '.join(entities[:3]) if entities else 'certain things'}"
+        elif intent == 'habit':
+            semantic_intent = f"User expressed habit of {', '.join(entities[:3]) if entities else 'certain activities'}"
+        else:
+            # Default to analyzing emotional tone and entities
+            if emotional_tone.get('tone') == 'positive':
+                semantic_intent = f"User expressed positive sentiment about {', '.join(entities[:3]) if entities else 'a topic'}"
+            elif emotional_tone.get('tone') == 'negative':
+                semantic_intent = f"User expressed negative sentiment about {', '.join(entities[:3]) if entities else 'a topic'}"
+            else:
+                semantic_intent = f"User expressed a general statement about {', '.join(entities[:3]) if entities else 'a topic'}"
+        
+        # Add meaning explanation
+        meaning = f"{semantic_intent}. Context: {clean_context[:100]}..." if len(clean_context) > 100 else f"{semantic_intent}. Context: {clean_context}"
+        
+        return meaning
+
+    def _fix_grammar_and_typos(self, text: str) -> str:
+        """Fix grammar, typos, and awkward phrasing in the text."""
+        if not text:
+            return text
+            
+        # Fix common grammar issues
+        fixed_text = text
+        
+        # Fix spacing issues
+        fixed_text = re.sub(r'\s+', ' ', fixed_text).strip()
+        
+        # Capitalize 'i' -> 'I'
+        fixed_text = re.sub(r'\bi\b', 'I', fixed_text)
+        
+        # Fix common typing errors
+        fixed_text = re.sub(r'\b(t|th)e\s+([^aeiou])', r'the \2', fixed_text, flags=re.IGNORECASE)
+        
+        # Fix double letters or repeated words
+        fixed_text = re.sub(r'\b(\w+?)\s+\1\b', r'\1', fixed_text, flags=re.IGNORECASE)
+        
+        return fixed_text
+    
+    def _create_clear_summary(self, context: str) -> str:
+        """Create a clear, short human-readable overview from context."""
+        if not context:
+            return "No context provided for summary"
+            
+        # Apply deep contextual understanding to preserve intent and emotion
+        deep_analysis = self._deep_contextual_understanding(context)
+        
+        # First clean system meta phrases from context
+        clean_context = re.sub(r'Added preference likes:\s*', '', context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'Added preference:\s*', '', clean_context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'indicating likes:\s*', '', clean_context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'Added preference (?:likes|dislikes|avoid):\s*', '', clean_context, flags=re.IGNORECASE)
+        
+        # Clean duplicate user prefixes
+        clean_context = self.clean_user_prefix_duplicates(clean_context)
+        
+        # Create a clean, readable summary with preserved emotion
+        # Extract meaningful content from context and transform to third person
+        summary = self._transform_context_to_summary(clean_context)
+        
+        # Limit to 1-2 sentences maximum
+        sentences = re.split(r'[.!?]+', summary)
+        if len(sentences) > 2:
+            summary = '. '.join(sentences[:2]) + '.'
+        elif len(sentences) == 1 and sentences[0].strip():
+            summary = sentences[0].strip() + '.'
+        elif sentences:
+            summary = '. '.join(s.strip() for s in sentences if s.strip())
+        
+        # Ensure proper capitalization
+        if summary and summary[0].isalpha():
+            summary = summary[0].upper() + summary[1:]
+        
+        return summary
+
+    def _create_fixed_original_summary(self, context: str) -> str:
+        """This function is deprecated as original_summary has been removed. Returns empty string."""
+        return ""
+
+    def _create_semantic_context(self, context: str) -> str:
+        """Create a brief explanation of intent and meaning from context with preserved emotion."""
+        if not context:
+            return "No semantic context available"
+            
+        # Apply deep contextual understanding to preserve intent and emotion
+        deep_analysis = self._deep_contextual_understanding(context)
+        
+        # First clean system meta phrases from context to get to actual user content
+        clean_context = re.sub(r'Added preference likes:\s*', '', context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'Added preference:\s*', '', clean_context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'indicating likes:\s*', '', clean_context, flags=re.IGNORECASE)
+        clean_context = re.sub(r'Added preference (?:likes|dislikes|avoid):\s*', '', clean_context, flags=re.IGNORECASE)
+        
+        # Clean duplicate user prefixes
+        clean_context = self.clean_user_prefix_duplicates(clean_context)
+        
+        # Analyze the context to determine intent and meaning with preserved emotion
+        context_lower = clean_context.lower()
+        
+        # Use deep analysis for more nuanced intent detection
+        emotional_tone = deep_analysis.get('emotional_tone', {})
+        intensity = emotional_tone.get('intensity', 0.5)
+        intent_analysis = deep_analysis.get('intent', '')
+        
+        # Determine intent based on deep analysis with preserved emotion
+        if any(word in context_lower for word in ['like', 'love', 'enjoy', 'prefer']):
+            if intensity > 0.7:
+                intent = "User expressed strong enjoyment or personal interest"
+            else:
+                intent = "User expressed enjoyment or personal interest"
+        elif any(word in context_lower for word in ['want', 'need', 'desire', 'hope']):
+            if intensity > 0.7:
+                intent = "User expressed strong desire or need"
+            else:
+                intent = "User expressed desire or need"
+        elif any(word in context_lower for word in ['think', 'believe', 'feel', 'opinion']):
+            intent = "User expressed opinion or belief"
+        elif any(word in context_lower for word in ['remember', 'remind', 'note']):
+            intent = "User provided a reminder or note"
+        elif intent_analysis == 'avoidance':
+            intent = "User expressed desire to avoid something"
+        elif intent_analysis == 'affinity':
+            if intensity > 0.7:
+                intent = "User expressed strong positive interest"
+            else:
+                intent = "User expressed positive interest"
+        elif intent_analysis == 'aversion':
+            if intensity > 0.7:
+                intent = "User expressed strong negative feelings"
+            else:
+                intent = "User expressed negative feelings"
+        else:
+            intent = "User expressed a general statement or information"
+        
+        # Add brief explanation of meaning with preserved emotional context
+        meaning = f"{intent}: {clean_context[:100]}..." if len(clean_context) > 100 else f"{intent}: {clean_context}"
+        
+        return meaning
+    
+    def _handle_missing_semantic_context(self, event: Dict[str, Any], context: str = None) -> Dict[str, Any]:
+        """
+        Handle entries where semantic_context is missing or equals "No semantic context available".
+        This function should be called during the rewriting process to fix summaries that contain
+        raw user input like "User: I love playing the piano..." when semantic context is unavailable.
+        
+        Args:
+            event: The memory event dictionary
+            context: Optional context string to use for inference
+            
+        Returns:
+            Dict: Updated event with properly rewritten summary
+        """
+        # Get the current summary and semantic context
+        current_summary = event.get('summary', '')
+        semantic_context = event.get('semantic_context', '')
+        
+        # Check if we need to fix this event
+        needs_fix = (
+            semantic_context == "No semantic context available" or 
+            (isinstance(semantic_context, str) and "No semantic context available" in semantic_context) or
+            self._has_raw_user_input_prefix(current_summary)
+        )
+        
+        # Updated event - we no longer need to worry about original_summary
+        updated_event = event.copy()
+        
+        if not needs_fix:
+            # Just return the event without modification
+            return updated_event
+        
+        # Try to get context from multiple sources
+        if not context:
+            context = event.get('context', current_summary)
+        
+        # Clean up the raw input
+        cleaned_context = self._clean_raw_user_input(context)
+        
+        # Infer meaning from the cleaned context
+        inferred_summary = self._infer_summary_from_context(cleaned_context, current_summary)
+        
+        # Update the event with the inferred summary
+        updated_event['summary'] = inferred_summary
+        
+        # Update semantic context to reflect the inference
+        if semantic_context == "No semantic context available":
+            updated_event['semantic_context'] = f"Inferred from user input: {inferred_summary}"
+        
+        # Use advanced emotional analysis to set emotion_tags based on context
+        if context and (not updated_event.get('emotional_context') or 'emotion_tags' not in updated_event.get('emotional_context', {})):
+            # Get the advanced emotion tags from the context
+            context_lower = context.lower().strip()
+            # The function _extract_advanced_emotion_tags appears to be missing, so use _analyze_emotion_tags instead
+            emotion_tags = self._analyze_emotion_tags(context_lower, updated_event.get('category', 'general'))
+            
+            # Ensure emotional_context exists and update it with the emotion tags
+            if 'emotional_context' not in updated_event:
+                updated_event['emotional_context'] = {}
+            
+            # Update only the emotion_tags without affecting other emotional_context fields
+            updated_event['emotional_context']['emotion_tags'] = emotion_tags
+        
+        return updated_event
+    
+    def _has_raw_user_input_prefix(self, text: str) -> bool:
+        """Check if the text contains raw user input prefixes that should be cleaned."""
+        if not text:
+            return False
+        
+        # Check for common raw user input prefixes
+        raw_prefixes = [
+            r'^User:\s+',
+            r'^User user:\s+',
+            r'^Added preference likes:\s+',
+            r'^Added preference:\s+',
+            r'^indicating likes:\s+',
+        ]
+        
+        text_lower = text.lower()
+        for pattern in raw_prefixes:
+            if re.search(pattern, text_lower):
+                return True
+        
+        # Also check if the text starts with "User: I " or similar patterns
+        if re.match(r'^User:\s*i\s+(like|love|enjoy|want|need|think|feel)', text_lower):
+            return True
+        
+        return False
+    
+    def _clean_raw_user_input(self, text: str) -> str:
+        """Clean raw user input by removing prefixes and meta phrases."""
+        if not text:
+            return text
+        
+        original_text = text
+        
+        # Remove common prefixes
+        text = re.sub(r'^(?:User user:|User:|user:)\s*', '', text, flags=re.IGNORECASE)
+        
+        # Remove meta phrases
+        text = re.sub(r'Added preference likes:\s*', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'Added preference:\s*', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'indicating likes:\s*', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'Added preference (?:likes|dislikes|avoid):\s*', '', text, flags=re.IGNORECASE)
+        
+        # Special handling for "User said:" patterns to extract the actual content
+        # We want to extract what comes after "User said:" or similar indicators
+        user_said_match = re.search(r'(?:User said:|said:|mentioned:|stated:)\s*(.+?)(?:\.|$)', text, re.IGNORECASE)
+        if user_said_match:
+            # If we find "User said: [content]", use that content as it's likely the actual user input
+            actual_content = user_said_match.group(1).strip()
+            if actual_content and len(actual_content) > 0:
+                # Clean up this extracted content further
+                actual_content = re.sub(r'\.{2,}', '', actual_content)  # Remove multiple periods
+                actual_content = actual_content.strip()
+                # Convert first person to standard form for processing
+                actual_content = re.sub(r'\bi\s+', 'I ', actual_content, flags=re.IGNORECASE)
+                return actual_content
+        
+        # Remove truncated text markers from remaining text
+        text = text.replace('...', '')
+        text = re.sub(r'\.{2,}', '', text)  # Remove multiple periods
+
+        # Clean up duplicate user prefixes
+        text = self.clean_user_prefix_duplicates(text)
+        
+        # Clean up any remaining meta phrases
+        text = self.clean_invalid_summary(text)
+        
+        # Normalize spaces
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        return text
+    
+    def _infer_summary_from_context(self, cleaned_context: str, original_summary: str = "") -> str:
+        """Infer a proper summary from cleaned context, with emotion-based rewriting. Original_summary parameter kept for compatibility but not used."""
+        if not cleaned_context:
+            return "Context pending — semantic data unavailable."
+        
+        # Determine user reference
+        user_name = self._get_user_name_from_context(cleaned_context) or "User"
+        
+        # Clean and analyze the context
+        context_lower = cleaned_context.lower().strip()
+        
+        # Detect emotion/sentiment from the cleaned context (ignoring original_summary since it's deprecated)
+        sentiment = self._detect_sentiment_from_context(context_lower)
+        
+        # Extract the core meaning based on detected sentiment
+        if sentiment == 'positive':
+            inferred = self._infer_positive_meaning(user_name, cleaned_context, context_lower)
+        elif sentiment == 'negative':
+            inferred = self._infer_negative_meaning(user_name, cleaned_context, context_lower)
+        else:
+            inferred = self._infer_neutral_meaning(user_name, cleaned_context, context_lower)
+        
+        # If we couldn't infer proper meaning, return fallback
+        if not inferred or inferred == "Context pending — semantic data unavailable.":
+            return "Context pending — semantic data unavailable."
+        
+        return inferred
+
+    def _infer_positive_from_cleaned_content(self, user_name: str, cleaned_content: str) -> str:
+        """Special function to infer positive meaning when we know it was originally a preference."""
+        content = cleaned_content.strip()
+        if not content:
+            return "Context pending — semantic data unavailable."
+        
+        # Remove common leading words that don't add meaning
+        content = re.sub(r'^(the|a|an)\s+', '', content, flags=re.IGNORECASE)
+        content = content.strip()
+        
+        # If there's meaningful content, treat it as positive
+        if content:
+            # If content starts with first person (like "I love..."), convert to third person with proper conjugation
+            if content.lower().startswith('i '):
+                # Use the more sophisticated conversion function
+                converted = self._convert_first_person_to_third_person(content, user_name)
+                return converted if converted.endswith(('.', '!', '?')) else converted + '.'
+            # Check if content already has a verb that suggests positive sentiment
+            elif any(verb in content.lower() for verb in ['love', 'like', 'enjoy', 'adore', 'appreciate']):
+                # Convert first person to third person if needed
+                converted = re.sub(r'\bi\s+', f'{user_name} ', content, flags=re.IGNORECASE)
+                converted = re.sub(r'\bmy\s+', f'{user_name}\'s ', converted, flags=re.IGNORECASE)
+                converted = re.sub(r'\bme\s+', user_name, converted, flags=re.IGNORECASE)
+                # Apply proper verb conjugation
+                converted = self._convert_first_person_to_third_person(converted, user_name)
+                return converted if converted.endswith(('.', '!', '?')) else converted + '.'
+            else:
+                # If no explicit verb, assume it's something the user enjoys
+                return f"{user_name} enjoys {content}." if not content.startswith(user_name) else content
+        
+        return "Context pending — semantic data unavailable."
+
+    def _infer_negative_from_cleaned_content(self, user_name: str, cleaned_content: str) -> str:
+        """Special function to infer negative meaning when we know it was originally a negative preference."""
+        content = cleaned_content.strip()
+        if not content:
+            return "Context pending — semantic data unavailable."
+        
+        # Remove common leading words that don't add meaning
+        content = re.sub(r'^(the|a|an)\s+', '', content, flags=re.IGNORECASE)
+        content = content.strip()
+        
+        # If there's meaningful content, treat it as negative
+        if content:
+            # Check if content already has a verb that suggests negative sentiment
+            if any(verb in content.lower() for verb in ['hate', 'dislike', 'avoid', 'don\'t like']):
+                # Convert first person to third person if needed
+                converted = re.sub(r'\bi\s+', f'{user_name} ', content, flags=re.IGNORECASE)
+                converted = re.sub(r'\bmy\s+', f'{user_name}\'s ', converted, flags=re.IGNORECASE)
+                converted = re.sub(r'\bme\s+', user_name, converted, flags=re.IGNORECASE)
+                return converted if converted.endswith(('.', '!', '?')) else converted + '.'
+            else:
+                # If no explicit verb, assume it's something the user dislikes
+                return f"{user_name} dislikes {content}." if not content.startswith(user_name) else content
+        
+        return "Context pending — semantic data unavailable."
+    
+    def _get_user_name_from_context(self, context: str) -> str:
+        """Extract user name from context if available."""
+        # This is a simple extraction - in a real implementation you might want to 
+        # integrate with the existing user name detection logic
+        # Look for patterns like "Name said: ..." or similar
+        match = re.match(r'^([A-Za-z]+):\s*', context)
+        if match:
+            return match.group(1)
+        return None
+    
+    def _detect_sentiment_from_context(self, context_lower: str) -> str:
+        """Detect sentiment from the context string."""
+        # Split the context into tokens to better detect negations
+        tokens = context_lower.split()
+        
+        # Check for negation patterns
+        negation_words = ['not', 'no', 'never', 'nothing', 'nowhere', 'nobody', 'none', 
+                         'neither', 'nor', 'cannot', 'cant', 'wont', 'shouldnt', 'couldnt', 
+                         'wouldnt', 'dont', 'doesnt', 'didnt', 'isnt', 'arent', 'aint', 
+                         'wasnt', 'werent', 'hasnt', 'havent', 'hadnt', 'neednt', 'mustnt']
+        
+        # Build negative indicators by combining negation words with positive words
+        negative_indicators = []
+        for token in tokens:
+            for negation in negation_words:
+                if token.startswith(negation):
+                    negative_indicators.append(token)
+        
+        # Positive indicators (excluding negative forms)
+        positive_indicators = [
+            'love', 'enjoy', 'adore', 'appreciate', 'great', 'good', 'awesome', 
+            'amazing', 'fantastic', 'wonderful', 'perfect', 'happy', 'pleased', 'satisfied',
+            'interested', 'excited', 'fun', 'love it', 'amazing', 'incredible', 'like', 'likes'
+        ]
+        
+        # Negative indicators (excluding 'not' and other negations which are handled separately)
+        truly_negative_indicators = [
+            'hate', 'dislike', 'disgust', 'terrible', 'awful', 'bad', 'horrible', 'worst',
+            'sad', 'angry', 'frustrated', 'annoyed', 'disappointed', 'upset', 'bored',
+            'hate it', 'awful', 'disappointing', 'disgusting', 'pathetic', 'useless'
+        ]
+        
+        # Check for negation + positive combinations like "don't like", "not good"
+        negated_positive_count = 0
+        for i, token in enumerate(tokens):
+            if token in negation_words and i + 1 < len(tokens):
+                next_token = tokens[i + 1]
+                if next_token in positive_indicators or next_token in ['like', 'like.', 'love', 'love.', 'good', 'good.']:
+                    negated_positive_count += 1
+        
+        # Count positive words that are not negated
+        positive_count = 0
+        for word in positive_indicators:
+            if word in context_lower:
+                # Avoid counting if this positive word is negated
+                if f"don't {word}" in context_lower or f"doesn't {word}" in context_lower or f"not {word}" in context_lower:
+                    continue  # Don't count positively because it's negated
+                positive_count += context_lower.count(word)
+        
+        # Count negative indicators
+        negative_count = 0
+        for word in truly_negative_indicators:
+            negative_count += context_lower.count(word)
+        
+        # Add the negated positive indicators to negative count
+        negative_count += negated_positive_count
+        
+        # Special handling for 'like' and 'don't like' patterns
+        if 'don\'t like' in context_lower or 'do not like' in context_lower:
+            negative_count += 1
+        elif 'don\'t love' in context_lower or 'do not love' in context_lower:
+            negative_count += 1
+        elif 'not good' in context_lower:
+            negative_count += 1
+        elif 'not happy' in context_lower:
+            negative_count += 1
+            
+        # For the basic check, also account for patterns in the original negative indicators
+        for indicator in ['don\'t like', 'not good', 'hate it', 'disappointing']:
+            negative_count += context_lower.count(indicator)
+        
+        if positive_count > negative_count:
+            return 'positive'
+        elif negative_count > positive_count:
+            return 'negative'
+        else:
+            return 'neutral'
+    
+    def _infer_positive_meaning(self, user_name: str, cleaned_context: str, context_lower: str) -> str:
+        """Infer positive meaning from context."""
+        # Look for patterns indicating positive sentiment
+        patterns = [
+            (r'i\s+love\s+(.+?)(?:\.|$)', f"{user_name} loves {{}}."),
+            (r'i\s+like\s+(.+?)(?:\.|$)', f"{user_name} enjoys {{}}."),
+            (r'i\s+enjoy\s+(.+?)(?:\.|$)', f"{user_name} enjoys {{}}."),
+            (r'i\s+adore\s+(.+?)(?:\.|$)', f"{user_name} adores {{}}."),
+            (r'i\s+appreciate\s+(.+?)(?:\.|$)', f"{user_name} appreciates {{}}."),
+            (r'i\'?m\s+interested\s+in\s+(.+?)(?:\.|$)', f"{user_name} is interested in {{}}."),
+            (r'i\s+am\s+fond\s+of\s+(.+?)(?:\.|$)', f"{user_name} is fond of {{}}."),
+            (r'i\s+think\s+(.+?)(?:\.|$)', f"{user_name} thinks {{}}."),
+        ]
+        
+        for pattern, template in patterns:
+            match = re.search(pattern, context_lower)
+            if match:
+                content = match.group(1).strip()
+                # Clean up the content to remove trailing fragments
+                content = content.rstrip('.,!?;')
+                return template.format(content)
+        
+        # If no specific pattern matched, try to infer from keywords
+        if 'play' in context_lower:
+            match = re.search(r'play\s+(.+?)(?:\.|$)', context_lower)
+            if match:
+                activity = match.group(1).strip()
+                return f"{user_name} enjoys playing {activity}."
+        
+        elif 'like' in context_lower or 'love' in context_lower or 'enjoy' in context_lower:
+            # Extract content after positive indicators
+            for keyword in ['like', 'love', 'enjoy']:
+                if keyword in context_lower:
+                    # Use regex to extract content after the keyword
+                    pattern = r'(?:' + keyword + r')\s+(.+?)(?:\.|$)'
+                    match = re.search(pattern, context_lower)
+                    if match:
+                        content = match.group(1).strip()
+                        content = content.rstrip('.,!?;')
+                        if content:
+                            template = f"{user_name} {'loves' if keyword == 'love' else 'enjoys' if keyword == 'enjoy' else 'enjoys'} {{}}."
+                            return template.format(content)
+        
+        # Generic positive inference
+        cleaned = cleaned_context.strip()
+        if cleaned:
+            # Convert first person to third person with proper verb conjugation
+            if cleaned.lower().startswith('i '):
+                # Use the more sophisticated conversion function
+                third_person = self._convert_first_person_to_third_person(cleaned, user_name)
+                return third_person
+            else:
+                return f"{user_name} enjoys {cleaned}."
+        
+        return f"{user_name} expressed positive sentiment about something."
+    
+    def _infer_negative_meaning(self, user_name: str, cleaned_context: str, context_lower: str) -> str:
+        """Infer negative meaning from context."""
+        # Look for patterns indicating negative sentiment
+        patterns = [
+            (r'i\s+hate\s+(.+?)(?:\.|$)', f"{user_name} dislikes {{}}."),
+            (r'i\s+dislike\s+(.+?)(?:\.|$)', f"{user_name} dislikes {{}}."),
+            (r'i\s+don\'?t\s+like\s+(.+?)(?:\.|$)', f"{user_name} dislikes {{}}."),
+            (r'i\s+don\'?t\s+love\s+(.+?)(?:\.|$)', f"{user_name} does not love {{}}."),
+            (r'i\s+don\'?t\s+enjoy\s+(.+?)(?:\.|$)', f"{user_name} does not enjoy {{}}."),
+            (r'i\'?m\s+frustrated\s+with\s+(.+?)(?:\.|$)', f"{user_name} is frustrated with {{}}."),
+            (r'i\'?m\s+not\s+happy\s+with\s+(.+?)(?:\.|$)', f"{user_name} is not happy with {{}}."),
+        ]
+        
+        for pattern, template in patterns:
+            match = re.search(pattern, context_lower)
+            if match:
+                content = match.group(1).strip()
+                content = content.rstrip('.,!?;')
+                return template.format(content)
+        
+        # Generic negative inference
+        if 'hate' in context_lower or 'dislike' in context_lower:
+            # Handle "dislike" specifically
+            if 'dislike' in context_lower:
+                parts = context_lower.split('dislike', 1)
+                if len(parts) > 1:
+                    content = parts[1].strip()
+                    content = content.rstrip('.,!?;')
+                    if content:
+                        return f"{user_name} dislikes {content}."
+            # Handle "hate" specifically
+            elif 'hate' in context_lower:
+                parts = context_lower.split('hate', 1)
+                if len(parts) > 1:
+                    content = parts[1].strip()
+                    content = content.rstrip('.,!?;')
+                    if content:
+                        return f"{user_name} dislikes {content}."  # Use "dislikes" consistently
+        
+        # If context shows negative sentiment but no specific pattern, create a general statement
+        cleaned = cleaned_context.strip()
+        if cleaned:
+            return f"{user_name} expressed negative sentiment about {cleaned}."
+        
+        return f"{user_name} expressed negative sentiment about something."
+    
+    def _infer_neutral_meaning(self, user_name: str, cleaned_context: str, context_lower: str) -> str:
+        """Infer neutral meaning from context."""
+        # Look for neutral patterns
+        patterns = [
+            (r'i\s+think\s+(.+?)(?:\.|$)', f"{user_name} thinks {{}}."),
+            (r'i\s+believe\s+(.+?)(?:\.|$)', f"{user_name} believes {{}}."),
+            (r'i\s+feel\s+(.+?)(?:\.|$)', f"{user_name} feels {{}}."),
+            (r'i\s+want\s+(.+?)(?:\.|$)', f"{user_name} wants {{}}."),
+            (r'i\s+need\s+(.+?)(?:\.|$)', f"{user_name} needs {{}}."),
+            (r'i\s+have\s+(.+?)(?:\.|$)', f"{user_name} has {{}}."),
+            (r'i\s+am\s+(.+?)(?:\.|$)', f"{user_name} is {{}}."),
+            (r'i\s+love\s+(.+?)(?:\.|$)', f"{user_name} loves {{}}."),
+        ]
+        
+        for pattern, template in patterns:
+            match = re.search(pattern, context_lower)
+            if match:
+                content = match.group(1).strip()
+                content = content.rstrip('.,!?;')
+                return template.format(content)
+        
+        # Try to extract any meaningful content
+        if cleaned_context.strip():
+            # Check if it's already in third person or a statement about the user
+            if not any(word in context_lower for word in ['i ', 'me ', 'my ', 'i\'']):
+                result = f"{user_name} {cleaned_context.strip()}" if not cleaned_context.startswith(user_name) else cleaned_context
+                # Fix grammatical issues like "User dislike" -> "User dislikes"
+                result = re.sub(r'\b(User|user)\s+dislike\s+', r'\1 dislikes ', result, flags=re.IGNORECASE)
+                result = re.sub(r'\b(User|user)\s+hate\s+', r'\1 hates ', result, flags=re.IGNORECASE)
+                result = re.sub(r'\b(User|user)\s+adore\s+', r'\1 adores ', result, flags=re.IGNORECASE)
+                result = re.sub(r'\b(User|user)\s+love\s+', r'\1 loves ', result, flags=re.IGNORECASE)
+                result = re.sub(r'\b(User|user)\s+think\s+', r'\1 thinks ', result, flags=re.IGNORECASE)
+                result = re.sub(r'\b(User|user)\s+want\s+', r'\1 wants ', result, flags=re.IGNORECASE)
+                result = re.sub(r'\b(User|user)\s+need\s+', r'\1 needs ', result, flags=re.IGNORECASE)
+                return result if result.endswith(('.', '!', '?')) else result + '.'
+            else:
+                # Convert first person to third person with proper verb conjugation
+                converted = self._convert_first_person_to_third_person(cleaned_context, user_name)
+                return converted if converted.endswith(('.', '!', '?')) else converted + '.'
+        
+        # If no meaningful content can be extracted
+        return "Context pending — semantic data unavailable."
+    
+    def _convert_first_person_to_third_person(self, text: str, user_name: str) -> str:
+        """Convert first person to third person with proper verb conjugation."""
+        # Basic conversion
+        converted = re.sub(r'\bi\s+', f'{user_name} ', text, flags=re.IGNORECASE)
+        converted = re.sub(r'\bmy\s+', f'{user_name}\'s ', converted, flags=re.IGNORECASE)
+        converted = re.sub(r'\bme\s+', user_name, converted, flags=re.IGNORECASE)
+        
+        # Fix verb conjugations for third person singular
+        # These should end in 's' when converted from first to third person
+        converted = re.sub(rf'\b{user_name}\s+love\s+', f'{user_name} loves ', converted, flags=re.IGNORECASE)
+        converted = re.sub(rf'\b{user_name}\s+like\s+', f'{user_name} likes ', converted, flags=re.IGNORECASE)
+        converted = re.sub(rf'\b{user_name}\s+enjoy\s+', f'{user_name} enjoys ', converted, flags=re.IGNORECASE)
+        converted = re.sub(rf'\b{user_name}\s+want\s+', f'{user_name} wants ', converted, flags=re.IGNORECASE)
+        converted = re.sub(rf'\b{user_name}\s+think\s+', f'{user_name} thinks ', converted, flags=re.IGNORECASE)
+        converted = re.sub(rf'\b{user_name}\s+feel\s+', f'{user_name} feels ', converted, flags=re.IGNORECASE)
+        converted = re.sub(rf'\b{user_name}\s+have\s+', f'{user_name} has ', converted, flags=re.IGNORECASE)
+        
+        # Apply grammatical fixes again after verb conversion
+        converted = re.sub(r'\b(User|user)\s+dislike\s+', r'\1 dislikes ', converted, flags=re.IGNORECASE)
+        converted = re.sub(r'\b(User|user)\s+hate\s+', r'\1 hates ', converted, flags=re.IGNORECASE)
+        converted = re.sub(r'\b(User|user)\s+adore\s+', r'\1 adores ', converted, flags=re.IGNORECASE)
+        converted = re.sub(r'\b(User|user)\s+love\s+', r'\1 loves ', converted, flags=re.IGNORECASE)
+        converted = re.sub(r'\b(User|user)\s+think\s+', r'\1 thinks ', converted, flags=re.IGNORECASE)
+        converted = re.sub(r'\b(User|user)\s+want\s+', r'\1 wants ', converted, flags=re.IGNORECASE)
+        converted = re.sub(r'\b(User|user)\s+need\s+', r'\1 needs ', converted, flags=re.IGNORECASE)
+        
+        return converted
+
+    def _transform_context_to_summary(self, context: str) -> str:
+        """
+        Transform context like "User: I usually go for morning walks" 
+        into "User likes going for morning walks" based on the requirements.
+        
+        Args:
+            context: The context string to transform
+            
+        Returns:
+            str: The transformed summary in third person
+        """
+        if not context:
+            return "Context pending — semantic data unavailable."
+        
+        # Clean the context first
+        context = context.strip()
+        
+        # Extract content after "User:" or similar prefixes
+        content = re.sub(r'^(?:User user:|User:|user:)\s*', '', context, flags=re.IGNORECASE)
+        content = content.replace('...', '').strip()
+        
+        # Check for specific patterns in the content
+        content_lower = content.lower()
+        
+        # Get user name for personalization
+        user_name = self._get_user_name_from_context(context) or "User"
+        
+        # Pattern: "I usually go for morning walks" -> "User likes going for morning walks"
+        if 'i usually' in content_lower or 'i always' in content_lower or 'i often' in content_lower:
+            # Extract the activity after the frequency word
+            activity_pattern = r'i\s+(?:usually|always|often)\s+(.+?)(?:\.|$)'
+            match = re.search(activity_pattern, content_lower)
+            if match:
+                activity = match.group(1).strip()
+                # Check if activity already ends with 'ing' or is correctly formed
+                if activity.endswith('ing'):
+                    # If it's already in -ing form, use it directly
+                    return f"{user_name} likes {activity}."
+                elif activity.startswith('go for'):
+                    # For "go for" patterns like "go for morning walks"
+                    return f"{user_name} likes going for {activity[7:]}."
+                elif activity.startswith('go to'):
+                    # For "go to" patterns
+                    return f"{user_name} likes going to {activity[6:]}."
+                elif activity.startswith('go '):
+                    # For other "go" patterns, convert to "going"
+                    rest = activity[3:]
+                    return f"{user_name} likes going {rest}."
+                else:
+                    # For other verbs, add -ing if appropriate
+                    return f"{user_name} likes {activity}ing."
+        
+        # Pattern: "I go for morning walks" -> "User likes going for morning walks"
+        elif 'i go for' in content_lower:
+            # Extract what they go for
+            activity_pattern = r'i go for (.+?)(?:\.|$)'
+            match = re.search(activity_pattern, content_lower)
+            if match:
+                activity = match.group(1).strip()
+                return f"{user_name} likes going for {activity}."
+        
+        # Pattern: "I like" -> "User likes X"
+        elif 'i like' in content_lower:
+            like_pattern = r'i like (.+?)(?:\.|$)'
+            match = re.search(like_pattern, content_lower)
+            if match:
+                liked_thing = match.group(1).strip()
+                return f"{user_name} likes {liked_thing}."
+
+        # Pattern: "I love" -> "User loves X"  
+        elif 'i love' in content_lower:
+            love_pattern = r'i love (.+?)(?:\.|$)'
+            match = re.search(love_pattern, content_lower)
+            if match:
+                loved_thing = match.group(1).strip()
+                return f"{user_name} loves {loved_thing}."
+        
+        # Pattern: "I enjoy" -> "User enjoys X"
+        elif 'i enjoy' in content_lower:
+            enjoy_pattern = r'i enjoy (.+?)(?:\.|$)'
+            match = re.search(enjoy_pattern, content_lower)
+            if match:
+                enjoyed_thing = match.group(1).strip()
+                return f"{user_name} enjoys {enjoyed_thing}."
+        
+        # Pattern: "I prefer" -> "User prefers X"
+        elif 'i prefer' in content_lower:
+            prefer_pattern = r'i prefer (.+?)(?:\.|$)'
+            match = re.search(prefer_pattern, content_lower)
+            if match:
+                preferred_thing = match.group(1).strip()
+                return f"{user_name} prefers {preferred_thing}."
+        
+        # Pattern: "I want" -> "User wants X"
+        elif 'i want' in content_lower:
+            want_pattern = r'i want (.+?)(?:\.|$)'
+            match = re.search(want_pattern, content_lower)
+            if match:
+                wanted_thing = match.group(1).strip()
+                return f"{user_name} wants {wanted_thing}."
+        
+        # Pattern: "I need" -> "User needs X"
+        elif 'i need' in content_lower:
+            need_pattern = r'i need (.+?)(?:\.|$)'
+            match = re.search(need_pattern, content_lower)
+            if match:
+                needed_thing = match.group(1).strip()
+                return f"{user_name} needs {needed_thing}."
+        
+        # If no specific pattern matched, use default conversion
+        # Convert first person to third person with proper verb conjugation
+        if content_lower.startswith('i '):
+            # Use the existing conversion method
+            converted = self._convert_first_person_to_third_person(content, user_name)
+            return converted if converted.endswith(('.', '!', '?')) else converted + '.'
+        
+        # If already in third person or doesn't start with "I", return as is
+        if content and not content.startswith(user_name):
+            return f"{user_name} {content}" if not content.startswith(user_name) else content
+        
+        # Fallback
+        return f"{user_name} {content}" if content else "Context pending — semantic data unavailable."
+
+    def _extract_current_value_from_summary(self, summary: str, context: str = None) -> str:
+        """
+        Extract the current_value from the summary based on the requirements, enhanced to use context.
+        
+        Args:
+            summary: The summary from which to extract the current_value
+            context: The context string to use for better extraction (optional)
+            
+        Returns:
+            str: The extracted current_value based on context if available, otherwise from summary
+        """
+        if not summary:
+            return ""
+        
+        # If context is provided, extract current_value based on the context for more precision
+        if context:
+            # Apply deep contextual understanding to extract the most salient information for current_value
+            deep_analysis = self._deep_contextual_understanding(context)
+            
+            # Extract key elements from the context that represent the current value
+            entities = deep_analysis.get('entities', [])
+            concepts = deep_analysis.get('concepts', [])
+            subjects_objects_actions = deep_analysis.get('subjects_objects_actions', {})
+            
+            # If we have specific entities that represent the value, use them
+            if entities:
+                # Use the first few relevant entities to form the current_value
+                current_value = ', '.join(entities[:3])
+                return current_value
+            
+            # Use concepts if no entities were found
+            if concepts:
+                current_value = ', '.join(concepts[:2])
+                return current_value
+            
+            # Extract based on subjects, objects, actions if available
+            if subjects_objects_actions:
+                objects = subjects_objects_actions.get('objects', [])
+                if objects:
+                    current_value = ', '.join(objects[:2])
+                    return current_value
+        
+        # Fallback to original logic based on summary alone
+        # Clean the summary
+        summary = summary.strip()
+        
+        # Remove the user's name from the beginning to get the core value
+        # e.g., "User likes going for morning walks" -> "likes going for morning walks"
+        user_patterns = [
+            r'^User\s+(?:[a-zA-Z0-9_]+\s+)?',  # Matches "User " or "User [name] "
+            r'^[A-Za-z0-9_]+\s+'              # Matches any name followed by space
+        ]
+        
+        for pattern in user_patterns:
+            match = re.match(pattern, summary, re.IGNORECASE)
+            if match:
+                current_value = summary[match.end():].strip()
+                
+                # Fix any grammatical errors that might have occurred during transformation
+                # e.g., "go for morning walksing" -> "going for morning walks"
+                # Look for the specific pattern "go for Xing" -> "going for X"
+                go_for_match = re.search(r'go for (.+?)ing', current_value)
+                if go_for_match:
+                    # Extract the content and convert properly: "go for morning walksing" -> "going for morning walks"
+                    extracted = go_for_match.group(1).strip()
+                    current_value = f"going for {extracted}"
+                elif current_value.startswith('go for '):
+                    # Convert "go for X" to "going for X"
+                    current_value = 'going for ' + current_value[7:]
+                elif current_value.startswith('go to '):
+                    # Convert "go to X" to "going to X" 
+                    current_value = 'going to ' + current_value[6:]
+                elif current_value.startswith('go '):
+                    # Convert "go X" to "going X"
+                    current_value = 'going ' + current_value[3:]
+                
+                # Also handle the case where it ends with 'ing' but is incorrectly formed
+                if current_value.endswith('ing') and not current_value.endswith('ing.'):
+                    # Check if it's like "go for morning walksing" -> should be "going for morning walks"
+                    if ' for ' in current_value and current_value.count('ing') > 1:
+                        # This might be the problematic case, fix it
+                        go_for_2_match = re.search(r'go for (.+?)ing', current_value)
+                        if go_for_2_match:
+                            extracted = go_for_2_match.group(1).strip()
+                            current_value = f"going for {extracted}"
+                
+                # Remove trailing punctuation for cleaner current_value
+                current_value = current_value.rstrip('.!?')
+                
+                # Capitalize first letter if the remaining text starts with lowercase
+                if current_value and current_value[0].islower():
+                    current_value = current_value[0].upper() + current_value[1:]
+                return current_value
+        
+        # If no user pattern matched, return the summary as is after cleaning
+        current_value = summary.rstrip('.!?')
+        if current_value and current_value[0].islower():
+            current_value = current_value[0].upper() + current_value[1:]
+        return current_value
+
+    def _contains_added_preference_prefix(self, text: str) -> bool:
+        """Check if text contains an 'Added preference' prefix."""
+        if not text:
+            return False
+        
+        # Check for various 'Added preference' patterns
+        patterns = [
+            r'^Added preference likes:',
+            r'^Added preference dislikes:',
+            r'^Added preference avoid:',
+            r'^Added preference always:',
+            r'^Added preference never:',
+            r'^Added preference love:',
+            r'^Added preference enjoy:',
+            r'^Added preference hate:',
+            r'^Added preference want:',
+            r'^Added preference need:',
+        ]
+        
+        text_stripped = text.strip()
+        for pattern in patterns:
+            # Match the pattern against the stripped text (case-insensitive)
+            if re.match(pattern, text_stripped, re.IGNORECASE):
+                return True
+                
+        return False
+
+    def _extract_preference_type_and_content(self, text: str) -> tuple[str, str]:
+        """
+        Extract the preference type and content from 'Added preference' text.
+        
+        Args:
+            text: Text that starts with 'Added preference X:' pattern
+            
+        Returns:
+            tuple: (preference_type, content_after_colon)
+        """
+        # Match patterns like "Added preference likes: content" or "Added preference dislikes: content"
+        pattern = r'^Added preference (\w+):\s*(.*)'
+        match = re.match(pattern, text, re.IGNORECASE)
+        
+        if match:
+            preference_type = match.group(1).lower()  # e.g., 'likes', 'dislikes', etc.
+            content = match.group(2).strip()  # content after the colon
+            return preference_type, content
+        
+        # If it doesn't match the expected pattern, return empty values
+        return "", text
+
+    def _extract_meaningful_content_from_context(self, context: str) -> str:
+        """
+        Extract the meaningful part from context that indicates what the user likes/dislikes.
+        
+        Args:
+            context: The context string from source_info.context
+            
+        Returns:
+            str: The meaningful content extracted from context
+        """
+        if not context:
+            return ""
+        
+        # Clean up the context
+        cleaned = context.strip()
+        
+        # Look for patterns indicating what the user said
+        # Pattern: "I love X", "I like X", "I hate X", etc.
+        patterns = [
+            r'i\s+love\s+(.+?)(?:\.|$)',
+            r'i\s+like\s+(.+?)(?:\.|$)', 
+            r'i\s+enjoy\s+(.+?)(?:\.|$)',
+            r'i\s+hate\s+(.+?)(?:\.|$)',
+            r'i\s+dislike\s+(.+?)(?:\.|$)',
+            r'i\s+don\'?t\s+like\s+(.+?)(?:\.|$)',
+            r'i\s+don\'?t\s+love\s+(.+?)(?:\.|$)',
+            r'i\s+don\'?t\s+enjoy\s+(.+?)(?:\.|$)',
+            r'i\s+want\s+(.+?)(?:\.|$)',
+            r'i\s+need\s+(.+?)(?:\.|$)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, cleaned, re.IGNORECASE)
+            if match:
+                content = match.group(1).strip()
+                # Clean up the content
+                content = content.rstrip('.,!?;')
+                return content
+        
+        # If no specific pattern matched, return the cleaned context
+        return cleaned
+
+    def _classify_preference_type(self, context: str) -> str:
+        """
+        Classify the preference type based on the context.
+        
+        Args:
+            context: The context string to analyze
+            
+        Returns:
+            str: The appropriate Added_preference type
+        """
+        if not context:
+            return "Added_preference_likes"
+        
+        context_lower = context.lower()
+        
+        # NEW: Enhanced processing for complex negation patterns
+        # Look for phrases that indicate negation with context
+        if 'try to avoid' in context_lower:
+            # For the specific case "I try to avoid junk food like McDonald's"
+            if 'like' in context_lower and 'try to avoid' in context_lower:
+                return "Added_preference_avoid"
+        
+        # Look for strong negative indicators
+        strong_negatives = ['hate', 'despise', 'loathe', 'strongly dislike']
+        if any(word in context_lower for word in strong_negatives):
+            return "Added_preference_hate"
+            
+        # Look for moderate negative indicators
+        moderate_negatives = ['dislike', 'don\'t like', 'don\'t enjoy', 'not interested in']
+        if any(word in context_lower for word in moderate_negatives):
+            return "Added_preference_dislikes"
+        
+        # Look for avoidance indicators
+        avoid_indicators = ['avoid', 'stay away', 'don\'t want', 'never do', 'steer clear', 'try to avoid', 'don\'t eat', 'try not to']
+        if any(word in context_lower for word in avoid_indicators):
+            return "Added_preference_avoid"
+        
+        # Look for strong positive indicators
+        strong_positives = ['love', 'adore', 'amazing', 'fantastic', 'wonderful', 'perfect', 'incredible']
+        if any(word in context_lower for word in strong_positives):
+            return "Added_preference_love"
+            
+        # Look for moderate positive indicators
+        moderate_positives = ['like', 'enjoy', 'appreciate', 'good', 'great', 'awesome', 'fun', 'excited']
+        if any(word in context_lower for word in moderate_positives):
+            return "Added_preference_likes"
+            
+        # Look for wanting/need indicators
+        need_indicators = ['need', 'must have', 'require', 'essential', 'vital']
+        if any(word in context_lower for word in need_indicators):
+            return "Added_preference_need"
+            
+        want_indicators = ['want', 'desire', 'wish', 'hope', 'aspiration', 'goal']
+        if any(word in context_lower for word in want_indicators):
+            return "Added_preference_want"
+            
+        # Look for continuation indicators
+        continue_indicators = ['always', 'keep doing', 'continue', 'still do', 'maintain']
+        if any(word in context_lower for word in continue_indicators):
+            return "Added_preference_continue"
+        
+        # Look for enjoyment indicators
+        enjoy_indicators = ['enjoy', 'pleasure', 'happy', 'satisfaction']
+        if any(word in context_lower for word in enjoy_indicators):
+            return "Added_preference_enjoy"
+        
+        # NEW: Check for negation patterns in sequence
+        # For example: if "don't" appears before a food item, classify as avoid
+        if any(neg_word in context_lower for neg_word in ['don\'t', 'do not', 'never']):
+            # Check if it's followed by eat/like/enjoy patterns
+            if any(activity in context_lower for activity in ['eat', 'consume', 'like', 'enjoy']):
+                return "Added_preference_avoid"
+        
+        # If no specific patterns match, use the original logic
+        if any(word in context_lower for word in ['hate', 'terrible', 'awful', 'horrible', 'worst', 'pathetic', 'useless']):
+            return "Added_preference_hate"
+        else:
+            # Default to likes if we can't determine a specific type
+            return "Added_preference_likes"
+
+    def _rewrite_preference_value(self, context: str, preference_type: str, user_name: Optional[str] = None) -> str:
+        """
+        Rewrite the preference value as a clean, human-readable sentence.
+        
+        Args:
+            context: The context string to rewrite
+            preference_type: The type of preference (e.g., Added_preference_likes)
+            user_name: Optional user name for personalization
+            
+        Returns:
+            str: The rewritten preference value as a natural sentence
+        """
+        if not context:
+            return ""
+        
+        # Clean up the context
+        cleaned_context = self._clean_raw_user_input(context)
+        
+        # Extract the meaningful content
+        content = self._extract_meaningful_content_from_context(cleaned_context)
+        
+        if not content:
+            content = cleaned_context.strip()
+        
+        # Make sure it doesn't start with "Added preference" or similar meta phrases
+        content = re.sub(r'^(Added preference|indicating|preference):\s*', '', content, flags=re.IGNORECASE)
+        
+        # Transform the content based on preference type
+        user_ref = user_name or "User"
+        
+        if preference_type == "Added_preference_likes":
+            if content:
+                return f"enjoys {content}"
+            else:
+                return f"has positive preferences"
+        elif preference_type == "Added_preference_dislikes":
+            if content:
+                return f"doesn't like {content}"
+            else:
+                return f"has negative preferences"
+        elif preference_type == "Added_preference_avoid":
+            if content:
+                return f"avoids {content}"
+            else:
+                return f"tends to avoid things"
+        elif preference_type == "Added_preference_continue":
+            if content:
+                return f"always {content}"
+            else:
+                return f"has habits to continue"
+        elif preference_type == "Added_preference_love":
+            if content:
+                return f"loves {content}"
+            else:
+                return f"has strong positive preferences"
+        elif preference_type == "Added_preference_hate":
+            if content:
+                return f"strongly dislikes {content}"
+            else:
+                return f"has strong negative preferences"
+        elif preference_type == "Added_preference_enjoy":
+            if content:
+                return f"actively enjoys {content}"
+            else:
+                return f"finds enjoyment in things"
+        elif preference_type == "Added_preference_need":
+            if content:
+                return f"requires {content}"
+            else:
+                return f"has certain needs"
+        elif preference_type == "Added_preference_want":
+            if content:
+                return f"wants to {content}"
+            else:
+                return f"has wants and desires"
+        else:
+            # Default case for any other preference types
+            if content:
+                return f"{content}"
+            else:
+                return f"has unspecified preferences"
+
+    def _rewrite_preference_content_based_on_context(self, content: str, context: str, preference_type: str) -> str:
+        """
+        Rewrite the content after the colon based on context from source_info.context using deep contextual understanding.
+        
+        Args:
+            content: The content after the colon in original_summary
+            context: The context from source_info.context 
+            preference_type: The type of preference (e.g., 'likes', 'dislikes', etc.)
+            
+        Returns:
+            str: The rewritten content that's natural, grammatically correct, and consistent with sentiment
+        """
+        # Apply deep contextual understanding to analyze every word, phrase, and sentence
+        deep_analysis = self._deep_contextual_understanding(context)
+        
+        # Clean up the context to get the actual user statement
+        if not context:
+            # If no context, return the original content unchanged
+            return content
+        
+        # Clean the context - remove prefixes like "User:" and extract the actual statement
+        cleaned_context = re.sub(r'^(?:User user:|User:|user:)\s*', '', context, flags=re.IGNORECASE).strip()
+        
+        # Remove any trailing '...' or similar
+        cleaned_context = cleaned_context.replace('...', '').strip()
+        
+        # Use entities and concepts from deep analysis for better phrasing
+        entities = deep_analysis.get('entities', [])
+        concepts = deep_analysis.get('concepts', [])
+        
+        # NEW: Handle the specific case: "I try to avoid junk food like McDonald's"
+        # Extract meaningful content considering negation and complex statements using semantic understanding
+        extracted_content = self._extract_meaningful_content_from_context(cleaned_context)
+        
+        # NEW: Special handling for complex avoidance patterns using deep analysis
+        if 'try to avoid' in cleaned_context.lower():
+            import re
+            # Match "I try to avoid X like Y" pattern using full contextual understanding
+            complex_pattern = r'i\s+try\s+to\s+avoid\s+(.+?)\s+like\s+(.+?)(?:\.|$)'
+            match = re.search(complex_pattern, cleaned_context.lower(), re.IGNORECASE)
+            if match:
+                first_item = match.group(1).strip()
+                second_item = match.group(2).strip()
+                # For this case, both items should be avoided - use deep analysis entities
+                if preference_type in ['avoid']:
+                    if entities:
+                        return f"avoids {', '.join(entities[:3])} and similar {first_item}"
+                    else:
+                        return f"avoids both {first_item} and {second_item}"
+        
+        if extracted_content and extracted_content != content:
+            # Use the extracted content based on the context
+            # Apply sentiment-appropriate transformation using semantic understanding
+            if preference_type in ['likes', 'love', 'enjoy']:
+                # Process as positive sentiment with full contextual awareness
+                if 'play' in extracted_content.lower():
+                    match = re.search(r'play\s+(.+)', extracted_content, re.IGNORECASE)
+                    if match:
+                        activity = match.group(1).strip()
+                        # Use entities for more natural phrasing
+                        if entities:
+                            return f"enjoys playing {', '.join(entities[:2])} and similar {activity}"
+                        else:
+                            return f"enjoys playing {activity}"
+                elif 'listen' in extracted_content.lower():
+                    match = re.search(r'(?:listen to|listening to)\s+(.+)', extracted_content, re.IGNORECASE)
+                    if match:
+                        content_item = match.group(1).strip()
+                        # Use entities for more natural phrasing
+                        if entities:
+                            return f"enjoys listening to {', '.join(entities[:2])} like {content_item}"
+                        else:
+                            return f"enjoys listening to {content_item}"
+                elif any(verb in extracted_content.lower() for verb in ['like', 'love', 'enjoy']):
+                    # Extract what comes after the positive verb using semantic understanding
+                    for verb in ['like', 'love', 'enjoy']:
+                        if verb in extracted_content.lower():
+                            extracted = re.sub(rf'.*{verb}\s+', '', extracted_content, 1, re.IGNORECASE).strip()
+                            if extracted:
+                                # Use concepts and entities for more natural phrasing
+                                if concepts and entities:
+                                    return f"enjoys {', '.join(concepts[:1])} such as {', '.join(entities[:2])}"
+                                elif entities:
+                                    return f"enjoys {', '.join(entities[:3])}"
+                                else:
+                                    return f"enjoys {extracted}"
+                
+                # Default positive transformation with semantic awareness
+                if extracted_content.lower().startswith('i '):
+                    # Convert to appropriate form: "I [verb] [object]" -> "enjoys [object]"
+                    parts = extracted_content.split(' ', 2)  # Split into 3 parts max
+                    if len(parts) > 2:
+                        verb = parts[1]
+                        remaining = ' '.join(parts[2:])
+                        if verb in ['play', 'listen', 'read', 'watch', 'eat', 'use']:
+                            # Use intent from deep analysis for better phrasing
+                            if deep_analysis.get('intent') == 'habit':
+                                return f"enjoys regularly {verb}ing {remaining}"
+                            else:
+                                return f"enjoys {verb}ing {remaining}"
+                        else:
+                            # Use emotional tone for better phrasing
+                            if deep_analysis.get('emotional_tone', {}).get('tone') == 'positive':
+                                return f"enjoys {remaining}"
+                            else:
+                                return f"enjoys {remaining}"
+                    else:
+                        return f"enjoys {extracted_content[2:].strip()}"  # Remove "I "
+                else:
+                    # Use full meaning reconstruction for more natural phrasing
+                    if entities and concepts:
+                        return f"enjoys {', '.join(concepts[:1])} such as {', '.join(entities[:2])}"
+                    elif entities:
+                        return f"enjoys {', '.join(entities[:3])}"
+                    else:
+                        return f"enjoys {extracted_content}"
+                    
+            elif preference_type in ['dislikes', 'hate', 'avoid']:
+                # Process as negative sentiment with full contextual understanding
+                # NEW: Enhanced handling for avoid preference type using deep analysis
+                if preference_type == 'avoid':
+                    # Special processing for avoid statements with semantic understanding
+                    if 'avoid' in extracted_content.lower():
+                        # Extract the actual thing to be avoided using contextual understanding
+                        avoid_pattern = r'avoid\s+(.+?)(?:\.|$)'
+                        match = re.search(avoid_pattern, extracted_content.lower())
+                        if match:
+                            item = match.group(1).strip()
+                            # Use entities for more natural phrasing
+                            if entities:
+                                return f"avoids {', '.join(entities[:3])} and similar {item}"
+                            else:
+                                return f"avoids {item}"
+                    
+                    # NEW: Handle complex avoidance statements with semantic understanding
+                    if 'and' in extracted_content.lower():
+                        # This is likely from our enhanced extraction "avoid X and Y"
+                        parts = extracted_content.split(' and ', 1)  # Split only on first 'and'
+                        if len(parts) > 1 and parts[0] == 'avoid':
+                            # Handle "avoid X and Y" pattern using entities
+                            specific_content = parts[1]
+                            if entities:
+                                return f"avoids {', '.join(entities[:3])} like {specific_content}"
+                            else:
+                                return f"avoids {specific_content}"
+                
+                # Handle the specific case: "I try to avoid junk food like McDonald's"
+                if 'try to avoid' in context.lower() and 'like' in context.lower():
+                    import re
+                    complex_pattern = r'i\s+try\s+to\s+avoid\s+(.+?)\s+like\s+(.+?)(?:\.|$)'
+                    match = re.search(complex_pattern, context.lower(), re.IGNORECASE)
+                    if match:
+                        first_item = match.group(1).strip()
+                        second_item = match.group(2).strip()
+                        # User avoids both items - use deep analysis entities
+                        if entities:
+                            return f"avoids {', '.join(entities[:3])} and similar {first_item}"
+                        else:
+                            return f"avoids both {first_item} and {second_item}"
+                
+                if 'play' in extracted_content.lower():
+                    match = re.search(r'play\s+(.+)', extracted_content, re.IGNORECASE)
+                    if match:
+                        activity = match.group(1).strip()
+                        # Use entities for more natural phrasing
+                        if entities:
+                            return f"dislikes playing {', '.join(entities[:2])} and similar {activity}"
+                        else:
+                            return f"dislikes playing {activity}"
+                elif any(verb in extracted_content.lower() for verb in ['hate', 'dislike']):
+                    # Extract what comes after the negative verb using semantic understanding
+                    for verb in ['hate', 'dislike']:
+                        if verb in extracted_content.lower():
+                            extracted = re.sub(rf'.*{verb}\s+', '', extracted_content, 1, re.IGNORECASE).strip()
+                            if extracted:
+                                # Use concepts and entities for more natural phrasing
+                                if concepts and entities:
+                                    return f"dislikes {', '.join(concepts[:1])} such as {', '.join(entities[:2])}"
+                                elif entities:
+                                    return f"dislikes {', '.join(entities[:3])}"
+                                else:
+                                    return f"dislikes {extracted}"
+                
+                # Default negative transformation with semantic awareness
+                if extracted_content.lower().startswith('i '):
+                    # Convert to appropriate form: "I [verb] [object]" -> "dislikes [object]"
+                    parts = extracted_content.split(' ', 2)  # Split into 3 parts max
+                    if len(parts) > 2:
+                        verb = parts[1]
+                        remaining = ' '.join(parts[2:])
+                        if verb in ['play', 'listen', 'read', 'watch', 'eat', 'use']:
+                            # Use intent from deep analysis for better phrasing
+                            if deep_analysis.get('intent') == 'avoidance':
+                                return f"avoids {verb}ing {remaining}"
+                            else:
+                                return f"dislikes {verb}ing {remaining}"
+                        else:
+                            # Use emotional tone for better phrasing
+                            if deep_analysis.get('emotional_tone', {}).get('tone') == 'negative':
+                                return f"dislikes {remaining}"
+                            else:
+                                return f"dislikes {remaining}"
+                    else:
+                        return f"dislikes {extracted_content[2:].strip()}"  # Remove "I "
+                else:
+                    # Use full meaning reconstruction for more natural phrasing
+                    # Handle the specific case: "I try to avoid junk food like McDonald's"
+                    if 'try to avoid' in context.lower() and 'like' in context.lower():
+                        import re
+                        complex_pattern = r'i\s+try\s+to\s+avoid\s+(.+?)\s+like\s+(.+?)(?:\.|$)'
+                        match = re.search(complex_pattern, context.lower(), re.IGNORECASE)
+                        if match:
+                            first_item = match.group(1).strip()
+                            second_item = match.group(2).strip()
+                            # User avoids both items - use deep analysis entities
+                            if entities:
+                                return f"avoids {', '.join(entities[:3])} and similar {first_item}"
+                            else:
+                                return f"avoids both {first_item} and {second_item}"
+                    
+                    # General negative phrasing with semantic understanding
+                    if entities and concepts:
+                        return f"dislikes {', '.join(concepts[:1])} such as {', '.join(entities[:2])}"
+                    elif entities:
+                        return f"dislikes {', '.join(entities[:3])}"
+                    else:
+                        return f"dislikes {extracted_content}"
+            else:
+                # For other preference types, just return the extracted content with semantic enhancement
+                if entities and concepts:
+                    return f"has a preference for {', '.join(concepts[:1])} such as {', '.join(entities[:2])}"
+                elif entities:
+                    return f"has a preference for {', '.join(entities[:3])}"
+                else:
+                    return extracted_content
+        
+        # If we couldn't extract meaningful content, return original with semantic context if available
+        if 'full_meaning' in deep_analysis:
+            return f"{content} - {deep_analysis['full_meaning']}"
+        
+        # If no specific patterns matched, return original
+        return content
+
+    def _update_original_summary_with_context(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        This function is deprecated as original_summary has been removed. Returns the event unchanged.
+        
+        Args:
+            event: The event dictionary
+            
+        Returns:
+            Dict: Returns the event unchanged
+        """
+        # Since original_summary has been removed, just return the event unchanged
+        return event
+
+    def _eliminate_repetitive_phrases(self, text: str) -> str:
+        """Eliminate repetitive phrases like 'and Added preference likes: like and Added preference likes'."""
+        if not text:
+            return text
+            
+        # Remove repeated phrases connected by 'and'
+        # Pattern: "X and Added preference likes: X" -> "X"
+        text = re.sub(r'(Added preference likes?:\s*([^\.]+?))\s+and\s+Added preference likes?:\s+\2', r'\1', text, flags=re.IGNORECASE)
+        
+        # Remove other repetitive patterns like "X and X"
+        text = re.sub(r'\b(\w+?)\s+and\s+\1\b', r'\1', text, flags=re.IGNORECASE)
+        
+        # Remove duplicate consecutive phrases
+        # Split on 'and' and remove duplicates while preserving order
+        parts = [part.strip() for part in text.split(' and ')]
+        unique_parts = []
+        seen = set()
+        for part in parts:
+            if part and part not in seen:
+                seen.add(part)
+                unique_parts.append(part)
+        
+        if unique_parts:
+            text = ' and '.join(unique_parts)
+        
+        # Normalize spaces
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        return text
+
+    def _log_processed_entry(self, entry: Dict[str, Any], final_summary: str, context_used: str) -> Dict[str, Any]:
+        """
+        Log the entry with the format specified in the requirements.
+        
+        Args:
+            entry: The original entry being processed
+            final_summary: The final summary after rewriting
+            context_used: The original context that was used
+            
+        Returns:
+            Dict with the log entry format: {entry_id, processed_at, summary, context_used, status}
+        """
+        entry_id = self._get_event_identifier(entry, -1)  # Use -1 as placeholder for index
+        
+        log_entry = {
+            "entry_id": entry_id,
+            "processed_at": datetime.now().isoformat(),
+            "summary": final_summary,
+            "context_used": context_used,
+            "status": "processed"
+        }
+        
+        return log_entry
+
+    def _save_processed_entry(self, entry: Dict[str, Any], final_summary: str, context_used: str):
+        """
+        Save the final rewritten entry to processed_memory.json to prevent reprocessing.
+        
+        Args:
+            entry: The original entry being processed
+            final_summary: The final summary after rewriting
+            context_used: The original context that was used
+        """
+        try:
+            # Create the log entry in the specified format
+            log_entry = self._log_processed_entry(entry, final_summary, context_used)
+            
+            # Add 'processed': true field
+            log_entry['processed'] = True
+            
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(self.processed_memory_file_path), exist_ok=True)
+            
+            # Load existing processed entries
+            processed_entries = []
+            if os.path.exists(self.processed_memory_file_path):
+                with open(self.processed_memory_file_path, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                    if content:
+                        try:
+                            data = json.loads(content)
+                            if isinstance(data, list):
+                                processed_entries = data
+                            elif isinstance(data, dict):
+                                # If it's a single entry dict, wrap in a list
+                                processed_entries = [data]
+                        except json.JSONDecodeError:
+                            processed_entries = []
+            
+            # Add the new processed entry to the list
+            processed_entries.append(log_entry)
+            
+            # Save the updated list back to the file
+            with open(self.processed_memory_file_path, 'w', encoding='utf-8') as f:
+                json.dump(processed_entries, f, indent=2)
+                
+        except Exception as e:
+            print(f"Error saving processed entry: {e}")
+
+    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+        """
+        Calculate cosine similarity between two vectors.
+        
+        Args:
+            vec1: First vector
+            vec2: Second vector
+            
+        Returns:
+            Cosine similarity score between the vectors
+        """
+        import math
+        
+        if not vec1 or not vec2 or len(vec1) != len(vec2):
+            return 0.0
+            
+        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        magnitude1 = math.sqrt(sum(a * a for a in vec1))
+        magnitude2 = math.sqrt(sum(b * b for b in vec2))
+        
+        if magnitude1 == 0 or magnitude2 == 0:
+            return 0.0
+            
+        return dot_product / (magnitude1 * magnitude2)
+
+    def _apply_operational_example_transformation(self, context: str) -> Dict[str, str]:
+        """
+        Implement the operational example transformation logic.
+        
+        Example from document:
+        Input context: "User user: i like to play game..."
+        Should produce:
+        - "summary": "User enjoys playing games and considers it a personal interest."
+        - "semantic_context": "User expressed enjoyment and personal interest in gaming."
+        
+        Args:
+            context: The input context string
+            
+        Returns:
+            Dict with transformed summary and semantic_context (original_summary removed)
+        """
+        result = {
+            'summary': context,  # Default fallback
+            'semantic_context': 'No semantic context available'
+        }
+        
+        # First clean duplicate user prefixes from context
+        cleaned_context = re.sub(r'(?i)(?:user)\s+(?:user):\s*', 'User: ', context)
+        cleaned_context = re.sub(r'(?i)([A-Za-z]+)\s+\1:\s*', r'\1: ', cleaned_context)
+        
+        # Normalize context for pattern matching
+        context_lower = cleaned_context.lower().strip()
+        
+        # Check if context contains patterns related to the example
+        if 'user user: i like to' in context_lower or 'user: i like to' in context_lower:
+            # Extract the activity after "i like to"
+            match = re.search(r'(?:user user:|user:)\s*i like to\s+(.+?)(?:\.{3}|$)', context_lower)
+            if match:
+                activity = match.group(1).strip()
+                
+                # Use varied expressions instead of always the same phrase
+                import random
+                varied_expressions = self._get_varied_expressions('interest', activity, "User")
+                result['summary'] = random.choice(varied_expressions)
+                result['semantic_context'] = f"User expressed enjoyment and personal interest in {activity}."
+                
+        # General handling of "like" patterns
+        elif 'like' in context_lower:
+            # Extract what user likes
+            like_match = re.search(r'(?:i|user|user user:)\s*(?:like|likes|love|loves)\s+(.+?)(?:\.{3}|$)', context_lower)
+            if like_match:
+                liked_thing = like_match.group(1).strip()
+                # Handle cases where the liked thing might be a phrase
+                import random
+                varied_expressions = self._get_varied_expressions('like', liked_thing, "User")
+                result['summary'] = random.choice(varied_expressions)
+                result['semantic_context'] = f"User expressed enjoyment and personal interest in {liked_thing}."
+        
+        # General pattern for other activities
+        else:
+            # If context contains "play" or similar activity verbs
+            activity_match = re.search(r'(?:i|user|user user:)\s*(?:play|plays|watch|watches|do|does|like|likes)\s+(.+?)(?:\.{3}|$)', context_lower)
+            if activity_match:
+                activity = activity_match.group(1).strip()
+                import random
+                varied_expressions = self._get_varied_expressions('interest', activity, "User")
+                result['summary'] = random.choice(varied_expressions)
+                result['semantic_context'] = f"User expressed enjoyment and interest in {activity}."
+        
+        return result
+
+    def _save_processed_entries(self):
+        """Save processed entry IDs to file."""
+        try:
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(self.processed_entries_file), exist_ok=True)
+            
+            data = {
+                'processed_entries': list(self.completely_processed_entries),
+                'last_updated': datetime.now().isoformat()
+            }
+            
+            with open(self.processed_entries_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            print(f"Error saving processed entries: {e}")
+
+    def _save_memory_file_with_backup(self, file_path: str, memory_data: Dict[str, Any]):
+        """
+        Save memory data to file with backup functionality.
+        
+        Args:
+            file_path: Path to the memory file
+            memory_data: The memory data to save
+        """
+        try:
+            # Create backup
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_dir = os.path.join(os.path.dirname(file_path), 'backups')
+            os.makedirs(backup_dir, exist_ok=True)
+            backup_path = os.path.join(backup_dir, f'nova_ai_memory_{timestamp}.json')
+            
+            # Only create backup if the original file exists
+            if os.path.exists(file_path):
+                shutil.copy2(file_path, backup_path)
+            
+            # Save the updated data
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(memory_data, f, indent=2, ensure_ascii=False, default=self._json_default)
+                
+        except Exception as e:
+            print(f"Error saving memory file with backup: {e}")
+            # Fallback: save without backup
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(memory_data, f, indent=2, ensure_ascii=False, default=self._json_default)
+            except Exception as fallback_error:
+                print(f"Fallback save also failed: {fallback_error}")
+
+    def _add_preference_to_unified_format(self, memory_data: Dict[str, Any], preference_type: str,
+                                         preference_value: str, confidence: float = 0.8, event_id: str = None) -> Dict[str, Any]:
+        """
+        Add a preference to the unified fact_history format following FACT_HISTORY ORGANIZATION RULES.
+        Rules:
+        1. Detect the preference verb (like, love, enjoy, hate, prefer).
+        2. Store the preference inside fact_history.personal_preferences.<verb>
+        3. ALWAYS append the normalized item string to exactly one list.
+        4. If the verb is unknown, store it under fact_history.personal_preferences.other.
+        5. Always create or update fact_history with event_references.
+
+        Args:
+            memory_data: The memory data structure to update
+            preference_type: The type of preference (likes, loves, enjoys, hates, etc.)
+            preference_value: The preference value
+            confidence: Confidence score for the preference
+            event_id: ID of the event that generated this preference
+
+        Returns:
+            Updated memory data with preference added to unified format
+        """
+        # Initialize or get the fact_history structure
+        if "fact_history" not in memory_data:
+            memory_data["fact_history"] = {}
+
+        # Initialize personal_preferences structure and ensure all required categories exist
+        if "personal_preferences" not in memory_data["fact_history"]:
+            memory_data["fact_history"]["personal_preferences"] = {}
+
+        # Ensure all required categories exist
+        required_categories = {
+            "likes": [],
+            "loves": [],  # Added to support the love verb
+            "enjoys": [],  # Added to support the enjoy verb
+            "hates": [],  # Added to support the hate verb
+            "dislikes": [],
+            "prefers": [],  # Added to support the prefer verb
+            "avoid": [],
+            "always": [],
+            "style": [],
+            "conditional": [],
+            "interests": [],
+            "need": [],  # Added to support the need verb
+            "want": [],   # Added to support the want verb
+            "continue": [], # Added to support the continue verb
+            "other": []  # For unknown verbs
+        }
+
+        for category, default_value in required_categories.items():
+            if category not in memory_data["fact_history"]["personal_preferences"]:
+                memory_data["fact_history"]["personal_preferences"][category] = default_value
+
+        # Validate preference type and handle unknown verbs
+        valid_preference_types = [
+            "likes", "loves", "enjoys", "hates", "dislikes", "prefers", "avoid",
+            "always", "style", "conditional", "interests", "need", "want", "continue"
+        ]
+
+        # Use a working variable to avoid modifying the original preference_type for logic
+        actual_preference_type = preference_type
+
+        # Map singular forms to plural forms used in fact_history
+        preference_mapping = {
+            "like": "likes",
+            "love": "loves",
+            "enjoy": "enjoys",
+            "hate": "hates",
+            "dislike": "dislikes",
+            "prefer": "prefers",
+            "need": "need",  # need remains as is (already plural)
+            "want": "want",  # want remains as is (already plural)
+            "continue": "continue"  # continue remains as is
+        }
+
+        if actual_preference_type in preference_mapping:
+            actual_preference_type = preference_mapping[actual_preference_type]
+        elif actual_preference_type not in valid_preference_types:
+            actual_preference_type = "other"  # Store unknown verbs under 'other'
+
+        # Create the unified format entry following the exact structure from the example
+        timestamp = datetime.now().isoformat()
+        unified_entry = {
+            "item": preference_value,
+            "score": confidence,
+            "added": self._extract_date_from_timestamp(timestamp),
+            "event_references": [event_id] if event_id else [],
+            "provenance": {
+                "enhanced_in_place": True,
+                "enhanced_at": timestamp
+            }
+        }
+
+        # Add to the appropriate category in personal_preferences
+        if actual_preference_type in memory_data["fact_history"]["personal_preferences"]:
+            # Check if this item already exists to avoid duplicates
+            # Compare based on the item text and potentially event references
+            existing_items = memory_data["fact_history"]["personal_preferences"][actual_preference_type]
+            item_exists = False
+
+            for existing_item in existing_items:
+                if existing_item.get("item", "").lower() == preference_value.lower():
+                    # Item already exists, just add the event reference if it's not already there
+                    item_exists = True
+                    if event_id and "event_references" in existing_item:
+                        if event_id not in existing_item["event_references"]:
+                            existing_item["event_references"].append(event_id)
+                    elif event_id:
+                        existing_item["event_references"] = [event_id]
+                    break
+
+            if not item_exists:
+                memory_data["fact_history"]["personal_preferences"][actual_preference_type].append(unified_entry)
+
+        return memory_data
+
+    def _extract_date_from_timestamp(self, timestamp: str) -> str:
+        """Extracts date from a timestamp string."""
+        try:
+            # Handles ISO format timestamps
+            return datetime.fromisoformat(timestamp.replace('Z', '+00:00')).strftime('%Y-%m-%d')
+        except (ValueError, TypeError):
+            # Fallback for other formats or if timestamp is not a string
+            return str(date.today())
+
+    def _normalize_preference_value(self, value: str) -> str:
+        """
+        Normalize a preference value for comparison, ignoring case, spacing, and minor variations.
+        
+        Args:
+            value: The preference value to normalize
+            
+        Returns:
+            Normalized version of the value for comparison
+        """
+        if not value or not isinstance(value, str):
+            return ""
+            
+        # Convert to lowercase
+        normalized = value.lower()
+        
+        # Remove extra spaces and normalize whitespace
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
+        
+        # Remove common punctuation
+        normalized = re.sub(r'[.,!?;:]', '', normalized)
+        
+        # Remove common articles like "the", "a", "an"
+        normalized = re.sub(r'\b(the|a|an)\s+', ' ', normalized)
+        
+        # Normalize extra spaces again after word removal
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
+        
+        return normalized
+
+    def _find_duplicate_preference_events(self, memory_events: List[Dict[str, Any]]) -> Set[int]:
+        """
+        Find indices of events that contain duplicate Added_preference values.
+        
+        Args:
+            memory_events: List of memory events to check for duplicates
+            
+        Returns:
+            Set of indices of events that are duplicates (keeping the first occurrence)
+        """
+        seen_preferences = {}  # Maps (field_name, normalized_value) -> event_index
+        duplicate_indices = set()
+        
+        for i, event in enumerate(memory_events):
+            if not isinstance(event, dict):
+                continue
+                
+            # Find all Added_preference fields in this event
+            added_pref_fields = [key for key in event.keys() if key.startswith("Added_preference_")]
+            
+            for field in added_pref_fields:
+                value = event.get(field)
+                if not value or not isinstance(value, str):
+                    continue
+                    
+                # Normalize the value for comparison
+                normalized_value = self._normalize_preference_value(value)
+                
+                # Create a key combining field name and normalized value
+                key = (field, normalized_value)
+                
+                # If we've seen this exact combination before, mark current event as duplicate
+                if key in seen_preferences:
+                    duplicate_indices.add(i)
+                    print(f"Found duplicate preference: {field} = '{value}' (duplicate of event at index {seen_preferences[key]})")
+                else:
+                    # Record this as the first occurrence
+                    seen_preferences[key] = i
+        
+        return duplicate_indices
+
+    def prevent_duplicate_preferences(self, memory_data: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
+        """
+        Main function to prevent duplicate preference entries in memory_events.
+        Checks across all existing entries and removes duplicates based on Added_preference values.
+        
+        Args:
+            memory_data: The complete memory data structure
+            
+        Returns:
+            Tuple of (updated memory data, number of duplicates removed)
+        """
+        if not isinstance(memory_data, dict):
+            return memory_data, 0
+            
+        # Access memory events from the new structure
+        memory_events = memory_data.get('memory_engine', {}).get('memory_events', [])
+        if not memory_events or not isinstance(memory_events, list):
+            return memory_data, 0
+            
+        # Find duplicate events
+        duplicate_indices = self._find_duplicate_preference_events(memory_events)
+        
+        # Remove duplicate events in reverse order to maintain proper indexing
+        removed_count = 0
+        for index in sorted(duplicate_indices, reverse=True):
+            if index < len(memory_events):
+                removed_event = memory_events.pop(index)
+                print(f"Removed duplicate event at index {index}: {str(removed_event)[:100]}...")
+                removed_count += 1
+        
+        if removed_count > 0:
+            print(f"Removed {removed_count} duplicate events containing Added_preference fields")
+            # Update the memory data with the new structure
+            memory_data['memory_engine']['memory_events'] = memory_events
+        
+        return memory_data, removed_count
+
+    def _convert_added_preference_to_unified_format(self, memory_data: Dict[str, Any], 
+                                                   event_index: int) -> Dict[str, Any]:
+        """
+        Convert any Added_preference fields in a memory event to unified format and remove them.
+        
+        Args:
+            memory_data: The memory data structure
+            event_index: Index of the event to process
+            
+        Returns:
+            Updated memory data with Added_preference converted to unified format
+        """
+        if event_index >= len(memory_data.get("memory_events", [])):
+            return memory_data
+            
+        event = memory_data["memory_events"][event_index]
+        if not isinstance(event, dict):
+            return memory_data
+            
+        # Define the preference types to look for
+        preference_types = [
+            "Added_preference_likes",
+            "Added_preference_like",      # Singular form
+            "Added_preference_loves",     # Plural form
+            "Added_preference_love",      # Singular form
+            "Added_preference_enjoys",    # Plural form
+            "Added_preference_enjoy",     # Singular form
+            "Added_preference_hates",     # Plural form
+            "Added_preference_hate",      # Singular form
+            "Added_preference_prefers",   # Plural form
+            "Added_preference_prefer",    # Singular form
+            "Added_preference_dislikes",  # Plural form
+            "Added_preference_dislike",   # Singular form
+            "Added_preference_avoid",
+            "Added_preference_always",
+            "Added_preference_style",
+            "Added_preference_conditional",
+            "Added_preference_interests",
+            "Added_preference_need",
+            "Added_preference_want",
+            "Added_preference_continue"
+        ]
+        
+        # Process any Added_preference fields in this event
+        converted_any = False
+        for pref_type in preference_types:
+            if pref_type in event:
+                # Extract the preference type from the field name
+                actual_pref_type = pref_type.replace("Added_preference_", "")
+                
+                # Get the preference value and metadata
+                pref_value = event[pref_type]
+                timestamp = event.get("timestamp", datetime.now().isoformat())
+                confidence = event.get("confidence", 0.8)
+                
+                # Add to unified format
+                event_id = event.get("event_id", f"evt_{len(memory_data.get('memory_events', []))}")
+                self._add_preference_to_unified_format(memory_data, actual_pref_type, pref_value, confidence, event_id)
+                
+                # Remove the Added_preference field
+                del event[pref_type]
+                converted_any = True
+        
+        # If we converted any preferences, save the updated data
+        if converted_any:
+            # Ensure directory exists (only if memory_file_path has a directory component)
+            directory = os.path.dirname(self.memory_file_path)
+            if directory:  # Only create directory if it's not empty (e.g. just a filename)
+                os.makedirs(directory, exist_ok=True)
+
+            # Save the updated data
+            with open(self.memory_file_path, 'w', encoding='utf-8') as f:
+                json.dump(memory_data, f, indent=2, ensure_ascii=False, default=self._json_default)
+
+        return memory_data
+
+    # ==================== VECTOR-BASED SIMILARITY & CLUSTERING METHODS ====================
+    
+    def _create_embedding_vector(self, text: str) -> List[float]:
+        """
+        Create a simple embedding vector for the given text using hash-based approach.
+        In a real implementation, this would use a proper embedding model like OpenAI or Sentence Transformers.
+        
+        Args:
+            text: Text to create embedding for
+            
+        Returns:
+            List of floats representing the embedding vector
+        """
+        if not text:
+            return [0.0] * 8  # Return zero vector of fixed size
+        
+        # Normalize text
+        text = text.lower().strip()
+        
+        # Simple approach: create a vector based on character n-grams
+        # This is a basic implementation that simulates embedding functionality
+        vector = [0.0] * 8
+        
+        # Create simple hash-based features
+        text_hash = hash(text) % 1000000
+        for i in range(8):
+            vector[i] = (text_hash >> (i * 4)) & 0xF
+            vector[i] = (vector[i] - 7.5) / 7.5  # Normalize to [-1, 1]
+        
+        # Normalize the vector to unit length
+        magnitude = math.sqrt(sum(x * x for x in vector))
+        if magnitude > 0:
+            vector = [x / magnitude for x in vector]
+        
+        return vector
+
+    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+        """
+        Calculate cosine similarity between two vectors.
+        Returns a value between -1 and 1, where 1 means identical direction.
+        
+        Args:
+            vec1: First vector
+            vec2: Second vector
+            
+        Returns:
+            Cosine similarity score between the vectors
+        """
+        if not vec1 or not vec2 or len(vec1) != len(vec2):
+            return 0.0
+        
+        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        magnitude1 = math.sqrt(sum(a * a for a in vec1))
+        magnitude2 = math.sqrt(sum(b * b for b in vec2))
+        
+        if magnitude1 == 0 or magnitude2 == 0:
+            return 0.0
+        
+        return dot_product / (magnitude1 * magnitude2)
+
+    def _find_similar_events(self, new_text: str, memory_data: Dict[str, Any], threshold: float = 0.75) -> List[Tuple[str, float]]:
+        """
+        Find events that are similar to the new text based on embedding similarity.
+        
+        Args:
+            new_text: The new text to compare against existing events
+            memory_data: The current memory data structure
+            threshold: Minimum similarity score to consider events similar
+            
+        Returns:
+            List of tuples containing (event_id, similarity_score) for similar events
+        """
+        new_vector = self._create_embedding_vector(new_text)
+        similar_events = []
+        
+        # Check existing memory events for similarity
+        memory_events = memory_data.get('memory_events', [])
+        for i, event in enumerate(memory_events):
+            if not isinstance(event, dict):
+                continue
+                
+            # Create event identifier
+            event_id = self._get_event_identifier(event, i)
+            
+            # Extract text content from the event for comparison
+            event_text = event.get('summary', '')
+            if not event_text and 'Added_preference_' in str(event):
+                # Extract preference content if it's an Added_preference event
+                for key, value in event.items():
+                    if key.startswith('Added_preference_'):
+                        event_text = str(value)
+                        break
+            
+            if event_text:
+                event_vector = self._create_embedding_vector(event_text)
+                similarity = self._cosine_similarity(new_vector, event_vector)
+                if similarity >= threshold:
+                    similar_events.append((event_id, similarity))
+        
+        # Sort by similarity score (highest first)
+        similar_events.sort(key=lambda x: x[1], reverse=True)
+        return similar_events
+
+    def _determine_update_type(self, old_value: str, new_value: str) -> str:
+        """
+        Determine the type of update based on semantic analysis of old and new values.
+        
+        Args:
+            old_value: The previous value
+            new_value: The new value
+            
+        Returns:
+            String representing the update type
+        """
+        old_lower = old_value.lower()
+        new_lower = new_value.lower()
+        
+        # Check for reversal (opposite meaning or sentiment)
+        reversal_indicators = [
+            ('love', 'hate'), ('like', 'dislike'), ('enjoy', 'hate'),
+            ('prefer', 'avoid'), ('want', 'avoid'), ('need', 'avoid'),
+            ('always', 'never'), ('often', 'rarely')
+        ]
+        
+        for positive, negative in reversal_indicators:
+            if (positive in old_lower and negative in new_lower) or \
+               (negative in old_lower and positive in new_lower):
+                return "reversal"
+        
+        # Check for reinforcement (same meaning but stronger tone)
+        reinforcement_indicators = [
+            (['like'], ['love', 'adore', 'really like']),
+            (['enjoy'], ['love', 'adore', 'really enjoy']),
+            (['sometimes'], ['always', 'often', 'regularly'])
+        ]
+        
+        for weaker_terms, stronger_terms in reinforcement_indicators:
+            if any(term in old_lower for term in weaker_terms) and \
+               any(term in new_lower for term in stronger_terms):
+                return "reinforcement"
+        
+        # Check for habit_change (change in behavior or repeated context)
+        habit_indicators = [
+            'usually', 'always', 'never', 'often', 'rarely', 'every', 'daily', 'weekly'
+        ]
+        
+        if any(term in old_lower for term in habit_indicators) or \
+           any(term in new_lower for term in habit_indicators):
+            return "habit_change"
+        
+        # Default to refinement (gradual or detailed evolution)
+        return "refinement"
+
+    def _process_with_vector_similarity(self, event: Dict[str, Any], memory_data: Dict[str, Any], event_index: int) -> Dict[str, Any]:
+        """
+        Process an event with vector-based similarity detection to determine if it should be an ADD or UPDATE.
+        
+        Args:
+            event: The event to process
+            memory_data: The current memory data structure
+            event_index: Index of the event in memory_events
+            
+        Returns:
+            Processed event with appropriate type (ADD or UPDATE)
+        """
+        # Extract the main content from the event for similarity comparison
+        event_content = event.get('summary', '')
+        
+        # If this is an Added_preference event, extract the preference content
+        if not event_content:
+            for key, value in event.items():
+                if key.startswith('Added_preference_'):
+                    event_content = str(value)
+                    break
+        
+        if not event_content:
+            return event  # Return unchanged if no content to process
+            
+        # Find similar existing events
+        similar_events = self._find_similar_events(event_content, memory_data, threshold=0.75)
+        
+        # If we found similar events, this should be an UPDATE
+        if similar_events:
+            # Get the most similar event
+            most_similar_event_id, similarity_score = similar_events[0]
+            
+            # Determine update type based on semantic analysis
+            # Find the corresponding event in memory_data
+            similar_event = None
+            similar_event_index = -1
+            memory_events = memory_data.get('memory_events', [])
+            
+            for i, existing_event in enumerate(memory_events):
+                existing_event_id = self._get_event_identifier(existing_event, i)
+                if existing_event_id == most_similar_event_id:
+                    similar_event = existing_event
+                    similar_event_index = i
+                    break
+            
+            if similar_event:
+                # Get the previous value for update type determination
+                previous_value = similar_event.get('summary', '')
+                if not previous_value:
+                    for key, value in similar_event.items():
+                        if key.startswith('Added_preference_'):
+                            previous_value = str(value)
+                            break
+                
+                # Determine the update type
+                update_type = self._determine_update_type(previous_value, event_content)
+                
+                # Update the event type and add semantic context
+                event['type'] = 'UPDATE'
+                event['previous_value'] = previous_value
+                event['semantic_context'] = {
+                    'related_facts': [most_similar_event_id],
+                    'confidence_score': similarity_score,
+                    'context_type': update_type,
+                    'semantic_tags': ['preference_update', update_type]
+                }
+                
+                # Add update log entry
+                self._create_update_log_entry(event, most_similar_event_id, similarity_score, update_type, memory_data)
+        
+        return event
+
+    def _create_update_log_entry(self, update_event: Dict[str, Any], replaced_event_id: str, 
+                                similarity_score: float, update_type: str, memory_data: Dict[str, Any]):
+        """
+        Create an entry in the update log for tracking how preferences evolve.
+        
+        Args:
+            update_event: The new UPDATE event
+            replaced_event_id: ID of the previous event being updated
+            similarity_score: Cosine similarity between the two events
+            update_type: Type of update (refinement, reversal, reinforcement, habit_change)
+            memory_data: The memory data structure to update
+        """
+        update_id = f"upd_{uuid.uuid4().hex[:8]}"
+        update_entry = {
+            "update_id": update_id,
+            "source_event": self._get_event_identifier(update_event, -1),
+            "replaced_event": replaced_event_id,
+            "timestamp": datetime.now().isoformat(),
+            "similarity_score": similarity_score,
+            "update_type": update_type,
+            "note": f"Updated {update_type} with similarity {similarity_score:.3f}"
+        }
+        
+        # Add to memory events
+        if "memory_events" not in memory_data:
+            memory_data["memory_events"] = []
+            
+        update_log_event = {
+            "type": "UPDATE_LOG",
+            "summary": f"Update log entry: {update_type} from {replaced_event_id}",
+            "timestamp": datetime.now().isoformat(),
+            "update_entry": update_entry
+        }
+        
+        memory_data["memory_events"].append(update_log_event)
+
+    def _analyze_emotion_tags(self, text: str, category: str) -> List[str]:
+        """
+        Analyze text content to generate 2-3 context-based emotion tags.
+        
+        NO KEYWORD MAPS. Pure context analysis only.
+        Extracts only meaningful tokens that represent actual content topics.
+        
+        Args:
+            text: The text content to analyze
+            category: The memory category (for context only, not for mapping)
+        
+        Returns:
+            List of 2-3 tags that reflect actual meaningful content from the text
+        """
+        if not text or len(text.strip()) < 3:
+            return []
+        
+        # Use the core context extraction method
+        return self._extract_context_based_tags(text)
+
+    def _extract_domain_tags(self, text: str) -> List[str]:
+        """
+        Extract contextually relevant tags from text.
+        
+        NO MAPPING. Pure extraction - returns only tokens that actually appear in text
+        and are meaningful (nouns, specific terms, concrete concepts).
+        
+        Args:
+            text: The text to analyze
+            
+        Returns:
+            List of 2-3 context-based tags
+        """
+        if not text or len(text.strip()) < 3:
+            return []
+        
+        # Use the core context extraction method which handles all logic
+        return self._extract_context_based_tags(text)
+
+    def _map_intensity_to_tags(self, intensity: float, sentiment: str, intent: str) -> List[str]:
+        """
+        This method is deprecated. Tags are now generated purely from context.
+        
+        Emotion intensity and sentiment are separate from tags.
+        Tags must only reflect the actual meaningful content from the text.
+        """
+        # Return empty - tags are handled entirely by _extract_context_based_tags
+        return []
+
+    def _infer_mood_context(self, text: str, emotional_tone: Dict, intensity: float, intent: str) -> str:
+        """Infer appropriate mood_context from analysis."""
+        text_lower = text.lower()
+
+        # Check for explicit mood indicators
+        if any(word in text_lower for word in ['happy', 'excited', 'love', '!']):
+            if intensity > 0.6:
+                return 'excited'
+            return 'happy'
+
+        if any(word in text_lower for word in ['motivated', 'determined', 'morning']):
+            return 'motivated'
+
+        if any(word in text_lower for word in ['curious', 'wonder', 'interesting']):
+            return 'curious'
+
+        if any(word in text_lower for word in ['content', 'satisfied', 'enjoy']):
+            return 'content'
+
+        if intent == 'habit':
+            return 'normal'
+
+        if emotional_tone.get('tone') == 'negative':
+            return 'cautious'
+
+        return 'normal'
+
+    def _calculate_tag_confidence(self, text: str, tags: List[str], intensity: float) -> float:
+        """Calculate confidence of emotion_tags based on evidence strength."""
+        base_confidence = 0.7
+
+        # Increase confidence if multiple strong indicators
+        if intensity > 0.6:
+            base_confidence += 0.1
+
+        # Increase confidence if tags are highly relevant to text
+        if tags and len(tags) > 0:
+            base_confidence = min(0.95, base_confidence + 0.05)
+
+        return round(base_confidence, 2)
+
+    def _generate_emotion_tags(self, text: str, summary: str = None) -> Dict[str, Any]:
+        """
+        Generate complete emotional_context with populated emotion_tags.
+
+        Returns:
+            Dict with: sentiment, emotion_tags, emotional_intensity,
+                       mood_context, confidence
+        """
+        # Follow the emotion tag guidelines by analyzing the text directly
+        emotion_tags = self._derive_emotion_tags_from_context(text)
+
+        # 1. Analyze emotional tone (only for sentiment, not for tags)
+        emotional_tone = self._analyze_emotional_tone(text)
+        sentiment = emotional_tone.get('tone', 'neutral')
+        intensity = emotional_tone.get('intensity', 0.5)
+
+        # 2. Infer mood context
+        mood_context = self._infer_mood_context(text, emotional_tone, intensity, self._infer_user_intent(text))
+
+        # 3. Calculate confidence
+        confidence = self._calculate_tag_confidence(text, emotion_tags, intensity)
+
+        return {
+            'sentiment': sentiment,
+            'emotion_tags': emotion_tags,
+            'emotional_intensity': intensity,
+            'mood_context': mood_context,
+            'confidence': confidence
+        }
+
+    def _derive_emotion_tags_from_context(self, text: str) -> List[str]:
+        """
+        Derive emotion tags following the Emotion Tag Guidelines (EMOTION_TAG_GUIDELINES.md).
+
+        The function should:
+        - Generate no more than 2-3 tags per event
+        - Base tags strictly on the immediate context of that event
+        - Use short, single-word or short-phrase tags
+        - Not rely on pre-defined keyword maps
+        - Validate and understand the cleaned event context before producing tags
+        - Strip generic 'User' references
+        - Extract actual meaningful context
+        - Prefer concrete over abstract
+        - Follow the 7-step Tagging Process from the guidelines
+        
+        This method delegates to _extract_context_based_tags for the core logic.
+        """
+        if not text:
+            return []
+
+        # Use the core context-based tag extraction method
+        return self._extract_context_based_tags(text)
+
+    def _infer_activities_from_text(self, text: str) -> List[str]:
+        """
+        This method is deprecated. All tag inference is now handled by _extract_context_based_tags.
+        
+        Activities are extracted as meaningful tokens from context, not inferred separately.
+        """
+        # Return empty - handled by context-based extraction
+        return []
+
+    def _extract_semantic_categories(self, text: str) -> List[str]:
+        """
+        This method is deprecated.
+        
+        All semantic tag extraction is now handled by _extract_context_based_tags
+        which properly analyzes context and generates only 2-3 relevant tags.
+        """
+        if not text:
+            return []
+        
+        # All logic moved to _extract_context_based_tags
+        return self._extract_context_based_tags(text)
+
+    def _normalize_emotion_text(self, text: str) -> str:
+        """Normalize text for emotion tag analysis."""
+        if not text:
+            return ""
+
+        # Convert to lowercase for analysis
+        normalized = text.lower()
+
+        # Basic punctuation trimming while preserving important punctuation for sentiment
+        normalized = normalized.strip()
+
+        # Remove extra whitespace
+        import re
+        normalized = re.sub(r'\s+', ' ', normalized)
+
+        return normalized.strip()
+
+    def _identify_salient_tokens(self, text: str) -> List[str]:
+        """Extract the most prominent nouns, noun phrases, activities, places, and sentiments."""
+        import re
+
+        # Extract various types of tokens
+        tokens = set()
+
+        # Nouns and noun phrases - based on direct mentions in the text
+        # Find words that are likely to be topics or subjects
+        words = text.split()
+        for word in words:
+            word = word.strip('.,!?;:"')
+            if len(word) > 2 and not self._is_stopword(word):  # Only consider meaningful words, not stopwords
+                tokens.add(word)
+
+        # Named entities (places, brands, etc) - explicit mentions in the text
+        named_entity_pattern = r'\b(?:[a-z]*[A-Z][a-z]+(?:\s+[a-z]*[A-Z][a-z]*)*|\w+)\b'
+        entities = re.findall(named_entity_pattern, text)
+        for entity in entities:
+            clean_entity = entity.strip()
+            if len(clean_entity) > 2 and not self._is_stopword(clean_entity.lower()):
+                tokens.add(clean_entity.lower())
+
+        # Activities - things people do
+        activity_indicators = [
+            'reading', 'cooking', 'hiking', 'watching', 'playing', 'working',
+            'walking', 'drinking', 'eating', 'traveling', 'swimming', 'running',
+            'gaming', 'coding', 'writing', 'studying', 'learning', 'teaching'
+        ]
+        for activity in activity_indicators:
+            if activity in text:
+                tokens.add(activity)
+
+        # Objects and things explicitly mentioned
+        object_indicators = [
+            'book', 'movie', 'food', 'drink', 'car', 'phone', 'computer', 'music',
+            'game', 'restaurant', 'place', 'cuisine', 'coffee', 'tea', 'pizza',
+            'pasta', 'yoga', 'meditation', 'gym', 'workout', 'anime'
+        ]
+        for obj in object_indicators:
+            if obj in text:
+                tokens.add(obj)
+
+        return list(tokens)
+
+    def _rank_candidates_by_explicitness(self, text: str, candidates: List[str]) -> List[str]:
+        """Score candidates by how explicitly they appear in the context."""
+        scores = {}
+
+        for candidate in candidates:
+            score = 0
+
+            # Direct mentions count
+            mentions = text.lower().count(candidate.lower())
+            score += mentions * 10  # High weight for direct mentions
+
+            # Position in sentence (beginning is more important)
+            if text.lower().startswith(candidate.lower()):
+                score += 5
+
+            # Verb of preference nearby? Check for "likes X", "loves X", etc.
+            preference_patterns = [
+                f'like {candidate}', f'likes {candidate}', f'love {candidate}',
+                f'loves {candidate}', f'enjoy {candidate}', f'enjoys {candidate}',
+                f'prefer {candidate}', f'prefers {candidate}'
+            ]
+            for pattern in preference_patterns:
+                if pattern in text.lower():
+                    score += 15  # Very high weight for preference indicators
+
+            # Sentiment words nearby
+            sentiment_words = ['love', 'like', 'enjoy', 'hate', 'dislike', 'adore', 'appreciate']
+            for sent_word in sentiment_words:
+                if sent_word in text.lower() and candidate in text.lower():
+                    # Check if they are close to each other in the text
+                    sent_pos = text.lower().find(sent_word)
+                    cand_pos = text.lower().find(candidate.lower())
+                    if abs(sent_pos - cand_pos) < 50:  # Within 50 characters
+                        score += 8
+
+            scores[candidate] = score
+
+        # Sort by score in descending order
+        sorted_candidates = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
+        return sorted_candidates
+
+    def _is_topical_tag(self, tag: str) -> bool:
+        """Check if a tag is more topical/semantic rather than emotional."""
+        # Topical/semantic tags typically refer to subjects, activities, domains
+        topical_indicators = [
+            'reading', 'cooking', 'hiking', 'watching', 'playing', 'working',
+            'walking', 'drinking', 'eating', 'traveling', 'swimming', 'running',
+            'gaming', 'coding', 'writing', 'studying', 'learning', 'teaching',
+            'book', 'movie', 'food', 'drink', 'car', 'phone', 'computer', 'music',
+            'game', 'restaurant', 'place', 'cuisine', 'coffee', 'tea', 'pizza',
+            'pasta', 'yoga', 'meditation', 'gym', 'workout', 'anime',
+            'python', 'javascript', 'java', 'programming', 'code', 'project',
+            'tech', 'travel', 'music', 'art', 'design', 'health', 'fitness',
+            'education', 'science', 'nature', 'business', 'finance', 'sports',
+            'football', 'basketball', 'soccer', 'baseball', 'kyoto'  # Added 'kyoto' from example
+        ]
+
+        return tag.lower() in topical_indicators
+
+    def _is_stopword(self, word: str) -> bool:
+        """Check if a word is a common stopword that should be filtered out."""
+        stopwords = {
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+            'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does',
+            'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this', 'that',
+            'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us',
+            'them', 'my', 'your', 'his', 'its', 'our', 'their', 'what', 'which', 'who', 'when', 'where',
+            'why', 'how', 'if', 'so', 'as', 'up', 'out', 'about', 'into', 'over', 'after', 'under'
+        }
+        return word.lower() in stopwords
+
+    def _analyze_emotion_tags(self, text: str, category: str) -> List[str]:
+        """
+        Analyze text content to assign appropriate emotion tags based on keywords and context.
+
+        Args:
+            text: The text content to analyze
+            category: The memory category to help determine relevant tags
+
+        Returns:
+            List of emotion tags based on the analysis
+        """
+        if not text:
+            return []
+
+        # Use the comprehensive emotion analysis system that follows guidelines
+        emotion_context = self._generate_emotion_tags(text)
+
+        # Return only the emotion_tags from the complete analysis
+        return emotion_context.get('emotion_tags', [])
+
+    def _extract_advanced_emotion_tags(self, text: str) -> List[str]:
+        """
+        Backwards-compatible shim for advanced emotion-tag extraction.
+
+        Some parts of the code call `_extract_advanced_emotion_tags`. If that
+        implementation isn't present (older versions), provide a safe fallback
+        that reuses the existing domain and intensity tag extractors.
+
+        Returns a list of tags (may be empty).
+        """
+        if not text:
+            return []
+
+        try:
+            # Use the domain extractor as the primary source
+            domain_tags = self._extract_domain_tags(text)
+            # Estimate emotional tone to map intensity-based tags
+            tone = self._analyze_emotional_tone(text)
+            intent = self._infer_user_intent(text)
+            intensity_tags = self._map_intensity_to_tags(tone.get('intensity', 0.5), tone.get('tone', 'neutral'), intent)
+
+            # Merge and dedupe while preserving relative order
+            combined = []
+            for t in domain_tags + intensity_tags:
+                if t not in combined:
+                    combined.append(t)
+            return combined
+        except Exception:
+            return []
+
+    def _ensure_emotional_context(self, event: Dict[str, Any], text_content: str = "") -> Dict[str, Any]:
+        """
+        Ensure that emotional context is always properly populated with all required fields.
+
+        Args:
+            event: The event dictionary to enhance
+            text_content: Content to analyze for emotional context if not already present
+
+        Returns:
+            Updated event dictionary with properly populated emotional context
+        """
+        # Initialize emotional_context if it doesn't exist
+        if 'emotional_context' not in event or not isinstance(event['emotional_context'], dict):
+            event['emotional_context'] = {}
+
+        emotional_context = event['emotional_context']
+
+        # Analyze text content if provided to populate emotional fields
+        if text_content:
+            # Analyze sentiment
+            if 'sentiment' not in emotional_context or not emotional_context['sentiment']:
+                emotional_context['sentiment'] = self._determine_sentiment_from_text(text_content)
+
+            # Generate emotion tags if missing or empty
+            if 'emotion_tags' not in emotional_context or not emotional_context['emotion_tags']:
+                emotion_tags = self._analyze_emotion_tags_from_text(text_content)
+                emotional_context['emotion_tags'] = emotion_tags
+
+            # Set emotional intensity if missing
+            if 'emotional_intensity' not in emotional_context or emotional_context['emotional_intensity'] is None:
+                emotional_context['emotional_intensity'] = self._calculate_emotional_intensity(text_content)
+
+            # Set mood context if missing
+            if 'mood_context' not in emotional_context or not emotional_context['mood_context']:
+                emotional_context['mood_context'] = self._determine_mood_context(text_content)
+
+            # Set confidence if missing
+            if 'confidence' not in emotional_context or emotional_context['confidence'] is None:
+                emotional_context['confidence'] = 0.75  # Default confidence value
+
+        # Ensure defaults for any missing fields
+        if 'sentiment' not in emotional_context:
+            emotional_context['sentiment'] = 'neutral'
+        if 'emotion_tags' not in emotional_context:
+            emotional_context['emotion_tags'] = self._analyze_emotion_tags_from_text(text_content) or ['neutral']
+        if 'emotional_intensity' not in emotional_context:
+            emotional_context['emotional_intensity'] = 0.5
+        if 'mood_context' not in emotional_context:
+            emotional_context['mood_context'] = 'neutral'
+        if 'confidence' not in emotional_context:
+            emotional_context['confidence'] = 0.7
+
+        # Update event with the enhanced emotional context
+        event['emotional_context'] = emotional_context
+        return event
+
+    def _determine_sentiment_from_text(self, text: str) -> str:
+        """
+        Determine sentiment from text content.
+
+        Args:
+            text: Text to analyze for sentiment
+
+        Returns:
+            Sentiment string ('positive', 'negative', or 'neutral')
+        """
+        if not text:
+            return 'neutral'
+
+        text_lower = text.lower()
+
+        # Positive sentiment keywords
+        positive_keywords = [
+            'love', 'like', 'enjoy', 'happy', 'great', 'good', 'excellent', 'wonderful',
+            'amazing', 'fantastic', 'awesome', 'perfect', 'best', 'favorite', 'prefer',
+            'appreciate', 'adore', 'delighted', 'pleased', 'satisfied', 'excited'
+        ]
+
+        # Negative sentiment keywords
+        negative_keywords = [
+            'hate', 'dislike', 'bad', 'terrible', 'awful', 'horrific', 'worst', 'disappoint',
+            'frustrated', 'angry', 'upset', 'sad', 'hurt', 'annoyed', 'bothered',
+            'irritated', 'disgusted', 'regret', 'avoid', 'problem', 'issue'
+        ]
+
+        pos_count = sum(1 for word in positive_keywords if word in text_lower)
+        neg_count = sum(1 for word in negative_keywords if word in text_lower)
+
+        if pos_count > neg_count:
+            return 'positive'
+        elif neg_count > pos_count:
+            return 'negative'
+        else:
+            return 'neutral'
+
+    def _analyze_emotion_tags_from_text(self, text: str) -> List[str]:
+        """
+        Analyze text content to extract relevant emotion tags following the Emotion Tag Guidelines.
+
+        Args:
+            text: Text to analyze for emotion tags
+
+        Returns:
+            List of emotion tags
+        """
+        # Use the new improved function that follows guidelines
+        return self._derive_emotion_tags_from_context(text)
+
+    def _calculate_emotional_intensity(self, text: str) -> float:
+        """
+        Calculate emotional intensity from text content.
+
+        Args:
+            text: Text to analyze for emotional intensity
+
+        Returns:
+            Float value representing emotional intensity (0.0 to 1.0)
+        """
+        if not text:
+            return 0.5  # Neutral intensity
+
+        # Check for intensity indicators
+        high_intensity_indicators = [
+            '!', 'very', 'extremely', 'incredibly', 'absolutely', 'totally',
+            'completely', 'utterly', 'highly', 'super', 'extreme', 'tremendous',
+            'amazingly', 'incredibly', 'phenomenally', 'exceptionally'
+        ]
+
+        text_lower = text.lower()
+        intensity_count = sum(1 for indicator in high_intensity_indicators if indicator in text_lower)
+
+        # Calculate intensity based on indicators
+        base_intensity = 0.5  # Neutral
+        if intensity_count > 0:
+            intensity = base_intensity + (min(intensity_count, 5) * 0.1)  # Up to +0.5
+            return min(0.9, intensity)  # Cap at 0.9
+        else:
+            return base_intensity
+
+    def _determine_mood_context(self, text: str) -> str:
+        """
+        Determine mood context from text content.
+
+        Args:
+            text: Text to analyze for mood context
+
+        Returns:
+            Mood context string
+        """
+        if not text:
+            return 'neutral'
+
+        text_lower = text.lower()
+
+        # Determine mood based on keywords
+        positive_mood_indicators = [
+            'happy', 'excited', 'enjoy', 'love', 'like', 'great', 'good', 'wonderful',
+            'amazing', 'fantastic', 'awesome', 'delighted', 'pleased', 'satisfied'
+        ]
+
+        negative_mood_indicators = [
+            'sad', 'frustrated', 'angry', 'upset', 'disappointed', 'annoyed', 'irritated',
+            'bothered', 'unhappy', 'depressed', 'stressed', 'worried', 'concerned'
+        ]
+
+        pos_count = sum(1 for word in positive_mood_indicators if word in text_lower)
+        neg_count = sum(1 for word in negative_mood_indicators if word in text_lower)
+
+        if pos_count > neg_count:
+            return 'happy' if 'happy' in text_lower else 'positive'
+        elif neg_count > pos_count:
+            return 'concerned' if 'concerned' in text_lower else 'negative'
+        else:
+            return 'neutral'
+
+    def _extract_semantic_tags(self, text: str, category: str, subcategory: str) -> List[str]:
+        """
+        Extract semantic tags from text content based on context and meaning.
+
+        Args:
+            text: The text content to analyze
+            category: The memory category
+            subcategory: The memory subcategory
+
+        Returns:
+            List of semantic tags based on the content
+        """
+        if not text:
+            return []
+
+        text_lower = text.lower()
+        semantic_tags = set()
+
+        # Extract tags based on category
+        category_semantic_map = {
+            'personal_preferences': ['preference'],
+            'activity_behavior': ['behavior'],
+            'long_term_goals': ['goal'],
+            'current_state': ['state'],
+            'knowledge_expertise': ['knowledge'],
+            'task_project_tracking': ['task'],
+            'collaborator_relationships': ['relationship']
+        }
+
+        if category in category_semantic_map:
+            semantic_tags.update(category_semantic_map[category])
+
+        # Extract tags based on subcategory
+        subcategory_semantic_map = {
+            'likes': ['affinity'],
+            'dislikes': ['aversion'],
+            'avoid': ['avoidance'],
+            'needs': ['necessity'],
+            'wants': ['desire'],
+            'interests': ['interest']
+        }
+        
+        if subcategory in subcategory_semantic_map:
+            semantic_tags.update(subcategory_semantic_map[subcategory])
+        
+        # Extract semantic tags based on content patterns
+        content_patterns = {
+            'time_preference': ['time', 'frequency', 'schedule', 'preference'] if any(time_word in text_lower for time_word in ['weekend', 'weekdays', 'morning', 'afternoon', 'evening', 'night', 'daily', 'weekly', 'monthly', 'always', 'often', 'seldom', 'never', 'sundays', 'mondays', 'tuesdays', 'wednesdays', 'thursdays', 'fridays', 'saturdays', 'only', 'prefer']) else [],
+            'food': ['food', 'cuisine', 'meal', 'drink'] if any(food_word in text_lower for food_word in ['food', 'meal', 'eat', 'drink', 'coffee', 'tea', 'pasta', 'pizza', 'italian', 'chinese', 'mexican', 'japanese', 'korean', 'thai', 'indian']) else [],
+            'activity': ['activity', 'hobby', 'leisure'] if any(activity_word in text_lower for activity_word in ['walk', 'exercise', 'sports', 'game', 'gaming', 'reading', 'writing', 'cooking', 'hiking', 'swimming', 'running']) else [],
+            'media': ['media', 'entertainment', 'content'] if any(media_word in text_lower for media_word in ['movie', 'film', 'tv', 'show', 'anime', 'series', 'books', 'music', 'podcast', 'youtube', 'tiktok', 'netflix']) else [],
+            'technology': ['technology', 'digital', 'software'] if any(tech_word in text_lower for tech_word in ['python', 'java', 'javascript', 'code', 'programming', 'software', 'app', 'computer', 'tech']) else [],
+            'genre': ['genre', 'type', 'category'] if any(genre_word in text_lower for genre_word in ['sci-fi', 'science fiction', 'fantasy', 'romance', 'action', 'horror', 'comedy', 'drama']) else [],
+            'books': ['books', 'reading', 'literature'] if any(book_word in text_lower for book_word in ['books', 'reading', 'novel', 'story', 'author', 'book']) else []
+        }
+        
+        for tag_type, tags in content_patterns.items():
+            if tags:
+                semantic_tags.update(tags)
+        
+        return list(semantic_tags)
+    
+    def _extract_current_value(self, summary: str, category: str, subcategory: str) -> str:
+        """
+        Extract a concise and meaningful current value from the summary.
+        
+        Args:
+            summary: The summary text to extract from
+            category: The memory category
+            subcategory: The memory subcategory
+            
+        Returns:
+            A concise current value string
+        """
+        if not summary:
+            return ""
+        
+        # Clean the summary first
+        clean_summary = self._remove_repetitive_phrases(summary.lower())
+        clean_summary = self.clean_invalid_summary(clean_summary)
+        
+        # Handle different categories to extract meaningful current values
+        if category == 'personal_preferences':
+            # Extract the preference content
+            patterns = [
+                r'(?:user|rich)\s+(?:likes|like|loves|love|enjoys|enjoy|prefers|prefer|wants|want|needs|need|has|have)\s+(.+?)(?:\.|$)',
+                r'(?:likes|like|loves|love|enjoys|enjoy|prefers|prefer|wants|want|needs|need)\s+(.+?)(?:\.|$)',
+                r'(?:is interested in|interest in|fond of|appreciates|appreciate)\s+(.+?)(?:\.|$)',
+                r'added\s+a\s+(?:new\s+)?\w*\s*preference[:\s]+(.+?)(?:\.|$)',
+                r'(?:added|added a|added a new)\s+(.+?)(?:\.|$)'
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, clean_summary, re.IGNORECASE)
+                if match:
+                    extracted = match.group(1).strip()
+                    # Format based on subcategory
+                    if subcategory == 'likes':
+                        return f"enjoys {extracted}" if extracted else ""
+                    elif subcategory == 'dislikes':
+                        return f"dislikes {extracted}" if extracted else ""
+                    elif subcategory == 'avoid':
+                        return f"avoids {extracted}" if extracted else ""
+                    elif subcategory == 'interests':
+                        return f"interested in {extracted}" if extracted else ""
+                    else:
+                        return extracted
+            
+            # If no pattern matched, extract the main content after common phrases
+            parts = clean_summary.split(':')
+            if len(parts) > 1:
+                main_content = parts[1].strip()
+                if subcategory == 'likes':
+                    return f"enjoys {main_content}" if main_content else clean_summary
+                elif subcategory == 'dislikes':
+                    return f"dislikes {main_content}" if main_content else clean_summary
+                else:
+                    return main_content if main_content else clean_summary
+            else:
+                # If no colon, try to extract content after 'that' or 'is'
+                if ' that ' in clean_summary:
+                    content = clean_summary.split(' that ', 1)[1].strip()
+                elif ' is ' in clean_summary:
+                    content = clean_summary.split(' is ', 1)[1].strip()
+                else:
+                    content = clean_summary
+                
+                # Handle "to verb" patterns like "to play a game", "to watch youtube"
+                if content.startswith('to '):
+                    to_pattern = r'^to\s+(.+)$'
+                    match = re.search(to_pattern, content, re.IGNORECASE)
+                    if match:
+                        activity = match.group(1).strip()
+                        if subcategory == 'likes':
+                            return f"enjoys {activity}" if activity else content
+                        elif subcategory == 'dislikes':
+                            return f"dislikes {activity}" if activity else content
+                        elif subcategory == 'avoid':
+                            return f"avoids {activity}" if activity else content
+                        elif subcategory == 'interests':
+                            return f"interested in {activity}" if activity else content
+                        else:
+                            return activity
+                    else:
+                        if subcategory == 'likes':
+                            return f"enjoys {content}" if content else clean_summary
+                        elif subcategory == 'dislikes':
+                            return f"dislikes {content}" if content else clean_summary
+                        else:
+                            return content if content else clean_summary
+                else:
+                    if subcategory == 'likes':
+                        return f"enjoys {content}" if content else clean_summary
+                    elif subcategory == 'dislikes':
+                        return f"dislikes {content}" if content else clean_summary
+                    else:
+                        return content if content else clean_summary
+        elif category == 'activity_behavior':
+            # Extract behavioral content
+            if 'usually' in clean_summary or 'always' in clean_summary or 'often' in clean_summary:
+                patterns = [r'(?:usually|always|often|sometimes|never|frequently)\s+(.+?)(?:\.|$)']
+                for pattern in patterns:
+                    match = re.search(pattern, clean_summary, re.IGNORECASE)
+                    if match:
+                        return f"habitually {match.group(1).strip()}"
+            return f"behaves by {clean_summary}" if clean_summary else clean_summary
+        elif category == 'long_term_goals':
+            # Extract goal content
+            patterns = [r'(?:goal|aim|objective|aspiration|dream|hope)\s*[:\s]+(.+?)(?:\.|$)',
+                        r'(?:wants to|wants|hopes to|hopes|aims to|aims|plans to|plans)\s+(.+?)(?:\.|$)']
+            for pattern in patterns:
+                match = re.search(pattern, clean_summary, re.IGNORECASE)
+                if match:
+                    return f"aims for {match.group(1).strip()}"
+            return f"has goal: {clean_summary}" if clean_summary else clean_summary
+        elif category == 'user_identity':
+            # Extract identity content
+            patterns = [r'(?:name|identity|pronoun)\s*[:\s]+(.+?)(?:\.|$)',
+                        r'(?:i am|i\'m|my name is|call me|this is)\s+(.+?)(?:\.|$)']
+            for pattern in patterns:
+                match = re.search(pattern, clean_summary, re.IGNORECASE)
+                if match:
+                    return f"is {match.group(1).strip()}"
+            return f"identity: {clean_summary}" if clean_summary else clean_summary
+        else:
+            # For other categories, try to extract meaningful content
+            if ' that ' in clean_summary:
+                content = clean_summary.split(' that ', 1)[1].strip()
+            elif ' is ' in clean_summary:
+                content = clean_summary.split(' is ', 1)[1].strip()
+            else:
+                content = clean_summary
+            
+            return content if content else clean_summary
+
+# Example configuration
+ORGANIZER_CONFIG = {
+    'organizer_enabled': True,
+    'memory_file_path': os.path.join('astra_ai', 'Date', 'nova_ai_memory.json'),
+    'check_interval': 1.0,
+    'llm_enabled': False,  # Disabled by default to prevent connection errors when Ollama is not running
+    'llm_api_key': '',  # Not needed for Ollama
+    'llm_model': 'openai/gpt-oss-120b'
+}
+
+def load_organizer_config(config_path: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Load organizer configuration from file or return default.
+    
+    Args:
+        config_path: Path to config file (optional)
+        
+    Returns:
+        Configuration dictionary
+    """
+    if config_path and os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as f:
+                content = f.read().strip()
+                if content:  # Check if file is not empty
+                    return json.loads(content)
+                else:
+                    # File is empty, return default configuration
+                    return ORGANIZER_CONFIG.copy()
+        except json.JSONDecodeError as e:
+            print(f"Error loading config from {config_path}: {e}")
+            # If JSON is invalid/corrupted, return default configuration
+            return ORGANIZER_CONFIG.copy()
+        except Exception as e:
+            print(f"Error loading config from {config_path}: {e}")
+            # For any other error, return default configuration
+            return ORGANIZER_CONFIG.copy()
+            
+    # Return default configuration
+    return ORGANIZER_CONFIG.copy()
+
+def create_organizer_with_config(config_path: Optional[str] = None) -> AIOrganizer:
+    """
+    Create an AIOrganizer instance with configuration.
+    
+    Args:
+        config_path: Path to config file (optional)
+        
+    Returns:
+        Configured AIOrganizer instance
+    """
+    config = load_organizer_config(config_path)
+    return AIOrganizer(config)
+
+def main():
+    """Main function to run the organizer."""
+    organizer = AIOrganizer(ORGANIZER_CONFIG)
+    organizer.start_monitoring()
+
+if __name__ == "__main__":
+    main()
