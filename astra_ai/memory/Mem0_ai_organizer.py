@@ -746,6 +746,7 @@ class AIOrganizer:
 
         # Step 3: Identify salient tokens/phrases (concrete things, not meta-categories)
         salient_tokens = self._extract_salient_tokens(cleaned_text)
+        
 
         # Step 4: Rank candidate cues by explicitness and concreteness
         ranked_candidates = self._rank_candidate_tags(salient_tokens)
