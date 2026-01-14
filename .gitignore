@@ -54,6 +54,16 @@ transcriptions/
 New folder/
 New folder/*
 
+# Large backup files and memory data
+Date/backups/*.json
+*.db
+nova_memory_db/
+*.bin
+
+# Node modules cache
+node_modules/.cache/
+*.pack
+
 # OS-specific
 .DS_Store
 Thumbs.db
