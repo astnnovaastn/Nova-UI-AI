@@ -1,0 +1,1211 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": null,
+    "created_at": "2025-11-07T22:25:57.258224",
+    "status": "active",
+    "total_sessions": 0,
+    "last_seen": null,
+    "relationship_established": false
+  },
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2025-11-07T22:25:57.258262",
+      "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+    },
+    "memory_events": [
+      {
+        "event_id": "evt_1b9afe1c",
+        "type": "UPDATE",
+        "summary": "User now prefers prefer",
+        "timestamp": "2025-11-07T22:27:29.474592",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.9
+        },
+        "semantic_context": {
+          "related_facts": [
+            "evt_60cd963b"
+          ],
+          "confidence_score": 0.8088179779426016,
+          "context_type": "refinement",
+          "semantic_tags": [
+            "likes"
+          ],
+          "similarity_hash": "4ac43701"
+        },
+        "importance_score": 0.6,
+        "confidence": 0.9,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": "to play video games during the weekend",
+        "current_value": "prefer",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-07T22:27:29.474592",
+          "original_summary": "User likes to play video games during the weekend",
+          "context": "User: prefer",
+          "source_conversation_timestamp": "2025-11-07T22:27:29.474592",
+          "cleanup_operation": "merged_similarities"
+        }
+      },
+      {
+        "event_id": "evt_887d1cb4",
+        "type": "ADD",
+        "summary": "User current_state unknown",
+        "timestamp": "2025-11-07T22:27:29.433312Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": "Inferred from input: 'unknown'",
+        "importance_score": 0.6,
+        "confidence": 0.85,
+        "category": "current_state",
+        "subcategory": "current_state",
+        "previous_value": null,
+        "current_value": "unknown",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-07T22:27:29.433312Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "unknown",
+            "event_index": 1
+          },
+          "source_conversation_timestamp": "2025-11-07T22:27:29.433312Z"
+        },
+        "Added_preference": "unknown"
+      },
+      {
+        "type": "ADD",
+        "summary": "User is interested in watching anime on sundays.",
+        "timestamp": "2025-11-07T22:27:29.448725",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.6,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "general",
+          "semantic_tags": [],
+          "similarity_hash": "12ffdaeb"
+        },
+        "importance_score": 0.5,
+        "confidence": 0.8,
+        "category": null,
+        "subcategory": null,
+        "relationships": [],
+        "session_id": null,
+        "privacy_level": "normal",
+        "previous_value": null,
+        "current_value": null
+      },
+      {
+        "type": "UPDATE_LOG",
+        "summary": "Update log entry: refinement from evt_60cd963b to {'event_id': 'evt_1b9afe1c', 'type': 'UPDATE', 'summary': 'User now prefers prefer', 'timestamp': '2025-11-07T22:27:29.474592', 'emotional_context': {'sentiment': 'neutral', 'emotion_tags': [], 'emotional_intensity': 0.5, 'mood_context': 'normal', 'confidence': 0.9}, 'semantic_context': {'related_facts': ['evt_60cd963b'], 'confidence_score': 0.8088179779426016, 'context_type': 'refinement', 'semantic_tags': ['likes'], 'similarity_hash': '4ac43701'}, 'importance_score': 0.6, 'confidence': 0.9, 'category': 'personal_preferences', 'subcategory': 'likes', 'previous_value': 'to play video games during the weekend', 'current_value': 'prefer', 'provenance': {'enhanced_in_place': True, 'enhanced_at': '2025-11-07T22:27:29.474592', 'original_summary': 'User likes to play video games during the weekend', 'context': 'User: prefer', 'source_conversation_timestamp': '2025-11-07T22:27:29.474592', 'cleanup_operation': 'merged_similarities'}}",
+        "timestamp": "2025-11-07T22:27:29.474702",
+        "update_entry": {
+          "update_id": "upd_65d4ab92",
+          "source_event": {
+            "event_id": "evt_1b9afe1c",
+            "type": "UPDATE",
+            "summary": "User now prefers prefer",
+            "timestamp": "2025-11-07T22:27:29.474592",
+            "emotional_context": {
+              "sentiment": "neutral",
+              "emotion_tags": [],
+              "emotional_intensity": 0.5,
+              "mood_context": "normal",
+              "confidence": 0.9
+            },
+            "semantic_context": {
+              "related_facts": [
+                "evt_60cd963b"
+              ],
+              "confidence_score": 0.8088179779426016,
+              "context_type": "refinement",
+              "semantic_tags": [
+                "likes"
+              ],
+              "similarity_hash": "4ac43701"
+            },
+            "importance_score": 0.6,
+            "confidence": 0.9,
+            "category": "personal_preferences",
+            "subcategory": "likes",
+            "previous_value": "to play video games during the weekend",
+            "current_value": "prefer",
+            "provenance": {
+              "enhanced_in_place": true,
+              "enhanced_at": "2025-11-07T22:27:29.474592",
+              "original_summary": "User likes to play video games during the weekend",
+              "context": "User: prefer",
+              "source_conversation_timestamp": "2025-11-07T22:27:29.474592",
+              "cleanup_operation": "merged_similarities"
+            }
+          },
+          "replaced_event": "evt_60cd963b",
+          "timestamp": "2025-11-07T22:27:29.474670",
+          "similarity_score": 0.8088179779426016,
+          "update_type": "refinement"
+        }
+      },
+      {
+        "type": "UPDATE",
+        "summary": "Updated personal_preferences.likes: to play video games during the weekend → ",
+        "timestamp": "2025-11-07T22:27:29.470530",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.6,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": null,
+        "importance_score": 0.5,
+        "confidence": 0.9,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "relationships": [],
+        "session_id": null,
+        "privacy_level": "normal",
+        "previous_value": "to play video games during the weekend",
+        "current_value": ""
+      },
+      {
+        "event_id": "evt_a86ad971",
+        "type": "UPDATE",
+        "summary": "User now prefers prefer",
+        "timestamp": "2025-11-07T22:29:47.227598",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.9
+        },
+        "semantic_context": {
+          "related_facts": [
+            "evt_dd244ebf"
+          ],
+          "confidence_score": 0.8629409583559434,
+          "context_type": "refinement",
+          "semantic_tags": [
+            "likes"
+          ],
+          "similarity_hash": "4ac43701"
+        },
+        "importance_score": 0.6,
+        "confidence": 0.9,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": "to play video games during the weekend",
+        "current_value": "prefer",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-07T22:29:47.227598",
+          "original_summary": "Updated personal_preferences.likes: to play video games during the weekend",
+          "context": "User: prefer",
+          "source_conversation_timestamp": "2025-11-07T22:29:47.227598",
+          "cleanup_operation": "merged_similarities"
+        }
+      },
+      {
+        "event_id": "evt_feb43816",
+        "type": "ADD",
+        "summary": "User current_state unknown",
+        "timestamp": "2025-11-07T22:28:37.748426Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": "Inferred from input: 'unknown'",
+        "importance_score": 0.6,
+        "confidence": 0.85,
+        "category": "current_state",
+        "subcategory": "current_state",
+        "previous_value": null,
+        "current_value": "unknown",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-07T22:28:37.748426Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "unknown",
+            "event_index": 6
+          },
+          "source_conversation_timestamp": "2025-11-07T22:28:37.748426Z"
+        },
+        "Added_preference": "unknown"
+      },
+      {
+        "type": "ADD",
+        "summary": "User is interested in watching anime on sundays.",
+        "timestamp": "2025-11-07T22:28:37.765371",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.6,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "general",
+          "semantic_tags": [],
+          "similarity_hash": "12ffdaeb"
+        },
+        "importance_score": 0.5,
+        "confidence": 0.8,
+        "category": null,
+        "subcategory": null,
+        "relationships": [],
+        "session_id": null,
+        "privacy_level": "normal",
+        "previous_value": null,
+        "current_value": null
+      },
+      {
+        "event_id": "evt_8a04d9e6",
+        "type": "ADD",
+        "summary": "User likes prefer",
+        "timestamp": "2025-11-07T22:28:37.788299",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'prefer'",
+        "importance_score": 0.6,
+        "confidence": 0.8,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "prefer",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-07T22:28:37.788299",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: prefer",
+            "event_index": 8
+          },
+          "source_conversation_timestamp": "2025-11-07T22:28:37.788299"
+        }
+      },
+      {
+        "event_id": "evt_b664abe0",
+        "type": "ADD",
+        "summary": "User current_state unknown",
+        "timestamp": "2025-11-07T22:28:37.788429Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": "Inferred from input: 'unknown'",
+        "importance_score": 0.6,
+        "confidence": 0.85,
+        "category": "current_state",
+        "subcategory": "current_state",
+        "previous_value": null,
+        "current_value": "unknown",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-07T22:28:37.788429Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "unknown",
+            "event_index": 9
+          },
+          "source_conversation_timestamp": "2025-11-07T22:28:37.788429Z"
+        },
+        "Added_preference": "unknown"
+      },
+      {
+        "type": "UPDATE_LOG",
+        "summary": "Update log entry: refinement from evt_9e62854f to {'event_id': 'evt_dd244ebf', 'type': 'UPDATE', 'summary': 'Updated personal_preferences.likes: to play video games during the weekend', 'timestamp': '2025-11-07T22:29:47.197960', 'emotional_context': {'sentiment': 'neutral', 'emotion_tags': [], 'emotional_intensity': 0.5, 'mood_context': 'normal', 'confidence': 0.9}, 'semantic_context': {'related_facts': ['evt_9e62854f'], 'confidence_score': 0.7963330593811956, 'context_type': 'refinement', 'semantic_tags': ['likes'], 'similarity_hash': '81cafb9a'}, 'importance_score': 0.6, 'confidence': 0.9, 'category': 'personal_preferences', 'subcategory': 'likes', 'previous_value': 'to play video games during the weekend', 'current_value': 'to play video games during the weekend', 'provenance': {'enhanced_in_place': True, 'enhanced_at': '2025-11-07T22:29:47.197960', 'original_summary': 'User likes to play video games during the weekend', 'context': 'User: to play video games during the weekend', 'source_conversation_timestamp': '2025-11-07T22:29:47.197960', 'cleanup_operation': 'merged_similarities'}}",
+        "timestamp": "2025-11-07T22:29:47.198064",
+        "update_entry": {
+          "update_id": "upd_60bb48e6",
+          "source_event": {
+            "event_id": "evt_dd244ebf",
+            "type": "UPDATE",
+            "summary": "Updated personal_preferences.likes: to play video games during the weekend",
+            "timestamp": "2025-11-07T22:29:47.197960",
+            "emotional_context": {
+              "sentiment": "neutral",
+              "emotion_tags": [],
+              "emotional_intensity": 0.5,
+              "mood_context": "normal",
+              "confidence": 0.9
+            },
+            "semantic_context": {
+              "related_facts": [
+                "evt_9e62854f"
+              ],
+              "confidence_score": 0.7963330593811956,
+              "context_type": "refinement",
+              "semantic_tags": [
+                "likes"
+              ],
+              "similarity_hash": "81cafb9a"
+            },
+            "importance_score": 0.6,
+            "confidence": 0.9,
+            "category": "personal_preferences",
+            "subcategory": "likes",
+            "previous_value": "to play video games during the weekend",
+            "current_value": "to play video games during the weekend",
+            "provenance": {
+              "enhanced_in_place": true,
+              "enhanced_at": "2025-11-07T22:29:47.197960",
+              "original_summary": "User likes to play video games during the weekend",
+              "context": "User: to play video games during the weekend",
+              "source_conversation_timestamp": "2025-11-07T22:29:47.197960",
+              "cleanup_operation": "merged_similarities"
+            }
+          },
+          "replaced_event": "evt_9e62854f",
+          "timestamp": "2025-11-07T22:29:47.198036",
+          "similarity_score": 0.7963330593811956,
+          "update_type": "refinement"
+        }
+      },
+      {
+        "type": "UPDATE",
+        "summary": "Updated personal_preferences.likes: to play video games during the weekend → ",
+        "timestamp": "2025-11-07T22:29:47.189103",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.6,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": null,
+        "importance_score": 0.5,
+        "confidence": 0.9,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "relationships": [],
+        "session_id": null,
+        "privacy_level": "normal",
+        "previous_value": "to play video games during the weekend",
+        "current_value": ""
+      },
+      {
+        "type": "ADD",
+        "summary": "User is interested in watching anime on sundays.",
+        "timestamp": "2025-11-07T22:29:47.206613",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.6,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "general",
+          "semantic_tags": [],
+          "similarity_hash": "12ffdaeb"
+        },
+        "importance_score": 0.5,
+        "confidence": 0.8,
+        "category": null,
+        "subcategory": null,
+        "relationships": [],
+        "session_id": null,
+        "privacy_level": "normal",
+        "previous_value": null,
+        "current_value": null
+      },
+      {
+        "type": "UPDATE_LOG",
+        "summary": "Update log entry: refinement from evt_dd244ebf to {'event_id': 'evt_a86ad971', 'type': 'UPDATE', 'summary': 'User now prefers prefer', 'timestamp': '2025-11-07T22:29:47.227598', 'emotional_context': {'sentiment': 'neutral', 'emotion_tags': [], 'emotional_intensity': 0.5, 'mood_context': 'normal', 'confidence': 0.9}, 'semantic_context': {'related_facts': ['evt_dd244ebf'], 'confidence_score': 0.8629409583559434, 'context_type': 'refinement', 'semantic_tags': ['likes'], 'similarity_hash': '4ac43701'}, 'importance_score': 0.6, 'confidence': 0.9, 'category': 'personal_preferences', 'subcategory': 'likes', 'previous_value': 'to play video games during the weekend', 'current_value': 'prefer', 'provenance': {'enhanced_in_place': True, 'enhanced_at': '2025-11-07T22:29:47.227598', 'original_summary': 'Updated personal_preferences.likes: to play video games during the weekend', 'context': 'User: prefer', 'source_conversation_timestamp': '2025-11-07T22:29:47.227598', 'cleanup_operation': 'merged_similarities'}}",
+        "timestamp": "2025-11-07T22:29:47.227654",
+        "update_entry": {
+          "update_id": "upd_b3829b99",
+          "source_event": {
+            "event_id": "evt_a86ad971",
+            "type": "UPDATE",
+            "summary": "User now prefers prefer",
+            "timestamp": "2025-11-07T22:29:47.227598",
+            "emotional_context": {
+              "sentiment": "neutral",
+              "emotion_tags": [],
+              "emotional_intensity": 0.5,
+              "mood_context": "normal",
+              "confidence": 0.9
+            },
+            "semantic_context": {
+              "related_facts": [
+                "evt_dd244ebf"
+              ],
+              "confidence_score": 0.8629409583559434,
+              "context_type": "refinement",
+              "semantic_tags": [
+                "likes"
+              ],
+              "similarity_hash": "4ac43701"
+            },
+            "importance_score": 0.6,
+            "confidence": 0.9,
+            "category": "personal_preferences",
+            "subcategory": "likes",
+            "previous_value": "to play video games during the weekend",
+            "current_value": "prefer",
+            "provenance": {
+              "enhanced_in_place": true,
+              "enhanced_at": "2025-11-07T22:29:47.227598",
+              "original_summary": "Updated personal_preferences.likes: to play video games during the weekend",
+              "context": "User: prefer",
+              "source_conversation_timestamp": "2025-11-07T22:29:47.227598",
+              "cleanup_operation": "merged_similarities"
+            }
+          },
+          "replaced_event": "evt_dd244ebf",
+          "timestamp": "2025-11-07T22:29:47.227636",
+          "similarity_score": 0.8629409583559434,
+          "update_type": "refinement"
+        }
+      },
+      {
+        "type": "UPDATE",
+        "summary": "Updated personal_preferences.likes: to play video games during the weekend → ",
+        "timestamp": "2025-11-07T22:29:47.224663",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.6,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": null,
+        "importance_score": 0.5,
+        "confidence": 0.9,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "relationships": [],
+        "session_id": null,
+        "privacy_level": "normal",
+        "previous_value": "to play video games during the weekend",
+        "current_value": ""
+      },
+      {
+        "event_id": "evt_34d941d8",
+        "type": "ADD",
+        "summary": "User likes to play video games during the weekend",
+        "timestamp": "2025-11-07T22:31:22.217054",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'to play video games during the weekend'",
+        "importance_score": 0.6,
+        "confidence": 0.8,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "to play video games during the weekend",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-07T22:31:22.217054",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: to play video games during the weekend",
+            "event_index": 15
+          },
+          "source_conversation_timestamp": "2025-11-07T22:31:22.217054"
+        }
+      },
+      {
+        "event_id": "evt_7085bda2",
+        "type": "ADD",
+        "summary": "User current_state unknown",
+        "timestamp": "2025-11-07T22:31:22.217204Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": "Inferred from input: 'unknown'",
+        "importance_score": 0.6,
+        "confidence": 0.85,
+        "category": "current_state",
+        "subcategory": "current_state",
+        "previous_value": null,
+        "current_value": "unknown",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-07T22:31:22.217204Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "unknown",
+            "event_index": 16
+          },
+          "source_conversation_timestamp": "2025-11-07T22:31:22.217204Z"
+        },
+        "Added_preference": "unknown"
+      },
+      {
+        "type": "ADD",
+        "summary": "User is interested in watching anime on sundays.",
+        "timestamp": "2025-11-07T22:31:22.236194",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.6,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.8,
+          "context_type": "general",
+          "semantic_tags": [],
+          "similarity_hash": "12ffdaeb"
+        },
+        "importance_score": 0.5,
+        "confidence": 0.8,
+        "category": null,
+        "subcategory": null,
+        "relationships": [],
+        "session_id": null,
+        "privacy_level": "normal",
+        "previous_value": null,
+        "current_value": null
+      },
+      {
+        "event_id": "evt_5a44d9cc",
+        "type": "ADD",
+        "summary": "User likes prefer",
+        "timestamp": "2025-11-07T22:31:22.266511",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'prefer'",
+        "importance_score": 0.6,
+        "confidence": 0.8,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "prefer",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-07T22:31:22.266511",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: prefer",
+            "event_index": 18
+          },
+          "source_conversation_timestamp": "2025-11-07T22:31:22.266511"
+        }
+      },
+      {
+        "event_id": "evt_131728ae",
+        "type": "ADD",
+        "summary": "User current_state unknown",
+        "timestamp": "2025-11-07T22:31:22.266679Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": "Inferred from input: 'unknown'",
+        "importance_score": 0.6,
+        "confidence": 0.85,
+        "category": "current_state",
+        "subcategory": "current_state",
+        "previous_value": null,
+        "current_value": "unknown",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-11-07T22:31:22.266679Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "unknown",
+            "event_index": 19
+          },
+          "source_conversation_timestamp": "2025-11-07T22:31:22.266679Z"
+        },
+        "Added_preference": "unknown"
+      }
+    ],
+    "vector_index": {
+      "evt_60cd963b": [
+        0.28221626051507914,
+        0.3762883473534389,
+        0.28221626051507914,
+        0.4703604341917986,
+        0.3762883473534389,
+        0.5644325210301583,
+        0.09407208683835973,
+        0.09407208683835973
+      ],
+      "evt_1b9afe1c": [
+        0.4853626716970755,
+        0.41602514716892186,
+        0.4853626716970755,
+        0.0,
+        0.4853626716970755,
+        0.34668762264076824,
+        0.0,
+        0.0
+      ],
+      "evt_9e62854f": [
+        0.15617376188860607,
+        0.39043440472151514,
+        0.5466081666101211,
+        0.46852128566581813,
+        0.15617376188860607,
+        0.46852128566581813,
+        0.23426064283290907,
+        0.07808688094430304
+      ],
+      "evt_8a04d9e6": [
+        0.2,
+        0.6,
+        0.2,
+        0.2,
+        0.4,
+        0.0,
+        0.6,
+        0.0
+      ],
+      "evt_dd244ebf": [
+        0.09805806756909201,
+        0.686406472983644,
+        0.39223227027636803,
+        0.588348405414552,
+        0.09805806756909201,
+        0.0,
+        0.0,
+        0.09805806756909201
+      ],
+      "evt_a86ad971": [
+        0.09166984970282113,
+        0.6416889479197478,
+        0.18333969940564226,
+        0.5500190982169267,
+        0.18333969940564226,
+        0.36667939881128453,
+        0.27500954910846337,
+        0.0
+      ],
+      "evt_34d941d8": [
+        0.2062842492517587,
+        0.6188527477552761,
+        0.0,
+        0.2062842492517587,
+        0.7219948723811553,
+        0.0,
+        0.0,
+        0.10314212462587935
+      ],
+      "evt_5a44d9cc": [
+        0.1386750490563073,
+        0.0,
+        0.2773500981126146,
+        0.6933752452815364,
+        0.4160251471689218,
+        0.2773500981126146,
+        0.4160251471689218,
+        0.0
+      ]
+    },
+    "clusters": {
+      "cluster_f2ff49df": {
+        "topic": "personal_preferences_evt_60cd",
+        "centroid_vector": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "event_ids": [
+          "evt_60cd963b"
+        ],
+        "coherence_score": 1.0,
+        "last_updated": "2025-11-07T22:27:29.433142",
+        "metadata": {
+          "dominant_tags": [
+            "personal"
+          ],
+          "cluster_type": "personal"
+        },
+        "semantic_context": {
+          "primary_topic": "personal_preferences",
+          "related_concepts": [
+            "likes"
+          ],
+          "confidence_score": 0.8,
+          "context_type": "new_fact"
+        }
+      },
+      "cluster_99fa1030": {
+        "topic": "current_state_evt_887d",
+        "centroid_vector": [
+          0.4195906791483446,
+          0.4195906791483446,
+          0.5035088149780135,
+          0.0,
+          0.3356725433186757,
+          0.5035088149780135,
+          0.16783627165933784,
+          0.0
+        ],
+        "event_ids": [
+          "evt_887d1cb4",
+          "evt_1b9afe1c"
+        ],
+        "coherence_score": 1.0,
+        "last_updated": "2025-11-07T22:27:29.474734",
+        "metadata": {
+          "dominant_tags": [
+            "current"
+          ],
+          "cluster_type": "current"
+        }
+      },
+      "cluster_3ea1f0ed": {
+        "topic": "current_state_evt_feb4",
+        "centroid_vector": [
+          0.43133109281375365,
+          0.43133109281375365,
+          0.0,
+          0.6469966392206304,
+          0.3234983196103152,
+          0.0,
+          0.3234983196103152,
+          0.0
+        ],
+        "event_ids": [
+          "evt_feb43816",
+          "evt_8a04d9e6"
+        ],
+        "coherence_score": 1.0,
+        "last_updated": "2025-11-07T22:28:37.788352",
+        "metadata": {
+          "dominant_tags": [
+            "current"
+          ],
+          "cluster_type": "current"
+        }
+      },
+      "cluster_02200e7b": {
+        "topic": "current_state_evt_b664",
+        "centroid_vector": [
+          0.43133109281375365,
+          0.43133109281375365,
+          0.0,
+          0.6469966392206304,
+          0.3234983196103152,
+          0.0,
+          0.3234983196103152,
+          0.0
+        ],
+        "event_ids": [
+          "evt_b664abe0"
+        ],
+        "coherence_score": 1.0,
+        "last_updated": "2025-11-07T22:28:37.788478",
+        "metadata": {
+          "dominant_tags": [
+            "current"
+          ],
+          "cluster_type": "current"
+        }
+      },
+      "cluster_93de83a2": {
+        "topic": "current_state_evt_7085",
+        "centroid_vector": [
+          0.0,
+          0.7683498199278324,
+          0.5488212999484517,
+          0.2195285199793807,
+          0.0,
+          0.2195285199793807,
+          0.10976425998969035,
+          0.0
+        ],
+        "event_ids": [
+          "evt_7085bda2"
+        ],
+        "coherence_score": 1.0,
+        "last_updated": "2025-11-07T22:31:22.217261",
+        "metadata": {
+          "dominant_tags": [
+            "current"
+          ],
+          "cluster_type": "current"
+        }
+      },
+      "cluster_f82f51c6": {
+        "topic": "current_state_evt_1317",
+        "centroid_vector": [
+          0.0,
+          0.7683498199278324,
+          0.5488212999484517,
+          0.2195285199793807,
+          0.0,
+          0.2195285199793807,
+          0.10976425998969035,
+          0.0
+        ],
+        "event_ids": [
+          "evt_131728ae"
+        ],
+        "coherence_score": 1.0,
+        "last_updated": "2025-11-07T22:31:22.266734",
+        "metadata": {
+          "dominant_tags": [
+            "current"
+          ],
+          "cluster_type": "current"
+        }
+      }
+    },
+    "update_log": []
+  },
+  "conversation": [
+    {
+      "role": "user",
+      "content": "I like to play video games during the weekend",
+      "timestamp": "2025-11-07T22:25:57.258709",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "That sounds like fun!",
+      "timestamp": "2025-11-07T22:25:57.258709",
+      "session_id": null
+    },
+    {
+      "role": "user",
+      "content": "I like to play video games during the weekend",
+      "timestamp": "2025-11-07T22:27:29.419722",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "That sounds like fun!",
+      "timestamp": "2025-11-07T22:27:29.419722",
+      "session_id": null
+    },
+    {
+      "role": "user",
+      "content": "I enjoy watching anime on Sundays",
+      "timestamp": "2025-11-07T22:27:29.448725",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "Anime is great!",
+      "timestamp": "2025-11-07T22:27:29.448725",
+      "session_id": null
+    },
+    {
+      "role": "user",
+      "content": "Actually, I prefer watching anime only on Saturdays",
+      "timestamp": "2025-11-07T22:27:29.470530",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "Got it, Saturday it is!",
+      "timestamp": "2025-11-07T22:27:29.470530",
+      "session_id": null
+    },
+    {
+      "role": "user",
+      "content": "I like to play video games during the weekend",
+      "timestamp": "2025-11-07T22:28:37.739900",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "That sounds like fun!",
+      "timestamp": "2025-11-07T22:28:37.739900",
+      "session_id": null
+    },
+    {
+      "role": "user",
+      "content": "I enjoy watching anime on Sundays",
+      "timestamp": "2025-11-07T22:28:37.765371",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "Anime is great!",
+      "timestamp": "2025-11-07T22:28:37.765371",
+      "session_id": null
+    },
+    {
+      "role": "user",
+      "content": "Actually, I prefer watching anime only on Saturdays",
+      "timestamp": "2025-11-07T22:28:37.785462",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "Got it, Saturday it is!",
+      "timestamp": "2025-11-07T22:28:37.785462",
+      "session_id": null
+    },
+    {
+      "role": "user",
+      "content": "I like to play video games during the weekend",
+      "timestamp": "2025-11-07T22:29:47.189103",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "That sounds like fun!",
+      "timestamp": "2025-11-07T22:29:47.189103",
+      "session_id": null
+    },
+    {
+      "role": "user",
+      "content": "I enjoy watching anime on Sundays",
+      "timestamp": "2025-11-07T22:29:47.206613",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "Anime is great!",
+      "timestamp": "2025-11-07T22:29:47.206613",
+      "session_id": null
+    },
+    {
+      "role": "user",
+      "content": "Actually, I prefer watching anime only on Saturdays",
+      "timestamp": "2025-11-07T22:29:47.224663",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "Got it, Saturday it is!",
+      "timestamp": "2025-11-07T22:29:47.224663",
+      "session_id": null
+    },
+    {
+      "role": "user",
+      "content": "I like to play video games during the weekend",
+      "timestamp": "2025-11-07T22:31:22.206743",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "That sounds like fun!",
+      "timestamp": "2025-11-07T22:31:22.206743",
+      "session_id": null
+    },
+    {
+      "role": "user",
+      "content": "I enjoy watching anime on Sundays",
+      "timestamp": "2025-11-07T22:31:22.236194",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "Anime is great!",
+      "timestamp": "2025-11-07T22:31:22.236194",
+      "session_id": null
+    },
+    {
+      "role": "user",
+      "content": "Actually, I prefer watching anime only on Saturdays",
+      "timestamp": "2025-11-07T22:31:22.262084",
+      "session_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "Got it, Saturday it is!",
+      "timestamp": "2025-11-07T22:31:22.262084",
+      "session_id": null
+    }
+  ],
+  "fact_history": {
+    "evt_887d1cb4": {
+      "item": "unknown",
+      "added": "2025-11-07",
+      "score": 0.85
+    },
+    "evt_1b9afe1c": {
+      "item": "prefer",
+      "added": "2025-11-07",
+      "updated": "2025-11-07",
+      "score": 0.9
+    },
+    "evt_8a04d9e6": {
+      "item": "prefer",
+      "added": "2025-11-07",
+      "score": 0.8
+    },
+    "evt_34d941d8": {
+      "item": "to play video games during the weekend",
+      "added": "2025-11-07",
+      "score": 0.8
+    },
+    "personal_preferences": {
+      "likes": [],
+      "dislikes": [],
+      "avoid": [],
+      "always": [],
+      "style": [],
+      "conditional": [],
+      "interests": [],
+      "love": [],
+      "hate": [],
+      "enjoy": [],
+      "need": [],
+      "want": [],
+      "continue": []
+    },
+    "evt_a86ad971": {
+      "item": "prefer",
+      "added": "2025-11-07",
+      "updated": "2025-11-07",
+      "score": 0.9
+    },
+    "evt_feb43816": {
+      "item": "unknown",
+      "added": "2025-11-07",
+      "score": 0.85
+    },
+    "evt_b664abe0": {
+      "item": "unknown",
+      "added": "2025-11-07",
+      "score": 0.85
+    },
+    "evt_7085bda2": {
+      "item": "unknown",
+      "added": "2025-11-07",
+      "score": 0.85
+    },
+    "evt_5a44d9cc": {
+      "item": "prefer",
+      "added": "2025-11-07",
+      "score": 0.8
+    },
+    "evt_131728ae": {
+      "item": "unknown",
+      "added": "2025-11-07",
+      "score": 0.85
+    },
+    "update_log_ec3b9097": {
+      "item": "Update log entry: refinement from evt_60cd963b to {'event_id': 'evt_1b9afe1c', 'type': 'UPDATE', 'summary': 'User now prefers prefer', 'timestamp': '2025-11-07T22:27:29.474592', 'emotional_context': {'sentiment': 'neutral', 'emotion_tags': [], 'emotional_intensity': 0.5, 'mood_context': 'normal', 'confidence': 0.9}, 'semantic_context': {'related_facts': ['evt_60cd963b'], 'confidence_score': 0.8088179779426016, 'context_type': 'refinement', 'semantic_tags': ['likes'], 'similarity_hash': '4ac43701'}, 'importance_score': 0.6, 'confidence': 0.9, 'category': 'personal_preferences', 'subcategory': 'likes', 'previous_value': 'to play video games during the weekend', 'current_value': 'prefer', 'provenance': {'enhanced_in_place': True, 'enhanced_at': '2025-11-07T22:27:29.474592', 'original_summary': 'User likes to play video games during the weekend', 'context': 'User: prefer', 'source_conversation_timestamp': '2025-11-07T22:27:29.474592', 'cleanup_operation': 'merged_similarities'}}",
+      "added": "2025-11-07",
+      "score": 1.0
+    },
+    "update_log_62d1205c": {
+      "item": "Update log entry: refinement from evt_9e62854f to {'event_id': 'evt_dd244ebf', 'type': 'UPDATE', 'summary': 'Updated personal_preferences.likes: to play video games during the weekend', 'timestamp': '2025-11-07T22:29:47.197960', 'emotional_context': {'sentiment': 'neutral', 'emotion_tags': [], 'emotional_intensity': 0.5, 'mood_context': 'normal', 'confidence': 0.9}, 'semantic_context': {'related_facts': ['evt_9e62854f'], 'confidence_score': 0.7963330593811956, 'context_type': 'refinement', 'semantic_tags': ['likes'], 'similarity_hash': '81cafb9a'}, 'importance_score': 0.6, 'confidence': 0.9, 'category': 'personal_preferences', 'subcategory': 'likes', 'previous_value': 'to play video games during the weekend', 'current_value': 'to play video games during the weekend', 'provenance': {'enhanced_in_place': True, 'enhanced_at': '2025-11-07T22:29:47.197960', 'original_summary': 'User likes to play video games during the weekend', 'context': 'User: to play video games during the weekend', 'source_conversation_timestamp': '2025-11-07T22:29:47.197960', 'cleanup_operation': 'merged_similarities'}}",
+      "added": "2025-11-07",
+      "score": 1.0
+    },
+    "update_log_0d087995": {
+      "item": "Update log entry: refinement from evt_dd244ebf to {'event_id': 'evt_a86ad971', 'type': 'UPDATE', 'summary': 'User now prefers prefer', 'timestamp': '2025-11-07T22:29:47.227598', 'emotional_context': {'sentiment': 'neutral', 'emotion_tags': [], 'emotional_intensity': 0.5, 'mood_context': 'normal', 'confidence': 0.9}, 'semantic_context': {'related_facts': ['evt_dd244ebf'], 'confidence_score': 0.8629409583559434, 'context_type': 'refinement', 'semantic_tags': ['likes'], 'similarity_hash': '4ac43701'}, 'importance_score': 0.6, 'confidence': 0.9, 'category': 'personal_preferences', 'subcategory': 'likes', 'previous_value': 'to play video games during the weekend', 'current_value': 'prefer', 'provenance': {'enhanced_in_place': True, 'enhanced_at': '2025-11-07T22:29:47.227598', 'original_summary': 'Updated personal_preferences.likes: to play video games during the weekend', 'context': 'User: prefer', 'source_conversation_timestamp': '2025-11-07T22:29:47.227598', 'cleanup_operation': 'merged_similarities'}}",
+      "added": "2025-11-07",
+      "score": 1.0
+    }
+  },
+  "sessions": {},
+  "current_session": null,
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": true,
+    "established_user": false
+  },
+  "memory_categories": {
+    "user_identity": {},
+    "personal_preferences": {},
+    "task_project_tracking": {},
+    "activity_behavior": {},
+    "user_instructions": {},
+    "current_state": {},
+    "personal_development": {},
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {},
+    "collaborator_relationships": {},
+    "data_privacy": {},
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {},
+    "meta_memory": {},
+    "temporal_patterns": {},
+    "search_external_info": {},
+    "greeting_patterns": {},
+    "conversation_analytics": {},
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+  "category_relationships": {},
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  },
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  }
+}

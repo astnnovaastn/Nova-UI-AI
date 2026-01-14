@@ -16,11 +16,21 @@ import time
 from typing import Dict, List, Any, Optional, Union
 from dotenv import load_dotenv
 
+# Import Groq client for AI-powered summarization
+try:
+    from groq_client_fix import GroqClient
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+    print("Warning: Groq client not available. Using basic summarization.")
+
 # Load environment variables from .env file
 load_dotenv()
 
-# Get API key from environment variable
+# Get API keys from environment variables
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
 if not SERPAPI_KEY:
     print("ERROR: No SerpAPI key found. Please set SERPAPI_KEY in your .env file.")
     print("You can get a free API key from https://serpapi.com/")
@@ -34,8 +44,20 @@ class NovaSearch:
         self.api_key = SERPAPI_KEY
         self.base_url = "https://serpapi.com/search"
         self.last_results = None
-        self.num_results = 5
+        self.num_results = 15  # Increased for more comprehensive information
         self.format_style = "smart"  # Smart format adapts to the query type
+        
+        # Initialize Groq client for AI-powered summarization
+        self.groq_client = None
+        if GROQ_AVAILABLE and GROQ_API_KEY:
+            try:
+                self.groq_client = GroqClient(api_key=GROQ_API_KEY)
+                print("AI-powered summarization enabled.")
+            except Exception as e:
+                print(f"Warning: Could not initialize Groq client: {e}")
+                self.groq_client = None
+        else:
+            print("Using basic text combination for summarization.")
     
     def search(self, query: str, summarize: Optional[bool] = False, target_site: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -109,8 +131,8 @@ class NovaSearch:
             return "news", params
         
         # Check for current year information requests
-        current_year = 2025
-        if re.search(r'(current|latest|newest|2025|this year)', query_lower):
+        current_year = 2026
+        if re.search(r'(current|latest|newest|2026|this year)', query_lower):
             # Add current year to search query if not already present
             if str(current_year) not in query:
                 query = f"{query} {current_year}"
@@ -328,7 +350,7 @@ class NovaSearch:
     def _generate_answer(self, results: List[Dict[str, Any]], query: str, search_type: str, summarize: Optional[bool] = None) -> str:
         """
         Generate a natural, well-written summary or full details from all search results,
-        with no links and improved detail.
+        using AI for cohesive narrative when available.
         """
         if not results:
             return f"No information found about '{query}'."
@@ -336,63 +358,190 @@ class NovaSearch:
         if results[0].get("type") == "error":
             return f"Search error: {results[0].get('message')}"
 
-        # Use knowledge graph or answer box if present
-        kg_result = next((r for r in results if r.get("type") == "knowledge_graph"), None)
-        ab_result = next((r for r in results if r.get("type") == "answer_box"), None)
-        web_results = [r for r in results if r.get("type") == "web_result"]
-        news_results = [r for r in results if r.get("type") == "news_result"]
+        # Collect all available information
+        all_info = self._collect_all_info(results)
+        
+        if not all_info.strip():
+            return f"No good information found for '{query}'."
 
-        # If user requested full details (no summary)
+        # Use AI-powered summarization if available
+        if self.groq_client:
+            try:
+                return self._generate_ai_summary(all_info, query, summarize)
+            except Exception as e:
+                print(f"AI summarization failed: {e}. Using basic method.")
+        
+        # Fallback to basic text combination
+        return self._generate_basic_summary(all_info, query, summarize)
+    
+    def _collect_all_info(self, results: List[Dict[str, Any]]) -> str:
+        """
+        Collect all available information from search results into a single text block.
+        
+        Args:
+            results: List of processed search results
+            
+        Returns:
+            Combined text from all results
+        """
+        info_parts = []
+        
+        for result in results:
+            result_type = result.get("type")
+            
+            if result_type == "knowledge_graph":
+                title = result.get("title", "")
+                description = result.get("description", "")
+                if title:
+                    info_parts.append(f"Knowledge Graph - {title}: {description}")
+                else:
+                    info_parts.append(f"Knowledge Graph: {description}")
+                
+                attributes = result.get("attributes", {})
+                for key, value in attributes.items():
+                    info_parts.append(f"{key}: {value}")
+            
+            elif result_type == "answer_box":
+                title = result.get("title", "")
+                answer = result.get("answer", "")
+                if title:
+                    info_parts.append(f"Answer Box - {title}: {answer}")
+                else:
+                    info_parts.append(f"Answer Box: {answer}")
+            
+            elif result_type in ["web_result", "news_result"]:
+                title = result.get("title", "").strip()
+                snippet = result.get("snippet", "").strip()
+                date = result.get("date", "").strip()
+                source = result.get("source", "").strip()
+                
+                if title or snippet:
+                    if result_type == "news_result" and (date or source):
+                        metadata = []
+                        if date:
+                            metadata.append(f"Date: {date}")
+                        if source:
+                            metadata.append(f"Source: {source}")
+                        metadata_str = " | ".join(metadata)
+                        info_parts.append(f"News: {title}. {snippet} ({metadata_str})")
+                    else:
+                        info_parts.append(f"Web: {title}. {snippet}")
+            
+            elif result_type == "image_result":
+                title = result.get("title", "").strip()
+                if title:
+                    info_parts.append(f"Image: {title}")
+        
+        return "\n".join(info_parts)
+    
+    def _generate_ai_summary(self, all_info: str, query: str, summarize: Optional[bool] = None) -> str:
+        """
+        Generate a cohesive, narrative summary using AI.
+        
+        Args:
+            all_info: Combined information from search results
+            query: The original search query
+            summarize: Whether to create a summary or full details
+            
+        Returns:
+            AI-generated summary
+        """
+        # Determine the type of response needed
         if summarize is False:
-            details = []
-            if kg_result:
-                details.append(f"{kg_result.get('title','')}. {kg_result.get('description','')}")
-                if kg_result.get("attributes"):
-                    for key, value in kg_result["attributes"].items():
-                        details.append(f"{key}: {value}")
-            if ab_result:
-                details.append(f"{ab_result.get('title','')}. {ab_result.get('answer', ab_result.get('snippet',''))}")
-            for r in (web_results + news_results):
-                # Only use title and snippet, skip links
-                if r.get('title','') or r.get('snippet',''):
-                    details.append(f"{r.get('title','')}. {r.get('snippet','')}")
-            # Join all details into a single, readable paragraph
-            full_info = " ".join([d for d in details if d.strip()])
-            return full_info + "\n\n_Sources: Google Search, top web results._"
+            prompt = f"""Based on the following search results about "{query}", create a comprehensive, cohesive, and well-written overview that synthesizes all the information into a single flowing narrative. Make it informative, detailed, and engaging, like a well-researched article section. Include all key facts, developments, and context from the results.
 
-        # Otherwise, summarize (default)
-        summary_parts = []
-        if kg_result:
-            summary_parts.append(kg_result.get("description", ""))
-            if kg_result.get("attributes"):
-                for key, value in kg_result["attributes"].items():
-                    summary_parts.append(f"{key}: {value}")
-        if ab_result:
-            summary_parts.append(ab_result.get("answer", ab_result.get("snippet", "")))
-        snippets = []
-        for r in (web_results + news_results):
-            snippet = r.get("snippet", "")
-            if snippet and snippet not in snippets:
-                snippets.append(snippet)
-            if len(snippets) >= 8:  # Use more snippets for richer detail
-                break
-        # Combine all into a single, detailed paragraph
-        all_text = " ".join(summary_parts + snippets)
-        if not all_text.strip():
-            return f"No good summary found for '{query}'."
-        # Remove duplicate sentences and links
-        sentences = []
-        seen = set()
-        for s in re.split(r'(?<=[.!?])\s+', all_text):
-            s_clean = s.strip()
-            # Remove anything that looks like a URL
-            s_clean = re.sub(r'https?://\S+', '', s_clean)
-            if s_clean and s_clean not in seen:
-                sentences.append(s_clean)
-                seen.add(s_clean)
-        summary = " ".join(sentences)
-        summary += "\n\n_Sources: Google Search, top web results._"
-        return summary
+Search Results:
+{all_info}
+
+Please provide a detailed synthesis that reads naturally and covers all important aspects."""
+        else:
+            prompt = f"""Based on the following search results about "{query}", create a concise but comprehensive summary that captures the most important information in a cohesive narrative.
+
+Search Results:
+{all_info}
+
+Please provide a well-written summary that flows naturally and covers the key points."""
+        
+        try:
+            response = self.groq_client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that creates comprehensive, well-written summaries from search results. Always provide informative, accurate content based on the given information."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=2000 if summarize is False else 1000,
+                temperature=0.3  # Lower temperature for more factual responses
+            )
+            
+            summary = response.choices[0].message.content.strip()
+            return summary + "\n\n_Sources: Google Search, top web results._"
+            
+        except Exception as e:
+            raise Exception(f"AI summarization failed: {e}")
+    
+    def _generate_basic_summary(self, all_info: str, query: str, summarize: Optional[bool] = None) -> str:
+        """
+        Generate a basic summary by combining and cleaning text (fallback method).
+        
+        Args:
+            all_info: Combined information from search results
+            query: The original search query
+            summarize: Whether to create a summary or full details
+            
+        Returns:
+            Basic text-based summary
+        """
+        # Split into lines and clean up
+        lines = [line.strip() for line in all_info.split('\n') if line.strip()]
+        
+        if summarize is False:
+            # For full details, combine all lines with better formatting
+            combined = []
+            for line in lines:
+                # Clean up prefixes and format
+                line = re.sub(r'^(Knowledge Graph|Answer Box|Web|News|Image)( - )?', '', line)
+                if line:
+                    combined.append(line)
+            
+            full_info = " ".join(combined)
+            
+            # Remove duplicate sentences
+            sentences = []
+            seen = set()
+            for s in re.split(r'(?<=[.!?])\s+', full_info):
+                s_clean = s.strip()
+                # Remove URLs
+                s_clean = re.sub(r'https?://\S+', '', s_clean)
+                if s_clean and s_clean not in seen and len(s_clean) > 10:
+                    sentences.append(s_clean)
+                    seen.add(s_clean)
+            
+            return " ".join(sentences) + "\n\n_Sources: Google Search, top web results._"
+        
+        else:
+            # For summary, take key sentences
+            all_text = " ".join(lines)
+            sentences = re.split(r'(?<=[.!?])\s+', all_text)
+            
+            # Remove duplicates and URLs
+            unique_sentences = []
+            seen = set()
+            for s in sentences:
+                s_clean = s.strip()
+                s_clean = re.sub(r'https?://\S+', '', s_clean)
+                s_clean = re.sub(r'^(Knowledge Graph|Answer Box|Web|News|Image)( - )?', '', s_clean)
+                if s_clean and s_clean not in seen and len(s_clean) > 15:
+                    unique_sentences.append(s_clean)
+                    seen.add(s_clean)
+            
+            # Take first 10-15 sentences for a good summary
+            summary_sentences = unique_sentences[:12]
+            summary = " ".join(summary_sentences)
+            
+            if len(summary) > 1500:
+                summary = summary[:1497] + "..."
+            
+            return summary + "\n\n_Sources: Google Search, top web results._"
     
     def summarize_last_result(self, style: str = "short") -> str:
         """
@@ -586,36 +735,11 @@ def main():
             # Clear the searching indicator
             print(" " * 30, end="\r")
             
-            LARGE_INFO_THRESHOLD = 900  # Adjust as needed
-
-            # If user explicitly asked for summarize/don't summarize, always respect that
-            if summarize_pref is not None:
-                answer = nova._generate_answer(results["results"], user_input, results["search_type"], summarize=summarize_pref)
-                print("\n" + answer)
-                if concise_mode:
-                    print("\nTip: Type 'open 1' to see the full source or 'detail' for more information.")
-                continue
-
-            # If info is large, ask the user what to do
-            answer_full = nova._generate_answer(results["results"], user_input, results["search_type"], summarize=False)
-            if len(answer_full) > LARGE_INFO_THRESHOLD:
-                print("\nThe information is quite long. Would you like me to summarize it? (yes/no)")
-                while True:
-                    user_reply = input("Summarize? (yes/no): ").strip().lower()
-                    if user_reply in ("yes", "y", "summarize"):
-                        summarized = nova._generate_answer(results["results"], user_input, results["search_type"], summarize=True)
-                        print("\n" + summarized)
-                        break
-                    elif user_reply in ("no", "n", "don't summarize", "do not summarize"):
-                        print("\n" + answer_full)
-                        break
-                    else:
-                        print("Please answer 'yes' or 'no'.")
-            else:
-                # Info is not large, just show it
-                print("\n" + answer_full)
-                if concise_mode:
-                    print("\nTip: Type 'open 1' to see the full source or 'detail' for more information.")
+            # Always provide comprehensive, AI-synthesized information
+            answer = nova._generate_answer(results["results"], user_input, results["search_type"], summarize=False)
+            print("\n" + answer)
+            if concise_mode:
+                print("\nTip: Type 'open 1' to see the full source or 'detail' for more information.")
             
         except KeyboardInterrupt:
             print("\nSearch cancelled.")

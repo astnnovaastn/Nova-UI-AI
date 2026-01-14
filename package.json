@@ -1,0 +1,11 @@
+{
+    "name": "astra-ai-root",
+    "version": "1.0.0",
+    "description": "Root controller for Nova AI System",
+    "scripts": {
+        "start": "start_integrated.bat",
+        "start:backend": "python server.py",
+        "start:frontend": "cd astra_ai/ui && npm start",
+        "setup": "pip install flask flask-cors watchdog && cd astra_ai/ui && npm install"
+    }
+}

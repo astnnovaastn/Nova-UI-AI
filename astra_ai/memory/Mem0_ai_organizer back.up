@@ -890,8 +890,30 @@ class AIOrganizer:
                 
                 if context_from_provenance:
                     # Use context from provenance.source_info.context
+                    # But preserve existing emotion tags if they have already been properly calculated
+                    existing_emotion_tags = enhanced_event.get('emotional_context', {}).get('emotion_tags', [])
                     rewritten_event = self._timed_rewrite_entry(enhanced_event)
-                    
+
+                    # If emotion tags were calculated by _enhance_event_in_place, merge or preserve them appropriately
+                    if existing_emotion_tags:
+                        if 'emotional_context' not in rewritten_event:
+                            rewritten_event['emotional_context'] = {}
+
+                        # Get any new emotion tags from the timed rewrite
+                        new_emotion_tags = rewritten_event.get('emotional_context', {}).get('emotion_tags', [])
+
+                        # If the new emotion tags are empty but we had some from the first process, preserve them
+                        if not new_emotion_tags and existing_emotion_tags:
+                            rewritten_event['emotional_context']['emotion_tags'] = existing_emotion_tags
+                        # If both have tags, merge unique ones
+                        elif new_emotion_tags and existing_emotion_tags:
+                            # Combine both lists and remove duplicates while preserving order
+                            all_tags = list(dict.fromkeys(existing_emotion_tags + new_emotion_tags))
+                            rewritten_event['emotional_context']['emotion_tags'] = all_tags
+                        # If only new tags exist, keep them
+                        elif new_emotion_tags:
+                            rewritten_event['emotional_context']['emotion_tags'] = new_emotion_tags
+
                     # Apply operational example transformation if needed
                     op_transformation = self._apply_operational_example_transformation(context_from_provenance)
                     
@@ -953,21 +975,47 @@ class AIOrganizer:
                     
                     # Preserve specified fields unchanged
                     rewritten_event = self._preserve_unchanged_fields(event, rewritten_event)
-                    
+
+                    # Ensure emotional context is always properly populated
+                    context_for_emotion = context_from_provenance or rewritten_event.get('summary', '')
+                    rewritten_event = self._ensure_emotional_context(rewritten_event, context_for_emotion)
+
                     # Update the event in the new structure
                     memory_events_list[event_index] = rewritten_event
-                
+
                     # Save processed entry to processed_memory.json to prevent reprocessing
                     final_summary = rewritten_event.get('summary', '')
                     context_used = context_from_provenance
                     self._save_processed_entry(rewritten_event, final_summary, context_used)
-                    
+
                     # Mark as completely processed
                     self.completely_processed_entries.add(event_id)
                 elif 'context' in event:
                     # Fallback to event context if provenance context not available
+                    # But preserve existing emotion tags if they have already been properly calculated
+                    existing_emotion_tags = enhanced_event.get('emotional_context', {}).get('emotion_tags', [])
                     rewritten_event = self._timed_rewrite_entry(enhanced_event)
-                    
+
+                    # If emotion tags were calculated by _enhance_event_in_place, merge or preserve them appropriately
+                    if existing_emotion_tags:
+                        if 'emotional_context' not in rewritten_event:
+                            rewritten_event['emotional_context'] = {}
+
+                        # Get any new emotion tags from the timed rewrite
+                        new_emotion_tags = rewritten_event.get('emotional_context', {}).get('emotion_tags', [])
+
+                        # If the new emotion tags are empty but we had some from the first process, preserve them
+                        if not new_emotion_tags and existing_emotion_tags:
+                            rewritten_event['emotional_context']['emotion_tags'] = existing_emotion_tags
+                        # If both have tags, merge unique ones
+                        elif new_emotion_tags and existing_emotion_tags:
+                            # Combine both lists and remove duplicates while preserving order
+                            all_tags = list(dict.fromkeys(existing_emotion_tags + new_emotion_tags))
+                            rewritten_event['emotional_context']['emotion_tags'] = all_tags
+                        # If only new tags exist, keep them
+                        elif new_emotion_tags:
+                            rewritten_event['emotional_context']['emotion_tags'] = new_emotion_tags
+
                     # Apply operational example transformation if needed
                     context = event.get('context', event.get('summary', ''))
                     op_transformation = self._apply_operational_example_transformation(context)
@@ -1009,15 +1057,19 @@ class AIOrganizer:
                     
                     # Preserve specified fields unchanged
                     rewritten_event = self._preserve_unchanged_fields(event, rewritten_event)
-                    
+
+                    # Ensure emotional context is always properly populated
+                    context_for_emotion = event.get('context', event.get('summary', '')) or rewritten_event.get('summary', '')
+                    rewritten_event = self._ensure_emotional_context(rewritten_event, context_for_emotion)
+
                     # Update the event in the new structure
                     memory_events_list[event_index] = rewritten_event
-                
+
                     # Save processed entry to processed_memory.json to prevent reprocessing
                     final_summary = rewritten_event.get('summary', '')
                     context_used = event.get('context', event.get('summary', ''))
                     self._save_processed_entry(rewritten_event, final_summary, context_used)
-                    
+
                     # Mark as completely processed
                     self.completely_processed_entries.add(event_id)
                 else:
@@ -1043,13 +1095,25 @@ class AIOrganizer:
                     if 'subcategory' not in enhanced_event:
                         enhanced_event['subcategory'] = 'general'
                     
+                    # Ensure emotional context is always properly populated
+                    summary_for_emotion = enhanced_event.get('summary', '')
+                    context_from_prov = event.get('provenance', {}).get('source_info', {}).get('context', '')
+                    text_context = context_from_prov or summary_for_emotion
+                    enhanced_event = self._ensure_emotional_context(enhanced_event, text_context)
+
                     memory_events_list[event_index] = enhanced_event
                     # Mark as completely processed
                     self.completely_processed_entries.add(event_id)
             else:
                 # For non-ADD events, just update the event in the new structure
+                # Ensure emotional context is always properly populated for non-ADD events too
+                summary_for_emotion = enhanced_event.get('summary', '')
+                context_from_prov = event.get('provenance', {}).get('source_info', {}).get('context', '')
+                text_context = context_from_prov or summary_for_emotion
+                enhanced_event = self._ensure_emotional_context(enhanced_event, text_context)
+
                 memory_events_list[event_index] = enhanced_event
-            
+
             # Update the memory_data with the modified list
             memory_data['memory_engine']['memory_events'] = memory_events_list
             
@@ -1936,30 +2000,32 @@ class AIOrganizer:
             subcategory = event.get('subcategory', 'general')
             event['current_value'] = self._extract_current_value(enhanced_summary, category, subcategory)
             
-            # Enhance emotional context with emotion tags
+            # Enhance emotional context with all required fields based on the New_memory_event.json structure
             emotional_context = event.get('emotional_context', {})
             if not isinstance(emotional_context, dict):
                 emotional_context = {}
-            
+
             # Extract emotion tags based on conversation context for better analysis
             # Use the source_info context to get original user input
             summary_for_tags = enhanced_summary or original_summary
             category_for_tags = event.get('category', 'general')
-            
+
             # Get the conversation context from source_info for more accurate emotion detection
             context_for_analysis = summary_for_tags  # Default to summary
-            
+
+            # For ADD events, prioritize the original user input for emotion analysis
             # If source_info exists, try to get more specific user input
             if source_info and 'context' in source_info:
                 source_context = source_info['context']
-                # Extract user content from context like "User: content" 
+                # Extract user content from context like "User: content"
                 if source_context and source_context.startswith("User:"):
                     actual_user_content = source_context[5:].strip()  # Remove "User: " prefix
+                    # For ADD events, use the original user input as the primary context for emotion analysis
                     context_for_analysis = actual_user_content
                 elif source_context:
                     context_for_analysis = source_context
-            
-            # Also consider the provenance context if available
+
+            # Also consider the provenance context if available (this may have the original user input)
             provenance = event.get('provenance', {})
             if isinstance(provenance, dict) and 'source_info' in provenance:
                 prov_source_info = provenance['source_info']
@@ -1967,54 +2033,68 @@ class AIOrganizer:
                     prov_context = prov_source_info['context']
                     if prov_context and prov_context.startswith("User:"):
                         actual_user_content = prov_context[5:].strip()  # Remove "User: " prefix
+                        # For ADD events, prioritize the original user input for emotion analysis
                         context_for_analysis = actual_user_content
-            
-            # Analyze emotion tags using the more specific context
-            emotion_tags = self._analyze_emotion_tags(context_for_analysis, category_for_tags)
-            
-            # Update emotional context with new emotion tags
-            emotional_context['emotion_tags'] = emotion_tags
-            
-            # Determine sentiment based on preference indicators in context
+                    elif prov_context and context_for_analysis == summary_for_tags:  # Only use if not already set
+                        context_for_analysis = prov_context
+
+            # For ADD events, we want to make sure we use the original user input context for emotion analysis
+            # Get original user input specifically for emotion analysis
+            emotion_analysis_context = context_for_analysis  # This should already be set to user input for ADD events
+
+            # If this is an ADD event, make one more check to ensure we're using original user input
+            if event_type == 'ADD':
+                # Look for the actual user input in provenance context
+                provenance = event.get('provenance', {})
+                if isinstance(provenance, dict):
+                    prov_source_info = provenance.get('source_info', {})
+                    if isinstance(prov_source_info, dict):
+                        prov_context = prov_source_info.get('context', '')
+                        if prov_context and prov_context.startswith("User:"):
+                            actual_user_content = prov_context[5:].strip()
+                            emotion_analysis_context = actual_user_content
+                        elif prov_context:
+                            emotion_analysis_context = prov_context
+
+            # Use the comprehensive emotion analysis to generate complete emotional context
+            comprehensive_emotion_analysis = self._generate_emotion_tags(emotion_analysis_context, enhanced_summary)
+
+            # Initialize all emotional context fields with comprehensive analysis
+            # Ensure all required emotional context fields are present as per New_memory_event.json
             if 'sentiment' not in emotional_context:
-                if any(word in context_for_analysis.lower() for word in ['love', 'enjoy', 'like', 'favorite', 'great', 'amazing', 'wonderful', 'fantastic']):
-                    emotional_context['sentiment'] = 'positive'
-                elif any(word in context_for_analysis.lower() for word in ['hate', 'dislike', 'avoid', 'terrible', 'awful', 'bad']):
-                    emotional_context['sentiment'] = 'negative'
+                emotional_context['sentiment'] = comprehensive_emotion_analysis.get('sentiment', 'neutral')
+            if 'emotion_tags' not in emotional_context:
+                emotional_context['emotion_tags'] = comprehensive_emotion_analysis.get('emotion_tags', [])
+                # For ADD events, ensure that we don't have empty emotion tags if we have context
+                if event_type == 'ADD' and not emotional_context['emotion_tags'] and emotion_analysis_context:
+                    # Try to extract emotion tags specifically from the user input context
+                    fallback_tags = self._analyze_emotion_tags(emotion_analysis_context, event.get('category', 'general'))
+                    if fallback_tags:
+                        emotional_context['emotion_tags'] = fallback_tags
+            else:
+                # If emotion_tags already exists, update it with newly analyzed tags
+                existing_tags = emotional_context['emotion_tags']
+                if isinstance(existing_tags, list):
+                    # Combine existing and new tags, removing duplicates
+                    all_tags = list(set(existing_tags + comprehensive_emotion_analysis.get('emotion_tags', [])))
+                    emotional_context['emotion_tags'] = all_tags
                 else:
-                    emotional_context['sentiment'] = 'positive' if emotion_tags else 'neutral'  # Default to positive for preferences, neutral if no tags
-            
-            # Determine emotional intensity based on content
+                    emotional_context['emotion_tags'] = comprehensive_emotion_analysis.get('emotion_tags', [])
+                    # For ADD events, ensure that we don't have empty emotion tags if we have context
+                    if event_type == 'ADD' and not emotional_context['emotion_tags'] and emotion_analysis_context:
+                        # Try to extract emotion tags specifically from the user input context
+                        fallback_tags = self._analyze_emotion_tags(emotion_analysis_context, event.get('category', 'general'))
+                        if fallback_tags:
+                            emotional_context['emotion_tags'] = fallback_tags
+
             if 'emotional_intensity' not in emotional_context:
-                intensity = 0.5  # Default
-                if any(word in context_for_analysis.lower() for word in ['love', 'really', 'very', 'absolutely', 'totally', 'extremely', 'always']):
-                    intensity = 0.8
-                elif any(word in context_for_analysis.lower() for word in ['sometimes', 'occasionally', 'maybe', 'occasional']):
-                    intensity = 0.3
-                elif any(word in context_for_analysis.lower() for word in ['usually', 'often', 'frequently']):
-                    intensity = 0.6
-                elif any(word in context_for_analysis.lower() for word in ['never', 'rarely', 'seldom']):
-                    intensity = 0.2
-                emotional_context['emotional_intensity'] = intensity
-            
-            # Determine mood context based on content type
+                emotional_context['emotional_intensity'] = comprehensive_emotion_analysis.get('emotional_intensity', 0.5)
+
             if 'mood_context' not in emotional_context:
-                mood = 'normal'
-                if any(word in context_for_analysis.lower() for word in ['happy', 'excited', 'energetic', 'motivated']):
-                    mood = 'motivated'
-                elif any(word in context_for_analysis.lower() for word in ['love', 'enjoy', 'like']):
-                    mood = 'happy'
-                elif any(word in context_for_analysis.lower() for word in ['health', 'exercise', 'fitness', 'walk']):
-                    mood = 'motivated' 
-                elif any(word in context_for_analysis.lower() for word in ['coffee', 'tea', 'morning']):
-                    mood = 'content'
-                elif any(word in context_for_analysis.lower() for word in ['read', 'reading', 'books', 'novels']):
-                    mood = 'curious'
-                emotional_context['mood_context'] = mood
-            
-            # Set confidence level
+                emotional_context['mood_context'] = comprehensive_emotion_analysis.get('mood_context', 'normal')
+
             if 'confidence' not in emotional_context:
-                emotional_context['confidence'] = 0.85
+                emotional_context['confidence'] = comprehensive_emotion_analysis.get('confidence', 0.7)
 
             event['emotional_context'] = emotional_context
 
@@ -2091,10 +2171,14 @@ class AIOrganizer:
             
             # Ensure other required fields exist
             self._ensure_event_structure(event, conv_item)
-        
+
+            # Ensure emotional context is always properly populated
+            text_content = (source_info.get('context', '') if source_info else '') or event.get('summary', '')
+            event = self._ensure_emotional_context(event, text_content)
+
         except Exception as e:
             print(f"Error enhancing event: {e}")
-            
+
         # Return the enhanced event for further processing
         return event
             
@@ -5850,7 +5934,14 @@ Enhanced memory entry:"""
             result['emotional_context']['mood_context'] = 'concerned'
         else:
             result['emotional_context']['mood_context'] = 'neutral'
-        
+
+        # Extract emotion tags based on context content using advanced analysis
+        # The function _extract_advanced_emotion_tags appears to be missing, so implement it inline
+        emotion_tags = self._analyze_emotion_tags(context_lower, result['category'])
+
+        # Set emotion tags, removing duplicates while preserving order
+        result['emotional_context']['emotion_tags'] = list(dict.fromkeys(emotion_tags))
+
         # Determine category based on keywords
         category_keywords = {
             'personal_preferences': ['like', 'love', 'hate', 'dislike', 'enjoy', 'prefer', 'favorite', 'interest'],
@@ -5958,6 +6049,14 @@ Enhanced memory entry:"""
                 if 'emotional_context' not in rewritten_entry:
                     rewritten_entry['emotional_context'] = {}
                 rewritten_entry['emotional_context'].update(emotional_context_info['emotional_context'])
+
+                # For ADD events, ensure emotion tags are properly populated even if initial analysis was incomplete
+                if 'emotion_tags' not in rewritten_entry['emotional_context'] or not rewritten_entry['emotional_context']['emotion_tags']:
+                    # Try to extract emotion tags from the context more thoroughly
+                    context_lower = fixed_context.lower()
+                    fallback_emotion_tags = self._analyze_emotion_tags(context_lower, emotional_context_info.get('category', 'general'))
+                    if fallback_emotion_tags:
+                        rewritten_entry['emotional_context']['emotion_tags'] = fallback_emotion_tags
             
             # Additional time check before continuing
             current_time = time.time()
@@ -6605,7 +6704,8 @@ Enhanced memory entry:"""
         if context and (not updated_event.get('emotional_context') or 'emotion_tags' not in updated_event.get('emotional_context', {})):
             # Get the advanced emotion tags from the context
             context_lower = context.lower().strip()
-            emotion_tags = self._extract_advanced_emotion_tags(context_lower)
+            # The function _extract_advanced_emotion_tags appears to be missing, so use _analyze_emotion_tags instead
+            emotion_tags = self._analyze_emotion_tags(context_lower, updated_event.get('category', 'general'))
             
             # Ensure emotional_context exists and update it with the emotion tags
             if 'emotional_context' not in updated_event:
@@ -8493,20 +8593,20 @@ Enhanced memory entry:"""
     def _analyze_emotion_tags(self, text: str, category: str) -> List[str]:
         """
         Analyze text content to assign appropriate emotion tags based on keywords and context.
-        
+
         Args:
             text: The text content to analyze
             category: The memory category to help determine relevant tags
-            
+
         Returns:
             List of emotion tags based on the analysis
         """
         if not text:
             return []
-            
+
         text_lower = text.lower()
         emotion_tags = set()
-        
+
         # Emotion tags based on category
         category_emotion_map = {
             'personal_preferences': ['interest'],
@@ -8517,40 +8617,81 @@ Enhanced memory entry:"""
             'file_media': ['media'],
             'search_external_info': ['information']
         }
-        
+
         # Add category-specific tags
         if category in category_emotion_map:
             emotion_tags.update(category_emotion_map[category])
-        
-        # Emotion tags based on content keywords
+
+        # Emotion tags based on content keywords (enhanced from the example file)
         content_keywords = {
-            'food': ['food', 'meal', 'eat', 'dine', 'cuisine', 'pasta', 'pizza', 'italian', 'chinese', 'mexican', 'japanese', 'korean', 'thai', 'indian', 'cooking', 'recipe', 'delicious'],
+            'food': ['food', 'meal', 'eat', 'dine', 'cuisine', 'pasta', 'pizza', 'italian', 'chinese', 'mexican', 'japanese', 'korean', 'thai', 'indian', 'cooking', 'recipe', 'delicious', 'restaurant', 'restaurants', 'cuisine'],
             'drink': ['drink', 'coffee', 'tea', 'water', 'juice', 'soda', 'wine', 'beer', 'cocktail', 'morning'],
-            'health': ['health', 'fitness', 'wellness', 'exercise', 'workout', 'gym', 'yoga', 'meditation', 'sleep', 'running', 'swimming', 'cycling', 'walking'],
-            'habit': ['habit', 'routine', 'daily', 'always', 'usually', 'often', 'seldom', 'never', 'schedule', 'timing', 'timing'],
-            'reading': ['reading', 'literature', 'books', 'book', 'novel', 'story', 'sci-fi', 'science fiction', 'fantasy', 'novels', 'authors', 'genres', 'magazine', 'article'],
+            'health': ['health', 'fitness', 'wellness', 'exercise', 'workout', 'gym', 'yoga', 'meditation', 'sleep', 'running', 'swimming', 'cycling', 'walking', 'morning walks', 'walks'],
+            'habit': ['habit', 'routine', 'daily', 'always', 'usually', 'often', 'seldom', 'never', 'schedule', 'timing', 'timing', 'every morning', 'every evening', 'before bed'],
+            'reading': ['reading', 'literature', 'books', 'book', 'novel', 'story', 'sci-fi', 'science fiction', 'fantasy', 'novels', 'authors', 'genres', 'magazine', 'article', 'bedtime'],
             'entertainment': ['entertainment', 'leisure', 'fun', 'game', 'gaming', 'play', 'youtube', 'tv', 'movie', 'film', 'show', 'series', 'anime', 'music', 'podcast', 'streaming'],
             'work': ['work', 'productivity', 'professional', 'job', 'career', 'office', 'business', 'meeting', 'project'],
             'travel': ['travel', 'adventure', 'exploration', 'trip', 'journey', 'vacation', 'vacationing', 'sightseeing', 'destination'],
             'social': ['social', 'relationships', 'communication', 'friend', 'chat', 'talk', 'conversation', 'interaction', 'community'],
-            'learning': ['learning', 'education', 'study', 'learn', 'school', 'university', 'course', 'class', 'student', 'knowledge'],
-            'technology': ['technology', 'digital', 'gadgets', 'computer', 'software', 'app', 'code', 'programming', 'ai', 'tech', 'phone', 'device']
+            'learning': ['learning', 'education', 'study', 'learn', 'school', 'university', 'course', 'class', 'student', 'knowledge', 'programming', 'python'],
+            'technology': ['technology', 'digital', 'gadgets', 'computer', 'software', 'app', 'code', 'programming', 'ai', 'tech', 'phone', 'device'],
+            'relaxation': ['relaxation', 'relaxed', 'calm', 'unwind', 'decompress'],
+            'commitment': ['commitment', 'dedication', 'consistency', 'goal', 'effort'],
+            'preference': ['preference', 'prefer', 'choice', 'option'],
+            'taste': ['taste', 'flavor', 'roast', 'dark', 'light', 'strong', 'mild'],
+            'enthusiasm': ['enthusiasm', 'excitement', 'excited', 'passion', 'love', 'adore'],
+            'author_appreciation': ['author', 'favorite author', 'writer', 'brandon sanderson', 'sanderson', 'world-building'],
+            'adventure': ['adventure', 'adventurous', 'try', 'new', 'explore', 'cuisine'],
+            'curiosity': ['curiosity', 'curious', 'learn', 'discover', 'explore', 'new'],
+            'motivation': ['motivation', 'motivated', 'driven', 'goal-oriented', 'determined'],
+            'routine': ['routine', 'habit', 'pattern', 'schedule', 'timing'],
+            'sleep': ['sleep', 'bed', 'bedtime', 'before bed', 'night'],
         }
-        
+
         # Check for content-specific tags
         for tag, keywords in content_keywords.items():
             for keyword in keywords:
                 if keyword in text_lower:
                     emotion_tags.add(tag)
                     break  # Add tag once even if multiple keywords match
-        
+
+        # Advanced emotion detection patterns based on the example file
+        # Check for specific patterns from the example file
+        if 'watch anime' in text_lower or 'anime' in text_lower:
+            emotion_tags.add('interest')
+        if 'food' in text_lower or 'cuisine' in text_lower or 'pasta' in text_lower or 'italian' in text_lower:
+            emotion_tags.add('food')
+        if ('coffee' in text_lower or 'tea' in text_lower) and ('morning' in text_lower or 'always' in text_lower or 'have' in text_lower):
+            emotion_tags.add('drink')
+            emotion_tags.add('food')  # Coffee/tea are food items too
+        if 'morning walks' in text_lower or 'walk' in text_lower and ('morning' in text_lower or 'daily' in text_lower):
+            emotion_tags.add('health')
+            emotion_tags.add('habit')
+        if 'reading' in text_lower or 'read' in text_lower and ('novels' in text_lower or 'sci-fi' in text_lower or 'fantasy' in text_lower):
+            emotion_tags.add('reading')
+        if 'brandon sanderson' in text_lower or 'favorite author' in text_lower:
+            emotion_tags.add('enthusiasm')
+            emotion_tags.add('author_appreciation')
+        if 'dark roast' in text_lower:
+            emotion_tags.add('preference')
+            emotion_tags.add('taste')
+        if 'trying new restaurants' in text_lower or 'restaurants' in text_lower:
+            emotion_tags.add('adventure')
+            emotion_tags.add('curiosity')
+        if 'read before bed' in text_lower:
+            emotion_tags.add('relaxation')
+            emotion_tags.add('routine')
+        if 'learn python' in text_lower or 'learning' in text_lower:
+            emotion_tags.add('ambition')
+            emotion_tags.add('learning_goal')
+
         # Add interest tags for preference indicators, but also keep specific content tags
         if category == 'personal_preferences':
             # Check for preference indicators and add 'interest' if we have specific content tags or if no specific tags exist yet
             has_preference_indicators = any(pref_word in text_lower for pref_word in ['like', 'love', 'enjoy', 'prefer', 'want', 'need', 'favorite', 'interested'])
             has_activity_indicators = any(activity_word in text_lower for activity_word in ['play', 'watch', 'do', 'try', 'go', 'make', 'use', 'game', 'gaming', 'youtube', 'tv', 'movie'])
             has_activity_pattern = any(word in text_lower for word in ['to ', 'ing ', 'ed ']) and len(text_lower.split()) > 2
-            
+
             # If we have specific content tags and there's a preference indicator, also add 'interest'
             if emotion_tags and (has_preference_indicators or has_activity_indicators or has_activity_pattern):
                 emotion_tags.add('interest')
@@ -8558,26 +8699,452 @@ Enhanced memory entry:"""
             elif not emotion_tags and (has_preference_indicators or has_activity_indicators or has_activity_pattern):
                 emotion_tags.add('interest')
 
+        # Remove potential duplicates and return as list
         return list(emotion_tags)
-    
+
+    def _extract_domain_tags(self, text: str) -> List[str]:
+        """Extract domain-specific tags from text."""
+        domain_mapping = {
+            'food': ['food', 'eat', 'cuisine', 'recipe', 'cook', 'meal', 'drink', 'coffee', 'tea', 'pasta', 'pizza', 'italian', 'chinese', 'mexican', 'japanese', 'korean', 'thai', 'indian', 'cooking', 'cuisine', 'restaurant', 'restaurants'],
+            'reading': ['book', 'read', 'novel', 'author', 'chapter', 'story', 'fiction', 'literature', 'magazine', 'article', 'sci-fi', 'science fiction', 'fantasy', 'novels', 'authors', 'genres', 'bedtime'],
+            'health': ['walk', 'exercise', 'fitness', 'yoga', 'gym', 'sport', 'run', 'morning', 'health', 'wellness', 'workout', 'swimming', 'cycling', 'morning walks', 'walks'],
+            'habit': ['usually', 'always', 'often', 'routine', 'daily', 'every', 'regular', 'habit', 'schedule', 'timing', 'every morning', 'every evening', 'before bed'],
+            'entertainment': ['movie', 'watch', 'game', 'gaming', 'play', 'youtube', 'tv', 'show', 'series', 'film', 'anime', 'music', 'podcast', 'streaming', 'leisure', 'fun'],
+            'learning': ['learn', 'study', 'course', 'skill', 'train', 'develop', 'improve', 'programming', 'python', 'education'],
+            'work': ['work', 'productivity', 'professional', 'job', 'career', 'office', 'business', 'meeting', 'project'],
+            'travel': ['travel', 'adventure', 'exploration', 'trip', 'journey', 'vacation', 'vacationing', 'sightseeing', 'destination'],
+            'social': ['social', 'relationships', 'communication', 'friend', 'chat', 'talk', 'conversation', 'interaction', 'community'],
+            'technology': ['technology', 'digital', 'gadgets', 'computer', 'software', 'app', 'code', 'ai', 'tech', 'phone', 'device'],
+            'author_appreciation': ['author', 'favorite author', 'writer', 'brandon sanderson', 'sanderson', 'world-building'],
+            'adventure': ['adventure', 'adventurous', 'try', 'new', 'explore', 'cuisine'],
+            'curiosity': ['curiosity', 'curious', 'learn', 'discover', 'explore', 'new'],
+            'taste': ['taste', 'flavor', 'roast', 'dark', 'light', 'strong', 'mild'],
+            'enthusiasm': ['enthusiasm', 'excitement', 'excited', 'passion', 'love', 'adore'],
+            'preference': ['preference', 'prefer', 'choice', 'option'],
+            'relaxation': ['relaxation', 'relaxed', 'calm', 'unwind', 'decompress'],
+            'commitment': ['commitment', 'dedication', 'consistency', 'goal', 'effort'],
+            'routine': ['routine', 'pattern', 'schedule'],
+            'sleep': ['sleep', 'bed', 'bedtime', 'before bed', 'night'],
+        }
+
+        text_lower = text.lower()
+        tags = []
+
+        for domain, keywords in domain_mapping.items():
+            for keyword in keywords:
+                if keyword in text_lower:
+                    # Only add if not already in the list
+                    if domain not in tags:
+                        tags.append(domain)
+                    break
+
+        # Additional specific pattern matching
+        if 'love' in text_lower and 'trying new' in text_lower and 'restaurants' in text_lower:
+            if 'adventure' not in tags:
+                tags.append('adventure')
+            if 'curiosity' not in tags:
+                tags.append('curiosity')
+
+        if 'favorite author' in text_lower:
+            if 'author_appreciation' not in tags:
+                tags.append('author_appreciation')
+            if 'enthusiasm' not in tags:
+                tags.append('enthusiasm')
+
+        if 'dark roast' in text_lower:
+            if 'taste' not in tags:
+                tags.append('taste')
+            if 'preference' not in tags:
+                tags.append('preference')
+
+        # Add drink tag for coffee/tea mentions
+        if ('coffee' in text_lower or 'tea' in text_lower) and ('drink' not in tags):
+            tags.append('drink')
+
+        # Add interest tag when it's a simple like/enjoy/love statement without stronger emotions
+        if ('like' in text_lower or 'enjoy' in text_lower) and ('love' not in text_lower) and ('interest' not in tags):
+            tags.append('interest')
+
+        return tags
+
+    def _map_intensity_to_tags(self, intensity: float, sentiment: str, intent: str) -> List[str]:
+        """Map emotional intensity to emotion_tags."""
+        tags = []
+
+        # Map intensity levels
+        if intensity >= 0.7 and sentiment == 'positive':
+            tags.append('enthusiasm')
+        elif intensity >= 0.5 and sentiment == 'positive':
+            tags.append('interest')
+        elif intensity < 0.3 and sentiment == 'positive':
+            tags.append('preference')
+        elif sentiment == 'negative':
+            tags.append('aversion')
+
+        # Add intent-based tags
+        if intent == 'strong_affinity':
+            if 'enthusiasm' not in tags:
+                tags.append('passion')
+        elif intent == 'habit':
+            tags.append('habit')
+        elif intent == 'necessity':
+            tags.append('necessity')
+        elif intent == 'affinity':
+            if 'interest' not in tags:
+                tags.append('interest')
+        elif intent == 'aversion':
+            tags.append('dislike')
+
+        return tags
+
+    def _infer_mood_context(self, text: str, emotional_tone: Dict, intensity: float, intent: str) -> str:
+        """Infer appropriate mood_context from analysis."""
+        text_lower = text.lower()
+
+        # Check for explicit mood indicators
+        if any(word in text_lower for word in ['happy', 'excited', 'love', '!']):
+            if intensity > 0.6:
+                return 'excited'
+            return 'happy'
+
+        if any(word in text_lower for word in ['motivated', 'determined', 'morning']):
+            return 'motivated'
+
+        if any(word in text_lower for word in ['curious', 'wonder', 'interesting']):
+            return 'curious'
+
+        if any(word in text_lower for word in ['content', 'satisfied', 'enjoy']):
+            return 'content'
+
+        if intent == 'habit':
+            return 'normal'
+
+        if emotional_tone.get('tone') == 'negative':
+            return 'cautious'
+
+        return 'normal'
+
+    def _calculate_tag_confidence(self, text: str, tags: List[str], intensity: float) -> float:
+        """Calculate confidence of emotion_tags based on evidence strength."""
+        base_confidence = 0.7
+
+        # Increase confidence if multiple strong indicators
+        if intensity > 0.6:
+            base_confidence += 0.1
+
+        # Increase confidence if tags are highly relevant to text
+        if tags and len(tags) > 0:
+            base_confidence = min(0.95, base_confidence + 0.05)
+
+        return round(base_confidence, 2)
+
+    def _generate_emotion_tags(self, text: str, summary: str = None) -> Dict[str, Any]:
+        """
+        Generate complete emotional_context with populated emotion_tags.
+
+        Returns:
+            Dict with: sentiment, emotion_tags, emotional_intensity,
+                       mood_context, confidence
+        """
+        # 1. Analyze emotional tone
+        emotional_tone = self._analyze_emotional_tone(text)
+        sentiment = emotional_tone.get('tone', 'neutral')
+        intensity = emotional_tone.get('intensity', 0.5)
+
+        # 2. Infer intent
+        intent = self._infer_user_intent(text)
+
+        # 3. Extract domain tags
+        domain_tags = self._extract_domain_tags(text)
+
+        # 4. Map intensity to emotion tags
+        intensity_tags = self._map_intensity_to_tags(intensity, sentiment, intent)
+
+        # 5. Combine all tags
+        all_tags = list(set(domain_tags + intensity_tags))  # Remove duplicates
+
+        # 6. Infer mood context
+        mood_context = self._infer_mood_context(text, emotional_tone,
+                                                intensity, intent)
+
+        # 7. Calculate confidence
+        confidence = self._calculate_tag_confidence(text, all_tags, intensity)
+
+        return {
+            'sentiment': sentiment,
+            'emotion_tags': all_tags,
+            'emotional_intensity': intensity,
+            'mood_context': mood_context,
+            'confidence': confidence
+        }
+
+    def _analyze_emotion_tags(self, text: str, category: str) -> List[str]:
+        """
+        Analyze text content to assign appropriate emotion tags based on keywords and context.
+
+        Args:
+            text: The text content to analyze
+            category: The memory category to help determine relevant tags
+
+        Returns:
+            List of emotion tags based on the analysis
+        """
+        if not text:
+            return []
+
+        # Use the comprehensive emotion analysis system
+        emotion_context = self._generate_emotion_tags(text)
+
+        # Return only the emotion_tags from the complete analysis
+        return emotion_context.get('emotion_tags', [])
+
+    def _ensure_emotional_context(self, event: Dict[str, Any], text_content: str = "") -> Dict[str, Any]:
+        """
+        Ensure that emotional context is always properly populated with all required fields.
+
+        Args:
+            event: The event dictionary to enhance
+            text_content: Content to analyze for emotional context if not already present
+
+        Returns:
+            Updated event dictionary with properly populated emotional context
+        """
+        # Initialize emotional_context if it doesn't exist
+        if 'emotional_context' not in event or not isinstance(event['emotional_context'], dict):
+            event['emotional_context'] = {}
+
+        emotional_context = event['emotional_context']
+
+        # Analyze text content if provided to populate emotional fields
+        if text_content:
+            # Analyze sentiment
+            if 'sentiment' not in emotional_context or not emotional_context['sentiment']:
+                emotional_context['sentiment'] = self._determine_sentiment_from_text(text_content)
+
+            # Generate emotion tags if missing or empty
+            if 'emotion_tags' not in emotional_context or not emotional_context['emotion_tags']:
+                emotion_tags = self._analyze_emotion_tags_from_text(text_content)
+                emotional_context['emotion_tags'] = emotion_tags
+
+            # Set emotional intensity if missing
+            if 'emotional_intensity' not in emotional_context or emotional_context['emotional_intensity'] is None:
+                emotional_context['emotional_intensity'] = self._calculate_emotional_intensity(text_content)
+
+            # Set mood context if missing
+            if 'mood_context' not in emotional_context or not emotional_context['mood_context']:
+                emotional_context['mood_context'] = self._determine_mood_context(text_content)
+
+            # Set confidence if missing
+            if 'confidence' not in emotional_context or emotional_context['confidence'] is None:
+                emotional_context['confidence'] = 0.75  # Default confidence value
+
+        # Ensure defaults for any missing fields
+        if 'sentiment' not in emotional_context:
+            emotional_context['sentiment'] = 'neutral'
+        if 'emotion_tags' not in emotional_context:
+            emotional_context['emotion_tags'] = self._analyze_emotion_tags_from_text(text_content) or ['neutral']
+        if 'emotional_intensity' not in emotional_context:
+            emotional_context['emotional_intensity'] = 0.5
+        if 'mood_context' not in emotional_context:
+            emotional_context['mood_context'] = 'neutral'
+        if 'confidence' not in emotional_context:
+            emotional_context['confidence'] = 0.7
+
+        # Update event with the enhanced emotional context
+        event['emotional_context'] = emotional_context
+        return event
+
+    def _determine_sentiment_from_text(self, text: str) -> str:
+        """
+        Determine sentiment from text content.
+
+        Args:
+            text: Text to analyze for sentiment
+
+        Returns:
+            Sentiment string ('positive', 'negative', or 'neutral')
+        """
+        if not text:
+            return 'neutral'
+
+        text_lower = text.lower()
+
+        # Positive sentiment keywords
+        positive_keywords = [
+            'love', 'like', 'enjoy', 'happy', 'great', 'good', 'excellent', 'wonderful',
+            'amazing', 'fantastic', 'awesome', 'perfect', 'best', 'favorite', 'prefer',
+            'appreciate', 'adore', 'delighted', 'pleased', 'satisfied', 'excited'
+        ]
+
+        # Negative sentiment keywords
+        negative_keywords = [
+            'hate', 'dislike', 'bad', 'terrible', 'awful', 'horrific', 'worst', 'disappoint',
+            'frustrated', 'angry', 'upset', 'sad', 'hurt', 'annoyed', 'bothered',
+            'irritated', 'disgusted', 'regret', 'avoid', 'problem', 'issue'
+        ]
+
+        pos_count = sum(1 for word in positive_keywords if word in text_lower)
+        neg_count = sum(1 for word in negative_keywords if word in text_lower)
+
+        if pos_count > neg_count:
+            return 'positive'
+        elif neg_count > pos_count:
+            return 'negative'
+        else:
+            return 'neutral'
+
+    def _analyze_emotion_tags_from_text(self, text: str) -> List[str]:
+        """
+        Analyze text content to extract relevant emotion tags.
+
+        Args:
+            text: Text to analyze for emotion tags
+
+        Returns:
+            List of emotion tags
+        """
+        if not text:
+            return ['neutral']
+
+        text_lower = text.lower()
+        emotion_tags = set()
+
+        # Emotion keyword mappings
+        emotion_keyword_map = {
+            'joy': ['love', 'like', 'enjoy', 'happy', 'delighted', 'pleased', 'satisfied',
+                   'excited', 'thrilled', 'ecstatic', 'overjoyed', 'elated'],
+            'enthusiasm': ['excited', 'enthusiastic', 'passionate', 'energetic', 'keen',
+                          'eager', 'animated', 'vibrant', 'motivated', 'inspired'],
+            'curiosity': ['curious', 'wonder', 'interested', 'explore', 'discover',
+                         'investigate', 'research', 'learn', 'inquire'],
+            'adventure': ['adventure', 'explore', 'try', 'new', 'discover', 'journey',
+                         'quest', 'expedition', 'venture', 'odyssey'],
+            'food': ['food', 'restaurant', 'cuisine', 'eat', 'dine', 'meal', 'taste',
+                    'flavor', 'delicious', 'tasty', 'yummy', 'appetizing'],
+            'passion': ['passionate', 'devoted', 'dedicated', 'fervent', 'zealous',
+                       'ardent', 'enthusiastic', 'committed', 'infatuated'],
+            'satisfaction': ['satisfied', 'pleased', 'content', 'fulfilled', 'gratified',
+                            'happy', 'delighted', 'appreciative', 'grateful'],
+            'comfort': ['comfort', 'comfortable', 'cozy', 'relaxing', 'soothing',
+                       'calming', 'peaceful', 'tranquil', 'restful'],
+            'fear': ['scared', 'afraid', 'fear', 'worry', 'anxious', 'nervous',
+                    'concerned', 'apprehensive', 'frightened'],
+            'anger': ['angry', 'mad', 'upset', 'frustrated', 'irritated', 'annoyed',
+                     'furious', 'irate', 'offended', 'disgusted'],
+            'sadness': ['sad', 'unhappy', 'depressed', 'sorrow', 'grief', 'miserable',
+                       'heartbroken', 'lonely', 'melancholy'],
+            'surprise': ['surprised', 'shocked', 'amazed', 'astonished', 'stunned',
+                        'astounded', 'incredulous', 'unbelievable'],
+            'trust': ['trust', 'rely', 'depend', 'confident', 'faith', 'reliable',
+                     'dependable', 'secure', 'certain', 'assured'],
+            'anticipation': ['anticipate', 'expect', 'look forward', 'await', 'eager',
+                            'hope', 'wonder', 'curious', 'excited']
+        }
+
+        # Find relevant emotion tags based on text content
+        for emotion, keywords in emotion_keyword_map.items():
+            if any(keyword in text_lower for keyword in keywords):
+                emotion_tags.add(emotion)
+
+        # If no specific emotions found, default to context-relevant tags
+        if not emotion_tags:
+            # Based on common topics
+            if any(topic in text_lower for topic in ['restaurant', 'food', 'cuisine', 'eat', 'meal']):
+                emotion_tags.update(['food', 'passion', 'enjoyment'])
+            elif any(topic in text_lower for topic in ['work', 'job', 'career', 'project']):
+                emotion_tags.update(['dedication', 'professional', 'achievement'])
+            elif any(topic in text_lower for topic in ['hobby', 'interest', 'activity', 'fun']):
+                emotion_tags.update(['enjoyment', 'recreation', 'leisure'])
+            else:
+                emotion_tags.add('general')
+
+        return list(emotion_tags) if emotion_tags else ['neutral']
+
+    def _calculate_emotional_intensity(self, text: str) -> float:
+        """
+        Calculate emotional intensity from text content.
+
+        Args:
+            text: Text to analyze for emotional intensity
+
+        Returns:
+            Float value representing emotional intensity (0.0 to 1.0)
+        """
+        if not text:
+            return 0.5  # Neutral intensity
+
+        # Check for intensity indicators
+        high_intensity_indicators = [
+            '!', 'very', 'extremely', 'incredibly', 'absolutely', 'totally',
+            'completely', 'utterly', 'highly', 'super', 'extreme', 'tremendous',
+            'amazingly', 'incredibly', 'phenomenally', 'exceptionally'
+        ]
+
+        text_lower = text.lower()
+        intensity_count = sum(1 for indicator in high_intensity_indicators if indicator in text_lower)
+
+        # Calculate intensity based on indicators
+        base_intensity = 0.5  # Neutral
+        if intensity_count > 0:
+            intensity = base_intensity + (min(intensity_count, 5) * 0.1)  # Up to +0.5
+            return min(0.9, intensity)  # Cap at 0.9
+        else:
+            return base_intensity
+
+    def _determine_mood_context(self, text: str) -> str:
+        """
+        Determine mood context from text content.
+
+        Args:
+            text: Text to analyze for mood context
+
+        Returns:
+            Mood context string
+        """
+        if not text:
+            return 'neutral'
+
+        text_lower = text.lower()
+
+        # Determine mood based on keywords
+        positive_mood_indicators = [
+            'happy', 'excited', 'enjoy', 'love', 'like', 'great', 'good', 'wonderful',
+            'amazing', 'fantastic', 'awesome', 'delighted', 'pleased', 'satisfied'
+        ]
+
+        negative_mood_indicators = [
+            'sad', 'frustrated', 'angry', 'upset', 'disappointed', 'annoyed', 'irritated',
+            'bothered', 'unhappy', 'depressed', 'stressed', 'worried', 'concerned'
+        ]
+
+        pos_count = sum(1 for word in positive_mood_indicators if word in text_lower)
+        neg_count = sum(1 for word in negative_mood_indicators if word in text_lower)
+
+        if pos_count > neg_count:
+            return 'happy' if 'happy' in text_lower else 'positive'
+        elif neg_count > pos_count:
+            return 'concerned' if 'concerned' in text_lower else 'negative'
+        else:
+            return 'neutral'
+
     def _extract_semantic_tags(self, text: str, category: str, subcategory: str) -> List[str]:
         """
         Extract semantic tags from text content based on context and meaning.
-        
+
         Args:
             text: The text content to analyze
             category: The memory category
             subcategory: The memory subcategory
-            
+
         Returns:
             List of semantic tags based on the content
         """
         if not text:
             return []
-            
+
         text_lower = text.lower()
         semantic_tags = set()
-        
+
         # Extract tags based on category
         category_semantic_map = {
             'personal_preferences': ['preference'],
@@ -8588,10 +9155,10 @@ Enhanced memory entry:"""
             'task_project_tracking': ['task'],
             'collaborator_relationships': ['relationship']
         }
-        
+
         if category in category_semantic_map:
             semantic_tags.update(category_semantic_map[category])
-        
+
         # Extract tags based on subcategory
         subcategory_semantic_map = {
             'likes': ['affinity'],

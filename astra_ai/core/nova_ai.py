@@ -449,13 +449,18 @@ except ImportError:
 class NovaSearch:
     """All-in-one search system that automatically searches and answers questions."""
     
-    def __init__(self):
-        """Initialize the Nova Search system."""
+    def __init__(self, search_news_memory=None):
+        """Initialize the Nova Search system.
+        
+        Args:
+            search_news_memory: Optional SearchNewsMemorySystem instance for saving history
+        """
         self.api_key = SERPAPI_KEY
         self.base_url = "https://serpapi.com/search"
         self.last_results = None
         self.num_results = 5
         self.format_style = "smart"  # Smart format adapts to the query type
+        self.search_news_memory = search_news_memory  # Store reference to memory system
     
     def search(self, query: str, summarize: Optional[bool] = False, target_site: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -509,6 +514,34 @@ class NovaSearch:
             "answer": answer,
             "raw_results": results
         }
+        
+        # Save to search/news history if memory system is available
+        if self.search_news_memory:
+            try:
+                from datetime import datetime
+                user_context = {"timestamp": datetime.now().isoformat()}
+                
+                # Save to news history if this was a news search
+                if search_type == "news":
+                    self.search_news_memory.store_news_record(
+                        query=query,
+                        results=answer,
+                        source=None,
+                        user_context=user_context,
+                        analysis_summary=f"Content Type: News | Query: {query} | Analyzed: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                    )
+                    logger.info(f"[NEWS] Saved news request to history: {query[:50]}...")
+                # Save to search history for all other searches
+                else:
+                    self.search_news_memory.store_search_record(
+                        query=query,
+                        results=answer,
+                        user_context=user_context,
+                        analysis_summary=f"Content Type: Search | Query: {query} | Analyzed: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                    )
+                    logger.info(f"[SEARCH] Saved search request to history: {query[:50]}...")
+            except Exception as e:
+                logger.error(f"[ERROR] Failed to save to search/news history: {e}")
 
         return self.last_results
     
@@ -742,6 +775,9 @@ class NovaSearch:
         # Process organic web results
         if search_type == "web" and "organic_results" in results:
             for result in results["organic_results"]:
+                # Ensure result is a dictionary
+                if not isinstance(result, dict):
+                    continue
                 processed.append({
                     "type": "web_result",
                     "title": result.get("title", ""),
@@ -754,6 +790,9 @@ class NovaSearch:
         # Process image results
         elif search_type == "images" and "images_results" in results:
             for result in results["images_results"]:
+                # Ensure result is a dictionary
+                if not isinstance(result, dict):
+                    continue
                 processed.append({
                     "type": "image_result",
                     "title": result.get("title", ""),
@@ -767,15 +806,30 @@ class NovaSearch:
         # Process news results
         elif search_type == "news" and "news_results" in results:
             for result in results["news_results"]:
-                processed.append({
-                    "type": "news_result",
-                    "title": result.get("title", ""),
-                    "snippet": result.get("snippet", ""),
-                    "link": result.get("link", ""),
-                    "source": result.get("source", ""),
-                    "date": result.get("date", ""),
-                    "relevance": 6
-                })
+                # Handle case where result might be a string or unexpected type
+                if isinstance(result, str):
+                    processed.append({
+                        "type": "news_result",
+                        "title": "News Item",
+                        "snippet": result,
+                        "link": "",
+                        "source": "",
+                        "date": "",
+                        "relevance": 6
+                    })
+                elif isinstance(result, dict):
+                    processed.append({
+                        "type": "news_result",
+                        "title": result.get("title", ""),
+                        "snippet": result.get("snippet", ""),
+                        "link": result.get("link", ""),
+                        "source": result.get("source", ""),
+                        "date": result.get("date", ""),
+                        "relevance": 6
+                    })
+                else:
+                    # Skip invalid result types
+                    continue
         
         # Sort by relevance
         processed.sort(key=lambda x: x.get("relevance", 0), reverse=True)
@@ -2855,7 +2909,7 @@ class DisplayManager:
         'BLACK': '\033[30m',
         'RED': '\033[91m',  # Bright red
         'GREEN': '\033[92m',  # Bright green
-        'YELLOW': '\033[93m',  # Bright yellow
+        'YELLOW': '\033[93m',  # Bright yellowb
         'BLUE': '\033[94m',  # Bright blue
         'MAGENTA': '\033[95m',  # Bright magenta
         'CYAN': '\033[96m',  # Bright cyan
@@ -3158,7 +3212,10 @@ class AleChatBot:
             if MEM0_MEMORY_AVAILABLE:
                 try:
                     # Use a deterministic storage path inside the repo data directory
-                    storage_path = os.path.normpath(os.path.join('astra_ai', 'Date', 'nova_ai_memory.json'))
+                    # Get the absolute path to the project root based on this script's location
+                    script_dir = os.path.dirname(os.path.abspath(__file__))
+                    project_root = os.path.dirname(os.path.dirname(script_dir))  # Go up two levels from core/
+                    storage_path = os.path.normpath(os.path.join(project_root, 'Date', 'nova_ai_memory.json'))
                     # print(f"[DEBUG] Storage path: {storage_path}")
                     # print(f"[DEBUG] Storage path exists: {os.path.exists(storage_path)}")
                     # Ensure the data directory exists
@@ -3207,7 +3264,12 @@ class AleChatBot:
                             try:
                                 from astra_ai.memory.Mem0_ai_organizer import AIOrganizer, ORGANIZER_CONFIG
 
-                                def _organizer_watcher_thread(memory_file_path=os.path.join('astra_ai', 'Date', 'nova_ai_memory.json'), poll_interval=2.0):
+                                def _organizer_watcher_thread(memory_file_path=None, poll_interval=2.0):
+                                    if memory_file_path is None:
+                                        # Use the same absolute path as the main storage
+                                        script_dir = os.path.dirname(os.path.abspath(__file__))
+                                        project_root = os.path.dirname(os.path.dirname(script_dir))
+                                        memory_file_path = os.path.normpath(os.path.join(project_root, 'Date', 'nova_ai_memory.json'))
                                     try:
                                         organizer = AIOrganizer(ORGANIZER_CONFIG)
                                     except Exception:
@@ -3394,8 +3456,17 @@ class AleChatBot:
         # Initialize search and news memory system
         try:
             from memory.search_news_memory_system import SearchNewsMemorySystem
-            self.search_news_memory = SearchNewsMemorySystem("search_history.json", "news_history.json")
+            import os
+            # Get correct file paths in the backend directory
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            ui_backend_dir = os.path.normpath(os.path.join(script_dir, '..', 'ui', 'src', 'backend'))
+            search_history_path = os.path.join(ui_backend_dir, "search_history.json")
+            news_history_path = os.path.join(ui_backend_dir, "news_history.json")
+            
+            self.search_news_memory = SearchNewsMemorySystem(search_history_path, news_history_path)
             logger.info("[OK] Search and news memory system initialized successfully")
+            logger.info(f"[OK] Search history: {search_history_path}")
+            logger.info(f"[OK] News history: {news_history_path}")
         except Exception as e:
             logger.error(f"[ERROR] Search and news memory system initialization failed: {e}")
             self.search_news_memory = None
@@ -3566,7 +3637,8 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                 logger.debug(f"Error processing saved history: {e}")
         
         # Initialize web search capability
-        self.search_system = NovaSearch()
+        # Pass search_news_memory to NovaSearch for automatic history tracking
+        self.search_system = NovaSearch(search_news_memory=self.search_news_memory)
 
         # Kick off voice system initialization in background (non-blocking)
         try:
@@ -4317,6 +4389,32 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
             logger.error(f"Error getting response: {e}")
             return "I apologize, but I encountered an error. Could you please try again?"
     
+    async def get_chat_response(self, user_message: str, session_id: str = "default") -> str:
+        """Get a simplified chat response for UI integration.
+        
+        Args:
+            user_message: The user's message
+            session_id: Session identifier for conversation tracking
+            
+        Returns:
+            str: The AI's response
+        """
+        try:
+            # Create message format expected by get_response
+            messages = [
+                {"role": "system", "content": self.chat_history[0]["content"]},  # System prompt
+                {"role": "user", "content": user_message}
+            ]
+            
+            # Get response using existing method
+            response = await self.get_response(messages, stream_to_terminal=False)
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error in get_chat_response: {e}")
+            return "I apologize, but I encountered an error processing your message. Could you please try again?"
+
     async def _store_conversation_memory_async(self, user_message: str, ai_response: str):
         """Store conversation in comprehensive memory system asynchronously.
 
@@ -4410,7 +4508,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
             self.session_id = f"session_{int(time.time())}"
             
             # Ensure the memory file directory exists
-            memory_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Date', 'nova_ai_memory.json')
+            memory_file_path = os.path.join(project_root, 'Date', 'nova_ai_memory.json')
             os.makedirs(os.path.dirname(memory_file_path), exist_ok=True)
             
             # Initialize the memory file if it doesn't exist
@@ -4774,7 +4872,9 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                     NovaVoiceService = getattr(ai_voice_module, 'NovaVoiceService')
 
                     # Initialize voice service with canonical nova memory JSON in workspace `@astra_ai/Date/`
-                    ai_responses_file = os.path.join(os.path.dirname(__file__), '..', '..', '@astra_ai', 'Date', 'nova_ai_memory.json')
+                    script_dir = os.path.dirname(os.path.abspath(__file__))
+                    project_root = os.path.dirname(os.path.dirname(script_dir))
+                    ai_responses_file = os.path.normpath(os.path.join(project_root, 'Date', 'nova_ai_memory.json'))
                     self.voice_system = NovaVoiceService(ai_responses_file=ai_responses_file)
 
                     # Start the voice service
@@ -5202,90 +5302,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
 
     def get_comprehensive_user_knowledge(self) -> str:
         """Get comprehensive knowledge about the user using unified memory system"""
-        try:
-            # Use unified memory integration if available
-            if hasattr(self.memory_integration, 'what_do_you_know_about_me'):
-                return self.memory_integration.what_do_you_know_about_me()
-
-            # Try mem0_memory_system if available
-            elif self.mem0_memory_agent:
-                try:
-                    # Get user profile from mem0_memory_system
-                    profile = self.mem0_memory_agent.get_user_profile()
-                    
-                    if profile and profile.get('user_info'):
-                        user_info = profile['user_info']
-                        name = user_info.get('name', 'there')
-                        
-                        # Create response with available information
-                        response = f"Hello {name}! "
-                        
-                        # Add facts if available
-                        facts = profile.get('facts', {})
-                        if facts:
-                            response += f"I remember {len(facts)} things about you. "
-                            # Add a few sample facts
-                            sample_facts = list(facts.items())[:3]
-                            if sample_facts:
-                                response += "Some things I recall: "
-                                response += ", ".join([f"{k}" for k, v in sample_facts]) + ". "
-                        
-                        response += "Feel free to ask me specific questions about what you'd like to know!"
-                        return response
-                    else:
-                        return "I'm still learning about you! Feel free to share more about yourself, your preferences, or what you're working on."
-                        
-                except Exception as e:
-                    logger.error(f"Error with mem0_memory_system: {e}")
-                    pass
-
-            # Fallback to standard memory retrieval
-            elif self.memory_integration and hasattr(self.memory_integration, 'get_comprehensive_context'):
-                context = self.memory_integration.get_comprehensive_context("comprehensive")
-
-                if "error" in context:
-                    return "I'm having trouble accessing my memory systems right now. I can only remember our current conversation."
-
-                # Build response from context
-                response_parts = ["Here's what I know about you:"]
-
-                # Extract user information
-                user_profile = context.get("user_profile", {})
-                if user_profile:
-                    for category, data in user_profile.items():
-                        if data and category != "memory_insights":
-                            category_name = category.replace('_', ' ').title()
-                            response_parts.append(f"\n**{category_name}:**")
-
-                            if isinstance(data, dict):
-                                for key, value in data.items():
-                                    if value:
-                                        response_parts.append(f"• {key.replace('_', ' ').title()}: {str(value)[:100]}...")
-                            else:
-                                response_parts.append(f"• {str(data)[:100]}...")
-
-                if len(response_parts) > 1:
-                    return "\n".join(response_parts)
-                else:
-                    return "I don't have much stored information about you yet. As we continue talking, I'll learn and remember more about your preferences, interests, and background."
-
-            # Fallback to basic memory system if available
-            elif hasattr(self, 'memory') and self.memory:
-                stats = self.memory.get_memory_stats()
-                total_memories = stats.get('total_memories', 0)
-                
-                if total_memories > 0:
-                    return f"I have {total_memories} memories stored about our conversations and your preferences. Feel free to ask me specific questions!"
-                else:
-                    return "I'm still learning about you! Feel free to share more about yourself, your preferences, or what you're working on."
-
-            # Basic fallback
-            else:
-                return "I don't have access to comprehensive memory systems right now, so I can only remember what we've discussed in this current conversation."
-
-        except Exception as e:
-            logger.error(f"Error retrieving comprehensive user knowledge: {e}")
-            return "I'm having some difficulty accessing my memory systems right now. I can remember our current conversation, but I may not have access to all stored information about you."
+        return "For privacy reasons, I don't summarize or store personal information about users. I focus on providing helpful responses to your current questions and requests."
 
     def get_memory_status(self) -> str:
         """Get current memory system status."""
@@ -5296,7 +5313,9 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                 facts_count = len(profile.get('facts', {})) if profile else 0
                 
                 # Get storage path
-                storage_path = os.path.normpath(os.path.join('..', '..', '@astra_ai', 'Date', 'nova_ai_memory.json'))
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                project_root = os.path.dirname(os.path.dirname(script_dir))
+                storage_path = os.path.normpath(os.path.join(project_root, 'Date', 'nova_ai_memory.json'))
                 file_exists = os.path.exists(storage_path)
                 file_size = os.path.getsize(storage_path) if file_exists else 0
                 
@@ -6392,6 +6411,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
 
     async def _store_news_memory_async(self, news_content: str, topic: str = "general", source: str = "various"):
         """Store news results in comprehensive memory system."""
+        # Store in legacy memory system
         if self.memory_enabled and self.memory_integration and self.memory_integration.is_enabled:
             try:
                 # Use the unified memory integration's store_memory method
@@ -6408,10 +6428,24 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                     confidence=0.8
                 )
 
-                logger.debug(f"Stored news results in memory: {topic}")
+                logger.debug(f"Stored news results in legacy memory: {topic}")
 
             except Exception as e:
-                logger.warning(f"Failed to store news memory: {e}")
+                logger.warning(f"Failed to store news in legacy memory: {e}")
+        
+        # Store in new dedicated JSON news history (mirroring search history)
+        if self.search_news_memory:
+            try:
+                self.search_news_memory.store_news_record(
+                    query=topic,
+                    results=news_content,
+                    source=source,
+                    user_context={"timestamp": datetime.now().isoformat()},
+                    analysis_summary=f"Automated news storage for: {topic}"
+                )
+                logger.info(f"[MEMORY] News stored in JSON history: {topic}")
+            except Exception as e:
+                logger.error(f"[ERROR] Failed to store news in JSON history: {e}")
 
     async def _store_weather_memory_async(self, weather_content: str, location: str):
         """Store weather results in comprehensive memory system."""
@@ -7680,10 +7714,14 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                                 'source': source.title(),
                                 'time': 'Just now'
                             }])
+                            # Store news result in memory
+                            asyncio.create_task(self._store_news_memory_async(response, f"News from {source}", source))
                             return f"NEWS_RESULT: {response}"
                         elif isinstance(news_result, dict) and news_result.get('summary'):
                             # Use enhanced formatting for comprehensive news display
                             response = self._format_enhanced_news(news_result)
+                            # Store news result in memory
+                            asyncio.create_task(self._store_news_memory_async(response, f"News from {source}", source))
                             return f"NEWS_RESULT: {response}"
                     
                     return f"📰 I couldn't retrieve news from {source}. Try asking for news from BBC, CNN, Reuters, Fox News, or other major news sources."
@@ -7747,11 +7785,15 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                             # Add paragraphs with proper spacing
                             response += "\n\n".join(paragraphs)
                             
+                            # Store news result in memory
+                            asyncio.create_task(self._store_news_memory_async(response, topic, None))
                             return f"NEWS_RESULT: {response}"
                         elif isinstance(news_result, dict) and news_result.get('summary'):
                             # Use enhanced formatting for comprehensive news display
                             response = self._format_enhanced_news(news_result)
                             
+                            # Store news result in memory
+                            asyncio.create_task(self._store_news_memory_async(response, topic, None))
                             return f"NEWS_RESULT: {response}"
                     
                     return f"📰 I couldn't find recent news about {topic}. This might be because:\n• The topic is very specific or niche\n• There's no recent news coverage\n• The news API is temporarily unavailable\n\nTry asking about a broader topic or check back later."
@@ -7814,6 +7856,8 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                             # Add sections with proper spacing
                             response += "\n\n".join(sections)
                             
+                            # Store news result in memory
+                            asyncio.create_task(self._store_news_memory_async(response, "general news", None))
                             return f"NEWS_RESULT: {response}"
                         elif isinstance(news_result, dict) and news_result.get('summary'):
                             # If it's a dictionary with summary
@@ -7828,6 +7872,8 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                                 source_names = sources[:3] if sources and isinstance(sources[0], str) else [source.get('name', 'Unknown') for source in sources[:3] if isinstance(source, dict)]
                                 response += f"\n\n📍 **Sources:** {', '.join(source_names)}"
                             
+                            # Store news result in memory
+                            asyncio.create_task(self._store_news_memory_async(response, "general news", None))
                             return f"NEWS_RESULT: {response}"
                     
                     return f"📰 I couldn't retrieve the latest news right now. This might be due to:\n• Temporary API issues\n• Network connectivity problems\n• Rate limiting\n\nPlease try again in a few moments."
@@ -9043,7 +9089,10 @@ def get_time_in_location(location: str) -> str:
                         """Append a single message to the nova_ai_memory.json file"""
                         try:
                             if not memory_path:
-                                memory_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Date', 'nova_ai_memory.json')
+                                # Get the absolute path to the project root based on this script's location
+                                script_dir = os.path.dirname(os.path.abspath(__file__))
+                                project_root = os.path.dirname(os.path.dirname(script_dir))
+                                memory_path = os.path.normpath(os.path.join(project_root, 'Date', 'nova_ai_memory.json'))
                             
                             # Ensure the directory exists
                             os.makedirs(os.path.dirname(memory_path), exist_ok=True)
