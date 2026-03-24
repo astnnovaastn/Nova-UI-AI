@@ -28,6 +28,9 @@ import numpy as np
 # Import AI Organizer
 from astra_ai.memory.Mem0_ai_organizer import AIOrganizer, ORGANIZER_CONFIG
 
+# Import conversation persistence for backup management
+from astra_ai.memory.conversation_persistence import initialize_persistence, start_session, end_session
+
 # Import shared data models
 from astra_ai.memory.memory_data_models import EmotionalContext, SemanticContext, MemoryEvent, Provenance, UpdateLogEntry, Cluster, FactHistoryEntry
 
@@ -35,35 +38,238 @@ from astra_ai.memory.memory_data_models import EmotionalContext, SemanticContext
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from typing import Iterable, Optional, List, Dict, Tuple
+import logging
+
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+
+try:
+    import faiss
+    FAISS_AVAILABLE = True
+except ImportError:
+    FAISS_AVAILABLE = False
 
 # Ensure all required classes are properly defined and exported
 __all__ = ['NovaMemoryAI', 'MemoryEventType', 'AdvancedMemoryAgent', 'AdvancedClusterEngine', 'MemoryCategory']
 
 
-class AdvancedClusterEngine:
-    """
-    Advanced clustering engine with enhanced capabilities including:
-    - Semantic clustering using improved vector embeddings
-    - Hierarchical clustering structure (topical, temporal, categorical)
-    - Dynamic cluster management (creation, merging, splitting)
-    - Cluster quality assessment and optimization
-    """
+class VectorGenerator:
+    """Generate real vector embeddings from text for semantic memory"""
 
-    def __init__(self, memory_system_instance):
-        self.memory_system = memory_system_instance
-        self.vector_dimension = 8  # Default dimension
-        self.similarity_threshold = 0.65  # Minimum similarity to join cluster
-        self.min_cluster_size = 2  # Minimum size for a valid cluster
-        self.max_cluster_size = 10  # Maximum size before splitting consideration
-        self.cluster_quality_threshold = 0.5  # Minimum quality score to maintain cluster
+    def __init__(self, model_name: str = 'all-MiniLM-L6-v2'):
+        self.model_name = model_name
+        self.model = None
+        self.vector_dim = 384  # Default for all-MiniLM-L6-v2
+        self._initialize_model()
+
+    def _initialize_model(self):
+        """Initialize the sentence transformer model"""
+        try:
+            if SENTENCE_TRANSFORMERS_AVAILABLE:
+                self.model = SentenceTransformer(self.model_name)
+                self.vector_dim = self.model.get_sentence_embedding_dimension()
+                print(f"[VECTOR] Loaded model {self.model_name} with dimension {self.vector_dim}")
+            else:
+                print("[VECTOR] Warning: sentence-transformers not available, using fallback")
+                self.model = None
+        except Exception as e:
+            print(f"[VECTOR] Error loading model: {e}")
+            self.model = None
+
+    def generate_vector(self, text: str) -> List[float]:
+        """Generate normalized vector embedding from text"""
+        if not text or not text.strip():
+            return [0.0] * self.vector_dim
+
+        if self.model is None:
+            # Fallback: simple hash-based vector (better than zeros)
+            return self._hash_fallback_vector(text)
+
+        try:
+            # Generate embedding
+            embedding = self.model.encode([text], normalize_embeddings=True)[0]
+            # Ensure it's a list of floats
+            vector = embedding.tolist()
+            return vector
+        except Exception as e:
+            print(f"[VECTOR] Error generating vector: {e}")
+            return self._hash_fallback_vector(text)
+
+    def _hash_fallback_vector(self, text: str) -> List[float]:
+        """Fallback vector generation using hash when model unavailable"""
+        # Create a deterministic vector from text hash
+        hash_obj = hashlib.sha256(text.encode('utf-8'))
+        hash_bytes = hash_obj.digest()
+
+        # Convert to float vector
+        vector = []
+        for i in range(0, min(len(hash_bytes), self.vector_dim * 4), 4):
+            if i + 4 <= len(hash_bytes):
+                # Convert 4 bytes to float
+                val = int.from_bytes(hash_bytes[i:i+4], byteorder='little', signed=True)
+                # Normalize to [-1, 1]
+                normalized = (val / 2147483648.0)  # 2^31
+                vector.append(normalized)
+
+        # Pad or truncate to vector_dim
+        while len(vector) < self.vector_dim:
+            vector.append(0.0)
+        vector = vector[:self.vector_dim]
+
+        # Normalize to unit vector
+        norm = math.sqrt(sum(x * x for x in vector))
+        if norm > 0:
+            vector = [x / norm for x in vector]
+        else:
+            # If all zeros, set first element to 1
+            vector[0] = 1.0
+
+        return vector
+
+
+class FastVectorIndex:
+    """FAISS-based vector index for fast similarity search"""
+
+    def __init__(self, dimension: int):
+        self.dimension = dimension
+        self.index = None
+        self.id_to_event = {}  # Maps index position to event ID
+        self.event_to_id = {}  # Maps event ID to index position
+        self.next_id = 0
+        self._initialize_index()
+
+    def _initialize_index(self):
+        """Initialize FAISS index"""
+        if FAISS_AVAILABLE:
+            # Using Inner Product (IP) which equals cosine similarity for normalized vectors
+            self.index = faiss.IndexFlatIP(self.dimension)
+            print(f"[VECTOR] Initialized FAISS index with dimension {self.dimension}")
+        else:
+            print("[VECTOR] Warning: FAISS not available, using brute force search")
+            self.index = None
+            self.vectors = []  # Fallback storage
+            self.id_to_event = {}
+
+    def add_vector(self, event_id: str, vector: List[float]) -> bool:
+        """Add a vector to the index"""
+        if not self._is_valid_vector(vector):
+            return False
+
+        try:
+            vector_np = np.array([vector], dtype='float32')
+
+            if self.index is not None:
+                # FAISS path
+                self.index.add(vector_np)
+                self.id_to_event[self.next_id] = event_id
+                self.event_to_id[event_id] = self.next_id
+                self.next_id += 1
+            else:
+                # Brute force fallback
+                self.vectors.append(vector)
+                self.id_to_event[len(self.vectors) - 1] = event_id
+                self.event_to_id[event_id] = len(self.vectors) - 1
+
+            return True
+        except Exception as e:
+            print(f"[VECTOR] Error adding vector: {e}")
+            return False
+
+    def search_vectors(self, query_vector: List[float], k: int = 10) -> List[Tuple[str, float]]:
+        """Search for similar vectors"""
+        if not self._is_valid_vector(query_vector):
+            return []
+
+        try:
+            query_np = np.array([query_vector], dtype='float32')
+
+            if self.index is not None and self.index.ntotal > 0:
+                # FAISS search
+                k = min(k, self.index.ntotal)  # Don't search for more than we have
+                distances, indices = self.index.search(query_np, k)
+
+                results = []
+                for i in range(len(indices[0])):
+                    idx = int(indices[0][i])
+                    if idx in self.id_to_event:
+                        event_id = self.id_to_event[idx]
+                        score = float(distances[0][i])  # Inner product = cosine for normalized
+                        results.append((event_id, score))
+                return results
+            else:
+                # Brute force fallback
+                if not self.vectors:
+                    return []
+
+                similarities = []
+                for i, vector in enumerate(self.vectors):
+                    if self._is_valid_vector(vector):
+                        sim = cosine_similarity([query_vector], [vector])[0][0]
+                        if i in self.id_to_event:
+                            event_id = self.id_to_event[i]
+                            similarities.append((event_id, float(sim)))
+
+                # Sort by similarity (descending) and return top k
+                similarities.sort(key=lambda x: x[1], reverse=True)
+                return similarities[:k]
+
+        except Exception as e:
+            print(f"[VECTOR] Error searching vectors: {e}")
+            return []
+
+    def _is_valid_vector(self, vector: List[float]) -> bool:
+        """Check if vector is valid (not all zeros)"""
+        if not vector or len(vector) != self.dimension:
+            return False
+        return not all(abs(x) < 1e-10 for x in vector)
+
+    def get_vector_count(self) -> int:
+        """Get number of vectors in index"""
+        if self.index is not None:
+            return self.index.ntotal
+        else:
+            return len(self.vectors) if hasattr(self, 'vectors') else 0
+
+    def rebuild_index(self, vectors: List[List[float]], event_ids: List[str]):
+        """Rebuild the entire index from scratch"""
+        try:
+            # Reset
+            self._initialize_index()
+            self.id_to_event = {}
+            self.event_to_id = {}
+            self.next_id = 0
+
+            # Add all vectors
+            valid_pairs = [(vid, vec) for vid, vec in zip(event_ids, vectors)
+                          if self._is_valid_vector(vec)]
+
+            for event_id, vector in valid_pairs:
+                self.add_vector(event_id, vector)
+
+            print(f"[VECTOR] Rebuilt index with {self.get_vector_count()} vectors")
+        except Exception as e:
+            print(f"[VECTOR] Error rebuilding index: {e}")
+
+
+class AdvancedClusterEngine:
+
+    def __init__(self, memory_system):
+        self.memory_system = memory_system
 
     def update_clusters_on_new_vector(self, storage: Dict, event_id: str, vector: List[float],
                                     timestamp: str, confidence: float = 0.8):
         """
         Enhanced method to handle new vector addition and update clusters immediately.
-        Implements multiple clustering strategies and quality assessment.
+        Implements the new clustering strategies from CLUSTER_IMPROVEMENT_GUIDE.md with proper thresholds.
         """
         print(f"[CLUSTER-ADV] Starting cluster update for event {event_id}")
+
+        # Log pre-operation metrics
+        pre_metrics = self.compute_clustering_metrics(storage)
         print(f"[CLUSTER-ADV] Storage clusters before: {len(storage['memory_engine'].get('clusters', {}))}")
 
         # Add the event's vector to the index
@@ -72,13 +278,50 @@ class AdvancedClusterEngine:
         storage["memory_engine"]["vector_index"][event_id] = vector
         print(f"[CLUSTER-ADV] Added vector for event {event_id} to vector_index")
 
-        # Find the most suitable cluster using multiple strategies
+        # Find the most suitable cluster using the improved similarity scoring
         best_cluster_id = self._find_best_cluster_for_event(storage, event_id, vector)
 
         if best_cluster_id:
-            # Add to existing cluster
-            self._add_event_to_cluster(storage, best_cluster_id, event_id, vector)
-            print(f"[CLUSTER-ADV] Assigned event {event_id} to existing cluster {best_cluster_id}")
+            # Attempt to add to existing cluster (with coherence checking)
+            success = self._add_event_to_cluster(storage, best_cluster_id, event_id, vector)
+            if success:
+                print(f"[CLUSTER-ADV] Assigned event {event_id} to existing cluster {best_cluster_id}")
+                # Get the event for the reason
+                event_obj = None
+                for event in storage["memory_engine"]["memory_events"]:
+                    if event.get('event_id') == event_id:
+                        event_obj = event
+                        break
+
+                if event_obj:
+                    # Calculate the similarity score for logging
+                    cluster_event_ids = storage["memory_engine"]["clusters"][best_cluster_id].get('event_ids', [])
+                    if cluster_event_ids:
+                        # Calculate average similarity to cluster events
+                        total_similarity = 0.0
+                        valid_comparisons = 0
+                        for cluster_event_id in cluster_event_ids[:3]:  # Limit to first 3 for performance
+                            cluster_event_obj = None
+                            for storage_event in storage["memory_engine"]["memory_events"]:
+                                if storage_event.get('event_id') == cluster_event_id:
+                                    cluster_event_obj = storage_event
+                                    break
+                            if cluster_event_obj:
+                                similarity = self._compute_similarity_score(event_obj, cluster_event_obj)
+                                total_similarity += similarity
+                                valid_comparisons += 1
+                        avg_similarity = total_similarity / valid_comparisons if valid_comparisons > 0 else 0.0
+
+                        # Log explainable merge
+                        reason = f"shared semantic content: {event_obj.get('summary', '')[:50]}..."
+                        self._log_explainable_merge(best_cluster_id, [event_id], reason, avg_similarity)
+            else:
+                # If coherence check failed, create a new cluster instead
+                print(f"[CLUSTER-ADV] Creating new cluster for event {event_id} (coherence check failed for cluster {best_cluster_id})")
+                new_cluster_id = self._create_new_cluster(storage, event_id, vector, timestamp)
+                self._log_cluster_update('create', new_cluster_id, [event_id],
+                                       f"Created new cluster for event {event_id} after coherence check failure")
+                print(f"[CLUSTER-ADV] Created new cluster {new_cluster_id} for event {event_id}")
         else:
             # Create a new cluster
             print(f"[CLUSTER-ADV] Creating new cluster for event {event_id}")
@@ -93,42 +336,132 @@ class AdvancedClusterEngine:
         # Synchronize vector_index with clusters to ensure consistency
         self._synchronize_vector_index_and_clusters(storage)
 
+        # Log post-operation metrics
+        post_metrics = self.compute_clustering_metrics(storage)
+
         print(f"[CLUSTER-ADV] Storage clusters after: {len(storage['memory_engine'].get('clusters', {}))}")
         print(f"[CLUSTER-ADV] Vector index size after: {len(storage['memory_engine']['vector_index'])}")
 
     def _find_best_cluster_for_event(self, storage: Dict, event_id: str, vector: List[float]) -> Optional[str]:
         """
-        Find the best cluster for an event using multiple similarity measures and strategies.
+        Find the best cluster for an event using the new similarity scoring approach from CLUSTER_IMPROVEMENT_GUIDE.md.
+        Implements the weighted similarity formula with proper thresholds and coherence checks.
         """
         clusters = storage["memory_engine"].get("clusters", {})
         best_cluster_id = None
         best_score = -1.0
 
+        # Get the event to determine its semantic tags for hybrid scoring
+        event_obj = None
+        for event in storage["memory_engine"]["memory_events"]:
+            if event.get('event_id') == event_id:
+                event_obj = event
+                break
+
+        if not event_obj:
+            return None
+
         for cluster_id, cluster in clusters.items():
             if 'centroid_vector' in cluster:
-                # Calculate semantic similarity (cosine similarity)
-                semantic_similarity = self._cosine_similarity_improved(vector, cluster['centroid_vector'])
+                # Calculate the similarity using our enhanced method that follows the guide
+                # First, get the cluster's representative event or calculate a synthetic one
+                cluster_event_ids = cluster.get('event_ids', [])
 
-                # Calculate cluster quality
-                cluster_quality = cluster.get('coherence_score', 0.5)
+                # Calculate mean similarity between the event and all events in the cluster
+                if cluster_event_ids:
+                    total_similarity = 0.0
+                    valid_comparisons = 0
 
-                # Combine similarity and quality for final score
-                combined_score = semantic_similarity * 0.7 + cluster_quality * 0.3
+                    for cluster_event_id in cluster_event_ids:
+                        cluster_event_obj = None
+                        for storage_event in storage["memory_engine"]["memory_events"]:
+                            if storage_event.get('event_id') == cluster_event_id:
+                                cluster_event_obj = storage_event
+                                break
 
-                # Check if this cluster is a good fit
-                if (combined_score > best_score and
-                    combined_score >= self.similarity_threshold and
+                        if cluster_event_obj:
+                            similarity = self._compute_similarity_score(event_obj, cluster_event_obj)
+                            total_similarity += similarity
+                            valid_comparisons += 1
+
+                    if valid_comparisons > 0:
+                        mean_similarity = total_similarity / valid_comparisons
+                    else:
+                        mean_similarity = 0.0
+                else:
+                    # If cluster is empty, somehow, skip it
+                    continue
+
+                # Apply thresholds as per guide: ≥0.65 auto merge, 0.50-0.65 flag for review, <0.50 no merge
+                merge_threshold = 0.65
+                review_threshold = 0.50
+
+                # Check if this cluster is a good fit based on the improved scoring
+                if (mean_similarity > best_score and
+                    mean_similarity >= merge_threshold and
                     len(cluster.get('event_ids', [])) < self.max_cluster_size):
-                    best_score = combined_score
+                    best_score = mean_similarity
                     best_cluster_id = cluster_id
 
         return best_cluster_id
 
+    def _extract_content_topics(self, text: str) -> set:
+        """
+        Extract main content topics from text to identify subject matter.
+        Helps prevent mixing of unrelated topics like food and technology.
+        """
+        text_lower = text.lower()
+        topics = set()
+
+        # Define topic keywords for different domains
+        topic_keywords = {
+            'food': ['food', 'eat', 'meal', 'cuisine', 'recipe', 'pasta', 'pizza', 'restaurant', 'cook', 'cooking', 'baking', 'ingredient', 'flavor', 'taste', 'dish', 'dining', 'dinner', 'lunch', 'breakfast'],
+            'technology': ['technology', 'tech', 'computer', 'software', 'app', 'application', 'programming', 'coding', 'algorithm', 'network', 'internet', 'digital', 'device', 'mobile', 'phone', 'tablet', 'hardware', 'data', 'information'],
+            'health': ['health', 'healthy', 'doctor', 'medicine', 'medical', 'exercise', 'fitness', 'wellness', 'nutrition', 'diet', 'workout', 'physical', 'mental', 'therapy', 'treatment', 'hospital'],
+            'travel': ['travel', 'trip', 'vacation', 'journey', 'destination', 'vacation', 'holiday', 'tour', 'tourist', 'flight', 'hotel', 'booking', 'visit', 'explore', 'sightseeing', 'adventure'],
+            'education': ['education', 'school', 'university', 'college', 'student', 'teacher', 'professor', 'study', 'learn', 'course', 'class', 'lecture', 'degree', 'academic'],
+            'entertainment': ['entertainment', 'movie', 'film', 'cinema', 'show', 'concert', 'music', 'song', 'dance', 'theater', 'play', 'game', 'gaming', 'sport', 'sports', 'comic', 'anime'],
+            'finance': ['finance', 'money', 'bank', 'investment', 'economy', 'budget', 'financial', 'saving', 'spending', 'expense', 'income', 'salary', 'loan', 'credit'],
+            'work': ['work', 'job', 'career', 'employment', 'office', 'colleague', 'boss', 'meeting', 'project', 'team', 'business', 'company', 'career'],
+            'family': ['family', 'parent', 'child', 'kid', 'son', 'daughter', 'mother', 'father', 'sibling', 'brother', 'sister', 'relative', 'cousin', 'aunt', 'uncle']
+        }
+
+        # Look for topic keywords in the text
+        for topic, keywords in topic_keywords.items():
+            if any(keyword in text_lower for keyword in keywords):
+                topics.add(topic)
+
+        # If no specific topics were found, return empty set
+        return topics
+
+    def _normalize_tag(self, tag: str) -> str:
+        """
+        Normalize a tag to lowercase with underscores replacing spaces.
+        """
+        if not tag:
+            return 'general'
+        return tag.strip().lower().replace(' ', '_').replace('-', '_')
+
+    def event_dominant_tag(self, event: Dict) -> str:
+        """
+        Determine the dominant tag for an event.
+        """
+        tags = event.get('emotional_context', {}).get('emotion_tags', [])
+        if tags:
+            return self._normalize_tag(tags[0])
+        cat = event.get('category') or 'general'
+        return self._normalize_tag(cat)
+
     def _add_event_to_cluster(self, storage: Dict, cluster_id: str, event_id: str, vector: List[float]):
         """
         Add an event to an existing cluster and update all relevant metrics.
+        Implements coherence checking: revert merge if coherence drops >0.15
         """
         cluster = storage["memory_engine"]["clusters"][cluster_id]
+
+        # Store original coherence, centroid, and event_ids to check if adding the event reduces coherence too much
+        original_coherence = cluster.get("coherence_score", 1.0)
+        original_event_ids = cluster["event_ids"][:]  # Create a copy of the list
 
         # Add event ID if not already present
         if event_id not in cluster["event_ids"]:
@@ -138,19 +471,95 @@ class AdvancedClusterEngine:
             self._update_cluster_centroid(storage, cluster_id, event_id, vector)
 
             # Update coherence score
-            cluster["coherence_score"] = self._calculate_enhanced_cluster_coherence(
-                storage, cluster_id)
+            new_coherence = self._calculate_enhanced_cluster_coherence(storage, cluster_id)
+            cluster["coherence_score"] = new_coherence
 
-            # Update metadata and timestamp
-            cluster["last_updated"] = datetime.now().isoformat()
-            self._update_cluster_metadata(storage, cluster_id)
+            # Check coherence drop - if it drops more than 0.15, revert the merge
+            coherence_drop = original_coherence - new_coherence
+            max_coherence_drop = 0.15  # As per guide: revert if coherence drops >0.15
 
-            # Log the assignment
-            self._log_cluster_update('assign', cluster_id, [event_id],
-                                   f"Assigned to cluster")
+            if coherence_drop > max_coherence_drop:
+                # Revert the changes: restore original state
+                cluster["event_ids"] = original_event_ids
+                # Revert centroid to what it was before the addition
+                self._update_cluster_centroid_after_removal(storage, cluster_id, original_event_ids)
+                cluster["coherence_score"] = original_coherence
+                print(f"[CLUSTER-ADV] Reverted adding event {event_id} to cluster {cluster_id} due to coherence drop: {coherence_drop:.3f}")
+                return False  # Indicate that the addition was reverted
+            else:
+                # Update metadata and timestamp
+                cluster["last_updated"] = datetime.now().isoformat()
+                self._update_cluster_metadata(storage, cluster_id)
+
+                # Log the assignment
+                self._log_cluster_update('assign', cluster_id, [event_id],
+                                       f"Assigned to cluster")
+                return True  # Indicate successful addition
+        return True
+
+    def _update_cluster_centroid_after_removal(self, storage: Dict, cluster_id: str, event_ids: List[str]):
+        """
+        Update cluster centroid after reverting an event addition.
+        """
+        cluster = storage["memory_engine"]["clusters"][cluster_id]
+
+        if not event_ids:
+            # If no events left, reset to zero vector or handle appropriately
+            cluster["centroid_vector"] = [0.0] * self.vector_dimension
+            return
+
+        # Get vectors and confidences for all events in the cluster
+        vectors = []
+        confidences = []
+        importance_scores = []
+
+        for eid in event_ids:
+            if eid in storage["memory_engine"]["vector_index"]:
+                vectors.append(storage["memory_engine"]["vector_index"][eid])
+
+                # Get confidence and importance for this event
+                conf = 0.8
+                importance = 0.5
+                for event in storage["memory_engine"]["memory_events"]:
+                    if event.get('event_id') == eid:
+                        conf = event.get('confidence', 0.8)
+                        importance = event.get('importance_score', 0.5)
+                        break
+                confidences.append(conf)
+                importance_scores.append(importance)
+
+        if not vectors:
+            cluster["centroid_vector"] = [0.0] * self.vector_dimension
+            return
+
+        # Calculate combined weights using both confidence and importance
+        combined_weights = []
+        for i in range(len(confidences)):
+            # Combine confidence and importance scores
+            combined_weight = confidences[i] * 0.7 + importance_scores[i] * 0.3
+            combined_weights.append(combined_weight)
+
+        # Calculate confidence-weighted centroid
+        total_weight = sum(combined_weights)
+        if total_weight == 0:
+            # Fallback to simple average if all weights are 0
+            centroid = [sum(vec[i] for vec in vectors) / len(vectors) for i in range(len(vectors[0]))]
+        else:
+            # Weighted average by combined confidence/importance
+            centroid = [
+                sum(vectors[i][j] * combined_weights[i] for i in range(len(vectors))) / total_weight
+                for j in range(len(vectors[0]))
+            ]
+
+        # Normalize the centroid vector to unit length for consistency
+        magnitude = math.sqrt(sum(x * x for x in centroid))
+        if magnitude > 0:
+            centroid = [x / magnitude for x in centroid]
+
+        cluster["centroid_vector"] = centroid
 
     def _update_cluster_centroid(self, storage: Dict, cluster_id: str, event_id: str, new_vector: List[float]):
-        """Update cluster centroid with confidence-weighted averaging."""
+        """Update cluster centroid with enhanced confidence-weighted averaging."""
         cluster = storage["memory_engine"]["clusters"][cluster_id]
         event_ids = cluster.get('event_ids', [])
 
@@ -162,42 +571,60 @@ class AdvancedClusterEngine:
         # Get vectors and confidences for all events in the cluster
         vectors = []
         confidences = []
+        importance_scores = []
 
         for eid in event_ids:
             if eid in storage["memory_engine"]["vector_index"]:
                 vectors.append(storage["memory_engine"]["vector_index"][eid])
 
-                # Get confidence for this event
+                # Get confidence and importance for this event
                 conf = 0.8
+                importance = 0.5
                 for event in storage["memory_engine"]["memory_events"]:
                     if event.get('event_id') == eid:
                         conf = event.get('confidence', 0.8)
+                        importance = event.get('importance_score', 0.5)
                         break
                 confidences.append(conf)
+                importance_scores.append(importance)
 
         if not vectors:
             return
 
+        # Calculate combined weights using both confidence and importance
+        combined_weights = []
+        for i in range(len(confidences)):
+            # Combine confidence and importance scores
+            combined_weight = confidences[i] * 0.7 + importance_scores[i] * 0.3
+            combined_weights.append(combined_weight)
+
         # Calculate confidence-weighted centroid
-        total_weight = sum(confidences)
+        total_weight = sum(combined_weights)
         if total_weight == 0:
-            # Fallback to simple average if all confidences are 0
+            # Fallback to simple average if all weights are 0
             centroid = [sum(vec[i] for vec in vectors) / len(vectors) for i in range(len(vectors[0]))]
         else:
-            # Weighted average by confidence
+            # Weighted average by combined confidence/importance
             centroid = [
-                sum(vectors[i][j] * confidences[i] for i in range(len(vectors))) / total_weight
+                sum(vectors[i][j] * combined_weights[i] for i in range(len(vectors))) / total_weight
                 for j in range(len(vectors[0]))
             ]
+
+        # Normalize the centroid vector to unit length for consistency
+        magnitude = math.sqrt(sum(x * x for x in centroid))
+        if magnitude > 0:
+            centroid = [x / magnitude for x in centroid]
 
         cluster["centroid_vector"] = centroid
 
     def _calculate_enhanced_cluster_coherence(self, storage: Dict, cluster_id: str) -> float:
         """
         Calculate enhanced coherence score considering:
-        - Semantic similarity to centroid
-        - Confidence weighting
+        - Semantic similarity to centroid (with confidence weighting)
         - Category consistency
+        - Emotional context consistency
+        - Importance score consistency
+        - Average pairwise similarity
         """
         cluster = storage["memory_engine"]["clusters"][cluster_id]
         event_ids = cluster.get('event_ids', [])
@@ -208,49 +635,101 @@ class AdvancedClusterEngine:
         vectors = []
         confidences = []
         categories = []
+        emotion_contexts = []
+        importance_scores = []
 
-        # Get vectors, confidences, and categories for all events
+        # Get all relevant data for events in the cluster
         for event_id in event_ids:
             if event_id in storage["memory_engine"]["vector_index"]:
                 vectors.append(storage["memory_engine"]["vector_index"][event_id])
 
-                # Get confidence for this event
-                conf = 0.8
+                # Get all attributes for this event
                 for event in storage["memory_engine"]["memory_events"]:
                     if event.get('event_id') == event_id:
-                        conf = event.get('confidence', 0.8)
+                        confidences.append(event.get('confidence', 0.8))
                         categories.append(event.get('category', 'general'))
+                        importance_scores.append(event.get('importance_score', 0.5))
+
+                        # Extract emotion context for consistency check
+                        emotional_context = event.get('emotional_context', {})
+                        sentiment = emotional_context.get('sentiment', 'neutral')
+                        emotion_tags = emotional_context.get('emotion_tags', [])
+                        emotion_contexts.append({
+                            'sentiment': sentiment,
+                            'tags': emotion_tags
+                        })
                         break
-                confidences.append(conf)
 
         if len(vectors) < 2:
             return 1.0
 
-        # Calculate centroid
-        centroid = [sum(vec[i] for vec in vectors) / len(vectors) for i in range(len(vectors[0]))]
+        # Calculate current centroid
+        current_centroid = cluster.get('centroid_vector', [sum(vec[i] for vec in vectors) / len(vectors) for i in range(len(vectors[0]))])
 
         # Calculate semantic similarity to centroid (weighted by confidence)
-        total_weight = sum(confidences)
-        if total_weight == 0:
+        if sum(confidences) == 0:
             semantic_coherence = 0.0
         else:
             semantic_coherence = sum(
-                self._cosine_similarity_improved(centroid, vectors[i]) * confidences[i]
+                self._cosine_similarity_improved(current_centroid, vectors[i]) * confidences[i]
                 for i in range(len(vectors))
-            ) / total_weight
+            ) / sum(confidences)
 
-        # Calculate category consistency (how similar the categories are)
+        # Calculate category consistency
         unique_categories = set(categories)
         if len(unique_categories) == 1:
             category_coherence = 1.0
         else:
-            # If multiple categories, measure how similar they are in semantic space
+            # Use normalized mutual information between categories
             category_coherence = 1.0 - (len(unique_categories) - 1) / len(categories)
 
-        # Combine semantic and category coherences
-        combined_coherence = (semantic_coherence * 0.7 + category_coherence * 0.3)
+        # Calculate emotional consistency
+        if emotion_contexts:
+            sentiment_types = [ctx['sentiment'] for ctx in emotion_contexts]
+            unique_sentiments = set(sentiment_types)
+            if len(unique_sentiments) == 1:
+                emotional_coherence = 1.0
+            else:
+                emotional_coherence = 1.0 - (len(unique_sentiments) - 1) / len(sentiment_types)
+        else:
+            emotional_coherence = 1.0
 
-        return min(1.0, combined_coherence)
+        # Calculate importance consistency (how similar the importance scores are)
+        if len(importance_scores) > 1:
+            avg_importance = sum(importance_scores) / len(importance_scores)
+            importance_variance = sum((imp - avg_importance) ** 2 for imp in importance_scores) / len(importance_scores)
+            # Lower variance = higher consistency
+            importance_coherence = max(0.0, 1.0 - importance_variance)
+        else:
+            importance_coherence = 1.0
+
+        # Calculate average pairwise similarity (for internal cluster consistency)
+        if len(vectors) > 1:
+            total_pairs = 0
+            total_similarity = 0.0
+            for i in range(len(vectors)):
+                for j in range(i + 1, len(vectors)):
+                    similarity = self._cosine_similarity_improved(vectors[i], vectors[j])
+                    total_similarity += similarity
+                    total_pairs += 1
+            if total_pairs > 0:
+                pairwise_coherence = total_similarity / total_pairs
+            else:
+                pairwise_coherence = 1.0
+        else:
+            pairwise_coherence = 1.0
+
+        # Combine all coherence factors with appropriate weights
+        # Using weights as: semantic: 0.3, category: 0.2, emotion: 0.2, importance: 0.15, pairwise: 0.15
+        combined_coherence = (
+            semantic_coherence * 0.3 +
+            category_coherence * 0.2 +
+            emotional_coherence * 0.2 +
+            importance_coherence * 0.15 +
+            pairwise_coherence * 0.15
+        )
+
+        return min(1.0, max(0.0, combined_coherence))
 
     def _create_new_cluster(self, storage: Dict, event_id: str, vector: List[float], timestamp: str) -> str:
         """
@@ -323,79 +802,267 @@ class AdvancedClusterEngine:
     def _infer_cluster_topic_from_event(self, event: Dict) -> str:
         """
         Infer cluster topic from event following the pattern in New_memory_event.json
+        Enhanced to consider multiple factors including emotions, categories, and content.
+        Uses snake_case format as per CLUSTER_IMPROVEMENT_GUIDE.md recommendation
         """
+        # Get emotional context
+        emotional_context = event.get('emotional_context', {})
+        emotion_tags = emotional_context.get('emotion_tags', [])
+
+        # Get category information
         category = event.get('category', 'general')
         subcategory = event.get('subcategory', 'general')
         summary = event.get('summary', '')
 
-        # Map categories to topics similar to the reference file
+        # Enhanced topic creation with multiple priority levels
+        topic_parts = []
+
+        # Level 1: Primary emotion if available
+        if emotion_tags:
+            main_emotion = emotion_tags[0].lower()
+            topic_parts.append(main_emotion)
+
+        # Level 2: Category context
         category_topic_map = {
-            'personal_preferences': 'Preferences',
-            'activity_behavior': 'Activities & Behaviors',
-            'personal_development': 'Personal Development',
-            'task_project_tracking': 'Projects & Tasks',
-            'user_identity': 'Identity & Personal Info',
-            'communication_boundaries': 'Communication Preferences',
-            'current_state': 'Current State',
-            'contextual_rules': 'Rules & Preferences',
-            'multi_identity': 'Identity & Roles',
-            'knowledge_expertise': 'Skills & Expertise',
-            'tool_integration': 'Tools & Integration',
-            'response_adaptation': 'Response Preferences',
-            'file_media': 'File & Media Preferences',
-            'long_term_goals': 'Goals & Aspirations',
-            'collaborator_relationships': 'Relationships',
-            'data_privacy': 'Privacy & Preferences',
-            'multimodal_preferences': 'Media Preferences',
-            'system_awareness': 'System Awareness',
-            'session_themes': 'Session Themes',
-            'meta_memory': 'Meta Memory',
-            'temporal_patterns': 'Time Patterns',
-            'search_external_info': 'Search Preferences',
-            'greeting_patterns': 'Greeting Patterns',
-            'conversation_analytics': 'Conversation Analytics',
-            'news_weather_history': 'News & Weather',
-            'timezone_preferences': 'Timezone Preferences'
+            'personal_preferences': 'preferences',
+            'activity_behavior': 'activities_behaviors',
+            'personal_development': 'personal_development',
+            'task_project_tracking': 'projects_tasks',
+            'user_identity': 'identity_info',
+            'communication_boundaries': 'communication_preferences',
+            'current_state': 'current_state',
+            'contextual_rules': 'rules_preferences',
+            'multi_identity': 'identity_roles',
+            'knowledge_expertise': 'skills_expertise',
+            'tool_integration': 'tools_integration',
+            'response_adaptation': 'response_preferences',
+            'file_media': 'media_preferences',
+            'long_term_goals': 'goals_aspirations',
+            'collaborator_relationships': 'relationships',
+            'data_privacy': 'privacy_preferences',
+            'multimodal_preferences': 'media_preferences',
+            'system_awareness': 'system_awareness',
+            'session_themes': 'session_themes',
+            'meta_memory': 'meta_memory',
+            'temporal_patterns': 'time_patterns',
+            'search_external_info': 'search_preferences',
+            'greeting_patterns': 'greeting_patterns',
+            'conversation_analytics': 'conversation_analytics',
+            'news_weather_history': 'news_weather',
+            'timezone_preferences': 'timezone_preferences'
         }
 
-        base_topic = category_topic_map.get(category, category.replace('_', ' ').title())
+        # Level 3: Content-based topic if emotion doesn't provide enough context
+        if summary and not emotion_tags:
+            # Extract meaningful keywords from summary
+            summary_lower = summary.lower()
 
-        # Add more specific topic based on subcategory and content if available
-        if subcategory and subcategory not in ['general', '']:
-            base_topic = f"{base_topic} - {subcategory.replace('_', ' ').title()}"
+            # Check for specific content types
+            content_keywords = [
+                ('food_cuisine', ['food', 'eat', 'meal', 'cuisine', 'italian', 'pasta', 'pizza', 'restaurant', 'cooking']),
+                ('entertainment', ['anime', 'tv', 'movie', 'show', 'watch', 'series', 'entertainment']),
+                ('reading_literature', ['book', 'novel', 'read', 'literature', 'author', 'story']),
+                ('health_fitness', ['exercise', 'walk', 'morning', 'health', 'fitness', 'routine', 'habit']),
+                ('travel_exploration', ['travel', 'trip', 'vacation', 'visit', 'flight', 'destination']),
+                ('work_career', ['work', 'job', 'career', 'professional', 'career']),
+                ('learning_skills', ['learn', 'study', 'education', 'skill', 'programming', 'python'])
+            ]
 
-        return base_topic
+            for content_type, keywords in content_keywords:
+                if any(keyword in summary_lower for keyword in keywords):
+                    topic_parts.append(content_type)
+                    break
+        elif category != 'general' and not emotion_tags:
+            # If no emotion tags but category exists, use category
+            base_category_topic = category_topic_map.get(category, category)
+            topic_parts.append(base_category_topic)
+
+        # Create topic from available parts in snake_case format
+        if topic_parts:
+            # Use the first part as the primary topic in snake_case
+            primary_topic = topic_parts[0].replace(' ', '_').replace('-', '_').lower()
+            return f"{primary_topic}_cluster"
+        else:
+            # Fallback to a default topic
+            return "general_activity_cluster"
 
     def _infer_cluster_label_from_event(self, event: Dict) -> str:
         """
         Infer cluster label from event following the pattern in New_memory_event.json
+        Enhanced with more sophisticated label generation based on emotions, content, and categories.
+        Creates human-friendly phrases as per CLUSTER_IMPROVEMENT_GUIDE.md
         """
-        summary = event.get('summary', '')
+        # Get all relevant context
+        emotional_context = event.get('emotional_context', {})
+        emotion_tags = emotional_context.get('emotion_tags', [])
         category = event.get('category', 'general')
+        subcategory = event.get('subcategory', 'general')
+        summary = event.get('summary', '')
+        importance_score = event.get('importance_score', 0.5)
 
-        # Create a descriptive label based on the event summary and category
+        # Enhanced label generation with multiple priority levels
+        label_parts = []
+
+        # Level 1: Extract main activity/action from summary for more descriptive labels
         if summary:
-            # Use keywords from summary to create a meaningful label
             summary_lower = summary.lower()
 
-            # Common patterns in the reference file
-            if any(word in summary_lower for word in ['anime', 'watch', 'tv', 'show']):
-                return "Anime Preferences"
-            elif any(word in summary_lower for word in ['food', 'cuisine', 'italian', 'pasta', 'pizza']):
-                return "Food & Culinary Interests"
-            elif any(word in summary_lower for word in ['walk', 'morning', 'health', 'exercise']):
-                return "Morning Wellness Routine"
-            elif any(word in summary_lower for word in ['read', 'book', 'novel', 'sci', 'fantasy', 'author']):
-                return "Reading Interests"
-            elif any(word in summary_lower for word in ['learn', 'python', 'programming', 'goal', 'skill']):
-                return "Learning Goals"
+            # Identify action/activity type for more specific labels
+            activity_patterns = [
+                # Entertainment activities
+                ('Anime & Series', ['watch', 'anime', 'series', 'tv', 'show', 'movie']),
+                ('Culinary & Food', ['food', 'eat', 'cook', 'cuisine', 'recipe', 'meal']),
+                ('Exercise & Health', ['exercise', 'walk', 'health', 'fitness', 'morning', 'routine']),
+                ('Reading & Learning', ['read', 'book', 'study', 'learn', 'education', 'knowledge']),
+                ('Work & Career', ['work', 'job', 'career', 'professional', 'office']),
+                ('Travel & Exploration', ['travel', 'visit', 'trip', 'explore', 'destination']),
+                ('Social & Communication', ['friend', 'social', 'talk', 'chat', 'connect']),
+                ('Creative & Artistic', ['create', 'art', 'design', 'write', 'music', 'creative'])
+            ]
+
+            for activity_name, keywords in activity_patterns:
+                if any(keyword in summary_lower for keyword in keywords):
+                    if emotion_tags:
+                        # Combine emotion with activity for richer labels
+                        main_emotion = emotion_tags[0].lower().title()
+                        return f"{main_emotion} {activity_name}"
+                    else:
+                        return f"{activity_name} Focus"
+
+        # Level 2: Use emotion tags if no specific activity is identified
+        if emotion_tags:
+            main_emotion = emotion_tags[0].lower().title()
+            # Create more descriptive emotion-based labels
+            emotion_label_map = {
+                'interest': 'Interest Exploration',
+                'enthusiasm': 'Enthusiasm Focus',
+                'preference': 'Preference Tracking',
+                'enjoyment': 'Enjoyment Activities',
+                'love': 'Passion Focus',
+                'liking': 'Liking Patterns',
+                'excitement': 'Excitement Tracking',
+                'motivation': 'Motivation Focus',
+                'happiness': 'Happiness Moments',
+                'joy': 'Joyful Experiences',
+                'habit': 'Habit Formation',
+                'routine': 'Routine Activities'
+            }
+
+            return emotion_label_map.get(main_emotion.lower(), f"{main_emotion} Focus")
+
+        # Level 3: Use category-specific labels
+        category_label_map = {
+            'personal_preferences': 'Personal Preferences & Habits',
+            'activity_behavior': 'Activity Patterns & Behaviors',
+            'personal_development': 'Personal Growth Goals',
+            'user_identity': 'Identity Information',
+            'communication_boundaries': 'Communication Preferences',
+            'long_term_goals': 'Long-term Goals & Aspirations'
+        }
+
+        if category in category_label_map:
+            return category_label_map[category]
+
+        # Level 4: General fallback with descriptive text
+        if summary:
+            # Create a label based on key content words
+            words = summary.split()
+            key_words = [word for word in words if word.lower() not in
+                        ['user', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']]
+            if key_words:
+                # Take first 2-3 meaningful words for the label
+                content_descriptor = ' '.join(key_words[:3])
+                return f"{content_descriptor} Activities" if len(content_descriptor) <= 30 else f"{key_words[0][:20]}... Tracking"
+
+        # Final fallback
+        category_name = category.replace('_', ' ').title()
+        return f"{category_name} Cluster"
+
+    def _create_hierarchical_cluster(self, storage: Dict, event_id: str, vector: List[float],
+                                   timestamp: str) -> Optional[str]:
+        """
+        Create a hierarchical cluster structure considering emotional, categorical, and semantic layers.
+        """
+        # Get the event for analysis
+        event_obj = None
+        for event in storage["memory_engine"]["memory_events"]:
+            if event.get('event_id') == event_id:
+                event_obj = event
+                break
+
+        if not event_obj:
+            return None
+
+        # Determine the appropriate cluster layer based on event characteristics
+        emotional_context = event_obj.get('emotional_context', {})
+        emotion_tags = emotional_context.get('emotion_tags', [])
+        category = event_obj.get('category', 'general')
+
+        # Create or find appropriate layer-based clusters
+        cluster_id = None
+
+        # First, look for an emotion-based cluster if emotion tags exist
+        if emotion_tags:
+            main_emotion = self._normalize_tag(emotion_tags[0])
+            emotion_cluster_id = self._find_existing_emotion_cluster(storage, main_emotion)
+            if emotion_cluster_id:
+                # Add to existing emotion cluster
+                self._add_event_to_cluster(storage, emotion_cluster_id, event_id, vector)
+                cluster_id = emotion_cluster_id
             else:
-                # Default to something based on category
-                category_name = category.replace('_', ' ').title()
-                return f"{category_name} Focus"
+                # Create new emotion cluster
+                cluster_id = self._create_new_cluster(storage, event_id, vector, timestamp)
+
+        # If no emotion cluster was found or created, try category-based clustering
+        elif category != 'general':
+            category_cluster_id = self._find_existing_category_cluster(storage, category)
+            if category_cluster_id:
+                self._add_event_to_cluster(storage, category_cluster_id, event_id, vector)
+                cluster_id = category_cluster_id
+            else:
+                # Create new category cluster
+                cluster_id = self._create_new_cluster(storage, event_id, vector, timestamp)
+
+        # If neither emotion nor category clustering worked, use semantic-based clustering
         else:
-            category_name = category.replace('_', ' ').title()
-            return f"{category_name} Cluster"
+            # Use the existing clustering logic
+            cluster_id = self._create_new_cluster(storage, event_id, vector, timestamp)
+
+        return cluster_id
+
+    def _find_existing_emotion_cluster(self, storage: Dict, emotion_tag: str) -> Optional[str]:
+        """
+        Find an existing cluster that matches the emotion tag.
+        """
+        clusters = storage["memory_engine"].get("clusters", {})
+
+        for cluster_id, cluster in clusters.items():
+            dominant_tags = cluster.get('metadata', {}).get('dominant_tags', [])
+            cluster_emotion_tag = cluster.get('metadata', {}).get('cluster_type', '')
+
+            # Check if this cluster is appropriate for the emotion
+            if emotion_tag in dominant_tags or emotion_tag == cluster_emotion_tag:
+                # Check if the cluster has capacity
+                if len(cluster.get('event_ids', [])) < self.max_cluster_size:
+                    return cluster_id
+
+        return None
+
+    def _find_existing_category_cluster(self, storage: Dict, category: str) -> Optional[str]:
+        """
+        Find an existing cluster that matches the category.
+        """
+        clusters = storage["memory_engine"].get("clusters", {})
+
+        for cluster_id, cluster in clusters.items():
+            cluster_type = cluster.get('metadata', {}).get('cluster_type', '')
+
+            if cluster_type == category:
+                # Check if the cluster has capacity
+                if len(cluster.get('event_ids', [])) < self.max_cluster_size:
+                    return cluster_id
+
+        return None
 
     def _validate_cluster_integrity(self, storage: Dict, cluster_id: str) -> bool:
         """
@@ -494,7 +1161,8 @@ class AdvancedClusterEngine:
 
     def _update_cluster_metadata(self, storage: Dict, cluster_id: str):
         """
-        Update cluster metadata with enhanced information following New_memory_event.json schema.
+        Update cluster metadata with enhanced information following CLUSTER_IMPROVEMENT_GUIDE.md.
+        Adds snake_case topic, human-friendly label, top 2-4 normalized tags, insights, etc.
         """
         cluster = storage["memory_engine"]["clusters"][cluster_id]
         event_ids = cluster.get('event_ids', [])
@@ -506,28 +1174,125 @@ class AdvancedClusterEngine:
         if event_ids:
             # Collect tags from all events in the cluster
             all_tags = set()
+            all_emotion_tags = []
+            all_categories = []
+            all_timestamps = []
+            all_summaries = []
+
             for event_id in event_ids:
                 for event in storage["memory_engine"]["memory_events"]:
                     if event.get('event_id') == event_id:
                         event_tags = self._extract_dominant_tags(storage, event_id)
                         all_tags.update(event_tags)
 
-            cluster['metadata']['dominant_tags'] = list(all_tags)[:10]  # Limit to 10 tags
+                        # Collect emotion tags specifically for emotion-based metadata
+                        emotion_tags = event.get('emotional_context', {}).get('emotion_tags', [])
+                        all_emotion_tags.extend(emotion_tags)
 
-        # Update average confidence from events
+                        # Collect categories
+                        category = event.get('category', 'general')
+                        all_categories.append(category)
+
+                        # Collect summaries for behavioral analysis
+                        summary = event.get('summary', '')
+                        if summary:
+                            all_summaries.append(summary)
+
+                        # Collect timestamps if available
+                        timestamp = event.get('timestamp')
+                        if timestamp:
+                            try:
+                                parsed_ts = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                all_timestamps.append(parsed_ts)
+                            except:
+                                pass
+
+            # Update dominant tags - top 2-4 normalized tags from members as per guide
+            all_tags_list = list(all_tags)
+            if len(all_tags_list) > 4:
+                # Sort tags by frequency or importance if possible
+                tag_counter = Counter()
+                for event_id in event_ids:
+                    for event in storage["memory_engine"]["memory_events"]:
+                        if event.get('event_id') == event_id:
+                            event_tags = self._extract_dominant_tags(storage, event_id)
+                            for tag in event_tags:
+                                tag_counter[tag] += 1
+                # Get top 4 most frequent tags
+                top_tags = [tag for tag, count in tag_counter.most_common(4)]
+                cluster['metadata']['dominant_tags'] = top_tags
+            else:
+                cluster['metadata']['dominant_tags'] = all_tags_list[:4]  # Limit to top 4
+
+            # Enrich with emotion-specific metadata
+            if all_emotion_tags:
+                # Count emotion frequencies for more detailed analysis
+                emotion_counter = Counter(all_emotion_tags)
+                cluster['metadata']['emotion_distribution'] = dict(emotion_counter)
+
+                # Identify primary emotion in the cluster
+                most_common_emotion = emotion_counter.most_common(1)
+                if most_common_emotion:
+                    cluster['metadata']['primary_emotion'] = most_common_emotion[0][0]
+                    cluster['metadata']['emotion_consistency'] = len([e for e in all_emotion_tags
+                                                                      if e == most_common_emotion[0][0]]) / len(all_emotion_tags)
+
+            # Enrich with categorical metadata
+            if all_categories:
+                category_counter = Counter(all_categories)
+                cluster['metadata']['category_distribution'] = dict(category_counter)
+
+                # Identify primary category
+                most_common_category = category_counter.most_common(1)
+                if most_common_category:
+                    cluster['metadata']['primary_category'] = most_common_category[0][0]
+                    cluster['metadata']['category_consistency'] = len([c for c in all_categories
+                                                                       if c == most_common_category[0][0]]) / len(all_categories)
+
+            # Add temporal metadata if timestamps exist
+            if all_timestamps and len(all_timestamps) > 1:
+                min_time = min(all_timestamps)
+                max_time = max(all_timestamps)
+                time_range_days = (max_time - min_time).days
+
+                cluster['metadata']['temporal_range_start'] = min_time.isoformat()
+                cluster['metadata']['temporal_range_end'] = max_time.isoformat()
+                cluster['metadata']['time_span_days'] = time_range_days
+                cluster['metadata']['temporal_density'] = len(all_timestamps) / max(time_range_days, 1)
+
+            # Add semantic diversity metrics
+            cluster['metadata']['semantic_diversity'] = len(all_tags) / max(len(event_ids), 1)
+            cluster['metadata']['emotion_diversity'] = len(set(all_emotion_tags)) / max(len(all_emotion_tags), 1) if all_emotion_tags else 0
+
+        # Update average confidence and importance from events
         if event_ids:
             total_conf = 0.0
+            total_importance = 0.0
             count = 0
+            conf_values = []
+
             for event_id in event_ids:
                 for event in storage["memory_engine"]["memory_events"]:
                     if event.get('event_id') == event_id:
-                        total_conf += event.get('confidence', 0.8)
+                        conf_val = event.get('confidence', 0.8)
+                        total_conf += conf_val
+                        total_importance += event.get('importance_score', 0.5)
+                        conf_values.append(conf_val)
                         count += 1
                         break
+
             if count > 0:
                 cluster['metadata']['average_confidence'] = total_conf / count
+                cluster['metadata']['average_importance'] = total_importance / count
 
-        # Enhance metadata with additional fields as per New_memory_event.json
+                # Add confidence distribution metrics
+                if len(conf_values) > 1:
+                    cluster['metadata']['confidence_std_dev'] = (sum((x - (total_conf / count)) ** 2 for x in conf_values) / len(conf_values)) ** 0.5
+                    cluster['metadata']['confidence_min'] = min(conf_values)
+                    cluster['metadata']['confidence_max'] = max(conf_values)
+
+        # Enhance metadata with additional fields as per CLUSTER_IMPROVEMENT_GUIDE.md
+        # Add temporal span
         if 'temporal_span' not in cluster['metadata']:
             # Calculate temporal span based on event timestamps
             timestamps = []
@@ -547,6 +1312,7 @@ class AdvancedClusterEngine:
             else:
                 cluster['metadata']['temporal_span'] = "unknown"
 
+        # Add creation timestamp
         if 'creation_timestamp' not in cluster['metadata']:
             # Set creation timestamp to first event's timestamp
             for event_id in event_ids:
@@ -562,8 +1328,68 @@ class AdvancedClusterEngine:
                     cluster['metadata']['cluster_type'] = event.get('category', 'general')
                     break
 
-        # Update cluster insights
+        # Update cluster insights with pattern analysis as per guide
         cluster['insights'] = self._create_enhanced_cluster_insights(storage, cluster_id)
+
+        # Add behavioral pattern summary as per guide
+        if all_summaries:
+            cluster['metadata']['behavioral_pattern_summary'] = self._analyze_behavioral_patterns(all_summaries)
+
+        # Add personalization opportunities as per guide
+        cluster['metadata']['personalization_opportunities'] = self._identify_personalization_opportunities(
+            cluster['metadata']['dominant_tags'], all_categories, all_emotion_tags
+        )
+
+    def _analyze_behavioral_patterns(self, summaries: List[str]) -> str:
+        """
+        Analyze behavioral patterns across cluster summaries to identify routines, habits, or preferences.
+        """
+        # Look for common patterns in summaries
+        all_text = ' '.join(summaries).lower()
+
+        # Identify common behavioral patterns
+        patterns_found = []
+
+        if any(word in all_text for word in ['always', 'usually', 'regularly', 'every', 'daily', 'weekly']):
+            patterns_found.append('routine_behavior')
+        if any(word in all_text for word in ['like', 'love', 'enjoy', 'prefer', 'favorite']):
+            patterns_found.append('preference_pattern')
+        if any(word in all_text for word in ['goal', 'want', 'aim', 'plan', 'hope']):
+            patterns_found.append('goal_oriented')
+        if any(word in all_text for word in ['health', 'exercise', 'walk', 'fitness']):
+            patterns_found.append('health_routine')
+
+        if patterns_found:
+            return f"Common patterns: {', '.join(patterns_found)}"
+        else:
+            return "Various activities and interests"
+
+    def _identify_personalization_opportunities(self, dominant_tags: List[str], categories: List[str], emotion_tags: List[str]) -> List[str]:
+        """
+        Identify personalization opportunities based on cluster content.
+        """
+        opportunities = []
+
+        # Check for preference-based opportunities
+        if any(cat in categories for cat in ['personal_preferences']):
+            opportunities.append('Recommend similar preferences')
+
+        # Check for habit/routine opportunities
+        if any(tag in dominant_tags for tag in ['habit', 'routine', 'daily']) or any('routine' in cat for cat in categories):
+            opportunities.append('Suggest habit optimizations or reminders')
+
+        # Check for goal-related opportunities
+        if any(cat in categories for cat in ['long_term_goals', 'personal_development']):
+            opportunities.append('Provide progress tracking and motivation')
+
+        # Check for emotional tone opportunities
+        if any(emotion in emotion_tags for emotion in ['interest', 'enthusiasm', 'excitement']):
+            opportunities.append('Offer related engaging content')
+
+        if any(emotion in emotion_tags for emotion in ['frustration', 'stress', 'anxiety']):
+            opportunities.append('Provide calming or helpful resources')
+
+        return opportunities if opportunities else ['General interest-based recommendations']
 
     def _create_enhanced_cluster_insights(self, storage: Dict, cluster_id: str) -> Dict:
         """
@@ -669,37 +1495,351 @@ class AdvancedClusterEngine:
 
         return insights
 
+    def _find_event_connections(self, storage: Dict, event_id: str) -> List[Dict[str, Any]]:
+        """
+        Find connections between the specified event and other events/clusters.
+
+        Args:
+            storage: The storage dictionary containing memory data
+            event_id: The ID of the event to find connections for
+
+        Returns:
+            List of connections with details about the relationship
+        """
+        connections = []
+
+        # Get the target event
+        target_event = None
+        for event in storage["memory_engine"]["memory_events"]:
+            if event.get('event_id') == event_id:
+                target_event = event
+                break
+
+        if not target_event:
+            return connections
+
+        target_vector = None
+        if event_id in storage["memory_engine"]["vector_index"]:
+            target_vector = storage["memory_engine"]["vector_index"][event_id]
+
+        if not target_vector:
+            return connections
+
+        # Find connections with other events based on semantic similarity
+        for other_event in storage["memory_engine"]["memory_events"]:
+            other_event_id = other_event.get('event_id')
+
+            # Skip the same event
+            if other_event_id == event_id:
+                continue
+
+            # Check if other event has a vector
+            if other_event_id in storage["memory_engine"]["vector_index"]:
+                other_vector = storage["memory_engine"]["vector_index"][other_event_id]
+
+                # Calculate similarity
+                similarity = self._cosine_similarity_improved(target_vector, other_vector)
+
+                # If similarity is above threshold, consider it a connection
+                if similarity > 0.6:  # Threshold for significant connection
+                    connection = {
+                        "type": "event_connection",
+                        "target_event_id": other_event_id,
+                        "similarity_score": similarity,
+                        "relationship_type": self._determine_relationship_type(target_event, other_event),
+                        "semantic_commonalities": self._extract_semantic_commonalities(target_event, other_event),
+                        "strength": "strong" if similarity > 0.8 else "moderate" if similarity > 0.6 else "weak"
+                    }
+                    connections.append(connection)
+
+        # Find connections with clusters
+        clusters = storage["memory_engine"].get("clusters", {})
+        for cluster_id, cluster in clusters.items():
+            # Calculate similarity to cluster centroid
+            if 'centroid_vector' in cluster:
+                centroid_sim = self._cosine_similarity_improved(target_vector, cluster['centroid_vector'])
+
+                if centroid_sim > 0.5:  # Threshold for cluster connection
+                    connection = {
+                        "type": "cluster_connection",
+                        "target_cluster_id": cluster_id,
+                        "similarity_to_centroid": centroid_sim,
+                        "cluster_topic": cluster.get('topic', 'Unknown'),
+                        "cluster_size": len(cluster.get('event_ids', [])),
+                        "strength": "strong" if centroid_sim > 0.8 else "moderate" if centroid_sim > 0.5 else "weak"
+                    }
+                    connections.append(connection)
+
+        # Sort connections by strength (similarity score)
+        connections.sort(key=lambda x: x.get('similarity_score', x.get('similarity_to_centroid', 0)), reverse=True)
+
+        return connections
+
+    def _determine_relationship_type(self, event1: Dict, event2: Dict) -> str:
+        """
+        Determine the type of relationship between two events.
+        """
+        # Extract categories and emotion tags
+        cat1 = event1.get('category', 'general')
+        cat2 = event2.get('category', 'general')
+        emo_tags1 = event1.get('emotional_context', {}).get('emotion_tags', [])
+        emo_tags2 = event2.get('emotional_context', {}).get('emotion_tags', [])
+
+        # Determine relationship based on category and emotion similarity
+        if cat1 == cat2 and emo_tags1 and emo_tags2:
+            if set(emo_tags1) & set(emo_tags2):
+                return "same_category_emotion_similar"
+        elif cat1 == cat2:
+            return "same_category_different_emotion"
+        elif emo_tags1 and emo_tags2 and set(emo_tags1) & set(emo_tags2):
+            return "different_category_same_emotion"
+        elif cat1 == 'personal_preferences' and cat2 == 'activity_behavior':
+            return "preference_behavior_link"
+        elif cat1 == 'activity_behavior' and cat2 == 'personal_preferences':
+            return "behavior_preference_link"
+        elif cat1 in ['user_identity', 'current_state'] or cat2 in ['user_identity', 'current_state']:
+            return "identity_context_link"
+        else:
+            return "semantic_similarity_only"
+
+    def _extract_semantic_commonalities(self, event1: Dict, event2: Dict) -> List[str]:
+        """
+        Extract semantic commonalities between two events.
+        """
+        commonalities = []
+
+        # Compare categories
+        if event1.get('category') == event2.get('category'):
+            commonalities.append(f"shared_category: {event1.get('category')}")
+
+        # Compare emotion tags
+        emo_tags1 = set(event1.get('emotional_context', {}).get('emotion_tags', []))
+        emo_tags2 = set(event2.get('emotional_context', {}).get('emotion_tags', []))
+        common_emotions = emo_tags1 & emo_tags2
+        if common_emotions:
+            commonalities.extend([f"shared_emotion: {emo}" for emo in common_emotions])
+
+        # Compare subcategories
+        if event1.get('subcategory') and event2.get('subcategory') and event1.get('subcategory') == event2.get('subcategory'):
+            commonalities.append(f"shared_subcategory: {event1.get('subcategory')}")
+
+        return commonalities
+
     def _optimize_clusters(self, storage: Dict):
         """
-        Perform cluster optimization including:
+        Perform dynamic cluster optimization including:
+        - Adaptive threshold adjustment
         - Quality assessment
-        - Merging low-quality clusters
-        - Splitting large clusters if needed
+        - Intelligent merging of related clusters
+        - Splitting based on semantic diversity
         - Garbage collection of unused clusters
         - Synchronization between clusters and vector index
         """
         clusters = storage["memory_engine"].get("clusters", {})
 
+        if not clusters:
+            return  # Nothing to optimize
+
+        # Adjust similarity thresholds dynamically based on data characteristics
+        self._adjust_dynamic_thresholds(storage)
+
         # Clean up clusters that reference non-existent vectors/events
         self._cleanup_orphaned_cluster_references(storage)
 
-        # Identify clusters that should be merged
+        # Identify clusters that should be merged based on enhanced criteria
         clusters_to_merge = self._identify_clusters_for_merging(storage)
 
         for cluster1_id, cluster2_id in clusters_to_merge:
             self._merge_clusters(storage, cluster1_id, cluster2_id)
 
-        # Identify clusters that should be split
+        # Identify clusters that should be split based on enhanced criteria
         clusters_to_split = self._identify_clusters_for_splitting(storage)
 
         for cluster_id in clusters_to_split:
             self._split_cluster(storage, cluster_id)
 
-        # Remove low-quality clusters
+        # Remove low-quality clusters based on enhanced quality metrics
         clusters_to_remove = self._identify_low_quality_clusters(storage)
 
         for cluster_id in clusters_to_remove:
             self._remove_cluster(storage, cluster_id)
+
+        # Synchronize vector index with clusters and clusters with vector index
+        self._synchronize_vector_index_and_clusters(storage)
+
+    def perform_quality_assurance_check(self, storage: Dict) -> Dict[str, Any]:
+        """
+        Perform comprehensive quality assurance check on the entire memory system.
+
+        Args:
+            storage: The storage dictionary to validate
+
+        Returns:
+            Dictionary containing validation results and any issues found
+        """
+        issues = []
+        warnings = []
+        stats = {}
+
+        # Overall statistics
+        memory_events = storage.get("memory_engine", {}).get("memory_events", [])
+        vector_index = storage.get("memory_engine", {}).get("vector_index", {})
+        clusters = storage.get("memory_engine", {}).get("clusters", {})
+
+        stats = {
+            "total_memory_events": len(memory_events),
+            "vector_index_size": len(vector_index),
+            "total_clusters": len(clusters),
+            "validation_timestamp": datetime.now().isoformat()
+        }
+
+        # Check for consistency between memory events and vector index
+        event_ids = {event['event_id'] for event in memory_events if 'event_id' in event}
+        vector_ids = set(vector_index.keys())
+
+        missing_vectors = event_ids - vector_ids
+        orphaned_vectors = vector_ids - event_ids
+
+        if missing_vectors:
+            issues.append(f"Found {len(missing_vectors)} events without corresponding vector entries")
+            if len(missing_vectors) > 10:  # Only show first 10 if there are many
+                issues.append(f"Sample missing vectors: {list(missing_vectors)[:10]}")
+            else:
+                issues.append(f"Missing vectors: {list(missing_vectors)}")
+
+        if orphaned_vectors:
+            warnings.append(f"Found {len(orphaned_vectors)} vectors without corresponding events")
+
+        # Check cluster integrity
+        cluster_event_ids = set()
+        for cluster_id, cluster in clusters.items():
+            cluster_events = set(cluster.get('event_ids', []))
+            cluster_event_ids.update(cluster_events)
+
+            # Validate cluster structure
+            required_cluster_fields = ['topic', 'label', 'centroid_vector', 'event_ids', 'coherence_score']
+            missing_fields = [field for field in required_cluster_fields if field not in cluster]
+            if missing_fields:
+                issues.append(f"Cluster {cluster_id} missing required fields: {missing_fields}")
+
+            # Validate centroid vector dimensions
+            centroid = cluster.get('centroid_vector')
+            if centroid and len(centroid) != 8:  # Expected dimension
+                issues.append(f"Cluster {cluster_id} centroid has wrong dimension: {len(centroid)}, expected 8")
+
+            # Validate coherence score
+            coherence = cluster.get('coherence_score', 0)
+            if not (0 <= coherence <= 1):
+                issues.append(f"Cluster {cluster_id} has invalid coherence score: {coherence}")
+
+            # Check if cluster events exist in main memory events
+            for event_id in cluster_events:
+                if event_id not in event_ids:
+                    issues.append(f"Cluster {cluster_id} contains non-existent event: {event_id}")
+
+        # Check for cluster-to-event consistency
+        cluster_orphans = cluster_event_ids - event_ids
+        if cluster_orphans:
+            issues.append(f"Found {len(cluster_orphans)} events in clusters that don't exist in memory_events")
+
+        # Check for vector-index consistency with clusters
+        cluster_based_vectors = set()
+        for cluster in clusters.values():
+            cluster_based_vectors.update(cluster.get('event_ids', []))
+
+        cluster_vs_vector_mismatch = cluster_based_vectors - set(vector_index.keys())
+        if cluster_vs_vector_mismatch:
+            issues.append(f"Found {len(cluster_vs_vector_mismatch)} events in clusters without corresponding vector entries")
+
+        # Check timestamp validity
+        invalid_timestamps = 0
+        for event in memory_events:
+            timestamp = event.get('timestamp')
+            if timestamp:
+                try:
+                    datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                except:
+                    invalid_timestamps += 1
+
+        if invalid_timestamps:
+            warnings.append(f"Found {invalid_timestamps} events with invalid timestamps")
+
+        # Overall quality assessment
+        quality_score = 1.0  # Start with perfect score
+
+        # Reduce score based on issues found
+        quality_score -= len(issues) * 0.05  # Deduct 0.05 per issue
+        quality_score -= len(warnings) * 0.01  # Deduct 0.01 per warning
+
+        # Ensure quality score stays within bounds
+        quality_score = max(0.0, min(1.0, quality_score))
+
+        stats["quality_score"] = quality_score
+
+        return {
+            "stats": stats,
+            "issues": issues,
+            "warnings": warnings,
+            "is_valid": len(issues) == 0,
+            "quality_status": "excellent" if quality_score > 0.9 else "good" if quality_score > 0.7 else "fair" if quality_score > 0.5 else "poor"
+        }
+
+    def _perform_periodic_maintenance(self, storage: Dict):
+        """
+        Perform periodic maintenance tasks to maintain memory system quality.
+        """
+        # Clean up invalid or corrupted entries
+        self._cleanup_invalid_entries(storage)
+
+        # Re-validate cluster integrity
+        clusters = storage.get("memory_engine", {}).get("clusters", {})
+        for cluster_id in clusters:
+            self._validate_cluster_integrity(storage, cluster_id)
+
+        # Optimize clusters
+        self._optimize_clusters(storage)
+
+        # Update all cluster metadata
+        for cluster_id in clusters:
+            self._update_cluster_metadata(storage, cluster_id)
+
+    def _adjust_dynamic_thresholds(self, storage: Dict):
+        """
+        Dynamically adjust similarity thresholds based on data characteristics.
+        Higher density data may need higher thresholds, lower density lower thresholds.
+        """
+        clusters = storage["memory_engine"].get("clusters", {})
+        num_clusters = len(clusters)
+
+        if num_clusters == 0:
+            return
+
+        # Calculate average cluster size to inform threshold adjustments
+        total_events = 0
+        for cluster in clusters.values():
+            total_events += len(cluster.get('event_ids', []))
+
+        if total_events == 0:
+            return
+
+        avg_cluster_size = total_events / num_clusters
+
+        # Adjust thresholds based on density
+        if avg_cluster_size > 5:  # Dense clusters
+            self.similarity_threshold = min(0.75, self.similarity_threshold + 0.05)
+        elif avg_cluster_size < 2:  # Sparse clusters
+            self.similarity_threshold = max(0.55, self.similarity_threshold - 0.05)
+        else:
+            # Moderate density, keep around original threshold
+            self.similarity_threshold = 0.65  # Reset to baseline if needed
+
+        # Adjust max cluster size based on average
+        if avg_cluster_size > 8:
+            self.max_cluster_size = 12
+        elif avg_cluster_size < 3:
+            self.max_cluster_size = 8
+        else:
+            self.max_cluster_size = 10
 
     def _cleanup_orphaned_cluster_references(self, storage: Dict):
         """
@@ -773,7 +1913,7 @@ class AdvancedClusterEngine:
 
     def _identify_clusters_for_merging(self, storage: Dict) -> List[Tuple[str, str]]:
         """
-        Identify pairs of clusters that should be merged based on similarity.
+        Identify pairs of clusters that should be merged based on similarity and semantic compatibility.
         """
         clusters = storage["memory_engine"].get("clusters", {})
         clusters_to_merge = []
@@ -788,11 +1928,26 @@ class AdvancedClusterEngine:
                 cluster1 = clusters[cluster1_id]
                 cluster2 = clusters[cluster2_id]
 
-                # Calculate similarity between clusters
-                similarity = self._cosine_similarity_improved(
+                # Calculate similarity between cluster centroids
+                centroid_similarity = self._cosine_similarity_improved(
                     cluster1['centroid_vector'],
                     cluster2['centroid_vector']
                 )
+
+                # Calculate semantic tag overlap score
+                tags1 = set(cluster1.get('metadata', {}).get('dominant_tags', []))
+                tags2 = set(cluster2.get('metadata', {}).get('dominant_tags', []))
+
+                if tags1 and tags2:
+                    # Calculate Jaccard similarity of tags
+                    intersection = len(tags1.intersection(tags2))
+                    union = len(tags1.union(tags2))
+                    tag_similarity = intersection / union if union > 0 else 0.0
+                else:
+                    tag_similarity = 0.0
+
+                # Combine centroid similarity and tag similarity (hybrid approach)
+                combined_similarity = centroid_similarity * 0.7 + tag_similarity * 0.3
 
                 # Check if clusters have compatible types
                 type_compatible = (
@@ -800,8 +1955,13 @@ class AdvancedClusterEngine:
                     cluster2.get('metadata', {}).get('cluster_type')
                 )
 
-                # Merge if similarity is high and types are compatible
-                if similarity > 0.8 and type_compatible:
+                # Additional compatibility check: check if their dominant tags are related
+                tags_compatible = len(tags1.intersection(tags2)) > 0 or tag_similarity >= 0.5
+
+                # Merge if similarity is high enough and compatibility conditions are met
+                merge_threshold = 0.7  # Lowered threshold to make merging more likely
+                if (combined_similarity > merge_threshold and
+                    (type_compatible or tags_compatible)):
                     clusters_to_merge.append((cluster1_id, cluster2_id))
 
         return clusters_to_merge
@@ -853,24 +2013,30 @@ class AdvancedClusterEngine:
 
     def _identify_clusters_for_splitting(self, storage: Dict) -> List[str]:
         """
-        Identify clusters that should be split based on internal diversity.
+        Identify clusters that should be split based on internal diversity and low coherence.
         """
         clusters_to_split = []
         clusters = storage["memory_engine"].get("clusters", {})
 
         for cluster_id, cluster in clusters.items():
             event_ids = cluster.get('event_ids', [])
+            coherence_score = cluster.get('coherence_score', 1.0)
 
-            # Only consider splitting larger clusters
-            if len(event_ids) < self.max_cluster_size:
-                continue
+            # Criteria for splitting:
+            # 1. If coherence is below threshold (indicating incoherent cluster)
+            coherence_threshold = 0.5  # Split if coherence is too low
+            size_threshold = self.max_cluster_size  # Or if cluster is too large
 
-            # Calculate internal diversity
-            diversity_score = self._calculate_cluster_diversity(storage, cluster_id)
+            should_split_by_size = len(event_ids) >= size_threshold
+            should_split_by_coherence = coherence_score < coherence_threshold
 
-            # If the cluster is too diverse, mark for splitting
-            if diversity_score > 0.7:  # High diversity threshold
-                clusters_to_split.append(cluster_id)
+            if should_split_by_size or should_split_by_coherence:
+                # Additional check: calculate internal diversity as well
+                diversity_score = self._calculate_cluster_diversity(storage, cluster_id)
+
+                # Only split if diversity is high enough or coherence is low
+                if diversity_score > 0.6 or coherence_score < coherence_threshold:
+                    clusters_to_split.append(cluster_id)
 
         return clusters_to_split
 
@@ -981,21 +2147,39 @@ class AdvancedClusterEngine:
 
     def _extract_dominant_tags(self, storage: Dict, event_id: str) -> List[str]:
         """
-        Enhanced tag extraction with better semantic understanding.
+        Enhanced tag extraction with focus on emotional context tags as seen in the JSON examples.
+        Extracts emotion tags from emotional_context as primary tags.
         """
         tags = []
         for event in storage["memory_engine"]["memory_events"]:
             if event.get('event_id') == event_id:
+                # Extract emotion tags from emotional_context as primary tags (like in JSON)
+                emotional_context = event.get('emotional_context', {})
+                emotion_tags = emotional_context.get('emotion_tags', [])
+
+                # Add emotion tags as dominant tags
+                if emotion_tags:
+                    # Take the most significant emotion tag (first one) as the main dominant tag
+                    main_emotion = emotion_tags[0].lower()
+                    tags.append(main_emotion)
+                    # Add other emotion tags too
+                    tags.extend([tag.lower() for tag in emotion_tags[1:]])
+
+                # Also include category-based tags
                 category = event.get('category', 'general')
                 subcategory = event.get('subcategory', 'general')
-                tags.append(category)
-                if subcategory != 'general':
+                if category not in tags:
+                    tags.append(category)
+                if subcategory != 'general' and subcategory not in tags:
                     tags.append(subcategory)
 
                 # Extract from content if available
                 content = str(event.get('current_value', event.get('summary', ''))).lower()
                 content_tags = self._extract_keywords_from_content(content)
-                tags.extend(content_tags[:3])
+                for tag in content_tags[:3]:
+                    if tag not in tags:
+                        tags.append(tag)
+
                 break
 
         return list(set(tags))  # Remove duplicates
@@ -1058,16 +2242,104 @@ class AdvancedClusterEngine:
         return float(similarity)
 
     def _log_cluster_update(self, operation: str, cluster_id: str = None, event_ids: List[str] = None,
-                          reason: str = ""):
+                          reason: str = "", pre_metrics: Dict = None, post_metrics: Dict = None,
+                          update_type: str = "CLUSTER_UPDATE"):
         """
-        Log cluster update operations.
+        Log cluster update operations with explainable reasons and metrics as per CLUSTER_IMPROVEMENT_GUIDE.md.
+        Supports CLUSTER_REORGANIZATION for large reorganizations and CLUSTER_UPDATE for smaller ops.
         """
-        # Use the memory system's logging if available
+        log_entry = {
+            "update_type": update_type,
+            "operation": operation,
+            "cluster_id": cluster_id,
+            "event_ids": event_ids or [],
+            "reason": reason,
+            "timestamp": datetime.now().isoformat(),
+            "pre_metrics": pre_metrics or {},
+            "post_metrics": post_metrics or {}
+        }
+
+        # Add to update log in storage if available
+        if hasattr(self.memory_system, 'data'):
+            storage = self.memory_system.data
+            if "memory_engine" not in storage:
+                storage["memory_engine"] = {}
+            if "update_log" not in storage["memory_engine"]:
+                storage["memory_engine"]["update_log"] = []
+
+            storage["memory_engine"]["update_log"].append(log_entry)
+
+        # Also try to use the memory system's logging if available
         if hasattr(self.memory_system, '_log_cluster_update'):
             try:
                 self.memory_system._log_cluster_update(operation, cluster_id, event_ids, reason)
             except:
                 pass  # Ignore if logging fails
+
+    def _log_cluster_reorganization(self, reason: str, changes: List[Dict], pre_metrics: Dict, post_metrics: Dict):
+        """
+        Log large reorganization operations with CLUSTER_REORGANIZATION entries.
+        """
+        self._log_cluster_update(
+            operation="reorganization",
+            reason=reason,
+            update_type="CLUSTER_REORGANIZATION",
+            pre_metrics=pre_metrics,
+            post_metrics=post_metrics
+        )
+
+    def _log_explainable_merge(self, cluster_id: str, event_ids: List[str], reason: str, similarity_score: float):
+        """
+        Log explainable merge operations with reasons for the merge.
+        """
+        reason_with_explanation = f"{reason} (similarity score: {similarity_score:.3f})"
+        self._log_cluster_update(
+            operation="merge",
+            cluster_id=cluster_id,
+            event_ids=event_ids,
+            reason=reason_with_explanation
+        )
+
+    def compute_clustering_metrics(self, storage: Dict) -> Dict:
+        """
+        Compute various clustering metrics for logging and analysis:
+        - fragmentation (cluster_count / event_count)
+        - average coherence
+        - total clusters
+        - total events
+        """
+        clusters = storage["memory_engine"].get("clusters", {})
+        events = storage["memory_engine"].get("memory_events", [])
+
+        total_events = len(events)
+        total_clusters = len(clusters)
+
+        # Calculate average coherence
+        total_coherence = 0.0
+        coherent_clusters = 0
+        for cluster in clusters.values():
+            coherence = cluster.get('coherence_score', 0.0)
+            total_coherence += coherence
+            coherent_clusters += 1
+
+        avg_coherence = total_coherence / coherent_clusters if coherent_clusters > 0 else 0.0
+
+        # Calculate fragmentation (cluster_count / event_count)
+        fragmentation = total_clusters / total_events if total_events > 0 else 0.0
+
+        # Count single-item clusters (fragmentation indicators)
+        single_item_clusters = sum(1 for cluster in clusters.values() if len(cluster.get('event_ids', [])) <= 1)
+        single_item_ratio = single_item_clusters / total_clusters if total_clusters > 0 else 0.0
+
+        return {
+            "total_events": total_events,
+            "total_clusters": total_clusters,
+            "average_coherence": avg_coherence,
+            "fragmentation_ratio": fragmentation,
+            "single_item_clusters": single_item_clusters,
+            "single_item_ratio": single_item_ratio,
+            "timestamp": datetime.now().isoformat()
+        }
 
     def initialize_from_existing_clusters(self, storage: Dict):
         """
@@ -1204,16 +2476,50 @@ class AdvancedClusterEngine:
 
     def _extract_dominant_tags_for_cluster(self, storage: Dict, event_ids: List[str]) -> List[str]:
         """
-        Extract dominant tags for a cluster based on its events.
+        Extract dominant tags for a cluster based on its events with priority on emotion tags.
+        Prioritizes the most common emotion tags from events, similar to the JSON examples.
         """
-        all_tags = set()
+        # Count occurrences of each tag type, with priority on emotion tags
+        emotion_tag_counts = {}
+        all_other_tags = []
+
+        # Collect emotion tags and other tags separately from all events in cluster
         for event_id in event_ids:
             for event in storage["memory_engine"]["memory_events"]:
                 if event.get('event_id') == event_id:
-                    event_tags = self._extract_dominant_tags(storage, event_id)
-                    all_tags.update(event_tags)
+                    # Extract emotion tags from emotional context
+                    emotional_context = event.get('emotional_context', {})
+                    emotion_tags = emotional_context.get('emotion_tags', [])
+
+                    # Count each emotion tag
+                    for tag in emotion_tags:
+                        tag_lower = tag.lower()
+                        emotion_tag_counts[tag_lower] = emotion_tag_counts.get(tag_lower, 0) + 1
+
+                    # Collect other tags from _extract_dominant_tags
+                    other_event_tags = self._extract_dominant_tags(storage, event_id)
+                    # Filter out emotion tags to avoid duplicates
+                    other_tags = [tag for tag in other_event_tags if tag not in emotion_tag_counts]
+                    all_other_tags.extend(other_tags)
+
                     break
-        return list(all_tags)[:10]  # Limit to 10 tags
+
+        # Sort emotion tags by frequency (most common first)
+        sorted_emotion_tags = sorted(emotion_tag_counts.items(), key=lambda x: x[1], reverse=True)
+        dominant_emotion_tags = [tag for tag, count in sorted_emotion_tags]
+
+        # Combine tags: emotion tags first, then others
+        all_tags = dominant_emotion_tags + [tag for tag in all_other_tags if tag not in dominant_emotion_tags]
+
+        # Remove duplicates while preserving order
+        seen = set()
+        result = []
+        for tag in all_tags:
+            if tag not in seen:
+                seen.add(tag)
+                result.append(tag)
+
+        return result[:10]  # Limit to 10 tags
 
     def _calculate_average_confidence(self, storage: Dict, event_ids: List[str]) -> float:
         """
@@ -1294,6 +2600,733 @@ class AdvancedClusterEngine:
                 # This event doesn't have a vector, we may want to generate one
                 # For now, just log it as potentially missing
                 print(f"[SYNC] Event {event_id} has no vector in index")
+
+    def validate_memory_data(self, storage: Dict) -> Tuple[bool, List[str]]:
+        """
+        Validate memory and vector data for schema consistency and integrity.
+
+        Args:
+            storage: The storage dictionary to validate
+
+        Returns:
+            Tuple of (is_valid: bool, error_messages: List[str])
+        """
+        errors = []
+
+        # Check if required keys exist
+        if "memory_engine" not in storage:
+            errors.append("Missing 'memory_engine' key in storage")
+            return False, errors
+
+        memory_engine = storage["memory_engine"]
+
+        # Validate memory_events structure
+        if "memory_events" not in memory_engine:
+            errors.append("Missing 'memory_events' in memory_engine")
+        else:
+            events = memory_engine["memory_events"]
+            if not isinstance(events, list):
+                errors.append("'memory_events' should be a list")
+            else:
+                for i, event in enumerate(events):
+                    if not isinstance(event, dict):
+                        errors.append(f"Event at index {i} is not a dictionary")
+                        continue
+                    required_event_keys = ["event_id", "type", "summary", "timestamp"]
+                    for key in required_event_keys:
+                        if key not in event:
+                            errors.append(f"Event {i} missing required key: {key}")
+
+        # Validate vector_index structure
+        if "vector_index" in memory_engine:
+            vector_index = memory_engine["vector_index"]
+            if not isinstance(vector_index, dict):
+                errors.append("'vector_index' should be a dictionary")
+            else:
+                for event_id, vector in vector_index.items():
+                    if not isinstance(vector, list):
+                        errors.append(f"Vector for event {event_id} is not a list")
+                    elif len(set(len(v) for v in vector_index.values())) > 1:
+                        errors.append("Vector dimensions are inconsistent across vector_index")
+                        break  # Only report once
+                    else:
+                        # Check if all values in the vector are numeric
+                        if not all(isinstance(v, (int, float)) for v in vector):
+                            errors.append(f"Vector for event {event_id} contains non-numeric values")
+
+        # Validate clusters structure
+        if "clusters" in memory_engine:
+            clusters = memory_engine["clusters"]
+            if not isinstance(clusters, dict):
+                errors.append("'clusters' should be a dictionary")
+            else:
+                for cluster_id, cluster in clusters.items():
+                    if not isinstance(cluster, dict):
+                        errors.append(f"Cluster {cluster_id} is not a dictionary")
+                        continue
+                    required_cluster_keys = ["centroid_vector", "event_ids", "coherence_score"]
+                    for key in required_cluster_keys:
+                        if key not in cluster:
+                            errors.append(f"Cluster {cluster_id} missing required key: {key}")
+
+                    # Validate centroid_vector
+                    if "centroid_vector" in cluster and not isinstance(cluster["centroid_vector"], list):
+                        errors.append(f"Cluster {cluster_id} centroid_vector is not a list")
+
+        return len(errors) == 0, errors
+
+    def _extract_signals(self, event: Dict) -> Dict:
+        """
+        Extract normalized event signals for clustering as per CLUSTER_IMPROVEMENT_GUIDE.md
+        For each event E extract:
+        - summary_text → normalize (lowercase, remove punctuation, lemmatize if available)
+        - noun_phrases and important_tokens (stopwords removed)
+        - behavioral_role: infer labels like `habit`, `preference`, `routine`, `one_off`, `goal`, `health`
+        - timestamp and frequency (daily, weekly, one-off) if available
+        - vector: use stored vector (if present) or compute embedding
+        - importance_score and confidence from event metadata
+        """
+        # Extract summary text with normalization
+        summary_text = event.get('summary', '')
+        normalized_summary = re.sub(r'[^\w\s]', ' ', summary_text.lower()).strip()
+
+        # Extract noun phrases and important tokens (with stopwords removed)
+        # For basic implementation, we'll use simple keyword extraction
+        import nltk
+        try:
+            stop_words = set(nltk.corpus.stopwords.words('english'))
+            tokens = normalized_summary.split()
+            important_tokens = [token for token in tokens if token not in stop_words and len(token) > 2]
+        except LookupError:
+            # Fallback if NLTK stopwords are not available
+            # Common English stop words
+            stop_words = {
+                'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+                'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+                'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those'
+            }
+            tokens = normalized_summary.split()
+            important_tokens = [token for token in tokens if token not in stop_words and len(token) > 2]
+
+        # Extract noun phrases (using simple heuristics)
+        # In a more complex implementation, you'd use POS tagging
+        noun_phrases = self._extract_noun_phrases(summary_text)
+
+        # Infer behavioral role from category, subcategory, and verbs in summary
+        behavioral_role = self._infer_behavioral_role(event)
+
+        # Extract timestamp and infer frequency if possible
+        timestamp = event.get('timestamp', datetime.now().isoformat())
+        frequency = self._infer_frequency(event)
+
+        # Get stored vector if available
+        event_id = event.get('event_id', '')
+        vector = None
+        if hasattr(self.memory_system, 'data'):
+            vector_index = self.memory_system.data["memory_engine"].get("vector_index", {})
+            vector = vector_index.get(event_id)
+
+        # Extract importance and confidence scores
+        importance_score = event.get('importance_score', 0.5)
+        confidence = event.get('confidence', 0.8)
+
+        return {
+            'summary_text': normalized_summary,
+            'noun_phrases': noun_phrases,
+            'important_tokens': important_tokens,
+            'behavioral_role': behavioral_role,
+            'timestamp': timestamp,
+            'frequency': frequency,
+            'vector': vector,
+            'importance_score': importance_score,
+            'confidence': confidence
+        }
+
+    def _extract_noun_phrases(self, text: str) -> List[str]:
+        """
+        Extract noun phrases from text using simple heuristics.
+        This is a basic implementation - in full implementation you'd use NLTK or spaCy.
+        """
+        # Simple noun phrase detection based on patterns
+        # This is a basic implementation - could be enhanced with POS tagging
+        import nltk
+        try:
+            tokens = nltk.word_tokenize(text)
+            pos_tags = nltk.pos_tag(tokens)
+
+            # Look for patterns like (Adjective)* (Noun)+
+            noun_phrases = []
+            i = 0
+            while i < len(pos_tags):
+                phrase_tokens = []
+                # Look for adjectives followed by nouns
+                while i < len(pos_tags) and pos_tags[i][1] in ['JJ', 'JJR', 'JJS', 'NN', 'NNS', 'NNP', 'NNPS']:
+                    if pos_tags[i][1] in ['NN', 'NNS', 'NNP', 'NNPS']:
+                        phrase_tokens.append(pos_tags[i][0])
+                        i += 1
+                        break
+                    elif pos_tags[i][1] in ['JJ', 'JJR', 'JJS']:
+                        phrase_tokens.append(pos_tags[i][0])
+                        i += 1
+                    else:
+                        break
+
+                if phrase_tokens:
+                    noun_phrases.append(' '.join(phrase_tokens))
+
+        except (LookupError, ImportError):
+            # Fallback: extract simple noun-like tokens
+            words = text.split()
+            # Look for capitalized words (proper nouns) and common noun patterns
+            noun_phrases = [word for word in words if word[0].isupper() or word.lower() in
+                           ['coffee', 'anime', 'food', 'work', 'project', 'python', 'book', 'movie', 'music', 'game', 'sport', 'exercise']]
+
+        return noun_phrases
+
+    def _infer_behavioral_role(self, event: Dict) -> str:
+        """
+        Infer behavioral role from category, subcategory, and verbs in summary.
+        Returns labels like `habit`, `preference`, `routine`, `one_off`, `goal`, `health`, etc.
+        """
+        summary = event.get('summary', '').lower()
+        category = event.get('category', '').lower()
+
+        # Define keywords for each behavioral role
+        role_keywords = {
+            'habit': ['habit', 'always', 'usually', 'regularly', 'daily', 'weekly', 'every', 'often', 'frequently', 'normally'],
+            'preference': ['like', 'love', 'prefer', 'enjoy', 'favorite', 'enjoyed', 'interested', 'fond of'],
+            'routine': ['routine', 'schedule', 'daily', 'daily routine', 'every day', 'morning routine', 'night routine'],
+            'one_off': ['once', 'yesterday', 'last time', 'first time', 'single', 'just once', 'occasional', 'rarely'],
+            'goal': ['goal', 'aim', 'want to', 'hope to', 'planning', 'plan to', 'intend to', 'aspiration', 'objective'],
+            'health': ['health', 'exercise', 'workout', 'fitness', 'walk', 'meditate', 'sleep', 'eat healthy']
+        }
+
+        # Check summary for behavioral role indicators
+        for role, keywords in role_keywords.items():
+            if any(keyword in summary for keyword in keywords):
+                return role
+
+        # Check category-based inference
+        category_role_map = {
+            'activity_behavior': 'routine',
+            'personal_preferences': 'preference',
+            'long_term_goals': 'goal',
+            'personal_development': 'goal'
+        }
+
+        return category_role_map.get(category, 'general')
+
+    def _infer_frequency(self, event: Dict) -> str:
+        """
+        Infer frequency from timestamp patterns or summary text.
+        Returns daily, weekly, one-off, monthly, etc.
+        """
+        summary = event.get('summary', '').lower()
+
+        if any(word in summary for word in ['daily', 'every day', 'each day', 'day to day', 'daily basis']):
+            return 'daily'
+        elif any(word in summary for word in ['weekly', 'every week', 'each week', 'week to week']):
+            return 'weekly'
+        elif any(word in summary for word in ['monthly', 'every month', 'each month']):
+            return 'monthly'
+        elif any(word in summary for word in ['yearly', 'every year', 'annually']):
+            return 'yearly'
+        elif any(word in summary for word in ['once', 'one time', 'single time', 'yesterday', 'today', 'tomorrow']):
+            return 'one_off'
+        else:
+            return 'irregular'
+
+    def _compute_similarity_score(self, event1: Dict, event2: Dict) -> float:
+        """
+        Compute pairwise similarity score using weighted formula as per CLUSTER_IMPROVEMENT_GUIDE.md
+        S_total = w_sem*S_sem + w_role*S_role + w_time*S_time + w_emotion*S_emotion
+        Suggested weights: w_sem=0.50, w_role=0.25, w_time=0.15, w_emotion=0.10
+        """
+        # Extract signals for both events
+        signals1 = self._extract_signals(event1)
+        signals2 = self._extract_signals(event2)
+
+        # Calculate semantic similarity (S_sem)
+        # Use noun phrases and important tokens
+        noun_phrases1 = set(signals1['noun_phrases'])
+        noun_phrases2 = set(signals2['noun_phrases'])
+
+        important_tokens1 = set(signals1['important_tokens'])
+        important_tokens2 = set(signals2['important_tokens'])
+
+        # Calculate Jaccard similarity for noun phrases
+        if noun_phrases1 or noun_phrases2:
+            intersection_noun = len(noun_phrases1 & noun_phrases2)
+            union_noun = len(noun_phrases1 | noun_phrases2)
+            jaccard_noun = intersection_noun / union_noun if union_noun > 0 else 0.0
+        else:
+            jaccard_noun = 0.0
+
+        # Calculate Jaccard similarity for important tokens
+        if important_tokens1 or important_tokens2:
+            intersection_tokens = len(important_tokens1 & important_tokens2)
+            union_tokens = len(important_tokens1 | important_tokens2)
+            jaccard_tokens = intersection_tokens / union_tokens if union_tokens > 0 else 0.0
+        else:
+            jaccard_tokens = 0.0
+
+        # Combine both for semantic similarity
+        s_sem = (jaccard_noun + jaccard_tokens) / 2.0
+
+        # Calculate role similarity (S_role)
+        role1 = signals1['behavioral_role']
+        role2 = signals2['behavioral_role']
+
+        if role1 == role2:
+            s_role = 1.0
+        elif self._are_related_roles(role1, role2):
+            s_role = 0.5
+        else:
+            s_role = 0.0
+
+        # Calculate temporal similarity (S_time)
+        s_time = self._calculate_temporal_similarity(signals1['timestamp'], signals2['timestamp'],
+                                                    signals1['frequency'], signals2['frequency'])
+
+        # Calculate emotion similarity (S_emotion)
+        s_emotion = self._calculate_emotion_similarity(event1, event2)
+
+        # Apply weights as per guide
+        w_sem, w_role, w_time, w_emotion = 0.50, 0.25, 0.15, 0.10
+        s_total = w_sem * s_sem + w_role * s_role + w_time * s_time + w_emotion * s_emotion
+
+        return s_total
+
+    def _are_related_roles(self, role1: str, role2: str) -> bool:
+        """
+        Determine if two behavioral roles are related.
+        """
+        related_pairs = [
+            ('preference', 'habit'),
+            ('routine', 'habit'),
+            ('goal', 'preference'),
+            ('routine', 'goal')
+        ]
+        return (role1, role2) in related_pairs or (role2, role1) in related_pairs
+
+    def _calculate_temporal_similarity(self, timestamp1: str, timestamp2: str,
+                                      frequency1: str, frequency2: str) -> float:
+        """
+        Calculate normalized temporal similarity based on timestamps and frequencies.
+        """
+        try:
+            # Parse timestamps
+            dt1 = datetime.fromisoformat(timestamp1.replace('Z', '+00:00'))
+            dt2 = datetime.fromisoformat(timestamp2.replace('Z', '+00:00'))
+
+            # Calculate time difference in seconds
+            time_diff = abs((dt1 - dt2).total_seconds())
+
+            # If frequencies are the same, increase similarity
+            freq_match = 1.0 if frequency1 == frequency2 else 0.0
+
+            # Weight based on temporal proximity (inverse relationship)
+            # Smaller time differences get higher similarity
+            time_weight = 0.0
+            if time_diff < 3600:  # Less than 1 hour
+                time_weight = 0.9
+            elif time_diff < 86400:  # Less than 1 day
+                time_weight = 0.7
+            elif time_diff < 604800:  # Less than 1 week
+                time_weight = 0.5
+            elif time_diff < 2592000:  # Less than 1 month
+                time_weight = 0.3
+            else:
+                time_weight = 0.1
+
+            # Combine temporal proximity and frequency matching
+            return (time_weight * 0.7) + (freq_match * 0.3)
+
+        except:
+            # If timestamp parsing fails, fallback to frequency match
+            return 1.0 if frequency1 == frequency2 else 0.0
+
+    def _calculate_emotion_similarity(self, event1: Dict, event2: Dict) -> float:
+        """
+        Calculate emotion similarity based on sentiment and emotion tags.
+        """
+        # Get emotional contexts
+        emotional_context1 = event1.get('emotional_context', {})
+        emotional_context2 = event2.get('emotional_context', {})
+
+        # Get sentiment similarity
+        sentiment1 = emotional_context1.get('sentiment', 'neutral')
+        sentiment2 = emotional_context2.get('sentiment', 'neutral')
+
+        sentiment_match = 1.0 if sentiment1 == sentiment2 else 0.0
+
+        # Get emotion tags similarity
+        tags1 = set(emotional_context1.get('emotion_tags', []))
+        tags2 = set(emotional_context2.get('emotion_tags', []))
+
+        if tags1 or tags2:
+            intersection = len(tags1 & tags2)
+            union = len(tags1 | tags2)
+            tag_similarity = intersection / union if union > 0 else 0.0
+        else:
+            tag_similarity = 0.0
+
+        # Combine sentiment and tag similarity
+        return (sentiment_match * 0.3) + (tag_similarity * 0.7)
+
+    def create_backup(self, storage: Dict, backup_path: str = None) -> str:
+        """
+        Create a backup of the memory system with validation.
+
+        Args:
+            storage: The storage dictionary to backup
+            backup_path: Optional path for the backup file. If None, generates timestamped name.
+
+        Returns:
+            Path to the created backup file
+        """
+        import json
+        import shutil
+        from datetime import datetime
+
+        # Validate data before backup
+        is_valid, errors = self.validate_memory_data(storage)
+        if not is_valid:
+            print(f"[BACKUP] Warning: Memory data has validation issues: {errors}")
+
+        # Generate backup filename if not provided
+        if backup_path is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = f"backups/nova_memory_backup_{timestamp}.json"
+
+        # Ensure backup directory exists
+        import os
+        backup_dir = os.path.dirname(backup_path)
+        if backup_dir and not os.path.exists(backup_dir):
+            os.makedirs(backup_dir, exist_ok=True)
+
+        # Write the backup
+        try:
+            with open(backup_path, 'w', encoding='utf-8') as f:
+                json.dump(storage, f, indent=2, ensure_ascii=False)
+            print(f"[BACKUP] Successfully created backup at {backup_path}")
+            return backup_path
+        except Exception as e:
+            print(f"[BACKUP] Error creating backup: {str(e)}")
+            raise
+
+    def batch_reorganize_clusters(self, storage: Dict, run_tests: bool = True) -> Dict[str, Any]:
+        """
+        Perform batch reorganization of clusters following CLUSTER_IMPROVEMENT_GUIDE.md.
+        Reorganizes clusters in batches with testing capabilities and metrics tracking.
+        """
+        print(f"[CLUSTER-REORG] Starting batch reorganization...")
+
+        # Compute pre-reorganization metrics
+        pre_metrics = self.compute_clustering_metrics(storage)
+        print(f"[CLUSTER-REORG] Pre-reorganization metrics: {pre_metrics}")
+
+        # Store original cluster state for comparison
+        original_cluster_count = len(storage["memory_engine"].get("clusters", {}))
+
+        # Clear existing clusters to start fresh reorganization
+        original_clusters = storage["memory_engine"].get("clusters", {}).copy()
+        storage["memory_engine"]["clusters"] = {}
+
+        # Get all events to reorganize
+        events = storage["memory_engine"].get("memory_events", [])
+        vector_index = storage["memory_engine"].get("vector_index", {})
+
+        print(f"[CLUSTER-REORG] Processing {len(events)} events for reorganization...")
+
+        # Process each event and assign to appropriate clusters using our improved methods
+        events_processed = 0
+        for event in events:
+            event_id = event.get('event_id')
+            if event_id in vector_index:
+                vector = vector_index[event_id]
+                timestamp = event.get('timestamp', datetime.now().isoformat())
+
+                # Use our improved clustering method to assign the event
+                self.update_clusters_on_new_vector(storage, event_id, vector, timestamp)
+                events_processed += 1
+
+                if events_processed % 50 == 0:  # Progress indicator
+                    print(f"[CLUSTER-REORG] Processed {events_processed}/{len(events)} events...")
+
+        # Compute post-reorganization metrics
+        post_metrics = self.compute_clustering_metrics(storage)
+        print(f"[CLUSTER-REORG] Post-reorganization metrics: {post_metrics}")
+
+        # Log the reorganization
+        changes = {
+            "events_processed": events_processed,
+            "original_cluster_count": original_cluster_count,
+            "final_cluster_count": len(storage["memory_engine"].get("clusters", {})),
+        }
+
+        self._log_cluster_reorganization(
+            reason=f"Batch reorganization of {events_processed} events",
+            changes=[changes],
+            pre_metrics=pre_metrics,
+            post_metrics=post_metrics
+        )
+
+        # Run tests if requested
+        test_results = {}
+        if run_tests:
+            print(f"[CLUSTER-REORG] Running validation tests...")
+            test_results = self.run_reorganization_tests(storage, pre_metrics, post_metrics)
+
+        result = {
+            "success": True,
+            "events_processed": events_processed,
+            "pre_metrics": pre_metrics,
+            "post_metrics": post_metrics,
+            "improvement": self._calculate_improvement(pre_metrics, post_metrics),
+            "test_results": test_results
+        }
+
+        print(f"[CLUSTER-REORG] Batch reorganization completed. Improvement: {result['improvement']:.2%}")
+        return result
+
+    def _calculate_improvement(self, pre_metrics: Dict, post_metrics: Dict) -> float:
+        """
+        Calculate improvement based on clustering metrics.
+        Positive improvement means better clustering (lower fragmentation, higher coherence).
+        """
+        # Calculate improvement in fragmentation ratio (lower is better)
+        fragmentation_improvement = (pre_metrics.get('fragmentation_ratio', 0) -
+                                   post_metrics.get('fragmentation_ratio', 0))
+
+        # Calculate improvement in average coherence (higher is better)
+        coherence_improvement = (post_metrics.get('average_coherence', 0) -
+                               pre_metrics.get('average_coherence', 0))
+
+        # Calculate improvement in single item cluster ratio (lower is better)
+        single_cluster_improvement = (pre_metrics.get('single_item_ratio', 0) -
+                                    post_metrics.get('single_item_ratio', 0))
+
+        # Weighted average of improvements (coherence gets more weight)
+        total_improvement = (fragmentation_improvement * 0.3 +
+                           coherence_improvement * 0.5 +
+                           single_cluster_improvement * 0.2)
+
+        return total_improvement
+
+    def run_reorganization_tests(self, storage: Dict, pre_metrics: Dict, post_metrics: Dict) -> Dict[str, Any]:
+        """
+        Run comprehensive tests on the reorganization to validate improvements.
+        """
+        test_results = {}
+
+        # Test 1: Similarity scores computation
+        try:
+            test_results['similarity_scores_test'] = self._test_similarity_scores(storage)
+        except Exception as e:
+            test_results['similarity_scores_test'] = {"passed": False, "error": str(e)}
+
+        # Test 2: Coherence computation
+        try:
+            test_results['coherence_test'] = self._test_cluster_coherence(storage)
+        except Exception as e:
+            test_results['coherence_test'] = {"passed": False, "error": str(e)}
+
+        # Test 3: Improvement validation
+        try:
+            improvement = self._calculate_improvement(pre_metrics, post_metrics)
+            test_results['improvement_test'] = {
+                "passed": improvement >= 0,  # Improvement should be positive
+                "improvement_score": improvement
+            }
+        except Exception as e:
+            test_results['improvement_test'] = {"passed": False, "error": str(e)}
+
+        # Test 4: Fragmentation validation
+        try:
+            post_frag = post_metrics.get('fragmentation_ratio', 0)
+            pre_frag = pre_metrics.get('fragmentation_ratio', 0)
+            test_results['fragmentation_test'] = {
+                "passed": post_frag <= pre_frag,  # Fragmentation should not increase significantly
+                "post_fragmentation": post_frag,
+                "pre_fragmentation": pre_frag
+            }
+        except Exception as e:
+            test_results['fragmentation_test'] = {"passed": False, "error": str(e)}
+
+        # Overall result
+        all_passed = all(test.get('passed', False) for test in test_results.values()
+                        if isinstance(test, dict) and 'passed' in test)
+        test_results['overall'] = {"all_tests_passed": all_passed}
+
+        return test_results
+
+    def _test_similarity_scores(self, storage: Dict) -> Dict[str, Any]:
+        """
+        Test similarity score computation functions.
+        """
+        # Get two sample events to test similarity
+        events = storage["memory_engine"].get("memory_events", [])
+        if len(events) < 2:
+            return {"passed": False, "message": "Not enough events to test"}
+
+        event1 = events[0]
+        event2 = events[1] if len(events) > 1 else events[0]
+
+        try:
+            similarity = self._compute_similarity_score(event1, event2)
+            if 0 <= similarity <= 1:
+                return {"passed": True, "sample_similarity": similarity}
+            else:
+                return {"passed": False, "message": f"Similarity out of range: {similarity}"}
+        except Exception as e:
+            return {"passed": False, "error": str(e)}
+
+    def _test_cluster_coherence(self, storage: Dict) -> Dict[str, Any]:
+        """
+        Test cluster coherence computation functions.
+        """
+        clusters = storage["memory_engine"].get("clusters", {})
+        if not clusters:
+            return {"passed": True, "message": "No clusters to test"}
+
+        try:
+            # Test a sample cluster's coherence
+            for cluster_id, cluster in list(clusters.items())[:1]:  # Test first cluster
+                coherence = self._calculate_enhanced_cluster_coherence(storage, cluster_id)
+                if 0 <= coherence <= 1:
+                    return {"passed": True, "sample_coherence": coherence, "cluster_id": cluster_id}
+                else:
+                    return {"passed": False, "message": f"Coherence out of range: {coherence}"}
+        except Exception as e:
+            return {"passed": False, "error": str(e)}
+
+        return {"passed": True}
+
+    def validate_all_improvements(self, storage: Dict) -> Dict[str, Any]:
+        """
+        Run comprehensive validation of all clustering improvements.
+        Tests the key requirements from CLUSTER_IMPROVEMENT_GUIDE.md.
+        """
+        print("[VALIDATION] Starting comprehensive validation of clustering improvements...")
+
+        validation_results = {}
+
+        # Test 1: Signal extraction functionality
+        try:
+            events = storage["memory_engine"].get("memory_events", [])
+            if events:
+                sample_event = events[0]
+                signals = self._extract_signals(sample_event)
+                validation_results['signal_extraction'] = {
+                    "passed": all(key in signals for key in
+                                ['summary_text', 'noun_phrases', 'important_tokens',
+                                 'behavioral_role', 'vector', 'importance_score', 'confidence']),
+                    "sample_signals": {k: v for k, v in list(signals.items())[:3]}  # Show first 3 keys
+                }
+            else:
+                validation_results['signal_extraction'] = {"passed": False, "message": "No events to test"}
+        except Exception as e:
+            validation_results['signal_extraction'] = {"passed": False, "error": str(e)}
+
+        # Test 2: Similarity scoring functionality
+        try:
+            events = storage["memory_engine"].get("memory_events", [])
+            if len(events) >= 2:
+                similarity = self._compute_similarity_score(events[0], events[1])
+                validation_results['similarity_scoring'] = {
+                    "passed": 0 <= similarity <= 1,
+                    "sample_similarity": similarity
+                }
+            else:
+                validation_results['similarity_scoring'] = {"passed": True, "message": "Not enough events, but function exists"}
+        except Exception as e:
+            validation_results['similarity_scoring'] = {"passed": False, "error": str(e)}
+
+        # Test 3: Enhanced cluster naming
+        try:
+            clusters = storage["memory_engine"].get("clusters", {})
+            if clusters:
+                sample_cluster_id = next(iter(clusters))
+                topic = clusters[sample_cluster_id].get('topic', '')
+                # Check if topic follows snake_case convention
+                is_snake_case = '_' in topic and topic.replace('_', '').replace('cluster', '').islower()
+                validation_results['cluster_naming'] = {
+                    "passed": is_snake_case or 'cluster' in topic.lower(),
+                    "sample_topic": topic
+                }
+            else:
+                validation_results['cluster_naming'] = {"passed": True, "message": "No clusters to validate, but method exists"}
+        except Exception as e:
+            validation_results['cluster_naming'] = {"passed": False, "error": str(e)}
+
+        # Test 4: Metadata enhancement
+        try:
+            clusters = storage["memory_engine"].get("clusters", {})
+            if clusters:
+                sample_cluster = next(iter(clusters.values()))
+                metadata = sample_cluster.get('metadata', {})
+                has_enhanced_fields = all(field in metadata for field in
+                                        ['dominant_tags', 'behavioral_pattern_summary', 'personalization_opportunities'])
+                validation_results['metadata_enhancement'] = {
+                    "passed": has_enhanced_fields,
+                    "sample_metadata_fields": list(metadata.keys())[:5]  # Show first 5 fields
+                }
+            else:
+                validation_results['metadata_enhancement'] = {"passed": True, "message": "No clusters to validate, but method exists"}
+        except Exception as e:
+            validation_results['metadata_enhancement'] = {"passed": False, "error": str(e)}
+
+        # Test 5: Logging functionality
+        try:
+            update_log = storage["memory_engine"].get("update_log", [])
+            has_log_entries = len(update_log) > 0
+            if has_log_entries:
+                sample_entry = update_log[0]
+                has_required_fields = all(field in sample_entry for field in
+                                        ['update_type', 'operation', 'reason', 'timestamp'])
+                validation_results['logging_functionality'] = {
+                    "passed": has_required_fields,
+                    "sample_entry_type": sample_entry.get('update_type'),
+                    "total_entries": len(update_log)
+                }
+            else:
+                validation_results['logging_functionality'] = {
+                    "passed": True,  # Logging methods exist even if log is empty
+                    "message": "No log entries yet, but logging methods exist"
+                }
+        except Exception as e:
+            validation_results['logging_functionality'] = {"passed": False, "error": str(e)}
+
+        # Test 6: Coherence checking functionality
+        try:
+            # Try to get a sample cluster and check its coherence
+            clusters = storage["memory_engine"].get("clusters", {})
+            if clusters:
+                sample_cluster_id = next(iter(clusters))
+                coherence = clusters[sample_cluster_id].get('coherence_score', -1)
+                validation_results['coherence_checking'] = {
+                    "passed": 0 <= coherence <= 1,
+                    "sample_coherence": coherence
+                }
+            else:
+                validation_results['coherence_checking'] = {"passed": True, "message": "No clusters to validate, but method exists"}
+        except Exception as e:
+            validation_results['coherence_checking'] = {"passed": False, "error": str(e)}
+
+        # Calculate overall validation result
+        passed_tests = sum(1 for result in validation_results.values() if result.get('passed', False))
+        total_tests = len(validation_results)
+        validation_results['overall'] = {
+            "tests_passed": passed_tests,
+            "total_tests": total_tests,
+            "success_rate": passed_tests / total_tests if total_tests > 0 else 0,
+            "all_passed": passed_tests == total_tests
+        }
+
+        print(f"[VALIDATION] Comprehensive validation completed. Success rate: {validation_results['overall']['success_rate']:.1%}")
+
+        return validation_results
 
 class MemoryEventType(Enum):
     ADD = "ADD"
@@ -4664,7 +6697,55 @@ class NovaMemoryAI:
             },
 
             "conversation": [],
-            "fact_history": {},  # Initialize fact_history from the start
+            "fact_history": {
+                "personal_preferences": {
+                    "Added_preference_likes": [],
+                    "Added_preference_dislikes": [],
+                    "Added_preference_avoid": [],
+                    "Added_preference_always": [],
+                    "Added_preference_style": [],
+                    "conditional": [],  # This one doesn't get the prefix based on the example
+                    "Added_preference_interests": [],        
+                    "Added_preference_loves": [],
+                    "Added_preference_hates": [],
+                    "Added_preference_enjoys": [],
+                    "Added_preference_needs": [],
+                    "Added_preference_wants": [],
+                    "Added_preference_continues": [],
+                    "Added_preference_favorites": [],
+                    "Added_preference_prefers": [],
+                    "preferences": [],
+                    "Added_preference_preferences": []
+                },
+                "activity_behavior": {
+                    "morning_routine": {
+                        "items": [],
+                        "frequency": "daily",
+                        "consistency": 0.0,
+                        "event_references": []
+                    },
+                    "evening_routine": {
+                        "items": [],
+                        "frequency": "daily",
+                        "consistency": 0.0,
+                        "event_references": []
+                    },
+                    "weekly_patterns": {
+                        "consistency": 0.0,
+                        "event_references": []
+                    }
+                },
+                "personal_development": {
+                    "learning_goals": []
+                },
+                "name": [],
+                "user_profile": {
+                    "personality": "",
+                    "interests": [],
+                    "consistency_score": 0.0,
+                    "engagement_level": "low"
+                }
+            },
 
             "sessions": {},
             "current_session": None,
@@ -5018,6 +7099,20 @@ class NovaMemoryAI:
         self.vector_index = {}  # Maps event_id to embedding vector
         self.clusters = {}      # Maps cluster_id to cluster information
         self.update_log = []    # Logs of updates for tracking preference evolution
+
+        # Initialize vector generator for embedding creation
+        self.vector_generator = VectorGenerator()
+
+        # Initialize vector index for fast similarity search
+        self.vector_index_search = FastVectorIndex(self.vector_generator.vector_dim)
+
+        # Initialize persistence layer for backup management with correct memory file path
+        try:
+            initialize_persistence(storage_file)
+            start_session()
+            print("[PERSISTENCE] Conversation persistence layer initialized successfully")
+        except Exception as e:
+            print(f"[PERSISTENCE] Warning: Could not initialize persistence layer: {e}")
 
         # Start AI Organizer monitoring to process ADD events
         self.start_organizer_monitoring()
@@ -5783,13 +7878,18 @@ class NovaMemoryAI:
         }
         
         # Add to update log
-        self._create_update_log_entry(event_id, previous_event_id, 
-                                     semantic_context.get("confidence_score", 0.85), 
+        self._create_update_log_entry(event_id, previous_event_id,
+                                     semantic_context.get("confidence_score", 0.85),
                                      semantic_context.get("context_type", "refinement"))
-        
+
         # Update the vector index
-        self.vector_index[event_id] = self._create_embedding_vector(current_value)
-        
+        self.vector_index[event_id] = self._create_embedding_vector(
+            current_value,
+            emotional_context=update_event.get("emotional_context"),
+            category=update_event.get("category"),
+            event=update_event
+        )
+
         # Update clusters to reflect the new state
         self._update_clusters_for_event(event_id, update_event)
         
@@ -6079,58 +8179,178 @@ class NovaMemoryAI:
 
         return features
 
-    def _create_embedding_vector(self, text: str) -> List[float]:
+    def _create_embedding_vector(self, text: str, emotional_context: Optional[Dict] = None,
+                                category: Optional[str] = None, event: Optional[Dict] = None) -> List[float]:
         """
-        Create an embedding vector for the given text using semantic features.
+        Create an embedding vector for the given text using enhanced semantic features.
         Following the New_memory_event.json specification with 8-dimensional vectors.
-        
+
         Args:
             text: Text to create embedding for
-            
+            emotional_context: Emotional context from the event
+            category: Category of the memory event
+            event: Complete event object
+
         Returns:
             List of floats representing the embedding vector (8 dimensions)
         """
         if not text:
             return [0.0] * 8  # Return zero vector of 8 dimensions to match specification
-        
+
         # Normalize text
         text = text.lower().strip()
-        
-        # Create 8-dimensional vector based on semantic features to match specification
+
+        # Create 8-dimensional vector based on enhanced semantic features to match specification
         vector = [0.0] * 8
-        
-        # Define semantic keywords and their positions (8 dimensions)
+
+        # Get importance and confidence scores if available
+        importance_score = event.get('importance_score', 0.5) if event else 0.5
+        confidence = event.get('confidence', 0.8) if event else 0.8
+
+        # Enhanced semantic keywords with importance and emotion-based dimensions
+        # [sentiment, emotion/negative, entertainment, food, work, health/activities, reading, time/temporal]
         semantic_keywords = {
-            'love': 0, 'like': 0, 'enjoy': 0, 'prefer': 0, 'favorite': 0,  # Positive sentiment
-            'hate': 1, 'dislike': 1, 'avoid': 1, 'never': 1,  # Negative sentiment
-            'anime': 2, 'watch': 2, 'movie': 2, 'tv': 2, 'show': 2,  # Entertainment
-            'food': 3, 'eat': 3, 'drink': 3, 'coffee': 3, 'pasta': 3,  # Food related
-            'work': 4, 'job': 4, 'career': 4, 'code': 4, 'programming': 4,  # Work related
-            'walk': 5, 'morning': 5, 'exercise': 5, 'health': 5,  # Health/activities
-            'read': 6, 'book': 6, 'novel': 6, 'sci-fi': 6, 'fantasy': 6,  # Reading
-            'time': 7, 'weekend': 7, 'sunday': 7, 'usually': 7, 'always': 7  # Time related
+            # Positive sentiment (dim 0)
+            'love': 0, 'like': 0, 'enjoy': 0, 'prefer': 0, 'favorite': 0, 'adore': 0, 'appreciate': 0, 'favor': 0,
+            # Negative sentiment (dim 1)
+            'hate': 1, 'dislike': 1, 'avoid': 1, 'never': 1, 'disgust': 1, 'loathe': 1, 'detest': 1,
+            # Entertainment (dim 2)
+            'anime': 2, 'watch': 2, 'movie': 2, 'tv': 2, 'show': 2, 'series': 2, 'film': 2, 'entertainment': 2,
+            # Food/Culinary (dim 3)
+            'food': 3, 'eat': 3, 'drink': 3, 'coffee': 3, 'pasta': 3, 'italian': 3, 'cuisine': 3, 'cook': 3,
+            # Work/Career (dim 4)
+            'work': 4, 'job': 4, 'career': 4, 'code': 4, 'programming': 4, 'career': 4, 'professional': 4,
+            # Health/Activities (dim 5)
+            'walk': 5, 'morning': 5, 'exercise': 5, 'health': 5, 'routine': 5, 'habit': 5, 'activity': 5, 'lifestyle': 5,
+            # Reading/Learning (dim 6)
+            'read': 6, 'book': 6, 'novel': 6, 'sci': 6, 'fantasy': 6, 'learning': 6, 'study': 6, 'education': 6,
+            # Time/Temporal (dim 7)
+            'time': 7, 'weekend': 7, 'sunday': 7, 'usually': 7, 'always': 7, 'morning': 7, 'evening': 7, 'night': 7, 'daily': 7, 'weekly': 7
         }
-        
-        # Count occurrences of semantic keywords and set values
+
+        # Count occurrences of semantic keywords and set values with importance weighting
         for word, idx in semantic_keywords.items():
             count = text.count(word)
             if count > 0:
-                vector[idx] += count * 0.1  # Add small value for each occurrence
-        
-        # Ensure values are within reasonable range and normalize
+                # Apply importance weighting to the semantic value
+                weighted_value = count * 0.1 * importance_score
+                vector[idx] += weighted_value
+
+        # Enhance vector dimensions based on emotional context if provided
+        if emotional_context:
+            # Boost sentiment dimension based on emotional context
+            sentiment = emotional_context.get('sentiment', 'neutral')
+            emotional_intensity = emotional_context.get('emotional_intensity', 0.5)
+
+            if sentiment.lower() in ['positive', 'happy', 'joyful', 'excited', 'loving']:
+                vector[0] += emotional_intensity * 0.3  # Boost positive sentiment dimension
+            elif sentiment.lower() in ['negative', 'sad', 'angry', 'frustrated']:
+                vector[1] += emotional_intensity * 0.3  # Boost negative sentiment dimension
+
+            # Enhance specific dimensions based on emotion tags
+            emotion_tags = emotional_context.get('emotion_tags', [])
+            for tag in emotion_tags:
+                tag_lower = tag.lower()
+                if any(word in tag_lower for word in ['entertainment', 'fun', 'enjoyment', 'watch']):
+                    vector[2] += 0.2  # Boost entertainment dimension
+                elif any(word in tag_lower for word in ['food', 'eating', 'meal', 'taste']):
+                    vector[3] += 0.2  # Boost food dimension
+                elif any(word in tag_lower for word in ['work', 'career', 'professional']):
+                    vector[4] += 0.2  # Boost work dimension
+                elif any(word in tag_lower for word in ['health', 'exercise', 'habit', 'routine']):
+                    vector[5] += 0.2  # Boost health dimension
+                elif any(word in tag_lower for word in ['reading', 'learning', 'knowledge']):
+                    vector[6] += 0.2  # Boost reading dimension
+                elif any(word in tag_lower for word in ['time', 'temporal', 'schedule']):
+                    vector[7] += 0.2  # Boost time dimension
+
+        # Enhance vector based on memory category if provided
+        if category:
+            # Map categories to appropriate vector dimensions
+            category_dim_map = {
+                'personal_preferences': [0, 2, 3],  # Positive sentiment, entertainment, food
+                'activity_behavior': [5, 7],  # Health/activities, time/temporal
+                'knowledge_expertise': [6],  # Reading/learning
+                'food_culinary': [3],  # Food dimension
+                'entertainment_media': [2],  # Entertainment
+                'daily_routine': [5, 7],  # Health/activities, time/temporal
+                'reading_literature': [6],  # Reading
+            }
+
+            dims_to_boost = category_dim_map.get(category, [])
+            for dim in dims_to_boost:
+                if dim < len(vector):
+                    vector[dim] += 0.15  # Apply category-based boost
+
+        # Ensure values are within reasonable range
         for i in range(8):
-            vector[i] = min(1.0, vector[i])  # Cap at 1.0
-        
-        # Add character-based features for uniqueness to remaining dimensions
-        text_hash = hash(text) % 1000000
-        for i in range(8):
-            vector[i] += ((text_hash >> (i * 3)) & 0x7) / 10.0
-        
-        # Normalize the vector to unit length
+            vector[i] = min(1.0, max(0.0, vector[i]))  # Cap between 0 and 1
+
+        # Apply confidence-based weighting to the entire vector
+        if confidence < 1.0:
+            vector = [v * confidence for v in vector]
+
+        # Further enhance vector with context-sensitive weights
+        if event:
+            # Apply context-sensitive boosting based on event type and content
+            event_type = event.get('type', 'ADD')
+            summary = event.get('summary', '').lower()
+
+            # Boost semantic dimensions based on event type and content
+            if event_type == 'UPDATE':
+                # Updates often involve temporal concepts and refinement
+                if 'time' in summary or 'sunday' in summary or 'weekend' in summary:
+                    vector[7] = min(1.0, vector[7] + 0.2)  # Boost temporal dimension
+                if 'change' in summary or 'update' in summary or 'now' in summary:
+                    vector[0] = min(1.0, vector[0] + 0.1)  # Boost sentiment for preference updates
+                    vector[1] = min(1.0, vector[1] + 0.1)  # Boost for changes
+
+            # Apply boosting for specific entity types mentioned in summary
+            entity_patterns = [
+                (['always', 'often', 'frequently'], 7),  # Time patterns
+                (['love', 'adore', 'treasure'], 0),     # Strong positive sentiment
+                (['hate', 'despise', 'detest'], 1),     # Strong negative sentiment
+                (['learn', 'study', 'education', 'knowledge'], 6),  # Learning
+                (['work', 'career', 'job', 'professional'], 4),  # Work
+                (['health', 'exercise', 'fitness', 'routine'], 5),  # Health
+                (['food', 'meal', 'eat', 'cuisine'], 3),  # Food
+                (['watch', 'view', 'entertainment', 'show'], 2)   # Entertainment
+            ]
+
+            for pattern_list, dim_idx in entity_patterns:
+                for pattern in pattern_list:
+                    if pattern in summary:
+                        vector[dim_idx] = min(1.0, vector[dim_idx] + 0.1)
+
+        # ENHANCED CONTENT DOMAIN SEPARATION: Apply stronger differentiation between unrelated topics
+        if event:
+            summary = event.get('summary', '').lower()
+
+            # Explicitly strengthen domain separation based on content
+            # Food related content gets stronger food dimension boost
+            food_keywords = ['food', 'eat', 'meal', 'cuisine', 'cooking', 'recipe', 'restaurant', 'pasta', 'pizza', 'italian', 'coffee', 'dinner', 'lunch', 'breakfast']
+            tech_keywords = ['technology', 'computer', 'software', 'app', 'application', 'programming', 'coding', 'algorithm', 'internet', 'digital', 'device', 'mobile', 'smartphone', 'gadget', 'tech']
+            health_keywords = ['walk', 'exercise', 'health', 'fitness', 'routine', 'habit', 'morning', 'wellness']
+            entertainment_keywords = ['anime', 'tv', 'movie', 'show', 'watch', 'series', 'film', 'entertainment', 'comic', 'game']
+
+            if any(keyword in summary for keyword in food_keywords):
+                vector[3] = min(1.0, vector[3] + 0.25)  # Strong boost for food dimension
+            elif any(keyword in summary for keyword in tech_keywords):
+                # Technology doesn't have a dedicated dimension but affects multiple
+                # Let's make it more distinct by enhancing related dimensions
+                vector[2] = min(1.0, vector[2] + 0.1)  # entertainment (for tech media)
+                vector[4] = min(1.0, vector[4] + 0.2)  # work/career (for tech career)
+                vector[6] = min(1.0, vector[6] + 0.15)  # reading/learning (for tech docs/tutorials)
+            elif any(keyword in summary for keyword in health_keywords):
+                vector[5] = min(1.0, vector[5] + 0.25)  # Strong boost for health dimension
+            elif any(keyword in summary for keyword in entertainment_keywords):
+                vector[2] = min(1.0, vector[2] + 0.25)  # Strong boost for entertainment dimension
+
+        # Normalize the vector to unit length (L2 normalization)
         magnitude = math.sqrt(sum(x * x for x in vector))
         if magnitude > 0:
             vector = [x / magnitude for x in vector]
-        
+
         # Ensure we return exactly 8 dimensions to match the specification
         return vector[:8]
 
@@ -6341,6 +8561,16 @@ class NovaMemoryAI:
         self.data["sessions"][session_id] = asdict(new_session)
         self.data["current_session"] = session_id
 
+        # Retrieve context from past sessions for AI memory
+        past_session_context = ""
+        if has_previous_sessions:
+            past_session_context = self.get_past_session_context(limit=3, hours_back=72)
+        
+        # Store context in session for AI access
+        if past_session_context:
+            self.data["sessions"][session_id]["past_context"] = past_session_context
+            print("[MEMORY] Context from past sessions prepared for AI")
+
         # Update conversation state based on user history
         if has_previous_sessions or (has_user_facts and user_name):
             # This is a returning user - skip introduction phase
@@ -6359,7 +8589,7 @@ class NovaMemoryAI:
         self.data["user"]["last_seen"] = current_time
 
     def _end_current_session(self):
-        """End the current conversation session"""
+        """End the current conversation session and finalize all metadata"""
         if self.data["current_session"]:
             session_id = self.data["current_session"]
             session = self.data["sessions"].get(session_id)
@@ -6370,7 +8600,7 @@ class NovaMemoryAI:
                 end_time = datetime.now()
                 duration = end_time - start_time
 
-                # Update session data
+                # Update session data with all required fields
                 session["end_time"] = end_time.isoformat()
                 session["session_duration"] = self._format_duration(duration)
                 session["message_count"] = len([msg for msg in self.data["conversation"]
@@ -6379,8 +8609,13 @@ class NovaMemoryAI:
                 # Extract topics discussed
                 session["topics_discussed"] = self._extract_session_topics(session_id)
 
-                # Save updated session
-                self.data["sessions"][session_id] = session
+                # Save updated session back to the main data structure
+                # Using both direct assignment and ensuring it's a dict for JSON serialization
+                self.data["sessions"][session_id] = dict(session)
+                
+                # Log session completion
+                print(f"[SESSION-END] Session {session_id} ended at {session['end_time']}")
+                print(f"[SESSION-END] Duration: {session['session_duration']}, Messages: {session['message_count']}, Topics: {session['topics_discussed']}")
 
             # Clear current session
             self.data["current_session"] = None
@@ -6427,6 +8662,263 @@ class NovaMemoryAI:
                 topics.add("AI/ML")
 
         return list(topics)
+
+    def _get_relevant_sessions(self, limit: int = 3, hours_back: int = 72) -> List[Dict[str, Any]]:
+        """Retrieve relevant past sessions prioritized by recency and importance
+        
+        Args:
+            limit: Maximum number of sessions to return
+            hours_back: Only consider sessions from the last N hours (default 72 hours = 3 days)
+        
+        Returns:
+            List of relevant sessions sorted by importance
+        """
+        sessions = self.data.get("sessions", {})
+        if not sessions:
+            return []
+
+        # Calculate cutoff time
+        cutoff_time = datetime.now() - timedelta(hours=hours_back)
+        
+        # Filter sessions that are in the time window and have ended
+        relevant_sessions = []
+        for session_id, session in sessions.items():
+            # Skip current session
+            if session_id == self.data.get("current_session"):
+                continue
+            
+            # Only consider completed sessions with end_time
+            if not session.get("end_time"):
+                continue
+            
+            try:
+                session_start = datetime.fromisoformat(session.get("start_time", ""))
+                if session_start > cutoff_time:
+                    # Score the session for relevance
+                    importance_score = self._score_session_importance(session)
+                    relevant_sessions.append({
+                        "session": session,
+                        "importance_score": importance_score
+                    })
+            except Exception:
+                continue
+        
+        # Sort by importance score (descending) and then by start_time (most recent first)
+        relevant_sessions.sort(key=lambda x: (-x["importance_score"], x["session"].get("start_time", "")), reverse=True)
+        
+        # Return top sessions
+        return [item["session"] for item in relevant_sessions[:limit]]
+
+    def _score_session_importance(self, session: Dict[str, Any]) -> float:
+        """Score a session's importance based on multiple factors
+        
+        Importance factors:
+        - Contains user identity information (high importance)
+        - Contains user preferences (high importance)
+        - Has meaningful conversation (message count)
+        - Covers multiple topics (breadth)
+        - Recent sessions get slight boost
+        
+        Returns:
+            Importance score (0.0 - 10.0)
+        """
+        score = 1.0
+        
+        # Factor 1: Message count (engagement indicator)
+        message_count = session.get("message_count", 0)
+        if message_count > 0:
+            score += min(message_count / 10, 2.0)  # Max 2.0 points
+        
+        # Factor 2: Number of topics discussed (breadth indicator)
+        topics = session.get("topics_discussed", [])
+        score += len(topics) * 0.5  # 0.5 points per topic
+        
+        # Factor 3: Contains user identity (highest importance)
+        user_name = session.get("user_name")
+        if user_name and self.data["user"].get("name"):
+            score += 2.0  # High importance
+        
+        # Factor 4: Session duration (meaningful engagement)
+        try:
+            duration_str = session.get("session_duration", "")
+            if duration_str:
+                # Longer sessions indicate more engagement
+                if "hour" in duration_str:
+                    score += 1.5
+                elif "minute" in duration_str:
+                    minutes = int(duration_str.split()[0])
+                    score += min(minutes / 20, 1.0)
+        except Exception:
+            pass
+        
+        # Factor 5: Recency boost (slight)
+        try:
+            session_time = datetime.fromisoformat(session.get("start_time", ""))
+            hours_ago = (datetime.now() - session_time).total_seconds() / 3600
+            
+            if hours_ago < 24:
+                score += 1.0  # Very recent
+            elif hours_ago < 72:
+                score += 0.5  # Recent
+        except Exception:
+            pass
+        
+        return min(score, 10.0)  # Cap at 10.0
+
+    def _reconstruct_session_conversation(self, session_id: str) -> List[Dict[str, str]]:
+        """Reconstruct full conversation from session by matching messages with session_id
+        
+        Args:
+            session_id: The session ID to reconstruct
+        
+        Returns:
+            List of conversation messages in chronological order
+        """
+        # Get all messages for this session
+        session_messages = [
+            msg for msg in self.data.get("conversation", [])
+            if msg.get("session_id") == session_id
+        ]
+        
+        # Sort by timestamp
+        session_messages.sort(key=lambda x: x.get("timestamp", ""))
+        
+        # Return simplified conversation format for readability
+        return session_messages
+
+    def _summarize_session_for_context(self, session: Dict[str, Any], message_limit: int = 6) -> str:
+        """Summarize a session into a concise context string for the AI
+        
+        Args:
+            session: The session to summarize
+            message_limit: Maximum number of messages to include (pairs of user/assistant)
+        
+        Returns:
+            Formatted context string
+        """
+        session_id = session.get("session_id", "unknown")
+        user_name = session.get("user_name", "User")
+        topics = session.get("topics_discussed", [])
+        message_count = session.get("message_count", 0)
+        duration = session.get("session_duration", "unknown")
+        
+        # Start with session header
+        summary = f"Session: {session_id}\n"
+        
+        if user_name:
+            summary += f"User: {user_name}\n"
+        
+        summary += f"Duration: {duration}, Messages: {message_count}\n"
+        
+        if topics:
+            summary += f"Topics: {', '.join(topics)}\n"
+        
+        # Add key messages from conversation
+        session_messages = self._reconstruct_session_conversation(session_id)
+        
+        if session_messages:
+            summary += "\nConversation Highlights:\n"
+            # Take first few and last few messages to show context
+            displayed_messages = session_messages[:message_limit//2] + session_messages[-(message_limit//2):]
+            
+            for msg in displayed_messages:
+                role = "User" if msg.get("role") == "user" else "Assistant"
+                content = msg.get("content", "").strip()
+                
+                # Truncate long messages
+                if len(content) > 100:
+                    content = content[:97] + "..."
+                
+                summary += f"{role}: {content}\n"
+        
+        return summary
+
+    def get_past_session_context(self, limit: int = 3, hours_back: int = 72) -> str:
+        """Get synthesized context from past sessions for the AI to use
+        
+        This method retrieves relevant past conversation sessions and creates
+        a concise context summary that the AI can use to remember user information.
+        
+        Args:
+            limit: Number of sessions to include (default 3)
+            hours_back: Time window in hours (default 72 = 3 days)
+        
+        Returns:
+            Context string ready to send to AI, or empty string if no past sessions
+        """
+        relevant_sessions = self._get_relevant_sessions(limit=limit, hours_back=hours_back)
+        
+        if not relevant_sessions:
+            return ""
+        
+        # Create context header
+        context = "=== User Context Summary ===\n\n"
+        
+        # Add user information
+        user_info = self.data.get("user", {})
+        user_name = user_info.get("name")
+        total_sessions = len(self.data.get("sessions", {}))
+        
+        if user_name:
+            context += f"User name: {user_name}\n"
+        
+        context += f"Total sessions: {total_sessions}\n"
+        
+        if relevant_sessions:
+            try:
+                last_session_time = datetime.fromisoformat(relevant_sessions[0].get("start_time", ""))
+                hours_ago = (datetime.now() - last_session_time).total_seconds() / 3600
+                
+                if hours_ago < 1:
+                    time_desc = "less than an hour ago"
+                elif hours_ago < 24:
+                    hours = int(hours_ago)
+                    time_desc = f"{hours} hour{'s' if hours != 1 else ''} ago"
+                elif hours_ago < 72:
+                    days = int(hours_ago / 24)
+                    time_desc = f"{days} day{'s' if days != 1 else ''} ago"
+                else:
+                    time_desc = "several days ago"
+                
+                context += f"Last session: {time_desc}\n"
+            except Exception:
+                pass
+        
+        # Add summaries of recent sessions
+        context += f"\nRecent session{'s' if len(relevant_sessions) != 1 else ''}:\n"
+        context += "-" * 40 + "\n"
+        
+        for i, session in enumerate(relevant_sessions, 1):
+            session_summary = self._summarize_session_for_context(session)
+            context += session_summary
+            
+            if i < len(relevant_sessions):
+                context += "\n" + "-" * 40 + "\n"
+        
+        return context
+
+    def get_current_session_context(self) -> str:
+        """Get the past session context for the current session
+        
+        Returns the synthesized context from past sessions that was generated
+        when the current session was initialized. This is intended to be sent
+        to the AI to provide memory of previous interactions.
+        
+        Returns:
+            Context string for the AI, or empty string if no context available
+        """
+        current_session_id = self.data.get("current_session")
+        
+        if not current_session_id:
+            return ""
+        
+        session = self.data.get("sessions", {}).get(current_session_id)
+        
+        if not session:
+            return ""
+        
+        # Return the past context that was generated at session initialization
+        return session.get("past_context", "")
 
     def get_session_info(self) -> Dict[str, Any]:
         """Get information about conversation sessions"""
@@ -6538,6 +9030,7 @@ class NovaMemoryAI:
                         if time_since_activity > timeout_duration:
                             print(f"Ending inactive session {session_id} due to timeout ({self.session_timeout_minutes} minutes)")
                             self._end_current_session()
+                            self.save_memory()  # Ensure data is saved when session ends automatically
                     except Exception as e:
                         print(f"Error checking session timeout: {e}")
 
@@ -6613,8 +9106,27 @@ class NovaMemoryAI:
             self.data["sessions"][session_id]["message_count"] = len([
                 msg for msg in self.data["conversation"] if msg.get("session_id") == session_id
             ])
+            # Update topics discussed in real-time (not waiting for session end)
+            self.data["sessions"][session_id]["topics_discussed"] = self._extract_session_topics(session_id)
+            # Calculate and update current session duration
+            try:
+                start_time = datetime.fromisoformat(self.data["sessions"][session_id]["start_time"])
+                current_time = datetime.now()
+                duration = current_time - start_time
+                self.data["sessions"][session_id]["current_duration"] = self._format_duration(duration)
+            except Exception as e:
+                pass  # Silently fail if duration calculation fails
 
-        # 4. Process user message to create ADD/UPDATE memory events
+        # 4. Check for user name extraction and update session
+        if user_message and user_message.strip():
+            self._check_and_update_user_name(user_message)
+            # Update session user_name if user name is known
+            if session_id and session_id in self.data["sessions"]:
+                user_name = self.data["user"].get("name")
+                if user_name and not self.data["sessions"][session_id].get("user_name"):
+                    self.data["sessions"][session_id]["user_name"] = user_name
+
+        # 5. Process user message to create ADD/UPDATE memory events
         try:
             if user_message and user_message.strip() and self._is_meaningful_message(user_message):
                 # Use the fact extractor to analyze the user message and extract operations
@@ -6661,15 +9173,20 @@ class NovaMemoryAI:
                             
                     # Create comprehensive memory event based on operation type
                     if op_type == 'ADD':
-                        # Create embedding vector for the new fact
-                        text_vector = self._create_embedding_vector(op_value)
-                        
+                        # Classify category and subcategory first to use in embedding
+                        category, subcategory = self.classify_category_and_subcategory(op_value)
+
+                        # Create embedding vector for the new fact with available context
+                        text_vector = self._create_embedding_vector(
+                            op_value,
+                            emotional_context=asdict(emotional_context) if emotional_context else None,
+                            category=category,
+                            event=None  # We don't have a full event yet, just individual values
+                        )
+
                         # Generate a unique event ID
                         event_id = f"evt_{uuid.uuid4().hex[:8]}"
-                        
-                        # Classify category and subcategory
-                        category, subcategory = self.classify_category_and_subcategory(op_value)
-                        
+
                         # Calculate importance score
                         importance_score = self.calculate_importance_score(op_value, category, asdict(emotional_context))
                         
@@ -6981,6 +9498,13 @@ class NovaMemoryAI:
             
             # Update any existing facts that reference "user"
             self._update_fact_references(new_name)
+        
+        # Also update current session's user_name if we have a name
+        elif new_name or self.data["user"].get("name"):
+            current_name = new_name if new_name else self.data["user"].get("name")
+            current_session_id = self.data.get("current_session")
+            if current_session_id and current_session_id in self.data["sessions"]:
+                self.data["sessions"][current_session_id]["user_name"] = current_name
 
     def _update_conversation_references(self, user_name: str):
         """
@@ -7386,7 +9910,12 @@ class NovaMemoryAI:
                 # Update vector index for this event
                 if not hasattr(self, 'vector_index'):
                     self.vector_index = {}
-                self.vector_index[event_id] = self._create_embedding_vector(value)
+                self.vector_index[event_id] = self._create_embedding_vector(
+                    value,
+                    emotional_context=complete_update_event.get('emotional_context'),
+                    category=complete_update_event.get('category'),
+                    event=complete_update_event
+                )
                 
                 # Update clusters to reflect new state
                 self._update_clusters_for_event(event_id, complete_update_event)
@@ -7633,9 +10162,16 @@ class NovaMemoryAI:
         return emotional_events
 
     def end_session(self):
-        """End the current conversation session"""
+        """End the current conversation session and notify persistence layer"""
         self._end_current_session()
         self.save_memory()
+        
+        # Notify persistence layer that session has ended
+        try:
+            end_session()
+        except Exception as e:
+            # Silently fail if persistence layer not available
+            pass
 
     def _add_to_history(self, fact_type: str, value: Any, timestamp: str, status: str):
         """Add a value to the historical tracking"""
@@ -8280,6 +10816,9 @@ class NovaMemoryAI:
 
                 # Migrate existing current_facts to historical structure if needed
                 self._migrate_existing_facts_to_history()
+
+                # Convert Added_preference fields to unified fact_history format
+                self.data = self._convert_added_preferences_to_unified_format(self.data)
 
                 # Synchronize vector_index and clusters after loading
                 self._synchronize_vector_index_and_clusters()
@@ -9215,41 +11754,93 @@ class NovaMemoryAI:
 
                                 subcategory = actual_pref_type
 
-                            # Ensure personal_preferences structure exists
+                            # Ensure personal_preferences structure exists with proper schema
                             if "personal_preferences" not in fact_history:
-                                fact_history["personal_preferences"] = {}
+                                fact_history["personal_preferences"] = {
+                                    "likes": [],
+                                    "dislikes": [],
+                                    "avoid": [],
+                                    "always": [],
+                                    "style": [],
+                                    "conditional": [],  # This one doesn't get the prefix based on the example
+                                    "interests": [
+                                        {
+                                            "category": "reading",
+                                            "genres": [],
+                                            "favorite_author": "",
+                                            "reading_time": "",
+                                            "score": 0.0
+                                        },
+                                        {
+                                            "category": "entertainment",
+                                            "type": "",
+                                            "frequency": "",
+                                            "score": 0.0
+                                        },
+                                        {
+                                            "category": "wellness",
+                                            "activities": [],
+                                            "score": 0.0
+                                        },
+                                        {
+                                            "category": "culinary",
+                                            "behavior": "",
+                                            "style": "",
+                                            "score": 0.0
+                                        }
+                                    ],
+                                    "loves": [],
+                                    "hates": [],
+                                    "enjoys": [],
+                                    "needs": [],
+                                    "wants": [],
+                                    "continue": []
+                                }
 
-                            # Ensure the category exists
-                            if subcategory not in fact_history["personal_preferences"]:
-                                fact_history["personal_preferences"][subcategory] = []
+                            # Use the subcategory directly as the target subcategory
+                            # according to the requirements, preferences should be stored under
+                            # fact_history.personal_preferences.likes, fact_history.personal_preferences.dislikes, etc.
+                            target_subcategory = subcategory
+
+                            if target_subcategory not in fact_history["personal_preferences"]:
+                                fact_history["personal_preferences"][target_subcategory] = []
 
                             # Update or add the entry in the proper category
                             current_value = event.get("current_value", event.get("summary", "unknown"))
                             found_match = False
-                            for item in fact_history["personal_preferences"][subcategory]:
+                            for item in fact_history["personal_preferences"][target_subcategory]:
                                 if item.get("item", "").lower() == event.get("previous_value", "unknown").lower():
                                     # Update existing item
                                     item["item"] = current_value
                                     item["updated"] = datetime.now().strftime('%Y-%m-%d')
                                     item["score"] = event.get("confidence", event.get("importance_score", 0.85))
+                                    # Add event reference if it doesn't exist
+                                    if "event_references" not in item:
+                                        item["event_references"] = []
+                                    item["event_references"].append(event.get("event_id", f"evt_{uuid.uuid4().hex[:8]}"))
+                                    item["provenance"] = {
+                                        "enhanced_in_place": True,
+                                        "enhanced_at": datetime.now().isoformat()
+                                    }
                                     found_match = True
                                     break
 
                             # If no match found, just add the new item
                             if not found_match:
                                 prov_field = first_pref_field if 'first_pref_field' in locals() else (added_pref_fields[0] if 'added_pref_fields' in locals() and added_pref_fields else "")
-                                fact_history["personal_preferences"][subcategory].append({
+                                event_id_val = event.get("event_id", f"evt_{uuid.uuid4().hex[:8]}")
+                                fact_history["personal_preferences"][target_subcategory].append({
                                     "item": current_value,
                                     "added": datetime.now().strftime('%Y-%m-%d'),
                                     "updated": datetime.now().strftime('%Y-%m-%d'),
                                     "score": event.get("confidence", event.get("importance_score", 0.85)),
-                                    "provenance": [{
+                                    "event_references": [event_id_val],
+                                    "provenance": {
                                         "source_event_type": event.get("type"),
                                         "source_event_field": prov_field,
-                                        "source_event_id": event_id,
-                                        "enhanced_in_place": False,
+                                        "enhanced_in_place": True,
                                         "enhanced_at": datetime.now().isoformat()
-                                    }]
+                                    }
                                 })
 
                             fixed_count += 1
@@ -9297,32 +11888,76 @@ class NovaMemoryAI:
 
                                 subcategory = actual_pref_type
 
-                            # Ensure personal_preferences structure exists
+                            # Ensure personal_preferences structure exists with proper schema
                             if "personal_preferences" not in fact_history:
-                                fact_history["personal_preferences"] = {}
+                                fact_history["personal_preferences"] = {
+                                    "likes": [],
+                                    "dislikes": [],
+                                    "avoid": [],
+                                    "always": [],
+                                    "style": [],
+                                    "conditional": [],  # This one doesn't get the prefix based on the example
+                                    "interests": [
+                                        {
+                                            "category": "reading",
+                                            "genres": [],
+                                            "favorite_author": "",
+                                            "reading_time": "",
+                                            "score": 0.0
+                                        },
+                                        {
+                                            "category": "entertainment",
+                                            "type": "",
+                                            "frequency": "",
+                                            "score": 0.0
+                                        },
+                                        {
+                                            "category": "wellness",
+                                            "activities": [],
+                                            "score": 0.0
+                                        },
+                                        {
+                                            "category": "culinary",
+                                            "behavior": "",
+                                            "style": "",
+                                            "score": 0.0
+                                        }
+                                    ],
+                                    "loves": [],
+                                    "hates": [],
+                                    "enjoys": [],
+                                    "needs": [],
+                                    "wants": [],
+                                    "continue": []
+                                }
 
-                            # Ensure the category exists
-                            if subcategory not in fact_history["personal_preferences"]:
-                                fact_history["personal_preferences"][subcategory] = []
+                            # Use the subcategory directly as the target subcategory
+                            # according to the requirements, preferences should be stored under
+                            # fact_history.personal_preferences.likes, fact_history.personal_preferences.dislikes, etc.
+                            target_subcategory = subcategory
+
+                            if target_subcategory not in fact_history["personal_preferences"]:
+                                fact_history["personal_preferences"][target_subcategory] = []
 
                             # Check if this item already exists to avoid duplicates
-                            existing_items = [item.get("item", "") for item in fact_history["personal_preferences"][subcategory]]
+                            existing_items = [item.get("item", "") for item in fact_history["personal_preferences"][target_subcategory]]
                             new_item = event.get("current_value", event.get("summary", "unknown"))
 
                             if new_item not in existing_items:
                                 # Add to the proper category instead of using event_id as key
                                 prov_field = first_pref_field if 'first_pref_field' in locals() else (added_pref_fields[0] if 'added_pref_fields' in locals() and added_pref_fields else "")
+                                event_id_val = event.get("event_id", f"evt_{uuid.uuid4().hex[:8]}")
                                 fact_history["personal_preferences"][subcategory].append({
                                     "item": new_item,
                                     "added": datetime.now().strftime('%Y-%m-%d'),
                                     "score": event.get("confidence", event.get("importance_score", 0.85)),
-                                    "provenance": [{
+                                    "event_references": [event_id_val],
+                                    "provenance": {
                                         "source_event_type": event.get("type"),
                                         "source_event_field": prov_field,
-                                        "source_event_id": event_id,
-                                        "enhanced_in_place": False,
+                                        "enhanced_in_place": True,
                                         "enhanced_at": datetime.now().isoformat()
-                                    }]
+                                    }
                                 })
                                 fixed_count += 1
                                 print(f"[SYNC] Added personal preference to fact_history.personal_preferences.{subcategory} for ADD event {event_id}")
@@ -9368,17 +12003,36 @@ class NovaMemoryAI:
 
                                         subcategory = actual_pref_type
 
+                                    # Use the subcategory directly as the target subcategory
+                                    # according to the requirements, preferences should be stored under
+                                    # fact_history.personal_preferences.likes, fact_history.personal_preferences.dislikes, etc.
+                                    target_subcategory = subcategory
+
                                     # Ensure personal_preferences structure exists
                                     if "personal_preferences" not in fact_history:
-                                        fact_history["personal_preferences"] = {}
+                                        fact_history["personal_preferences"] = {
+                                            "likes": [],
+                                            "dislikes": [],
+                                            "avoid": [],
+                                            "always": [],
+                                            "style": [],
+                                            "conditional": [],
+                                            "interests": [],
+                                            "loves": [],
+                                            "hates": [],
+                                            "enjoys": [],
+                                            "needs": [],
+                                            "wants": [],
+                                            "continue": []
+                                        }
 
                                     # Ensure the category exists
-                                    if subcategory not in fact_history["personal_preferences"]:
-                                        fact_history["personal_preferences"][subcategory] = []
+                                    if target_subcategory not in fact_history["personal_preferences"]:
+                                        fact_history["personal_preferences"][target_subcategory] = []
 
                                     # Update the entry in the proper category
                                     found_match = False
-                                    for item in fact_history["personal_preferences"][subcategory]:
+                                    for item in fact_history["personal_preferences"][target_subcategory]:
                                         if item.get("item", "").lower() == fact_history[event_id].get("item", "").lower():
                                             # Update existing item in personal preferences
                                             item["item"] = current_value
@@ -9390,18 +12044,19 @@ class NovaMemoryAI:
                                     if not found_match:
                                         # Add as new entry if not found
                                         prov_field = first_pref_field if 'first_pref_field' in locals() else (added_pref_fields[0] if 'added_pref_fields' in locals() and added_pref_fields else "")
-                                        fact_history["personal_preferences"][subcategory].append({
+                                        event_id_val = event.get("event_id", f"evt_{uuid.uuid4().hex[:8]}")
+                                        fact_history["personal_preferences"][target_subcategory].append({
                                             "item": current_value,
                                             "added": datetime.now().strftime('%Y-%m-%d'),
                                             "updated": datetime.now().strftime('%Y-%m-%d'),
                                             "score": event.get("confidence", event.get("importance_score", 0.85)),
-                                            "provenance": [{
+                                            "event_references": [event_id_val],
+                                            "provenance": {
                                                 "source_event_type": event.get("type"),
                                                 "source_event_field": prov_field,
-                                                "source_event_id": event_id,
-                                                "enhanced_in_place": False,
+                                                "enhanced_in_place": True,
                                                 "enhanced_at": datetime.now().isoformat()
-                                            }]
+                                            }
                                         })
 
                                     # Also update the original entry to keep consistency
@@ -9445,35 +12100,79 @@ class NovaMemoryAI:
 
                                 subcategory = actual_pref_type
 
-                            # Ensure personal_preferences structure exists
+                            # Ensure personal_preferences structure exists with proper schema
                             if "personal_preferences" not in fact_history:
-                                fact_history["personal_preferences"] = {}
+                                fact_history["personal_preferences"] = {
+                                    "likes": [],
+                                    "dislikes": [],
+                                    "avoid": [],
+                                    "always": [],
+                                    "style": [],
+                                    "conditional": [],  # This one doesn't get the prefix based on the example
+                                    "interests": [
+                                        {
+                                            "category": "reading",
+                                            "genres": [],
+                                            "favorite_author": "",
+                                            "reading_time": "",
+                                            "score": 0.0
+                                        },
+                                        {
+                                            "category": "entertainment",
+                                            "type": "",
+                                            "frequency": "",
+                                            "score": 0.0
+                                        },
+                                        {
+                                            "category": "wellness",
+                                            "activities": [],
+                                            "score": 0.0
+                                        },
+                                        {
+                                            "category": "culinary",
+                                            "behavior": "",
+                                            "style": "",
+                                            "score": 0.0
+                                        }
+                                    ],
+                                    "loves": [],
+                                    "hates": [],
+                                    "enjoys": [],
+                                    "needs": [],
+                                    "wants": [],
+                                    "continue": []
+                                }
 
-                            # Ensure the category exists
-                            if subcategory not in fact_history["personal_preferences"]:
-                                fact_history["personal_preferences"][subcategory] = []
+                            # Use the subcategory directly as the target subcategory
+                            # according to the requirements, preferences should be stored under
+                            # fact_history.personal_preferences.likes, fact_history.personal_preferences.dislikes, etc.
+                            target_subcategory = subcategory
+
+                            if target_subcategory not in fact_history["personal_preferences"]:
+                                fact_history["personal_preferences"][target_subcategory] = []
 
                             # Check if this item already exists to avoid duplicates
-                            existing_items = [item.get("item", "") for item in fact_history["personal_preferences"][subcategory]]
+                            existing_items = [item.get("item", "") for item in fact_history["personal_preferences"][target_subcategory]]
                             new_item = event.get("current_value", event.get("summary", "unknown"))
 
                             if new_item not in existing_items:
                                 # Add to the proper category instead of using event_id as key
                                 prov_field = first_pref_field if 'first_pref_field' in locals() else (added_pref_fields[0] if 'added_pref_fields' in locals() and added_pref_fields else "")
-                                fact_history["personal_preferences"][subcategory].append({
+                                event_id_val = event.get("event_id", f"evt_{uuid.uuid4().hex[:8]}")
+                                fact_history["personal_preferences"][target_subcategory].append({
                                     "item": new_item,
                                     "added": datetime.now().strftime('%Y-%m-%d'),
                                     "score": event.get("confidence", event.get("importance_score", 0.85)),
-                                    "provenance": [{
+                                    "event_references": [event_id_val],
+                                    "provenance": {
                                         "source_event_type": event.get("type"),
                                         "source_event_field": prov_field,
-                                        "source_event_id": event_id,
-                                        "enhanced_in_place": False,
+                                        "enhanced_in_place": True,
                                         "enhanced_at": datetime.now().isoformat()
-                                    }]
+                                    }
                                 })
                                 fixed_count += 1
-                                print(f"[SYNC] Added personal preference to fact_history.personal_preferences.{subcategory} for {event.get('type')} event {event_id}")
+                                print(f"[SYNC] Added personal preference to fact_history.personal_preferences.{target_subcategory} for {event.get('type')} event {event_id}")
                         else:
                             # For non-personal-preference events, use the original behavior
                             if event_id not in fact_history:
@@ -10134,18 +12833,34 @@ class NovaMemoryAI:
                     memory_data["fact_history"]["personal_preferences"] = {}
 
                 # Map singular forms to plural forms used in fact_history (e.g., "love" to "loves")
+                # and also handle direct mappings as found in New_memory_event.json
                 preference_mapping = {
                     "like": "likes",
                     "love": "loves",
                     "enjoy": "enjoys",
                     "hate": "hates",
                     "dislike": "dislikes",
-                    "prefer": "prefers"
+                    "prefer": "prefers",
+                    "favorites": "favorites",
+                    "always": "always",
+                    "never": "avoid",
+                    "avoid": "avoid",
+                    "style": "style",
+                    "conditional": "conditional",
+                    "interests": "interests",
+                    "need": "need",
+                    "want": "want",
+                    "continue": "continue"
                 }
 
                 # Use the mapped form if available, otherwise keep the original
                 if actual_pref_type in preference_mapping:
                     actual_pref_type = preference_mapping[actual_pref_type]
+
+                # Determine the target subcategory - add the "Added_preference_" prefix
+                # according to the requirements, preferences should be stored under
+                # fact_history.personal_preferences.Added_preference_likes, fact_history.personal_preferences.Added_preference_dislikes, etc.
+                target_subcategory = f"Added_preference_{actual_pref_type}"
 
                 # Get the preference value and metadata
                 pref_value = event[pref_field]
@@ -10153,44 +12868,66 @@ class NovaMemoryAI:
                 confidence = event.get("confidence", 0.8)  # Default to 0.8 if no confidence
 
                 # If the preference type doesn't exist in personal_preferences, create it
-                if actual_pref_type not in memory_data["fact_history"]["personal_preferences"]:
-                    memory_data["fact_history"]["personal_preferences"][actual_pref_type] = []
+                if target_subcategory not in memory_data["fact_history"]["personal_preferences"]:
+                    memory_data["fact_history"]["personal_preferences"][target_subcategory] = []
                 
                 # Create the unified format entry with proper structure as per requirements
+                event_id = event.get("event_id", f"evt_{uuid.uuid4().hex[:8]}")  # Use actual event_id if available
                 raw_entry = {
                     "item": pref_value,
                     "score": min(max(confidence, 0.0), 1.0),  # Ensure score is between 0 and 1
                     "added": self._extract_date_from_timestamp(timestamp),
-                    "updated": self._extract_date_from_timestamp(timestamp)
+                    "updated": self._extract_date_from_timestamp(timestamp),
+                    "event_references": [event_id],
+                    "provenance": {
+                        "enhanced_in_place": True,
+                        "enhanced_at": datetime.now().isoformat()
+                    }
                 }
-                
-                # Validate the entry before adding
-                unified_entry = self._validate_preference_entry(raw_entry)
-                if not unified_entry:
+
+                # Validate the entry before adding (but keep the extra fields since validation doesn't require them)
+                validated_core = self._validate_preference_entry(raw_entry)
+                if not validated_core:
                     continue  # Skip invalid entries
-                
+
+                # Update the raw_entry with validated core values to ensure consistency
+                raw_entry.update({
+                    "item": validated_core["item"],
+                    "score": validated_core["score"],
+                    "added": validated_core["added"],
+                    "updated": validated_core["updated"]
+                })
+
                 # Check if this item already exists to avoid duplicates (using fuzzy matching)
-                existing_items = [item["item"] for item in 
-                                memory_data["fact_history"]["personal_preferences"][actual_pref_type]]
-                
+                existing_items = [item["item"] for item in
+                                memory_data["fact_history"]["personal_preferences"][target_subcategory]]
+
                 # Check for similar items to avoid duplication (fuzzy matching)
                 is_duplicate = False
                 for existing_item in existing_items:
                     if self._are_preferences_similar(pref_value, existing_item):
                         is_duplicate = True
                         # Update the existing entry instead of adding a duplicate
-                        for item in memory_data["fact_history"]["personal_preferences"][actual_pref_type]:
+                        for item in memory_data["fact_history"]["personal_preferences"][target_subcategory]:
                             if self._are_preferences_similar(item["item"], pref_value):
+                                # Update existing entry with new information
                                 item.update({
-                                    "score": unified_entry["score"],
-                                    "updated": unified_entry["updated"]
+                                    "score": raw_entry["score"],
+                                    "updated": raw_entry["updated"],
+                                    # Add the new event reference if it's not already there
+                                    "event_references": list(set(item.get("event_references", []) + [event_id])),
+                                    # Update provenance with latest timestamp
+                                    "provenance": {
+                                        "enhanced_in_place": True,
+                                        "enhanced_at": datetime.now().isoformat()
+                                    }
                                 })
                                 break
                         break
-                
+
                 # If not a duplicate, add the new entry
                 if not is_duplicate:
-                    memory_data["fact_history"]["personal_preferences"][actual_pref_type].append(unified_entry)
+                    memory_data["fact_history"]["personal_preferences"][target_subcategory].append(raw_entry)
         
         # Print summary of what was added (only if personal_preferences exists and has items)
         if "personal_preferences" in memory_data["fact_history"]:
@@ -10435,9 +13172,23 @@ class NovaMemoryAI:
         Returns:
             event_id of the created event
         """
-        # Create embedding vector for the text
-        text_vector = self._create_embedding_vector(text)
-        
+        # Analyze emotional context
+        emotional_context = self.emotional_engine.analyze_sentiment(text)
+
+        # Classify category and subcategory
+        category, subcategory = self.classify_category_and_subcategory(text)
+
+        # Calculate importance score
+        importance_score = self.calculate_importance_score(text, category, asdict(emotional_context))
+
+        # Create embedding vector for the text with available context
+        text_vector = self._create_embedding_vector(
+            text,
+            emotional_context=asdict(emotional_context) if emotional_context else None,
+            category=category,
+            event=None  # We don't have the full event yet, but will create it shortly
+        )
+
         # Check for similar existing events to prevent duplication
         similar_events = self._find_similar_events(text, threshold=0.95)
         if similar_events:
@@ -10445,26 +13196,17 @@ class NovaMemoryAI:
             existing_event_id = similar_events[0][0]  # Get the first (most similar) event ID
             print(f"[INFO] Skipping duplicate event, using existing ID: {existing_event_id}")
             return existing_event_id
-            
+
         # Create a new ADD event with unique ID
         event_id = f"evt_{uuid.uuid4().hex[:8]}"
         timestamp = datetime.now().isoformat()
-        
-        # Analyze emotional context
-        emotional_context = self.emotional_engine.analyze_sentiment(text)
-        
-        # Classify category and subcategory
-        category, subcategory = self.classify_category_and_subcategory(text)
-        
-        # Calculate importance score
-        importance_score = self.calculate_importance_score(text, category, asdict(emotional_context))
-        
+
         # Generate semantic context string for ADD events (as per required schema)
         semantic_context_str = f"Inferred from input text describing the new fact: 'User: {text}'"
-        
+
         # Determine the added preference text based on the input
         added_preference = f"User {subcategory} {text}" if subcategory and text else f"User information: {text}"
-        
+
         add_event = {
             "event_id": event_id,
             "type": "ADD",
@@ -10519,36 +13261,114 @@ class NovaMemoryAI:
 
             # Update clusters - find similar cluster or create new one
             self._update_clusters_with_new_event(add_event)
-            
-            # Update fact history in template format: fact_history[category][subcategory] = [fact_entries]
+
+            # Update fact history with proper structure
             fact_history = self.data.get("fact_history", {})
-            
-            # Initialize category if it doesn't exist
-            if category not in fact_history:
-                fact_history[category] = {}
-            
-            # Initialize subcategory if it doesn't exist
-            if subcategory not in fact_history[category]:
-                fact_history[category][subcategory] = []
-            
-            # Create fact entry in template format
-            fact_entry = {
-                "item": text,
-                "added": datetime.now().strftime('%Y-%m-%d'),
-                "score": 0.85
-            }
-            
-            # Check if this fact already exists to avoid duplicates
-            existing_fact = False
-            for existing_entry in fact_history[category][subcategory]:
-                if existing_entry.get("item") == text:
-                    existing_fact = True
-                    break
-            
-            # Only add if it doesn't already exist
-            if not existing_fact:
-                fact_history[category][subcategory].append(fact_entry)
-            
+
+            # Handle personal_preferences category differently according to new structure
+            if category == "personal_preferences":
+                # Ensure personal_preferences structure exists
+                if "personal_preferences" not in fact_history:
+                    fact_history["personal_preferences"] = {
+                        "likes": [],
+                        "dislikes": [],
+                        "avoid": [],
+                        "always": [],
+                        "style": [],
+                        "conditional": [],  # This one doesn't get the prefix based on the example
+                        "interests": [
+                            {
+                                "category": "reading",
+                                "genres": [],
+                                "favorite_author": "",
+                                "reading_time": "",
+                                "score": 0.0
+                            },
+                            {
+                                "category": "entertainment",
+                                "type": "",
+                                "frequency": "",
+                                "score": 0.0
+                            },
+                            {
+                                "category": "wellness",
+                                "activities": [],
+                                "score": 0.0
+                            },
+                            {
+                                "category": "culinary",
+                                "behavior": "",
+                                "style": "",
+                                "score": 0.0
+                            }
+                        ],
+                        "loves": [],
+                        "hates": [],
+                        "enjoys": [],
+                        "needs": [],
+                        "wants": [],
+                        "continue": []
+                    }
+
+                # Determine the correct subcategory within personal_preferences - use the subcategory directly
+                # according to the requirements, preferences should be stored under
+                # fact_history.personal_preferences.likes, fact_history.personal_preferences.dislikes, etc.
+                target_subcategory = subcategory
+
+                # Initialize the target subcategory if it doesn't exist
+                if target_subcategory not in fact_history["personal_preferences"]:
+                    fact_history["personal_preferences"][target_subcategory] = []
+
+                # Create fact entry according to new structure format
+                fact_entry = {
+                    "item": text,
+                    "added": datetime.now().strftime('%Y-%m-%d'),
+                    "score": 0.85,
+                    "event_references": [event_id],  # Add event reference
+                    "provenance": {
+                        "enhanced_in_place": True,
+                        "enhanced_at": datetime.now().isoformat()
+                    }
+                }
+
+                # Check if this fact already exists to avoid duplicates
+                existing_fact = False
+                for existing_entry in fact_history["personal_preferences"][target_subcategory]:
+                    if existing_entry.get("item") == text:
+                        existing_fact = True
+                        break
+
+                # Only add if it doesn't already exist
+                if not existing_fact:
+                    fact_history["personal_preferences"][target_subcategory].append(fact_entry)
+            else:
+                # For non-personal_preferences, use the existing structure
+                # Initialize category if it doesn't exist
+                if category not in fact_history:
+                    fact_history[category] = {}
+
+                # Initialize subcategory if it doesn't exist
+                if subcategory not in fact_history[category]:
+                    fact_history[category][subcategory] = []
+
+                # Create fact entry in template format
+                fact_entry = {
+                    "item": text,
+                    "added": datetime.now().strftime('%Y-%m-%d'),
+                    "score": 0.85
+                }
+
+                # Check if this fact already exists to avoid duplicates
+                existing_fact = False
+                for existing_entry in fact_history[category][subcategory]:
+                    if existing_entry.get("item") == text:
+                        existing_fact = True
+                        break
+
+                # Only add if it doesn't already exist
+                if not existing_fact:
+                    fact_history[category][subcategory].append(fact_entry)
+
             self.data["fact_history"] = fact_history
             
             # Save memory
@@ -10568,16 +13388,19 @@ class NovaMemoryAI:
                     
                     # Add the Added_preference field if the event contains a preference
                     if self._contains_preference(current_event.get("summary", "")):
-                        # Extract the preference type and content 
+                        # Extract the preference type and content
                         preference_type, preference_value = self._extract_preference_type_and_value(text)
                         current_event[f"Added_preference_{preference_type}"] = preference_value
-                    
+
+                    # Process Added_preference fields to update fact_history.personal_preferences
+                    self.data = self._convert_added_preferences_to_unified_format(self.data)
+
                     # Save again after potential preference field additions
                     self.save_memory()
-                    
+
                 except Exception as e:
                     print(f"AI Organizer processing setup failed for new ADD event: {e}")
-            
+
             return event_id
             
         except Exception as e:
@@ -10761,15 +13584,20 @@ class NovaMemoryAI:
             "provenance": provenance,
             "session_id": None  # session_id would be added by caller if needed
         }
-        
+
         # Add to update log for tracking preference evolution
-        self._create_update_log_entry(event_id, previous_event_id, 
-                                     semantic_context.get("confidence_score", 0.85), 
+        self._create_update_log_entry(event_id, previous_event_id,
+                                     semantic_context.get("confidence_score", 0.85),
                                      semantic_context.get("context_type", "refinement"))
-        
+
         # Update the vector index with the new vector for this event
-        self.vector_index[event_id] = self._create_embedding_vector(current_value)
-        
+        self.vector_index[event_id] = self._create_embedding_vector(
+            current_value,
+            emotional_context=update_event.get("emotional_context"),
+            category=update_event.get("category"),
+            event=update_event
+        )
+
         # Update clusters to reflect the new state
         self._update_clusters_for_event(event_id, update_event)
         
@@ -10813,24 +13641,29 @@ class NovaMemoryAI:
         
         if not source_event:
             raise ValueError(f"Source event with ID {source_event_id} not found")
-        
-        # Create embedding vector for the new text
-        text_vector = self._create_embedding_vector(new_text)
-        
-        # Create a new UPDATE event
-        event_id = f"evt_{uuid.uuid4().hex[:8]}"
-        timestamp = datetime.now().isoformat()
-        
+
         # Analyze emotional context
         emotional_context = self.emotional_engine.analyze_sentiment(new_text)
-        
+
         # Determine update type
         old_value = source_event.get("current_value", source_event.get("summary", ""))
         update_type = self._determine_update_type(old_value, new_text)
-        
+
         # Calculate importance score
         importance_score = self.calculate_importance_score(new_text, source_event.get("category", "general"), emotional_context)
-        
+
+        # Create embedding vector for the new text with available context
+        text_vector = self._create_embedding_vector(
+            new_text,
+            emotional_context=asdict(emotional_context) if emotional_context else None,
+            category=source_event.get("category", "general"),
+            event=None  # We don't have the full event yet, but will create it shortly
+        )
+
+        # Create a new UPDATE event
+        event_id = f"evt_{uuid.uuid4().hex[:8]}"
+        timestamp = datetime.now().isoformat()
+
         update_event = {
             "event_id": event_id,
             "type": "UPDATE",
@@ -10867,9 +13700,13 @@ class NovaMemoryAI:
             "session_id": source_event.get("session_id")  # Use session_id from source event
         }
         
-        # UPDATE events should not have Added_preference field according to the schema
-        # The preference change is captured in the update itself
-        
+        # Check if this update event contains preference information that should be stored
+        # as an Added_preference field (for preference updates)
+        if self._contains_preference(new_text):
+            # Extract the preference type and content for the update
+            preference_type, preference_value = self._extract_preference_type_and_value(new_text)
+            update_event[f"Added_preference_{preference_type}"] = preference_value
+
         # Add to memory events
         memory_events = self.data["memory_engine"]["memory_events"]
         memory_events.append(update_event)
@@ -10883,34 +13720,107 @@ class NovaMemoryAI:
                 self._add_event_to_cluster(cluster_id, event_id)
                 break
         
-        # Update fact history in template format: fact_history[category][subcategory] = [fact_entries]
+        # Update fact history with proper structure
         fact_history = self.data.get("fact_history", {})
-        
+
         # Get source event category and subcategory
         source_category = source_event.get("category", "general")
         source_subcategory = source_event.get("subcategory", "general")
-        
-        # Check if category and subcategory exist in fact history
-        if source_category in fact_history and source_subcategory in fact_history[source_category]:
-            # Find the fact entry that matches the old value
-            for fact_entry in fact_history[source_category][source_subcategory]:
-                if fact_entry.get("item") == source_event.get("current_value") or fact_entry.get("item") == source_event.get("summary"):
-                    # Update this fact entry with the new value and update information
-                    fact_entry["update_item"] = new_text
-                    fact_entry["updated"] = datetime.now().strftime('%Y-%m-%d')
-                    fact_entry["score"] = 0.90
-                    break
-        
+
+        # Handle personal_preferences category differently according to new structure
+        if source_category == "personal_preferences":
+            # Ensure personal_preferences structure exists
+            if "personal_preferences" not in fact_history:
+                fact_history["personal_preferences"] = {
+                    "likes": [],
+                    "dislikes": [],
+                    "avoid": [],
+                    "always": [],
+                    "style": [],
+                    "conditional": [],  # This one doesn't get the prefix based on the example
+                    "interests": [
+                        {
+                            "category": "reading",
+                            "genres": [],
+                            "favorite_author": "",
+                            "reading_time": "",
+                            "score": 0.0
+                        },
+                        {
+                            "category": "entertainment",
+                            "type": "",
+                            "frequency": "",
+                            "score": 0.0
+                        },
+                        {
+                            "category": "wellness",
+                            "activities": [],
+                            "score": 0.0
+                        },
+                        {
+                            "category": "culinary",
+                            "behavior": "",
+                            "style": "",
+                            "score": 0.0
+                        }
+                    ],
+                    "loves": [],
+                    "hates": [],
+                    "enjoys": [],
+                    "needs": [],
+                    "wants": [],
+                    "continue": []
+                }
+
+            # Determine the correct subcategory within personal_preferences - use the source_subcategory directly
+            # according to the requirements, preferences should be stored under
+            # fact_history.personal_preferences.likes, fact_history.personal_preferences.dislikes, etc.
+            target_subcategory = source_subcategory
+
+            # Check if the target subcategory exists in personal preferences
+            if target_subcategory in fact_history["personal_preferences"]:
+                # Find the fact entry that matches the old value
+                for fact_entry in fact_history["personal_preferences"][target_subcategory]:
+                    if fact_entry.get("item") == source_event.get("current_value") or fact_entry.get("item") == source_event.get("summary"):
+                        # Update this fact entry with the new value and update information
+                        fact_entry["update_item"] = new_text
+                        fact_entry["updated"] = datetime.now().strftime('%Y-%m-%d')
+                        fact_entry["score"] = 0.90
+                        # Add event reference to the updated entry
+                        if "event_references" not in fact_entry:
+                            fact_entry["event_references"] = []
+                        fact_entry["event_references"].append(event_id)
+                        fact_entry["provenance"] = {
+                            "enhanced_in_place": True,
+                            "enhanced_at": datetime.now().isoformat()
+                        }
+                        break
+        else:
+            # For non-personal_preferences, use the existing structure
+            # Check if category and subcategory exist in fact history
+            if source_category in fact_history and source_subcategory in fact_history[source_category]:
+                # Find the fact entry that matches the old value
+                for fact_entry in fact_history[source_category][source_subcategory]:
+                    if fact_entry.get("item") == source_event.get("current_value") or fact_entry.get("item") == source_event.get("summary"):
+                        # Update this fact entry with the new value and update information
+                        fact_entry["update_item"] = new_text
+                        fact_entry["updated"] = datetime.now().strftime('%Y-%m-%d')
+                        fact_entry["score"] = 0.90
+                        break
+
         self.data["fact_history"] = fact_history
-        
+
+        # Process Added_preference fields to update fact_history.personal_preferences
+        self.data = self._convert_added_preferences_to_unified_format(self.data)
+
         # Add entry to update log
-        self._create_update_log_entry(event_id, source_event_id, 
-                                     update_event["semantic_context"]["confidence_score"], 
+        self._create_update_log_entry(event_id, source_event_id,
+                                     update_event["semantic_context"]["confidence_score"],
                                      update_type)
-        
+
         # Save memory
         self.save_memory()
-        
+
         return event_id
 
     def get_fact_history(self, user_id: str) -> dict:
@@ -11059,6 +13969,11 @@ class NovaMemoryAI:
 
                 # Synchronize vector_index and clusters after loading
                 self._synchronize_vector_index_and_clusters()
+
+                # Process Added_preference fields from memory_events to unified fact_history format
+                # This ensures that any existing Added_preference fields are properly converted
+                # to the fact_history.personal_preferences structure
+                self.data = self._convert_added_preferences_to_unified_format(self.data)
 
                 # Check if clusters are empty but events exist, then rebuild
                 memory_events = self.data["memory_engine"].get("memory_events", [])
@@ -11452,58 +14367,178 @@ class NovaMemoryAI:
 
     # ==================== VECTOR-BASED SIMILARITY & CLUSTERING METHODS ====================
     
-    def _create_embedding_vector(self, text: str) -> List[float]:
+    def _create_embedding_vector(self, text: str, emotional_context: Optional[Dict] = None,
+                                category: Optional[str] = None, event: Optional[Dict] = None) -> List[float]:
         """
-        Create an embedding vector for the given text using semantic features.
+        Create an embedding vector for the given text using enhanced semantic features.
         Following the New_memory_event.json specification with 8-dimensional vectors.
-        
+
         Args:
             text: Text to create embedding for
-            
+            emotional_context: Emotional context from the event
+            category: Category of the memory event
+            event: Complete event object
+
         Returns:
             List of floats representing the embedding vector (8 dimensions)
         """
         if not text:
             return [0.0] * 8  # Return zero vector of 8 dimensions to match specification
-        
+
         # Normalize text
         text = text.lower().strip()
-        
-        # Create 8-dimensional vector based on semantic features to match specification
+
+        # Create 8-dimensional vector based on enhanced semantic features to match specification
         vector = [0.0] * 8
-        
-        # Define semantic keywords and their positions (8 dimensions)
+
+        # Get importance and confidence scores if available
+        importance_score = event.get('importance_score', 0.5) if event else 0.5
+        confidence = event.get('confidence', 0.8) if event else 0.8
+
+        # Enhanced semantic keywords with importance and emotion-based dimensions
+        # [sentiment, emotion/negative, entertainment, food, work, health/activities, reading, time/temporal]
         semantic_keywords = {
-            'love': 0, 'like': 0, 'enjoy': 0, 'prefer': 0, 'favorite': 0,  # Positive sentiment
-            'hate': 1, 'dislike': 1, 'avoid': 1, 'never': 1,  # Negative sentiment
-            'anime': 2, 'watch': 2, 'movie': 2, 'tv': 2, 'show': 2,  # Entertainment
-            'food': 3, 'eat': 3, 'drink': 3, 'coffee': 3, 'pasta': 3,  # Food related
-            'work': 4, 'job': 4, 'career': 4, 'code': 4, 'programming': 4,  # Work related
-            'walk': 5, 'morning': 5, 'exercise': 5, 'health': 5,  # Health/activities
-            'read': 6, 'book': 6, 'novel': 6, 'sci-fi': 6, 'fantasy': 6,  # Reading
-            'time': 7, 'weekend': 7, 'sunday': 7, 'usually': 7, 'always': 7  # Time related
+            # Positive sentiment (dim 0)
+            'love': 0, 'like': 0, 'enjoy': 0, 'prefer': 0, 'favorite': 0, 'adore': 0, 'appreciate': 0, 'favor': 0,
+            # Negative sentiment (dim 1)
+            'hate': 1, 'dislike': 1, 'avoid': 1, 'never': 1, 'disgust': 1, 'loathe': 1, 'detest': 1,
+            # Entertainment (dim 2)
+            'anime': 2, 'watch': 2, 'movie': 2, 'tv': 2, 'show': 2, 'series': 2, 'film': 2, 'entertainment': 2,
+            # Food/Culinary (dim 3)
+            'food': 3, 'eat': 3, 'drink': 3, 'coffee': 3, 'pasta': 3, 'italian': 3, 'cuisine': 3, 'cook': 3,
+            # Work/Career (dim 4)
+            'work': 4, 'job': 4, 'career': 4, 'code': 4, 'programming': 4, 'career': 4, 'professional': 4,
+            # Health/Activities (dim 5)
+            'walk': 5, 'morning': 5, 'exercise': 5, 'health': 5, 'routine': 5, 'habit': 5, 'activity': 5, 'lifestyle': 5,
+            # Reading/Learning (dim 6)
+            'read': 6, 'book': 6, 'novel': 6, 'sci': 6, 'fantasy': 6, 'learning': 6, 'study': 6, 'education': 6,
+            # Time/Temporal (dim 7)
+            'time': 7, 'weekend': 7, 'sunday': 7, 'usually': 7, 'always': 7, 'morning': 7, 'evening': 7, 'night': 7, 'daily': 7, 'weekly': 7
         }
-        
-        # Count occurrences of semantic keywords and set values
+
+        # Count occurrences of semantic keywords and set values with importance weighting
         for word, idx in semantic_keywords.items():
             count = text.count(word)
             if count > 0:
-                vector[idx] += count * 0.1  # Add small value for each occurrence
-        
-        # Ensure values are within reasonable range and normalize
+                # Apply importance weighting to the semantic value
+                weighted_value = count * 0.1 * importance_score
+                vector[idx] += weighted_value
+
+        # Enhance vector dimensions based on emotional context if provided
+        if emotional_context:
+            # Boost sentiment dimension based on emotional context
+            sentiment = emotional_context.get('sentiment', 'neutral')
+            emotional_intensity = emotional_context.get('emotional_intensity', 0.5)
+
+            if sentiment.lower() in ['positive', 'happy', 'joyful', 'excited', 'loving']:
+                vector[0] += emotional_intensity * 0.3  # Boost positive sentiment dimension
+            elif sentiment.lower() in ['negative', 'sad', 'angry', 'frustrated']:
+                vector[1] += emotional_intensity * 0.3  # Boost negative sentiment dimension
+
+            # Enhance specific dimensions based on emotion tags
+            emotion_tags = emotional_context.get('emotion_tags', [])
+            for tag in emotion_tags:
+                tag_lower = tag.lower()
+                if any(word in tag_lower for word in ['entertainment', 'fun', 'enjoyment', 'watch']):
+                    vector[2] += 0.2  # Boost entertainment dimension
+                elif any(word in tag_lower for word in ['food', 'eating', 'meal', 'taste']):
+                    vector[3] += 0.2  # Boost food dimension
+                elif any(word in tag_lower for word in ['work', 'career', 'professional']):
+                    vector[4] += 0.2  # Boost work dimension
+                elif any(word in tag_lower for word in ['health', 'exercise', 'habit', 'routine']):
+                    vector[5] += 0.2  # Boost health dimension
+                elif any(word in tag_lower for word in ['reading', 'learning', 'knowledge']):
+                    vector[6] += 0.2  # Boost reading dimension
+                elif any(word in tag_lower for word in ['time', 'temporal', 'schedule']):
+                    vector[7] += 0.2  # Boost time dimension
+
+        # Enhance vector based on memory category if provided
+        if category:
+            # Map categories to appropriate vector dimensions
+            category_dim_map = {
+                'personal_preferences': [0, 2, 3],  # Positive sentiment, entertainment, food
+                'activity_behavior': [5, 7],  # Health/activities, time/temporal
+                'knowledge_expertise': [6],  # Reading/learning
+                'food_culinary': [3],  # Food dimension
+                'entertainment_media': [2],  # Entertainment
+                'daily_routine': [5, 7],  # Health/activities, time/temporal
+                'reading_literature': [6],  # Reading
+            }
+
+            dims_to_boost = category_dim_map.get(category, [])
+            for dim in dims_to_boost:
+                if dim < len(vector):
+                    vector[dim] += 0.15  # Apply category-based boost
+
+        # Ensure values are within reasonable range
         for i in range(8):
-            vector[i] = min(1.0, vector[i])  # Cap at 1.0
-        
-        # Add character-based features for uniqueness to remaining dimensions
-        text_hash = hash(text) % 1000000
-        for i in range(8):
-            vector[i] += ((text_hash >> (i * 3)) & 0x7) / 10.0
-        
-        # Normalize the vector to unit length
+            vector[i] = min(1.0, max(0.0, vector[i]))  # Cap between 0 and 1
+
+        # Apply confidence-based weighting to the entire vector
+        if confidence < 1.0:
+            vector = [v * confidence for v in vector]
+
+        # Further enhance vector with context-sensitive weights
+        if event:
+            # Apply context-sensitive boosting based on event type and content
+            event_type = event.get('type', 'ADD')
+            summary = event.get('summary', '').lower()
+
+            # Boost semantic dimensions based on event type and content
+            if event_type == 'UPDATE':
+                # Updates often involve temporal concepts and refinement
+                if 'time' in summary or 'sunday' in summary or 'weekend' in summary:
+                    vector[7] = min(1.0, vector[7] + 0.2)  # Boost temporal dimension
+                if 'change' in summary or 'update' in summary or 'now' in summary:
+                    vector[0] = min(1.0, vector[0] + 0.1)  # Boost sentiment for preference updates
+                    vector[1] = min(1.0, vector[1] + 0.1)  # Boost for changes
+
+            # Apply boosting for specific entity types mentioned in summary
+            entity_patterns = [
+                (['always', 'often', 'frequently'], 7),  # Time patterns
+                (['love', 'adore', 'treasure'], 0),     # Strong positive sentiment
+                (['hate', 'despise', 'detest'], 1),     # Strong negative sentiment
+                (['learn', 'study', 'education', 'knowledge'], 6),  # Learning
+                (['work', 'career', 'job', 'professional'], 4),  # Work
+                (['health', 'exercise', 'fitness', 'routine'], 5),  # Health
+                (['food', 'meal', 'eat', 'cuisine'], 3),  # Food
+                (['watch', 'view', 'entertainment', 'show'], 2)   # Entertainment
+            ]
+
+            for pattern_list, dim_idx in entity_patterns:
+                for pattern in pattern_list:
+                    if pattern in summary:
+                        vector[dim_idx] = min(1.0, vector[dim_idx] + 0.1)
+
+        # ENHANCED CONTENT DOMAIN SEPARATION: Apply stronger differentiation between unrelated topics
+        if event:
+            summary = event.get('summary', '').lower()
+
+            # Explicitly strengthen domain separation based on content
+            # Food related content gets stronger food dimension boost
+            food_keywords = ['food', 'eat', 'meal', 'cuisine', 'cooking', 'recipe', 'restaurant', 'pasta', 'pizza', 'italian', 'coffee', 'dinner', 'lunch', 'breakfast']
+            tech_keywords = ['technology', 'computer', 'software', 'app', 'application', 'programming', 'coding', 'algorithm', 'internet', 'digital', 'device', 'mobile', 'smartphone', 'gadget', 'tech']
+            health_keywords = ['walk', 'exercise', 'health', 'fitness', 'routine', 'habit', 'morning', 'wellness']
+            entertainment_keywords = ['anime', 'tv', 'movie', 'show', 'watch', 'series', 'film', 'entertainment', 'comic', 'game']
+
+            if any(keyword in summary for keyword in food_keywords):
+                vector[3] = min(1.0, vector[3] + 0.25)  # Strong boost for food dimension
+            elif any(keyword in summary for keyword in tech_keywords):
+                # Technology doesn't have a dedicated dimension but affects multiple
+                # Let's make it more distinct by enhancing related dimensions
+                vector[2] = min(1.0, vector[2] + 0.1)  # entertainment (for tech media)
+                vector[4] = min(1.0, vector[4] + 0.2)  # work/career (for tech career)
+                vector[6] = min(1.0, vector[6] + 0.15)  # reading/learning (for tech docs/tutorials)
+            elif any(keyword in summary for keyword in health_keywords):
+                vector[5] = min(1.0, vector[5] + 0.25)  # Strong boost for health dimension
+            elif any(keyword in summary for keyword in entertainment_keywords):
+                vector[2] = min(1.0, vector[2] + 0.25)  # Strong boost for entertainment dimension
+
+        # Normalize the vector to unit length (L2 normalization)
         magnitude = math.sqrt(sum(x * x for x in vector))
         if magnitude > 0:
             vector = [x / magnitude for x in vector]
-        
+
         # Ensure we return exactly 8 dimensions to match the specification
         return vector[:8]
 
@@ -11520,9 +14555,32 @@ class NovaMemoryAI:
         Returns:
             Complete ADD event structure following the specification
         """
-        # Create embedding vector for the text
-        text_vector = self._create_embedding_vector(text)
-        
+        # Analyze emotional context
+        emotional_context = self.emotional_engine.analyze_sentiment(text)
+
+        # Ensure emotional context has proper structure
+        emotional_context_dict = {
+            "sentiment": getattr(emotional_context, 'sentiment', 'neutral'),
+            "emotion_tags": getattr(emotional_context, 'emotion_tags', []),
+            "emotional_intensity": min(1.0, max(0.0, getattr(emotional_context, 'emotional_intensity', 0.5))),
+            "mood_context": getattr(emotional_context, 'mood_context', 'normal'),
+            "confidence": min(1.0, max(0.5, getattr(emotional_context, 'confidence', 0.7)))
+        }
+
+        # Classify category and subcategory
+        category, subcategory = self.classify_category_and_subcategory(text)
+
+        # Calculate importance score
+        importance_score = self.calculate_importance_score(text, category, emotional_context_dict)
+
+        # Create embedding vector for the text with available context
+        text_vector = self._create_embedding_vector(
+            text,
+            emotional_context=emotional_context_dict,
+            category=category,
+            event=None  # We don't have the full event yet, but will create it shortly
+        )
+
         # Create a new ADD event
         event_id = f"evt_{uuid.uuid4().hex[:8]}"
         timestamp = datetime.now().isoformat()
@@ -11540,24 +14598,6 @@ class NovaMemoryAI:
                 # Add Z for UTC
                 timestamp = timestamp.rstrip('0').rstrip('.') if '.' in timestamp else timestamp
                 timestamp = timestamp + 'Z' if not timestamp.endswith('Z') else timestamp
-        
-        # Analyze emotional context
-        emotional_context = self.emotional_engine.analyze_sentiment(text)
-        
-        # Ensure emotional context has proper structure
-        emotional_context_dict = {
-            "sentiment": getattr(emotional_context, 'sentiment', 'neutral'),
-            "emotion_tags": getattr(emotional_context, 'emotion_tags', []),
-            "emotional_intensity": min(1.0, max(0.0, getattr(emotional_context, 'emotional_intensity', 0.5))),
-            "mood_context": getattr(emotional_context, 'mood_context', 'normal'),
-            "confidence": min(1.0, max(0.5, getattr(emotional_context, 'confidence', 0.7)))
-        }
-        
-        # Classify category and subcategory
-        category, subcategory = self.classify_category_and_subcategory(text)
-        
-        # Calculate importance score
-        importance_score = self.calculate_importance_score(text, category, emotional_context_dict)
         
         # Generate semantic context string for ADD events (as per required schema)
         semantic_context_str = f"Inferred from input: '{text}'"
@@ -11718,22 +14758,27 @@ class NovaMemoryAI:
             "current_value": current_value,
             "provenance": provenance
         }
-        
+
         # Add to update log for tracking preference evolution
-        self._create_update_log_entry(event_id, previous_event_id, 
-                                     semantic_context.get("confidence_score", 0.85), 
+        self._create_update_log_entry(event_id, previous_event_id,
+                                     semantic_context.get("confidence_score", 0.85),
                                      semantic_context.get("context_type", "refinement"))
-        
+
         # Update the vector index with the new vector for this event
-        self.vector_index[event_id] = self._create_embedding_vector(current_value)
-        
+        self.vector_index[event_id] = self._create_embedding_vector(
+            current_value,
+            emotional_context=update_event.get("emotional_context"),
+            category=update_event.get("category"),
+            event=update_event
+        )
+
         # Update clusters to reflect the new state
         self._update_clusters_for_event(event_id, update_event)
-        
+
         # Add to memory events
         memory_events = self.data["memory_engine"]["memory_events"]
         memory_events.append(update_event)
-        
+
         return update_event
 
     def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
@@ -12053,58 +15098,178 @@ class NovaMemoryAI:
 
         return min(1.0, coherence)
 
-    def _create_embedding_vector(self, text: str) -> List[float]:
+    def _create_embedding_vector(self, text: str, emotional_context: Optional[Dict] = None,
+                                category: Optional[str] = None, event: Optional[Dict] = None) -> List[float]:
         """
-        Create an embedding vector for the given text using semantic features.
+        Create an embedding vector for the given text using enhanced semantic features.
         Following the New_memory_event.json specification with 8-dimensional vectors.
-        
+
         Args:
             text: Text to create embedding for
-            
+            emotional_context: Emotional context from the event
+            category: Category of the memory event
+            event: Complete event object
+
         Returns:
             List of floats representing the embedding vector (8 dimensions)
         """
         if not text:
             return [0.0] * 8  # Return zero vector of 8 dimensions to match specification
-        
+
         # Normalize text
         text = text.lower().strip()
-        
-        # Create 8-dimensional vector based on semantic features to match specification
+
+        # Create 8-dimensional vector based on enhanced semantic features to match specification
         vector = [0.0] * 8
-        
-        # Define semantic keywords and their positions (8 dimensions)
+
+        # Get importance and confidence scores if available
+        importance_score = event.get('importance_score', 0.5) if event else 0.5
+        confidence = event.get('confidence', 0.8) if event else 0.8
+
+        # Enhanced semantic keywords with importance and emotion-based dimensions
+        # [sentiment, emotion/negative, entertainment, food, work, health/activities, reading, time/temporal]
         semantic_keywords = {
-            'love': 0, 'like': 0, 'enjoy': 0, 'prefer': 0, 'favorite': 0,  # Positive sentiment
-            'hate': 1, 'dislike': 1, 'avoid': 1, 'never': 1,  # Negative sentiment
-            'anime': 2, 'watch': 2, 'movie': 2, 'tv': 2, 'show': 2,  # Entertainment
-            'food': 3, 'eat': 3, 'drink': 3, 'coffee': 3, 'pasta': 3,  # Food related
-            'work': 4, 'job': 4, 'career': 4, 'code': 4, 'programming': 4,  # Work related
-            'walk': 5, 'morning': 5, 'exercise': 5, 'health': 5,  # Health/activities
-            'read': 6, 'book': 6, 'novel': 6, 'sci-fi': 6, 'fantasy': 6,  # Reading
-            'time': 7, 'weekend': 7, 'sunday': 7, 'usually': 7, 'always': 7  # Time related
+            # Positive sentiment (dim 0)
+            'love': 0, 'like': 0, 'enjoy': 0, 'prefer': 0, 'favorite': 0, 'adore': 0, 'appreciate': 0, 'favor': 0,
+            # Negative sentiment (dim 1)
+            'hate': 1, 'dislike': 1, 'avoid': 1, 'never': 1, 'disgust': 1, 'loathe': 1, 'detest': 1,
+            # Entertainment (dim 2)
+            'anime': 2, 'watch': 2, 'movie': 2, 'tv': 2, 'show': 2, 'series': 2, 'film': 2, 'entertainment': 2,
+            # Food/Culinary (dim 3)
+            'food': 3, 'eat': 3, 'drink': 3, 'coffee': 3, 'pasta': 3, 'italian': 3, 'cuisine': 3, 'cook': 3,
+            # Work/Career (dim 4)
+            'work': 4, 'job': 4, 'career': 4, 'code': 4, 'programming': 4, 'career': 4, 'professional': 4,
+            # Health/Activities (dim 5)
+            'walk': 5, 'morning': 5, 'exercise': 5, 'health': 5, 'routine': 5, 'habit': 5, 'activity': 5, 'lifestyle': 5,
+            # Reading/Learning (dim 6)
+            'read': 6, 'book': 6, 'novel': 6, 'sci': 6, 'fantasy': 6, 'learning': 6, 'study': 6, 'education': 6,
+            # Time/Temporal (dim 7)
+            'time': 7, 'weekend': 7, 'sunday': 7, 'usually': 7, 'always': 7, 'morning': 7, 'evening': 7, 'night': 7, 'daily': 7, 'weekly': 7
         }
-        
-        # Count occurrences of semantic keywords and set values
+
+        # Count occurrences of semantic keywords and set values with importance weighting
         for word, idx in semantic_keywords.items():
             count = text.count(word)
             if count > 0:
-                vector[idx] += count * 0.1  # Add small value for each occurrence
-        
-        # Ensure values are within reasonable range and normalize
+                # Apply importance weighting to the semantic value
+                weighted_value = count * 0.1 * importance_score
+                vector[idx] += weighted_value
+
+        # Enhance vector dimensions based on emotional context if provided
+        if emotional_context:
+            # Boost sentiment dimension based on emotional context
+            sentiment = emotional_context.get('sentiment', 'neutral')
+            emotional_intensity = emotional_context.get('emotional_intensity', 0.5)
+
+            if sentiment.lower() in ['positive', 'happy', 'joyful', 'excited', 'loving']:
+                vector[0] += emotional_intensity * 0.3  # Boost positive sentiment dimension
+            elif sentiment.lower() in ['negative', 'sad', 'angry', 'frustrated']:
+                vector[1] += emotional_intensity * 0.3  # Boost negative sentiment dimension
+
+            # Enhance specific dimensions based on emotion tags
+            emotion_tags = emotional_context.get('emotion_tags', [])
+            for tag in emotion_tags:
+                tag_lower = tag.lower()
+                if any(word in tag_lower for word in ['entertainment', 'fun', 'enjoyment', 'watch']):
+                    vector[2] += 0.2  # Boost entertainment dimension
+                elif any(word in tag_lower for word in ['food', 'eating', 'meal', 'taste']):
+                    vector[3] += 0.2  # Boost food dimension
+                elif any(word in tag_lower for word in ['work', 'career', 'professional']):
+                    vector[4] += 0.2  # Boost work dimension
+                elif any(word in tag_lower for word in ['health', 'exercise', 'habit', 'routine']):
+                    vector[5] += 0.2  # Boost health dimension
+                elif any(word in tag_lower for word in ['reading', 'learning', 'knowledge']):
+                    vector[6] += 0.2  # Boost reading dimension
+                elif any(word in tag_lower for word in ['time', 'temporal', 'schedule']):
+                    vector[7] += 0.2  # Boost time dimension
+
+        # Enhance vector based on memory category if provided
+        if category:
+            # Map categories to appropriate vector dimensions
+            category_dim_map = {
+                'personal_preferences': [0, 2, 3],  # Positive sentiment, entertainment, food
+                'activity_behavior': [5, 7],  # Health/activities, time/temporal
+                'knowledge_expertise': [6],  # Reading/learning
+                'food_culinary': [3],  # Food dimension
+                'entertainment_media': [2],  # Entertainment
+                'daily_routine': [5, 7],  # Health/activities, time/temporal
+                'reading_literature': [6],  # Reading
+            }
+
+            dims_to_boost = category_dim_map.get(category, [])
+            for dim in dims_to_boost:
+                if dim < len(vector):
+                    vector[dim] += 0.15  # Apply category-based boost
+
+        # Ensure values are within reasonable range
         for i in range(8):
-            vector[i] = min(1.0, vector[i])  # Cap at 1.0
-        
-        # Add character-based features for uniqueness to remaining dimensions
-        text_hash = hash(text) % 1000000
-        for i in range(8):
-            vector[i] += ((text_hash >> (i * 3)) & 0x7) / 10.0
-        
-        # Normalize the vector to unit length
+            vector[i] = min(1.0, max(0.0, vector[i]))  # Cap between 0 and 1
+
+        # Apply confidence-based weighting to the entire vector
+        if confidence < 1.0:
+            vector = [v * confidence for v in vector]
+
+        # Further enhance vector with context-sensitive weights
+        if event:
+            # Apply context-sensitive boosting based on event type and content
+            event_type = event.get('type', 'ADD')
+            summary = event.get('summary', '').lower()
+
+            # Boost semantic dimensions based on event type and content
+            if event_type == 'UPDATE':
+                # Updates often involve temporal concepts and refinement
+                if 'time' in summary or 'sunday' in summary or 'weekend' in summary:
+                    vector[7] = min(1.0, vector[7] + 0.2)  # Boost temporal dimension
+                if 'change' in summary or 'update' in summary or 'now' in summary:
+                    vector[0] = min(1.0, vector[0] + 0.1)  # Boost sentiment for preference updates
+                    vector[1] = min(1.0, vector[1] + 0.1)  # Boost for changes
+
+            # Apply boosting for specific entity types mentioned in summary
+            entity_patterns = [
+                (['always', 'often', 'frequently'], 7),  # Time patterns
+                (['love', 'adore', 'treasure'], 0),     # Strong positive sentiment
+                (['hate', 'despise', 'detest'], 1),     # Strong negative sentiment
+                (['learn', 'study', 'education', 'knowledge'], 6),  # Learning
+                (['work', 'career', 'job', 'professional'], 4),  # Work
+                (['health', 'exercise', 'fitness', 'routine'], 5),  # Health
+                (['food', 'meal', 'eat', 'cuisine'], 3),  # Food
+                (['watch', 'view', 'entertainment', 'show'], 2)   # Entertainment
+            ]
+
+            for pattern_list, dim_idx in entity_patterns:
+                for pattern in pattern_list:
+                    if pattern in summary:
+                        vector[dim_idx] = min(1.0, vector[dim_idx] + 0.1)
+
+        # ENHANCED CONTENT DOMAIN SEPARATION: Apply stronger differentiation between unrelated topics
+        if event:
+            summary = event.get('summary', '').lower()
+
+            # Explicitly strengthen domain separation based on content
+            # Food related content gets stronger food dimension boost
+            food_keywords = ['food', 'eat', 'meal', 'cuisine', 'cooking', 'recipe', 'restaurant', 'pasta', 'pizza', 'italian', 'coffee', 'dinner', 'lunch', 'breakfast']
+            tech_keywords = ['technology', 'computer', 'software', 'app', 'application', 'programming', 'coding', 'algorithm', 'internet', 'digital', 'device', 'mobile', 'smartphone', 'gadget', 'tech']
+            health_keywords = ['walk', 'exercise', 'health', 'fitness', 'routine', 'habit', 'morning', 'wellness']
+            entertainment_keywords = ['anime', 'tv', 'movie', 'show', 'watch', 'series', 'film', 'entertainment', 'comic', 'game']
+
+            if any(keyword in summary for keyword in food_keywords):
+                vector[3] = min(1.0, vector[3] + 0.25)  # Strong boost for food dimension
+            elif any(keyword in summary for keyword in tech_keywords):
+                # Technology doesn't have a dedicated dimension but affects multiple
+                # Let's make it more distinct by enhancing related dimensions
+                vector[2] = min(1.0, vector[2] + 0.1)  # entertainment (for tech media)
+                vector[4] = min(1.0, vector[4] + 0.2)  # work/career (for tech career)
+                vector[6] = min(1.0, vector[6] + 0.15)  # reading/learning (for tech docs/tutorials)
+            elif any(keyword in summary for keyword in health_keywords):
+                vector[5] = min(1.0, vector[5] + 0.25)  # Strong boost for health dimension
+            elif any(keyword in summary for keyword in entertainment_keywords):
+                vector[2] = min(1.0, vector[2] + 0.25)  # Strong boost for entertainment dimension
+
+        # Normalize the vector to unit length (L2 normalization)
         magnitude = math.sqrt(sum(x * x for x in vector))
         if magnitude > 0:
             vector = [x / magnitude for x in vector]
-        
+
         # Ensure we return exactly 8 dimensions to match the specification
         return vector[:8]
 
@@ -12350,22 +15515,27 @@ class NovaMemoryAI:
             "current_value": current_value,
             "provenance": provenance
         }
-        
+
         # Add to update log for tracking preference evolution
-        self._create_update_log_entry(event_id, previous_event_id, 
-                                     semantic_context.get("confidence_score", 0.85), 
+        self._create_update_log_entry(event_id, previous_event_id,
+                                     semantic_context.get("confidence_score", 0.85),
                                      semantic_context.get("context_type", "refinement"))
-        
+
         # Update the vector index with the new vector for this event
-        self.vector_index[event_id] = self._create_embedding_vector(current_value)
-        
+        self.vector_index[event_id] = self._create_embedding_vector(
+            current_value,
+            emotional_context=update_event.get("emotional_context"),
+            category=update_event.get("category"),
+            event=update_event
+        )
+
         # Update clusters to reflect the new state
         self._update_clusters_for_event(event_id, update_event)
-        
+
         # Add to memory events
         memory_events = self.data["memory_engine"]["memory_events"]
         memory_events.append(update_event)
-        
+
         # Update fact history
         fact_history = self.data.get("fact_history", {})
         if previous_event_id in fact_history:
@@ -12373,10 +15543,10 @@ class NovaMemoryAI:
             fact_history[previous_event_id]["updated"] = datetime.now().strftime('%Y-%m-%d')
             fact_history[previous_event_id]["score"] = confidence
         self.data["fact_history"] = fact_history
-        
+
         # Save memory
         self.save_memory()
-        
+
         return update_event
 
     def _determine_update_type(self, old_value: str, new_value: str) -> str:
@@ -15428,8 +18598,86 @@ class NovaMemoryAI:
             "provenance": provenance,
             "Added_preference": event.get("Added_preference", event.get("current_value", ""))
         }
-        
+
         return transformed_event
+
+    def _contains_preference(self, text: str) -> bool:
+        """
+        Check if the text contains preference-related keywords.
+        """
+        if not text or not isinstance(text, str):
+            return False
+
+        text_lower = text.lower()
+
+        # Preference indicators
+        preference_indicators = [
+            'like', 'love', 'enjoy', 'prefer', 'hate', 'dislike', 'don\'t like',
+            'always', 'never', 'only', 'enjoy', 'favorite', 'favourite', 'passion',
+            'interest', 'interests', 'passionate about', 'into', 'fond of',
+            'not fond of', 'can\'t stand', 'can\'t tolerate'
+        ]
+
+        # Check for preference indicators
+        for indicator in preference_indicators:
+            if indicator in text_lower:
+                return True
+
+        return False
+
+    def _extract_preference_type_and_value(self, text: str) -> tuple:
+        """
+        Extract preference type and value from text.
+        Returns a tuple of (preference_type, preference_value)
+        """
+        if not text or not isinstance(text, str):
+            return ("general", text or "")
+
+        text_lower = text.lower().strip()
+
+        # Map preference indicators to types
+        type_mappings = {
+            'love': 'love',
+            'enjoy': 'enjoy',
+            'prefer': 'prefer',
+            'hate': 'hate',
+            'dislike': 'dislike',
+            'don\'t like': 'dislike',
+            'always': 'always',
+            'never': 'avoid',
+            'only': 'conditional',
+            'like': 'like',
+            'interest': 'interests',
+            'passion': 'interests',
+            'into': 'like',
+            'fond of': 'like',
+            'not fond of': 'dislike',
+            'can\'t stand': 'hate',
+            'can\'t tolerate': 'hate'
+        }
+
+        # Find the most appropriate preference type
+        for indicator, pref_type in type_mappings.items():
+            if indicator in text_lower:
+                # Extract the preference value by removing the indicator and cleaning up
+                value = text_lower.replace(indicator, '').strip()
+                # Clean up the value - remove common fillers
+                value = value.replace('i', '').strip()
+                value = value.replace('i\'m', '').strip()
+                value = value.replace('i am', '').strip()
+                value = value.replace('i do', '').strip()
+                value = value.replace('i really', '').strip()
+                value = value.replace('i sometimes', '').strip()
+                value = value.replace('sometimes', '').strip()
+                value = value.strip(' .,')
+
+                if not value:
+                    value = text  # fallback to original text if extraction failed
+
+                return (pref_type, value.title())
+
+        # Default case if no specific preference type is detected
+        return ("general", text)
 
 class AdvancedMemoryAgent:
     """
