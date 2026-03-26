@@ -21,6 +21,10 @@ class GroqClient:
         
         if not self.api_key:
             raise ValueError("Groq API key is required. Set GROQ_API_KEY environment variable or pass api_key parameter.")
+        
+        # Validate API key format
+        if not self.api_key.startswith('gsk_'):
+            raise ValueError("Invalid Groq API key format. API key should start with 'gsk_'.")
     
     @property
     def chat(self):
@@ -64,7 +68,18 @@ class CompletionsInterface:
             return ChatCompletion(result)
             
         except requests.exceptions.RequestException as e:
-            print(f"❌ Groq API request failed: {e}")
+            error_msg = f"[ERROR] Groq API request failed: {e}"
+            print(error_msg)
+            
+            # Try to extract more specific error information
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    if 'error' in error_data:
+                        error_msg += f" - API Error: {error_data['error'].get('message', 'Unknown error')}"
+                except:
+                    pass
+            
             # Return a fallback response
             return ChatCompletion({
                 "choices": [{
@@ -111,18 +126,44 @@ class Usage:
         self.completion_tokens = data.get("completion_tokens", 0)
         self.total_tokens = data.get("total_tokens", 0)
 
+def validate_api_key(api_key: str) -> bool:
+    """Validate the Groq API key by making a simple request to the models endpoint."""
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        response = requests.get("https://api.groq.com/openai/v1/models", headers=headers, timeout=10)
+        return response.status_code == 200
+    except:
+        return False
+
 # Create the Client class for compatibility
 Client = GroqClient
 
 # Test the client
 if __name__ == "__main__":
     try:
-        client = GroqClient()
+        # Load environment variables
+        from dotenv import load_dotenv
+        import os
+        load_dotenv()
+        
+        # Get API key from environment
+        api_key = os.getenv('GROQ_API_KEY')
+        if not api_key:
+            print("GROQ_API_KEY not found in environment variables")
+            exit(1)
+            
+        client = GroqClient(api_key=api_key)
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": "Hello! How are you?"}]
+            messages=[{"role": "user", "content": "Hello! How are you?"}],
+            max_tokens=50
         )
-        print("✅ Groq client working!")
+        print("Groq client working!")
         print(f"Response: {response.choices[0].message.content}")
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
+        if "401" in str(e):
+            print("Unauthorized - please check your GROQ_API_KEY in the .env file")

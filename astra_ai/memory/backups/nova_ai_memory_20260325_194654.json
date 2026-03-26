@@ -1,0 +1,1548 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": "Momo",
+    "created_at": "2026-03-24T10:11:44.984204",
+    "status": "active",
+    "total_sessions": 7,
+    "last_seen": "2026-03-25T19:34:58.359929",
+    "relationship_established": true
+  },
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2026-03-25T09:39:00.901134",
+      "description": "Mem0 AI Memory Engine - Event-based user memory management system"
+    },
+    "memory_events": [
+      {
+        "event_id": "evt_82961987",
+        "type": "ADD",
+        "summary": "User general all ears, momo!",
+        "timestamp": "2026-03-24T10:36:41.761300Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.7,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": "Inferred from input: '\nUser: nova\nAI: That's my name - I'm all ears, Momo!\n'",
+        "importance_score": 0.82,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "all ears, momo!",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2026-03-24T10:36:41.761300Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: \nUser: nova\nAI: That's my name - I'm all ears, Momo!\n",
+            "event_index": 0
+          },
+          "source_conversation_timestamp": "2026-03-24T10:36:41.761300Z"
+        },
+        "Added_preference": "User general all ears, momo!",
+        "session_id": "session_abac9ce3"
+      },
+      {
+        "event_id": "evt_f697be69",
+        "type": "ADD",
+        "summary": "User: User's ai: You're referring to User- I'm your AI friend Nova!",
+        "timestamp": "2026-03-24T11:11:08.056395Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [
+            "friend",
+            "referring",
+            "you're",
+            "nova"
+          ],
+          "emotional_intensity": 0.0,
+          "mood_context": "neutral",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from user input: User: User's ai: You're referring to User- I'm your AI friend Nova!",
+        "importance_score": 0.62,
+        "confidence": 0.85,
+        "category": "collaborator_relationships",
+        "subcategory": "relationships",
+        "previous_value": null,
+        "current_value": "User",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2026-03-24T11:11:08.908746",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: \nUser: my ai\nAI: You're referring to me - I'm your AI friend Nova!\n",
+            "event_index": 1
+          },
+          "source_conversation_timestamp": "2026-03-24T11:11:08.908753"
+        },
+        "session_id": "session_32184301",
+        "Added_preference_likes": "enjoys You're, Nova, User"
+      },
+      {
+        "event_id": "evt_4b409266",
+        "type": "ADD",
+        "summary": "User: User's name is momo AI: User remember, Momo!",
+        "timestamp": "2026-03-24T12:20:20.580947Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [
+            "remember",
+            "momo",
+            "name",
+            "general"
+          ],
+          "emotional_intensity": 0.0,
+          "mood_context": "neutral",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from user input: User: User's name is momo AI: User remember, Momo!",
+        "importance_score": 0.82,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "User, Momo",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2026-03-24T12:20:21.634569",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: \nUser: my name is momo\nAI: I remember, Momo!\n",
+            "event_index": 2
+          },
+          "source_conversation_timestamp": "2026-03-24T12:20:21.634578"
+        },
+        "session_id": "session_df8cedbf",
+        "Added_preference_likes": "enjoys User, Momo"
+      },
+      {
+        "event_id": "evt_7c0a8614",
+        "type": "ADD",
+        "summary": "User: HI AI: User apologize, but I'm having trouble connecting to the Groq API right now. Error: HTTPSConnectionPool(host='api.groq.com', port=443): Max retries exceeded with url: /openai/v1/chat/.",
+        "timestamp": "2026-03-25T09:11:56.642191Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [
+            "nameresolutionerror(\"httpsconnection(host='api.groq.com",
+            "/openai/v1/chat/completions",
+            "httpsconnectionpool(host='api.groq.com",
+            "right",
+            "momo"
+          ],
+          "emotional_intensity": 0.0,
+          "mood_context": "neutral",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from user input: User: HI AI: User apologize, but I'm having trouble connecting to the Groq API right now. Error: HTTPSConnectionPool(host='api.groq.com', port=443): Max retries exceeded with url: /openai/v1/chat/.",
+        "importance_score": 0.9099999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "identity_info",
+        "previous_value": null,
+        "current_value": "Momo",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2026-03-25T09:11:57.437766",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: \nUser: HI\nAI: I apologize, but I'm having trouble connecting to the Groq API right now. Error: HTTPSConnectionPool(host='api.groq.com', port=443): Max retries exceeded with url: /openai/v1/chat/",
+            "event_index": 3
+          },
+          "source_conversation_timestamp": "2026-03-25T09:11:57.437774"
+        },
+        "session_id": "session_0c087bde",
+        "Added_preference_likes": "enjoys User, I'm, Groq"
+      },
+      {
+        "event_id": "evt_84dcd930",
+        "type": "ADD",
+        "summary": "User: User's name is momo AI: Ciao, Momo! By the way, User can help with creating a name for your company, as we discussed earlier.",
+        "timestamp": "2026-03-25T09:38:59.915132Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [
+            "discussed",
+            "creating",
+            "company",
+            "general",
+            "momo"
+          ],
+          "emotional_intensity": 0.0,
+          "mood_context": "neutral",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from user input: User: User's name is momo AI: Ciao, Momo! By the way, User can help with creating a name for your company, as we discussed earlier.",
+        "importance_score": 0.82,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "Momo, User",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2026-03-25T09:39:00.850610",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: \nUser: my name is momo\nAI: Ciao, Momo! By the way, I can help with creating a name for your company, as we discussed earlier.\n",
+            "event_index": 4
+          },
+          "source_conversation_timestamp": "2026-03-25T09:39:00.850618"
+        },
+        "session_id": "session_0c087bde",
+        "Added_preference_likes": "enjoys Momo, Ciao, User"
+      },
+      {
+        "event_id": "evt_acce472e",
+        "type": "ADD",
+        "summary": "User boundaries a large language model, i don't have personal opinions, but i can tell you about the latest football news or strategies if you're interested.",
+        "timestamp": "2026-03-25T19:45:07.769113Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.6,
+          "mood_context": "learning",
+          "confidence": 0.7
+        },
+        "semantic_context": "Inferred from input: '\nUser: what do you think about football\nAI: Dennis, I'm a large language model, I don't have personal opinions, but I can tell you about the latest football news or strategies if you're interested.\n'",
+        "importance_score": 0.8099999999999999,
+        "confidence": 0.85,
+        "category": "communication_boundaries",
+        "subcategory": "boundaries",
+        "previous_value": null,
+        "current_value": "a large language model, i don't have personal opinions, but i can tell you about the latest football news or strategies if you're interested.",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2026-03-25T19:45:07.769113Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: \nUser: what do you think about football\nAI: Dennis, I'm a large language model, I don't have personal opinions, but I can tell you about the latest football news or strategies if you're interested.\n",
+            "event_index": 5
+          },
+          "source_conversation_timestamp": "2026-03-25T19:45:07.769113Z"
+        },
+        "Added_preference": "User boundaries a large language model, i don't have personal opinions, but i can tell you about the latest football news or strategies if you're interested.",
+        "session_id": "session_f6d5b76e"
+      },
+      {
+        "event_id": "evt_042b0513",
+        "type": "ADD",
+        "summary": "User general here for you, dennis. what's on your mind?",
+        "timestamp": "2026-03-25T19:46:53.301826Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.6,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": "Inferred from input: '\nUser: nova\nAI: I'm here for you, Dennis. What's on your mind?\n'",
+        "importance_score": 0.8099999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "here for you, dennis. what's on your mind?",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2026-03-25T19:46:53.301826Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: \nUser: nova\nAI: I'm here for you, Dennis. What's on your mind?\n",
+            "event_index": 6
+          },
+          "source_conversation_timestamp": "2026-03-25T19:46:53.301826Z"
+        },
+        "Added_preference": "User general here for you, dennis. what's on your mind?",
+        "session_id": "session_f6d5b76e"
+      }
+    ],
+    "vector_index": {
+      "evt_82961987": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+      "evt_f697be69": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+      "evt_4b409266": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+      "evt_7c0a8614": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+      "evt_84dcd930": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+      "evt_acce472e": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+      "evt_042b0513": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00]
+    },
+    "clusters": {
+      "cluster_000": {
+        "topic": "general_activity_cluster",
+        "label": "Identity Information",
+        "centroid_vector": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+        "event_ids": [
+          "evt_82961987"
+        ],
+        "coherence_score": 1.0,
+        "last_updated": "2026-03-24T10:36:41.761300Z",
+        "metadata": {
+          "dominant_tags": [
+            "user_identity"
+          ],
+          "cluster_type": "user_identity",
+          "member_count": 1,
+          "average_confidence": 0.8,
+          "temporal_span": "0 days",
+          "creation_timestamp": "2026-03-24T10:36:41.761300Z"
+        },
+        "insights": {
+          "primary_pattern": "new_pattern",
+          "consistency": 1.0,
+          "emotional_tone": "neutral_tone",
+          "frequency": "single_event"
+        }
+      }
+    },
+    "update_log": []
+  },
+  "conversation": [
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-24T10:11:44.985983",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-24T10:11:44.985983",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: hi\nAI: No need for hellos again, Momo - what's on your mind?\n",
+      "timestamp": "2026-03-24T10:11:45.189774",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: hi\nAI: No need for hellos again, Momo - what's on your mind?\n",
+      "timestamp": "2026-03-24T10:11:45.189774",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-24T10:26:17.438622",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-24T10:26:17.438622",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: what up\nAI: Not much, Momo - same routine: answering questions and helping you out!\n",
+      "timestamp": "2026-03-24T10:26:17.610977",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: what up\nAI: Not much, Momo - same routine: answering questions and helping you out!\n",
+      "timestamp": "2026-03-24T10:26:17.610977",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-24T10:36:41.538376",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-24T10:36:41.538376",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: nova\nAI: That's my name - I'm all ears, Momo!\n",
+      "timestamp": "2026-03-24T10:36:41.760762",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: nova\nAI: That's my name - I'm all ears, Momo!\n",
+      "timestamp": "2026-03-24T10:36:41.760762",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: what was my name\nAI: Your name is Momo.\n",
+      "timestamp": "2026-03-24T10:37:13.418527",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: what was my name\nAI: Your name is Momo.\n",
+      "timestamp": "2026-03-24T10:37:13.418527",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-24T10:38:33.723149",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-24T10:38:33.723149",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: nova\nAI: That's my name - I'm all ears, Momo!\n",
+      "timestamp": "2026-03-24T10:38:33.847573",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: nova\nAI: That's my name - I'm all ears, Momo!\n",
+      "timestamp": "2026-03-24T10:38:33.847573",
+      "session_id": "session_abac9ce3"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-24T11:11:07.847474",
+      "session_id": "session_32184301"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-24T11:11:07.847474",
+      "session_id": "session_32184301"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: my ai\nAI: You're referring to me - I'm your AI friend Nova!\n",
+      "timestamp": "2026-03-24T11:11:08.055885",
+      "session_id": "session_32184301"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: my ai\nAI: You're referring to me - I'm your AI friend Nova!\n",
+      "timestamp": "2026-03-24T11:11:08.055885",
+      "session_id": "session_32184301"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-24T12:19:30.287053",
+      "session_id": "session_df8cedbf"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-24T12:19:30.287053",
+      "session_id": "session_df8cedbf"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: what did i just say\nAI: You just said \"my AI\" which is me, Nova.\n",
+      "timestamp": "2026-03-24T12:19:30.866881",
+      "session_id": "session_df8cedbf"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: what did i just say\nAI: You just said \"my AI\" which is me, Nova.\n",
+      "timestamp": "2026-03-24T12:19:30.866881",
+      "session_id": "session_df8cedbf"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: ok\nAI: We're good to continue!\n",
+      "timestamp": "2026-03-24T12:19:56.097317",
+      "session_id": "session_df8cedbf"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: ok\nAI: We're good to continue!\n",
+      "timestamp": "2026-03-24T12:19:56.097317",
+      "session_id": "session_df8cedbf"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: my name is momo\nAI: I remember, Momo!\n",
+      "timestamp": "2026-03-24T12:20:20.519039",
+      "session_id": "session_df8cedbf"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: my name is momo\nAI: I remember, Momo!\n",
+      "timestamp": "2026-03-24T12:20:20.519039",
+      "session_id": "session_df8cedbf"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-24T12:49:05.694815",
+      "session_id": "session_df8cedbf"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-24T12:49:05.694815",
+      "session_id": "session_df8cedbf"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: what was the last thing i said\nAI: Your name is Momo.\n",
+      "timestamp": "2026-03-24T12:49:05.936612",
+      "session_id": "session_df8cedbf"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: what was the last thing i said\nAI: Your name is Momo.\n",
+      "timestamp": "2026-03-24T12:49:05.936612",
+      "session_id": "session_df8cedbf"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-24T14:45:15.199875",
+      "session_id": "session_32c19f2e"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-24T14:45:15.199875",
+      "session_id": "session_32c19f2e"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: hi\nAI: It's great to chat with you! What can I help with today?\n",
+      "timestamp": "2026-03-24T14:45:15.618403",
+      "session_id": "session_32c19f2e"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: hi\nAI: It's great to chat with you! What can I help with today?\n",
+      "timestamp": "2026-03-24T14:45:15.618403",
+      "session_id": "session_32c19f2e"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-24T17:53:27.364168",
+      "session_id": "session_4c2f7aaf"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-24T17:53:27.364168",
+      "session_id": "session_4c2f7aaf"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: ciao\nAI: Ciao, Momo!\n",
+      "timestamp": "2026-03-24T17:53:27.508589",
+      "session_id": "session_4c2f7aaf"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: ciao\nAI: Ciao, Momo!\n",
+      "timestamp": "2026-03-24T17:53:27.508589",
+      "session_id": "session_4c2f7aaf"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: what can you do\nAI: I can chat about a wide range of topics, from science and history to pop culture and hobbies. Want to discuss something specific, like your favorite anime or Italian food?\n",
+      "timestamp": "2026-03-24T17:53:44.153723",
+      "session_id": "session_4c2f7aaf"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: what can you do\nAI: I can chat about a wide range of topics, from science and history to pop culture and hobbies. Want to discuss something specific, like your favorite anime or Italian food?\n",
+      "timestamp": "2026-03-24T17:53:44.153723",
+      "session_id": "session_4c2f7aaf"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-25T09:11:56.368263",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-25T09:11:56.368263",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: HI\nAI: I apologize, but I'm having trouble connecting to the Groq API right now. Error: HTTPSConnectionPool(host='api.groq.com', port=443): Max retries exceeded with url: /openai/v1/chat/completions (Caused by NameResolutionError(\"HTTPSConnection(host='api.groq.com', port=443): Failed to resolve 'api.groq.com' ([Errno 11001] getaddrinfo failed)\"))\n",
+      "timestamp": "2026-03-25T09:11:56.639880",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: HI\nAI: I apologize, but I'm having trouble connecting to the Groq API right now. Error: HTTPSConnectionPool(host='api.groq.com', port=443): Max retries exceeded with url: /openai/v1/chat/completions (Caused by NameResolutionError(\"HTTPSConnection(host='api.groq.com', port=443): Failed to resolve 'api.groq.com' ([Errno 11001] getaddrinfo failed)\"))\n",
+      "timestamp": "2026-03-25T09:11:56.639880",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-25T09:14:09.383443",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-25T09:14:09.383443",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: what up\nAI: Not much, just here to help and chat.\n",
+      "timestamp": "2026-03-25T09:14:09.460651",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: what up\nAI: Not much, just here to help and chat.\n",
+      "timestamp": "2026-03-25T09:14:09.460651",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: can you create a name for my company \nAI: I'd love to help. Here's a potential name: **Lumina Labs** - it suggests innovation and light.\n",
+      "timestamp": "2026-03-25T09:16:34.724975",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: can you create a name for my company \nAI: I'd love to help. Here's a potential name: **Lumina Labs** - it suggests innovation and light.\n",
+      "timestamp": "2026-03-25T09:16:34.724975",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-25T09:38:59.762140",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-25T09:38:59.762140",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: my name is momo\nAI: Ciao, Momo! By the way, I can help with creating a name for your company, as we discussed earlier.\n",
+      "timestamp": "2026-03-25T09:38:59.914688",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: my name is momo\nAI: Ciao, Momo! By the way, I can help with creating a name for your company, as we discussed earlier.\n",
+      "timestamp": "2026-03-25T09:38:59.914688",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-25T09:39:56.827416",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-25T09:39:56.827416",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: what my name\nAI: Your name is Momo!\n",
+      "timestamp": "2026-03-25T09:39:57.086733",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: what my name\nAI: Your name is Momo!\n",
+      "timestamp": "2026-03-25T09:39:57.086733",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-25T09:59:28.803727",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-25T09:59:28.803727",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: hi\nAI: Hello! What can I help you with today?\n",
+      "timestamp": "2026-03-25T09:59:28.953302",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: hi\nAI: Hello! What can I help you with today?\n",
+      "timestamp": "2026-03-25T09:59:28.953302",
+      "session_id": "session_0c087bde"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-25T19:34:58.337236",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-25T19:34:58.337236",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: hi\nAI: Hi Momo... or should I say, Dennis?\n",
+      "timestamp": "2026-03-25T19:34:58.517959",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: hi\nAI: Hi Momo... or should I say, Dennis?\n",
+      "timestamp": "2026-03-25T19:34:58.517959",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-25T19:44:47.230778",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-25T19:44:47.230778",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: what up nova\nAI: Not much, Dennis. Just here to help if you need anything.\n",
+      "timestamp": "2026-03-25T19:44:47.416837",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: what up nova\nAI: Not much, Dennis. Just here to help if you need anything.\n",
+      "timestamp": "2026-03-25T19:44:47.416837",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: what do you think about football\nAI: Dennis, I'm a large language model, I don't have personal opinions, but I can tell you about the latest football news or strategies if you're interested.\n",
+      "timestamp": "2026-03-25T19:45:07.768020",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: what do you think about football\nAI: Dennis, I'm a large language model, I don't have personal opinions, but I can tell you about the latest football news or strategies if you're interested.\n",
+      "timestamp": "2026-03-25T19:45:07.768020",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: what all the best footballer\nAI: Dennis, some of the best footballers of all time include Lionel Messi, Cristiano Ronaldo, and Diego Maradona.\n",
+      "timestamp": "2026-03-25T19:45:49.751639",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: what all the best footballer\nAI: Dennis, some of the best footballers of all time include Lionel Messi, Cristiano Ronaldo, and Diego Maradona.\n",
+      "timestamp": "2026-03-25T19:45:49.751639",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "user",
+      "content": "Memory system test",
+      "timestamp": "2026-03-25T19:46:53.134618",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system is working correctly",
+      "timestamp": "2026-03-25T19:46:53.134618",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "user",
+      "content": "\nUser: nova\nAI: I'm here for you, Dennis. What's on your mind?\n",
+      "timestamp": "2026-03-25T19:46:53.301139",
+      "session_id": "session_f6d5b76e"
+    },
+    {
+      "role": "assistant",
+      "content": "Stored conversation_summary memory: \nUser: nova\nAI: I'm here for you, Dennis. What's on your mind?\n",
+      "timestamp": "2026-03-25T19:46:53.301139",
+      "session_id": "session_f6d5b76e"
+    }
+  ],
+  "fact_history": {
+    "personal_preferences": {
+      "Added_preference_likes": [
+        {
+          "item": "Enjoys You're, Nova, Momo",
+          "score": 0.85,
+          "added": "2026-03-24",
+          "updated": "2026-03-24",
+          "event_references": [
+            "evt_f697be69"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-03-24T12:20:21.631902"
+          }
+        },
+        {
+          "item": "Enjoys You're, Nova, Momo",
+          "score": 0.85,
+          "added": "2026-03-24",
+          "updated": "2026-03-24",
+          "event_references": [
+            "evt_f697be69"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-03-25T09:11:57.406317"
+          }
+        },
+        {
+          "item": "Enjoys Momo, Momo",
+          "score": 0.85,
+          "added": "2026-03-24",
+          "updated": "2026-03-24",
+          "event_references": [
+            "evt_4b409266"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-03-25T09:11:57.406432"
+          }
+        },
+        {
+          "item": "Enjoys You're, Nova, Momo",
+          "score": 0.85,
+          "added": "2026-03-24",
+          "updated": "2026-03-24",
+          "event_references": [
+            "evt_f697be69"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-03-25T09:39:00.809043"
+          }
+        },
+        {
+          "item": "Enjoys Momo, Momo",
+          "score": 0.85,
+          "added": "2026-03-24",
+          "updated": "2026-03-24",
+          "event_references": [
+            "evt_4b409266"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-03-25T09:39:00.809131"
+          }
+        },
+        {
+          "item": "Enjoys Momo, I'm, Groq",
+          "score": 0.85,
+          "added": "2026-03-25",
+          "updated": "2026-03-25",
+          "event_references": [
+            "evt_7c0a8614"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-03-25T09:39:00.809210"
+          }
+        },
+        {
+          "item": "enjoys You're, Nova, User",
+          "score": 0.85,
+          "added": "2026-03-24",
+          "updated": "2026-03-24",
+          "event_references": [
+            "evt_f697be69"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-03-25T19:46:53.091774"
+          }
+        },
+        {
+          "item": "enjoys User, Momo",
+          "score": 0.85,
+          "added": "2026-03-24",
+          "updated": "2026-03-24",
+          "event_references": [
+            "evt_4b409266"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-03-25T19:46:53.091963"
+          }
+        },
+        {
+          "item": "enjoys User, I'm, Groq",
+          "score": 0.85,
+          "added": "2026-03-25",
+          "updated": "2026-03-25",
+          "event_references": [
+            "evt_7c0a8614"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-03-25T19:46:53.092152"
+          }
+        },
+        {
+          "item": "enjoys Momo, Ciao, User",
+          "score": 0.85,
+          "added": "2026-03-25",
+          "updated": "2026-03-25",
+          "event_references": [
+            "evt_84dcd930"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-03-25T19:46:53.092354"
+          }
+        }
+      ],
+      "Added_preference_dislikes": [],
+      "Added_preference_avoid": [],
+      "Added_preference_always": [],
+      "Added_preference_style": [],
+      "conditional": [],
+      "Added_preference_interests": [
+        {
+          "category": "reading",
+          "genres": [],
+          "favorite_author": "",
+          "reading_time": "",
+          "score": 0.0
+        },
+        {
+          "category": "entertainment",
+          "type": "",
+          "frequency": "",
+          "score": 0.0
+        },
+        {
+          "category": "wellness",
+          "activities": [],
+          "score": 0.0
+        },
+        {
+          "category": "culinary",
+          "behavior": "",
+          "style": "",
+          "score": 0.0
+        }
+      ],
+      "Added_preference_loves": [],
+      "Added_preference_hates": [],
+      "Added_preference_enjoys": [],
+      "Added_preference_needs": [],
+      "Added_preference_wants": [],
+      "Added_preference_continues": [],
+      "Added_preference_favorites": [],
+      "Added_preference_prefers": [],
+      "preferences": [],
+      "Added_preference_preferences": []
+    },
+    "evt_82961987": {
+      "item": "all ears, momo!",
+      "added": "2026-03-24",
+      "score": 0.85
+    },
+    "evt_f697be69": {
+      "item": "User",
+      "added": "2026-03-24",
+      "score": 0.85,
+      "updated": "2026-03-24"
+    },
+    "evt_4b409266": {
+      "item": "User, Momo",
+      "added": "2026-03-24",
+      "score": 0.85,
+      "updated": "2026-03-24"
+    },
+    "evt_7c0a8614": {
+      "item": "Momo",
+      "added": "2026-03-25",
+      "score": 0.85,
+      "updated": "2026-03-25"
+    },
+    "evt_84dcd930": {
+      "item": "Momo, User",
+      "added": "2026-03-25",
+      "score": 0.85,
+      "updated": "2026-03-25"
+    },
+    "evt_acce472e": {
+      "item": "a large language model, i don't have personal opinions, but i can tell you about the latest football news or strategies if you're interested.",
+      "added": "2026-03-25",
+      "score": 0.85
+    },
+    "evt_042b0513": {
+      "item": "here for you, dennis. what's on your mind?",
+      "added": "2026-03-25",
+      "score": 0.85
+    }
+  },
+  "sessions": {
+    "session_abac9ce3": {
+      "session_id": "session_abac9ce3",
+      "start_time": "2026-03-24T10:11:44.986002",
+      "end_time": "2026-03-24T11:11:07.847543",
+      "message_count": 18,
+      "topics_discussed": [
+        "AI/ML"
+      ],
+      "user_name": null,
+      "session_duration": "59 minutes",
+      "last_activity": "2026-03-24T10:38:33.847573",
+      "current_duration": "26 minutes"
+    },
+    "session_32184301": {
+      "session_id": "session_32184301",
+      "start_time": "2026-03-24T11:11:07.854786",
+      "end_time": "2026-03-24T12:19:30.292757",
+      "message_count": 4,
+      "topics_discussed": [
+        "AI/ML"
+      ],
+      "user_name": null,
+      "session_duration": "1 hours 8 minutes",
+      "last_activity": "2026-03-24T11:11:08.055885",
+      "current_duration": "0 seconds"
+    },
+    "session_df8cedbf": {
+      "session_id": "session_df8cedbf",
+      "start_time": "2026-03-24T12:19:30.372599",
+      "end_time": "2026-03-24T14:45:15.212696",
+      "message_count": 12,
+      "topics_discussed": [
+        "AI/ML"
+      ],
+      "user_name": "Momo",
+      "session_duration": "2 hours 25 minutes",
+      "last_activity": "2026-03-24T12:49:05.936612",
+      "past_context": "=== User Context Summary ===\n\nTotal sessions: 3\nLast session: 1 hour ago\n\nRecent sessions:\n----------------------------------------\nSession: session_32184301\nDuration: 1 hours 8 minutes, Messages: 4\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: my ai\nAI: You're referring to me - I'm your AI friend Nova!\nAssistant: Memory system is working correctly\nUser: User: my ai\nAI: You're referring to me - I'm your AI friend Nova!\nAssistant: Stored conversation_summary memory: \nUser: my ai\nAI: You're referring to me - I'm your AI friend ...\n\n----------------------------------------\nSession: session_abac9ce3\nDuration: 59 minutes, Messages: 18\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: hi\nAI: No need for hellos again, Momo - what's on your mind?\nAssistant: Memory system is working correctly\nUser: User: nova\nAI: That's my name - I'm all ears, Momo!\nAssistant: Stored conversation_summary memory: \nUser: nova\nAI: That's my name - I'm all ears, Momo!\n",
+      "current_duration": "29 minutes"
+    },
+    "session_32c19f2e": {
+      "session_id": "session_32c19f2e",
+      "start_time": "2026-03-24T14:45:15.375455",
+      "end_time": "2026-03-24T17:53:27.364304",
+      "message_count": 4,
+      "topics_discussed": [
+        "AI/ML"
+      ],
+      "user_name": "Momo",
+      "session_duration": "3 hours 8 minutes",
+      "last_activity": "2026-03-24T14:45:15.618403",
+      "past_context": "=== User Context Summary ===\n\nUser name: Momo\nTotal sessions: 4\nLast session: 3 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_32184301\nDuration: 1 hours 8 minutes, Messages: 4\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: my ai\nAI: You're referring to me - I'm your AI friend Nova!\nAssistant: Memory system is working correctly\nUser: User: my ai\nAI: You're referring to me - I'm your AI friend Nova!\nAssistant: Stored conversation_summary memory: \nUser: my ai\nAI: You're referring to me - I'm your AI friend ...\n\n----------------------------------------\nSession: session_abac9ce3\nDuration: 59 minutes, Messages: 18\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: hi\nAI: No need for hellos again, Momo - what's on your mind?\nAssistant: Memory system is working correctly\nUser: User: nova\nAI: That's my name - I'm all ears, Momo!\nAssistant: Stored conversation_summary memory: \nUser: nova\nAI: That's my name - I'm all ears, Momo!\n\n----------------------------------------\nSession: session_df8cedbf\nUser: Momo\nDuration: 2 hours 25 minutes, Messages: 12\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: what did i just say\nAI: You just said \"my AI\" which is me, Nova.\nAssistant: Memory system is working correctly\nUser: User: what was the last thing i said\nAI: Your name is Momo.\nAssistant: Stored conversation_summary memory: \nUser: what was the last thing i said\nAI: Your name is Momo.\n",
+      "current_duration": "0 seconds"
+    },
+    "session_4c2f7aaf": {
+      "session_id": "session_4c2f7aaf",
+      "start_time": "2026-03-24T17:53:27.373480",
+      "end_time": "2026-03-25T09:11:56.369390",
+      "message_count": 6,
+      "topics_discussed": [
+        "interests",
+        "AI/ML"
+      ],
+      "user_name": "Momo",
+      "session_duration": "15 hours 18 minutes",
+      "last_activity": "2026-03-24T17:53:44.153723",
+      "past_context": "=== User Context Summary ===\n\nUser name: Momo\nTotal sessions: 5\nLast session: 6 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_32184301\nDuration: 1 hours 8 minutes, Messages: 4\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: my ai\nAI: You're referring to me - I'm your AI friend Nova!\nAssistant: Memory system is working correctly\nUser: User: my ai\nAI: You're referring to me - I'm your AI friend Nova!\nAssistant: Stored conversation_summary memory: \nUser: my ai\nAI: You're referring to me - I'm your AI friend ...\n\n----------------------------------------\nSession: session_abac9ce3\nDuration: 59 minutes, Messages: 18\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: hi\nAI: No need for hellos again, Momo - what's on your mind?\nAssistant: Memory system is working correctly\nUser: User: nova\nAI: That's my name - I'm all ears, Momo!\nAssistant: Stored conversation_summary memory: \nUser: nova\nAI: That's my name - I'm all ears, Momo!\n\n----------------------------------------\nSession: session_32c19f2e\nUser: Momo\nDuration: 3 hours 8 minutes, Messages: 4\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: hi\nAI: It's great to chat with you! What can I help with today?\nAssistant: Memory system is working correctly\nUser: User: hi\nAI: It's great to chat with you! What can I help with today?\nAssistant: Stored conversation_summary memory: \nUser: hi\nAI: It's great to chat with you! What can I help wi...\n",
+      "current_duration": "16 seconds"
+    },
+    "session_0c087bde": {
+      "session_id": "session_0c087bde",
+      "start_time": "2026-03-25T09:11:56.583908",
+      "end_time": "2026-03-25T19:34:58.340896",
+      "message_count": 22,
+      "topics_discussed": [
+        "AI/ML"
+      ],
+      "user_name": "Momo",
+      "session_duration": "10 hours 23 minutes",
+      "last_activity": "2026-03-25T09:59:28.953302",
+      "past_context": "=== User Context Summary ===\n\nUser name: Momo\nTotal sessions: 6\nLast session: 22 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_32184301\nDuration: 1 hours 8 minutes, Messages: 4\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: my ai\nAI: You're referring to me - I'm your AI friend Nova!\nAssistant: Memory system is working correctly\nUser: User: my ai\nAI: You're referring to me - I'm your AI friend Nova!\nAssistant: Stored conversation_summary memory: \nUser: my ai\nAI: You're referring to me - I'm your AI friend ...\n\n----------------------------------------\nSession: session_abac9ce3\nDuration: 59 minutes, Messages: 18\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: hi\nAI: No need for hellos again, Momo - what's on your mind?\nAssistant: Memory system is working correctly\nUser: User: nova\nAI: That's my name - I'm all ears, Momo!\nAssistant: Stored conversation_summary memory: \nUser: nova\nAI: That's my name - I'm all ears, Momo!\n\n----------------------------------------\nSession: session_32c19f2e\nUser: Momo\nDuration: 3 hours 8 minutes, Messages: 4\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: hi\nAI: It's great to chat with you! What can I help with today?\nAssistant: Memory system is working correctly\nUser: User: hi\nAI: It's great to chat with you! What can I help with today?\nAssistant: Stored conversation_summary memory: \nUser: hi\nAI: It's great to chat with you! What can I help wi...\n",
+      "current_duration": "47 minutes"
+    },
+    "session_f6d5b76e": {
+      "session_id": "session_f6d5b76e",
+      "start_time": "2026-03-25T19:34:58.359929",
+      "end_time": null,
+      "message_count": 16,
+      "topics_discussed": [
+        "interests",
+        "AI/ML"
+      ],
+      "user_name": "Momo",
+      "session_duration": null,
+      "last_activity": "2026-03-25T19:46:53.301139",
+      "past_context": "=== User Context Summary ===\n\nUser name: Momo\nTotal sessions: 7\nLast session: 1 day ago\n\nRecent sessions:\n----------------------------------------\nSession: session_32184301\nDuration: 1 hours 8 minutes, Messages: 4\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: my ai\nAI: You're referring to me - I'm your AI friend Nova!\nAssistant: Memory system is working correctly\nUser: User: my ai\nAI: You're referring to me - I'm your AI friend Nova!\nAssistant: Stored conversation_summary memory: \nUser: my ai\nAI: You're referring to me - I'm your AI friend ...\n\n----------------------------------------\nSession: session_abac9ce3\nDuration: 59 minutes, Messages: 18\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: hi\nAI: No need for hellos again, Momo - what's on your mind?\nAssistant: Memory system is working correctly\nUser: User: nova\nAI: That's my name - I'm all ears, Momo!\nAssistant: Stored conversation_summary memory: \nUser: nova\nAI: That's my name - I'm all ears, Momo!\n\n----------------------------------------\nSession: session_32c19f2e\nUser: Momo\nDuration: 3 hours 8 minutes, Messages: 4\nTopics: AI/ML\n\nConversation Highlights:\nUser: Memory system test\nAssistant: Memory system is working correctly\nUser: User: hi\nAI: It's great to chat with you! What can I help with today?\nAssistant: Memory system is working correctly\nUser: User: hi\nAI: It's great to chat with you! What can I help with today?\nAssistant: Stored conversation_summary memory: \nUser: hi\nAI: It's great to chat with you! What can I help wi...\n",
+      "current_duration": "11 minutes"
+    }
+  },
+  "current_session": "session_f6d5b76e",
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": false,
+    "established_user": true
+  },
+  "memory_categories": {
+    "user_identity": {
+      "description": "Names, pronouns, identity evolution",
+      "enhancement_focus": "Personalization, identity consistency, name variations",
+      "contextual_considerations": [
+        "previous_names",
+        "identity_evolution",
+        "pronoun_preferences"
+      ]
+    },
+    "personal_preferences": {
+      "description": "Response style, formality, explanation rules",
+      "enhancement_focus": "Communication adaptation, preference consistency, style evolution",
+      "contextual_considerations": [
+        "communication_style",
+        "formality_level",
+        "explanation_preferences"
+      ]
+    },
+    "task_project_tracking": {
+      "description": "Active projects, tech stacks, deadlines",
+      "enhancement_focus": "Project context, technical details, timeline awareness",
+      "contextual_considerations": [
+        "current_projects",
+        "tech_stack",
+        "deadlines",
+        "progress_tracking"
+      ]
+    },
+    "activity_behavior": {
+      "description": "Active times, conversation topics, engagement",
+      "enhancement_focus": "Behavioral patterns, temporal context, engagement metrics",
+      "contextual_considerations": [
+        "active_hours",
+        "topic_preferences",
+        "engagement_levels"
+      ]
+    },
+    "user_instructions": {
+      "description": "Permanent commands, rules, triggers",
+      "enhancement_focus": "Instruction clarity, permanence recognition, trigger identification",
+      "contextual_considerations": [
+        "permanent_rules",
+        "conditional_triggers",
+        "command_hierarchy"
+      ]
+    },
+    "current_state": {
+      "description": "Active topics, mood, recent questions",
+      "enhancement_focus": "State awareness, temporal relevance, contextual transitions",
+      "contextual_considerations": [
+        "active_topics",
+        "emotional_state",
+        "recent_interactions"
+      ]
+    },
+    "personal_development": {
+      "description": "Skills learning, progress, emotional notes",
+      "enhancement_focus": "Progress tracking, skill relationships, learning patterns",
+      "contextual_considerations": [
+        "skill_progress",
+        "learning_journey",
+        "developmental_milestones"
+      ]
+    },
+    "communication_boundaries": {
+      "description": "Sensitive topics, triggers, support level",
+      "enhancement_focus": "Boundary respect, sensitivity awareness, support adaptation",
+      "contextual_considerations": [
+        "sensitive_topics",
+        "emotional_triggers",
+        "support_boundaries"
+      ]
+    },
+    "contextual_rules": {
+      "description": "Scope, expiry, recall priority",
+      "enhancement_focus": "Rule contextualization, priority management, scope definition",
+      "contextual_considerations": [
+        "rule_scope",
+        "priority_levels",
+        "expiration_contexts"
+      ]
+    },
+    "multi_identity": {
+      "description": "Role profiles, switching triggers",
+      "enhancement_focus": "Identity context switching, role consistency, transition awareness",
+      "contextual_considerations": [
+        "role_profiles",
+        "identity_switching",
+        "contextual_triggers"
+      ]
+    },
+    "knowledge_expertise": {
+      "description": "Skill levels, known concepts",
+      "enhancement_focus": "Expertise assessment, knowledge mapping, competency progression",
+      "contextual_considerations": [
+        "skill_levels",
+        "domain_knowledge",
+        "competency_assessment"
+      ]
+    },
+    "tool_integration": {
+      "description": "Permissions, preferred languages",
+      "enhancement_focus": "Integration optimization, preference alignment, permission management",
+      "contextual_considerations": [
+        "tool_preferences",
+        "permission_levels",
+        "integration_contexts"
+      ]
+    },
+    "response_adaptation": {
+      "description": "Style corrections, tone adaptation",
+      "enhancement_focus": "Adaptive responses, tone consistency, style refinement",
+      "contextual_considerations": [
+        "style_corrections",
+        "tone_adaptation",
+        "response_refinement"
+      ]
+    },
+    "file_media": {
+      "description": "Uploads, context links, preferences",
+      "enhancement_focus": "Media context, link relevance, preference tracking",
+      "contextual_considerations": [
+        "file_references",
+        "media_preferences",
+        "link_context"
+      ]
+    },
+    "long_term_goals": {
+      "description": "Life goals, career objectives, blockers",
+      "enhancement_focus": "Goal progression, objective alignment, obstacle identification",
+      "contextual_considerations": [
+        "life_goals",
+        "career_objectives",
+        "progress_tracking"
+      ]
+    },
+    "collaborator_relationships": {
+      "description": "Team members, communication styles",
+      "enhancement_focus": "Relationship dynamics, communication adaptation, collaboration context",
+      "contextual_considerations": [
+        "team_members",
+        "communication_styles",
+        "collaboration_history"
+      ]
+    },
+    "data_privacy": {
+      "description": "Retention policies, private sessions",
+      "enhancement_focus": "Privacy compliance, retention management, session security",
+      "contextual_considerations": [
+        "privacy_policies",
+        "retention_rules",
+        "security_protocols"
+      ]
+    },
+    "multimodal_preferences": {
+      "description": "Image styles, audio modes",
+      "enhancement_focus": "Multimodal adaptation, preference consistency, format optimization",
+      "contextual_considerations": [
+        "media_formats",
+        "style_preferences",
+        "modality_choices"
+      ]
+    },
+    "system_awareness": {
+      "description": "Errors, feedback, constraints",
+      "enhancement_focus": "System understanding, constraint awareness, feedback integration",
+      "contextual_considerations": [
+        "system_constraints",
+        "error_history",
+        "feedback_loops"
+      ]
+    },
+    "session_themes": {
+      "description": "Themes, emotional arcs, continuity",
+      "enhancement_focus": "Thematic consistency, emotional tracking, narrative coherence",
+      "contextual_considerations": [
+        "session_themes",
+        "emotional_arcs",
+        "continuity_markers"
+      ]
+    },
+    "meta_memory": {
+      "description": "Browser UI, change logs, cleanup",
+      "enhancement_focus": "Meta-awareness, change tracking, system maintenance",
+      "contextual_considerations": [
+        "system_ui",
+        "change_logs",
+        "maintenance_tracking"
+      ]
+    },
+    "temporal_patterns": {
+      "description": "Time-based behaviors and preferences",
+      "enhancement_focus": "Temporal awareness, pattern recognition, schedule optimization",
+      "contextual_considerations": [
+        "time_patterns",
+        "behavioral_cycles",
+        "schedule_preferences"
+      ]
+    },
+    "search_external_info": {
+      "description": "Internet search history, preferences, trusted sources",
+      "enhancement_focus": "Information quality, source reliability, search optimization",
+      "contextual_considerations": [
+        "search_history",
+        "trusted_sources",
+        "information_preferences"
+      ]
+    },
+    "greeting_patterns": {
+      "description": "Greeting history, timing, session tracking",
+      "enhancement_focus": "Greeting personalization, timing optimization, session recognition",
+      "contextual_considerations": [
+        "greeting_history",
+        "timing_preferences",
+        "session_patterns"
+      ]
+    },
+    "conversation_analytics": {
+      "description": "Duration, session gaps, statistics",
+      "enhancement_focus": "Engagement metrics, conversation analytics, interaction patterns",
+      "contextual_considerations": [
+        "engagement_metrics",
+        "session_gaps",
+        "conversation_stats"
+      ]
+    },
+    "news_weather_history": {
+      "description": "News and weather query results and summaries",
+      "enhancement_focus": "Information retention, query context, temporal updates",
+      "contextual_considerations": [
+        "query_context",
+        "information_type",
+        "update_frequency"
+      ]
+    },
+    "timezone_preferences": {
+      "description": "Time zone queries and location preferences",
+      "enhancement_focus": "Timezone awareness, location context, scheduling preferences",
+      "contextual_considerations": [
+        "timezone_context",
+        "location_preferences",
+        "scheduling_needs"
+      ]
+    }
+  },
+  "category_relationships": {
+    "user_identity": [
+      "personal_preferences",
+      "collaborator_relationships",
+      "multi_identity"
+    ],
+    "personal_preferences": [
+      "activity_behavior",
+      "response_adaptation",
+      "communication_boundaries"
+    ],
+    "task_project_tracking": [
+      "knowledge_expertise",
+      "tool_integration",
+      "current_state"
+    ],
+    "activity_behavior": [
+      "temporal_patterns",
+      "session_themes",
+      "conversation_analytics"
+    ],
+    "user_instructions": [
+      "communication_boundaries",
+      "contextual_rules",
+      "system_awareness"
+    ],
+    "current_state": [
+      "session_themes",
+      "conversation_analytics",
+      "news_weather_history"
+    ],
+    "personal_development": [
+      "knowledge_expertise",
+      "long_term_goals",
+      "temporal_patterns"
+    ],
+    "communication_boundaries": [
+      "response_adaptation",
+      "contextual_rules",
+      "data_privacy"
+    ],
+    "contextual_rules": [
+      "system_awareness",
+      "data_privacy",
+      "meta_memory"
+    ],
+    "multi_identity": [
+      "user_identity",
+      "collaborator_relationships",
+      "session_themes"
+    ],
+    "knowledge_expertise": [
+      "tool_integration",
+      "personal_development",
+      "search_external_info"
+    ],
+    "tool_integration": [
+      "file_media",
+      "multimodal_preferences",
+      "system_awareness"
+    ],
+    "response_adaptation": [
+      "personal_preferences",
+      "communication_boundaries",
+      "session_themes"
+    ],
+    "file_media": [
+      "multimodal_preferences",
+      "search_external_info",
+      "meta_memory"
+    ],
+    "long_term_goals": [
+      "personal_development",
+      "collaborator_relationships",
+      "news_weather_history"
+    ],
+    "collaborator_relationships": [
+      "user_identity",
+      "multi_identity",
+      "communication_boundaries"
+    ],
+    "data_privacy": [
+      "contextual_rules",
+      "system_awareness",
+      "meta_memory"
+    ],
+    "multimodal_preferences": [
+      "file_media",
+      "tool_integration",
+      "response_adaptation"
+    ],
+    "system_awareness": [
+      "contextual_rules",
+      "data_privacy",
+      "meta_memory"
+    ],
+    "session_themes": [
+      "activity_behavior",
+      "response_adaptation",
+      "conversation_analytics"
+    ],
+    "meta_memory": [
+      "category_relationships",
+      "behavioral_adaptation",
+      "privacy_settings"
+    ],
+    "temporal_patterns": [
+      "activity_behavior",
+      "session_themes",
+      "conversation_analytics"
+    ],
+    "search_external_info": [
+      "knowledge_expertise",
+      "news_weather_history",
+      "timezone_preferences"
+    ],
+    "greeting_patterns": [
+      "session_themes",
+      "conversation_analytics",
+      "timezone_preferences"
+    ],
+    "conversation_analytics": [
+      "activity_behavior",
+      "session_themes",
+      "temporal_patterns"
+    ],
+    "news_weather_history": [
+      "search_external_info",
+      "current_state",
+      "timezone_preferences"
+    ],
+    "timezone_preferences": [
+      "search_external_info",
+      "news_weather_history",
+      "greeting_patterns"
+    ]
+  },
+  "behavioral_adaptation": {
+    "response_style_preferences": {
+      "preferred_response_length": "moderate",
+      "avoidance_topics": [
+        "politics",
+        "religion"
+      ],
+      "languages_used": [
+        "English"
+      ]
+    },
+    "communication_adaptations": {
+      "formality_level": "casual",
+      "explanation_preferences": "detailed_when_asked",
+      "response_tone": "friendly_helpful"
+    },
+    "learned_patterns": {
+      "user_interests": [],
+      "communication_style": "casual_inquisitive",
+      "preferred_topics": []
+    },
+    "user_feedback_integration": {
+      "last_feedback_received": null,
+      "feedback_type": "",
+      "feedback_content": "",
+      "integration_status": "pending"
+    }
+  },
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  }
+}

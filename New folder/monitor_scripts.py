@@ -70,13 +70,13 @@ def start_scripts(voice_mode=True):
     
     processes = {}
     
-    # Start Ai vioce.py (text-to-speech) in a new process
+    # Start Ai_voice.py (text-to-speech) in a new process
     voice_path = os.path.join(current_dir, "Ai vioce.py")
     voice_process = subprocess.Popen([python_executable, voice_path],
                                      creationflags=subprocess.CREATE_NEW_CONSOLE)
     processes["voice"] = {
         "pid": voice_process.pid,
-        "name": "Ai vioce.py",
+    "name": "Ai vioce.py",
         "path": voice_path,
         "last_restart": datetime.now().isoformat()
     }

@@ -2,185 +2,104 @@
   "user": {
     "user_id": "default_user",
     "name": null,
-    "created_at": "2025-11-13T18:26:38.051584",
+    "created_at": "2026-03-26T08:43:49.282972",
     "status": "active",
-    "total_sessions": 3,
-    "last_seen": "2025-11-13T18:34:52.163302",
-    "relationship_established": true
+    "total_sessions": 0,
+    "last_seen": null,
+    "relationship_established": false
   },
   "memory_engine": {
     "metadata": {
       "version": "1.0",
-      "generated_at": "2025-11-13T18:35:00.211892",
+      "generated_at": "2026-03-26T08:56:07.998252",
       "description": "Mem0 AI Memory Engine - Event-based user memory management system"
     },
-    "memory_events": [
-      {
-        "event_id": "evt_8dace6fa",
-        "type": "ADD",
-        "summary": "User preferences like to play football",
-        "timestamp": "2025-11-13T18:34:59.882797Z",
-        "emotional_context": {
-          "sentiment": "neutral",
-          "emotion_tags": [],
-          "emotional_intensity": 0.5,
-          "mood_context": "normal",
-          "confidence": 0.7
-        },
-        "semantic_context": "Inferred from input: 'i like to play football'",
-        "importance_score": 0.7999999999999999,
-        "confidence": 0.85,
-        "category": "personal_preferences",
-        "subcategory": "preferences",
-        "previous_value": null,
-        "current_value": "like to play football",
-        "provenance": {
-          "enhanced_in_place": true,
-          "enhanced_at": "2025-11-13T18:34:59.882797Z",
-          "source_info": {
-            "source_type": "conversation",
-            "source_details": "chat input",
-            "context": "User: i like to play football",
-            "event_index": 0
-          },
-          "source_conversation_timestamp": "2025-11-13T18:34:59.882797Z"
-        },
-        "Added_preference": "User preferences like to play football",
-        "session_id": "session_fdb4fa6e"
-      }
-    ],
-    "vector_index": {
-      "evt_8dace6fa": [
-        0.13483997249264842,
-        0.26967994498529685,
-        0.0,
-        0.26967994498529685,
-        0.8090398349558905,
-        0.13483997249264842,
-        0.40451991747794525,
-        0.0
-      ]
-    },
+    "memory_events": [],
+    "vector_index": {},
     "clusters": {},
     "update_log": []
   },
   "conversation": [
     {
       "role": "user",
-      "content": "hi",
-      "timestamp": "2025-11-13T18:27:56.765058",
-      "session_id": "session_e4e2bb8d"
+      "content": "Hello",
+      "timestamp": "2026-03-26T08:43:49.287440",
+      "session_id": "test_session"
     },
     {
       "role": "assistant",
-      "content": "Hi back!",
-      "timestamp": "2025-11-13T18:27:56.765058",
-      "session_id": "session_e4e2bb8d"
+      "content": "Hi there! How can I help you?",
+      "timestamp": "2026-03-26T08:43:49.287440",
+      "session_id": "test_session"
     },
     {
       "role": "user",
-      "content": "i like to you talke with you nova",
-      "timestamp": "2025-11-13T18:28:15.424289",
-      "session_id": "session_e4e2bb8d"
+      "content": "what up nova",
+      "timestamp": "2026-03-26T08:55:27.558794",
+      "session_id": "test_session"
     },
     {
       "role": "assistant",
-      "content": "I'm happy to chat with you too, it's always nice to talk!",
-      "timestamp": "2025-11-13T18:28:15.424289",
-      "session_id": "session_e4e2bb8d"
-    },
-    {
-      "role": "user",
-      "content": "i like to play football",
-      "timestamp": "2025-11-13T18:33:48.408245",
-      "session_id": "session_1ea62e12"
-    },
-    {
-      "role": "assistant",
-      "content": "A sporting choice! Do you play or watch football?",
-      "timestamp": "2025-11-13T18:33:48.408245",
-      "session_id": "session_1ea62e12"
-    },
-    {
-      "role": "user",
-      "content": "i like to play football",
-      "timestamp": "2025-11-13T18:34:59.878196",
-      "session_id": "session_fdb4fa6e"
-    },
-    {
-      "role": "assistant",
-      "content": "You play football. What's your favorite position?",
-      "timestamp": "2025-11-13T18:34:59.878196",
-      "session_id": "session_fdb4fa6e"
+      "content": "Not much, Dennis! Still here to help with anything football or anything else you'd like to chat about!",
+      "timestamp": "2026-03-26T08:55:27.558794",
+      "session_id": "test_session"
     }
   ],
   "fact_history": {
     "personal_preferences": {
-      "preferences": [
-        {
-          "item": "like to play football",
-          "added": "2025-11-13",
-          "score": 0.85
-        }
-      ],
-      "likes": [
-        {
-          "item": "enjoys reading science fiction novels",
-          "added": "2025-11-13",
-          "score": 0.9,
-          "update_item": "prefers reading science fiction and fantasy novels",
-          "updated": "2025-11-13"
-        },
-        {
-          "item": "likes drinking coffee in the morning",
-          "added": "2025-11-13",
-          "score": 0.85
-        }
-      ]
+      "Added_preference_likes": [],
+      "Added_preference_dislikes": [],
+      "Added_preference_avoid": [],
+      "Added_preference_always": [],
+      "Added_preference_style": [],
+      "conditional": [],
+      "Added_preference_interests": [],
+      "Added_preference_loves": [],
+      "Added_preference_hates": [],
+      "Added_preference_enjoys": [],
+      "Added_preference_needs": [],
+      "Added_preference_wants": [],
+      "Added_preference_continues": [],
+      "Added_preference_favorites": [],
+      "Added_preference_prefers": [],
+      "preferences": [],
+      "Added_preference_preferences": []
     },
-    "evt_8dace6fa": {
-      "item": "like to play football",
-      "added": "2025-11-13",
-      "score": 0.85
+    "activity_behavior": {
+      "morning_routine": {
+        "items": [],
+        "frequency": "daily",
+        "consistency": 0.0,
+        "event_references": []
+      },
+      "evening_routine": {
+        "items": [],
+        "frequency": "daily",
+        "consistency": 0.0,
+        "event_references": []
+      },
+      "weekly_patterns": {
+        "consistency": 0.0,
+        "event_references": []
+      }
+    },
+    "personal_development": {
+      "learning_goals": []
+    },
+    "name": [],
+    "user_profile": {
+      "personality": "",
+      "interests": [],
+      "consistency_score": 0.0,
+      "engagement_level": "low"
     }
   },
-  "sessions": {
-    "session_e4e2bb8d": {
-      "session_id": "session_e4e2bb8d",
-      "start_time": "2025-11-13T18:26:38.071760",
-      "end_time": null,
-      "message_count": 4,
-      "topics_discussed": [],
-      "user_name": null,
-      "session_duration": null,
-      "last_activity": "2025-11-13T18:28:15.424289"
-    },
-    "session_1ea62e12": {
-      "session_id": "session_1ea62e12",
-      "start_time": "2025-11-13T18:33:37.561522",
-      "end_time": null,
-      "message_count": 2,
-      "topics_discussed": [],
-      "user_name": null,
-      "session_duration": null,
-      "last_activity": "2025-11-13T18:33:48.408245"
-    },
-    "session_fdb4fa6e": {
-      "session_id": "session_fdb4fa6e",
-      "start_time": "2025-11-13T18:34:52.163302",
-      "end_time": null,
-      "message_count": 2,
-      "topics_discussed": [],
-      "user_name": null,
-      "session_duration": null,
-      "last_activity": "2025-11-13T18:34:59.878196"
-    }
-  },
-  "current_session": "session_fdb4fa6e",
+  "sessions": {},
+  "current_session": "test_session",
   "conversation_state": {
-    "greeting_completed": true,
-    "introduction_phase": false,
-    "established_user": true
+    "greeting_completed": false,
+    "introduction_phase": true,
+    "established_user": false
   },
   "memory_categories": {
     "user_identity": {
@@ -602,127 +521,5 @@
       "sensitive": "store_encrypted",
       "private": "session_only"
     }
-  },
-  "vector_index": {
-    "evt_8dace6fa": [
-      0.13483997249264842,
-      0.26967994498529685,
-      0.0,
-      0.26967994498529685,
-      0.8090398349558905,
-      0.13483997249264842,
-      0.40451991747794525,
-      0.0
-    ]
-  },
-  "clusters": {},
-  "memory_events": [
-    {
-      "event_id": "evt_d7d9312c",
-      "type": "ADD",
-      "summary": "enjoys reading science fiction novels",
-      "timestamp": "2025-11-13T18:42:31.685196",
-      "emotional_context": {
-        "sentiment": "positive",
-        "emotion_tags": [
-          "interest"
-        ],
-        "emotional_intensity": 0.6,
-        "mood_context": "normal",
-        "confidence": 0.85
-      },
-      "semantic_context": "Inferred from input: 'enjoys reading science fiction novels'",
-      "importance_score": 0.7,
-      "confidence": 0.85,
-      "category": "personal_preferences",
-      "subcategory": "likes",
-      "previous_value": null,
-      "current_value": "enjoys reading science fiction novels",
-      "provenance": {
-        "enhanced_in_place": true,
-        "enhanced_at": "2025-11-13T18:42:31.685196",
-        "source_info": {
-          "source_type": "conversation",
-          "source_details": "chat input",
-          "context": "User: enjoys reading science fiction novels",
-          "event_index": 0
-        },
-        "source_conversation_timestamp": "2025-11-13T18:42:31.685196"
-      },
-      "Added_preference": "enjoys reading science fiction novels"
-    },
-    {
-      "event_id": "evt_4fc05cf8",
-      "type": "ADD",
-      "summary": "User likes likes drinking coffee in the morning",
-      "timestamp": "2025-11-13T18:42:31.704871",
-      "emotional_context": {
-        "sentiment": "positive",
-        "emotion_tags": [
-          "interest"
-        ],
-        "emotional_intensity": 0.6,
-        "mood_context": "normal",
-        "confidence": 0.85
-      },
-      "semantic_context": "Inferred from input: 'likes drinking coffee in the morning'",
-      "importance_score": 0.7,
-      "confidence": 0.85,
-      "category": "personal_preferences",
-      "subcategory": "likes",
-      "previous_value": null,
-      "current_value": "likes drinking coffee in the morning",
-      "provenance": {
-        "enhanced_in_place": true,
-        "enhanced_at": "2025-11-13T18:42:31.704871",
-        "source_info": {
-          "source_type": "conversation",
-          "source_details": "chat input",
-          "context": "User: likes drinking coffee in the morning",
-          "event_index": 1
-        },
-        "source_conversation_timestamp": "2025-11-13T18:42:31.704871"
-      },
-      "Added_preference": "likes drinking coffee in the morning"
-    },
-    {
-      "event_id": "evt_1b16c36c",
-      "type": "UPDATE",
-      "summary": "User now prefers prefers reading science fiction and fantasy novels instead of enjoys reading science fiction novels",
-      "timestamp": "2025-11-13T18:42:31.720169",
-      "emotional_context": {
-        "sentiment": "neutral",
-        "emotion_tags": [],
-        "emotional_intensity": 0.1,
-        "mood_context": "normal",
-        "confidence": 0.9
-      },
-      "semantic_context": {
-        "related_facts": [
-          "evt_d7d9312c"
-        ],
-        "confidence_score": 0.89,
-        "context_type": "preference_update",
-        "semantic_tags": [
-          "preference",
-          "update"
-        ],
-        "similarity_hash": "7b2d0f8d"
-      },
-      "importance_score": 0.7,
-      "confidence": 0.9,
-      "category": "personal_preferences",
-      "subcategory": "likes",
-      "previous_value": "enjoys reading science fiction novels",
-      "current_value": "prefers reading science fiction and fantasy novels",
-      "provenance": {
-        "enhanced_in_place": true,
-        "enhanced_at": "2025-11-13T18:42:31.720169",
-        "original_summary": "User likes enjoys reading science fiction novels.",
-        "context": "User: Actually, I prefer prefers reading science fiction and fantasy novels.",
-        "source_conversation_timestamp": "2025-11-13T18:42:31.720169",
-        "cleanup_operation": "specificity refinement"
-      }
-    }
-  ]
+  }
 }

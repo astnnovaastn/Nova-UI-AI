@@ -8,36 +8,13 @@ from pathlib import Path
 import sys
 import asyncio
 import json
+from datetime import datetime
 from flask import Flask, request, jsonify, session
-try:
-    from flask_cors import CORS
-except ImportError:
-    print("❌ 'flask-cors' not found. Attempting to install (pip install flask-cors)...")
-    try:
-        import subprocess as _subprocess, sys as _sys
-        _subprocess.check_call([_sys.executable, "-m", "pip", "install", "flask-cors"])
-        from flask_cors import CORS
-        print("✅ 'flask-cors' installed and imported successfully")
-    except Exception as _e:
-        print(f"❌ Failed to install 'flask-cors': {_e}")
-        raise
+from flask_cors import CORS
 import uuid
 import time
-from datetime import datetime
-try:
-    from watchdog.observers import Observer
-    from watchdog.events import FileSystemEventHandler
-except ImportError:
-    print("❌ 'watchdog' not found. Attempting to install (pip install watchdog)...")
-    try:
-        import subprocess as _subprocess, sys as _sys
-        _subprocess.check_call([_sys.executable, "-m", "pip", "install", "watchdog"])
-        from watchdog.observers import Observer
-        from watchdog.events import FileSystemEventHandler
-        print("✅ 'watchdog' installed and imported successfully")
-    except Exception as _e:
-        print(f"❌ Failed to install 'watchdog': {_e}")
-        raise
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 import importlib
 import fnmatch
 import logging
@@ -73,21 +50,7 @@ logger = logging.getLogger("NovaAI")
 # Add the parent directory to the path to import Nova AI
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent / "astra_ai"))
-# Import EnhancedNovaAI first, then fallback to AleChatBot if needed
-try:
-    from core.enhanced_nova_ai import EnhancedNovaAI
-    ENHANCED_NOVA_AVAILABLE = True
-except ImportError:
-    ENHANCED_NOVA_AVAILABLE = False
-    EnhancedNovaAI = None
-
-# Import basic Nova AI as fallback
-try:
-    from core.nova_ai import AleChatBot
-    ALE_CHAT_BOT_AVAILABLE = True
-except ImportError:
-    ALE_CHAT_BOT_AVAILABLE = False
-    AleChatBot = None
+from core.nova_ai import AleChatBot
 
 # Store chat histories in memory (per session)
 chat_histories = {}
@@ -213,57 +176,28 @@ class CodeChangeHandler(FileSystemEventHandler):
     
     def reload_nova_ai(self):
         """Attempt to reload Nova AI module"""
-        global nova_ai  # Declare global at the beginning of the function
-        
         try:
             print("🔄 Reloading Nova AI module...")
             
             # Clear the module from cache
             modules_to_reload = []
             for module_name in list(sys.modules.keys()):
-                if 'nova_ai' in module_name or 'core' in module_name or 'enhanced_nova_ai' in module_name:
+                if 'nova_ai' in module_name or 'core' in module_name:
                     modules_to_reload.append(module_name)
             
             for module_name in modules_to_reload:
                 if module_name in sys.modules:
                     del sys.modules[module_name]
             
-            # Initialize configuration
-            config = {
-                'search_api_key': os.getenv('GROQ_API_KEY', 'your_api_key_here'),
-                'search_base_url': os.getenv('SEARCH_BASE_URL', 'https://api.search.example.com'),
-                'openweather_api_key': os.getenv('OPENWEATHER_API_KEY', 'your_openweather_api_key_here')
-            }
+            # Reimport and reinitialize
+            global nova_ai
+            from core.nova_ai import AleChatBot
+            nova_ai = AleChatBot()
+            print("✅ Nova AI reloaded successfully")
             
-            # Try EnhancedNovaAI first if available
-            if ENHANCED_NOVA_AVAILABLE and EnhancedNovaAI:
-                try:
-                    # Reimport and reinitialize with EnhancedNovaAI
-                    from core.enhanced_nova_ai import EnhancedNovaAI
-                    nova_ai = EnhancedNovaAI(config)
-                    print("✅ Enhanced Nova AI reloaded successfully")
-                except Exception as e:
-                    print(f"⚠️ Failed to reload Enhanced Nova AI: {e}")
-                    # Fallback to basic Nova AI if EnhancedNovaAI fails
-                    if ALE_CHAT_BOT_AVAILABLE and AleChatBot:
-                        try:
-                            from core.nova_ai import AleChatBot
-                            nova_ai = AleChatBot()
-                            print("✅ Fallback Nova AI reloaded successfully")
-                        except Exception as fallback_e:
-                            print(f"⚠️ Fallback also failed: {fallback_e}")
-            else:
-                # Fallback to AleChatBot if EnhancedNovaAI is not available
-                if ALE_CHAT_BOT_AVAILABLE and AleChatBot:
-                    try:
-                        from core.nova_ai import AleChatBot
-                        nova_ai = AleChatBot()
-                        print("✅ Fallback Nova AI reloaded successfully")
-                    except Exception as fallback_e:
-                        print(f"⚠️ Fallback failed: {fallback_e}")
-                        
         except Exception as e:
-            print(f"⚠️ Error reloading Nova AI: {e}")
+            print(f"⚠️ Failed to reload Nova AI: {e}")
+            print("💡 You may need to restart the application for changes to take effect")
     
     def refresh_webview(self):
         """Refresh the webview window"""
@@ -345,45 +279,14 @@ def run_server(port, directory):
 nova_ai = None
 
 def initialize_nova_ai():
-    """Initialize Enhanced Nova AI chatbot with fallback options"""
+    """Initialize Nova AI chatbot"""
     global nova_ai
     try:
-        # Initialize configuration for EnhancedNovaAI
-        config = {
-            'search_api_key': os.getenv('GROQ_API_KEY', 'your_api_key_here'),
-            'search_base_url': os.getenv('SEARCH_BASE_URL', 'https://api.search.example.com'),
-            'openweather_api_key': os.getenv('OPENWEATHER_API_KEY', 'your_openweather_api_key_here')
-        }
-        
-        # Try EnhancedNovaAI first if available
-        if ENHANCED_NOVA_AVAILABLE and EnhancedNovaAI:
-            try:
-                # Initialize EnhancedNovaAI with configuration
-                nova_ai = EnhancedNovaAI(config)
-                print("Enhanced Nova AI initialized successfully")
-                return True
-            except Exception as e:
-                print(f"Failed to initialize EnhancedNovaAI: {e}")
-                print("Falling back to basic AleChatBot...")
-        
-        # Fallback to AleChatBot if EnhancedNovaAI fails or is not available
-        if ALE_CHAT_BOT_AVAILABLE and AleChatBot:
-            try:
-                # Initialize basic AleChatBot
-                nova_ai = AleChatBot()
-                print("Basic AleChatBot initialized successfully")
-                return True
-            except Exception as e:
-                print(f"Failed to initialize AleChatBot: {e}")
-                return False
-        else:
-            print("Neither EnhancedNovaAI nor AleChatBot is available")
-            return False
-            
+        nova_ai = AleChatBot()
+        print("Nova AI initialized successfully")
+        return True
     except Exception as e:
-        print(f"Error in initialize_nova_ai: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Failed to initialize Nova AI: {e}")
         return False
 
 # Create Flask app for API
@@ -497,33 +400,39 @@ def chat():
             except Exception as e:
                 print(f"Warning: Failed to retrieve local conversation history: {e}")
         
-        # Determine which AI system to use based on available methods
-        if hasattr(nova_ai, 'process_message'):
-            # Use EnhancedNovaAI's process_message method which handles all enhanced features
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                response = loop.run_until_complete(nova_ai.process_message(user_message))
-            finally:
-                loop.close()
-        else:
-            # For basic AleChatBot, we need to call get_response method which is async
-            # Create a new event loop to call the async method
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                # Prepare messages for basic AI
-                if hasattr(nova_ai, 'chat_history'):
-                    messages = nova_ai.chat_history + [{"role": "user", "content": user_message}]
-                else:
-                    messages = [{"role": "user", "content": user_message}]
-                
-                response = loop.run_until_complete(nova_ai.get_response(messages, stream_to_terminal=False))
-            except Exception as e:
-                print(f"Error calling AleChatBot get_response: {e}")
-                response = "I'm experiencing technical difficulties. Please try again later."
-            finally:
-                loop.close()
+        # Build messages with memory context (same as terminal mode)
+        messages = nova_ai.chat_history + chat_histories[session_id]
+        
+        # Add system message about time display capabilities
+        messages.append({
+            "role": "system",
+            "content": "You are running in a desktop UI with visual time display capabilities. When users ask for time, you have REAL-TIME access to current time information. Always provide actual current time, never say you don't have real-time access. The UI will automatically show a visual time display widget when you provide time information."
+        })
+        
+        # Add memory context as a system message if we have relevant memories
+        if relevant_memories:
+            messages.append({
+                "role": "system", 
+                "content": f"Context from past conversations:\n{relevant_memories}\n\nUse this context naturally in your response if relevant to the current question."
+            })
+        
+        # Add location context if available
+        if user_location:
+            messages.append({
+                "role": "system",
+                "content": f"User's current location: {user_location}. You have REAL-TIME access to current time information for any location. When users ask for time, provide the actual current time using your time functions. Use this location for time requests and location-based queries."
+            })
+        
+        # Add the current user message
+        messages.append({"role": "user", "content": user_message})
+        
+        # Get response from Nova AI (run async function in sync context)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            response = loop.run_until_complete(nova_ai.get_response(messages, stream_to_terminal=False))
+        finally:
+            loop.close()
         
         # Update session chat history (without system prompt, just like terminal mode)
         if response:
@@ -536,44 +445,59 @@ def chat():
             if len(chat_histories[session_id]) > 20:  # 10 exchanges
                 chat_histories[session_id] = chat_histories[session_id][-20:]
             
-            # Store conversation using appropriate memory system
+            # SAVE TO MEMORY JSON - This is CRITICAL for persistent storage
             try:
-                # Check if using EnhancedNovaAI
-                if hasattr(nova_ai, 'vector_memory'):
-                    # Store in EnhancedNovaAI's memory system
-                    if hasattr(nova_ai.vector_memory, 'add_memory'):
-                        nova_ai.vector_memory.add_memory(
-                            text=f"User: {user_message}\nAssistant: {response}",
-                            metadata={
-                                'timestamp': datetime.now().isoformat(),
-                                'conversation_turn': len(chat_histories[session_id]) // 2,
-                                'session_id': session_id
-                            }
-                        )
-                        print(f"[SPEED] Conversation stored using EnhancedNovaAI memory system")
-                else:
-                    # For basic AleChatBot, try to use its memory system if available
-                    if hasattr(nova_ai, 'files') and hasattr(nova_ai.files, 'store_conversation'):
-                        # Store using basic Nova AI's file system
-                        nova_ai.files.store_conversation(user_message, response)
-                        print(f"[SPEED] Conversation stored using basic Nova AI file system")
-                    elif hasattr(nova_ai, 'memory') and hasattr(nova_ai.memory, 'store_memory'):
-                        # Store using basic memory system
-                        from core.nova_ai import MemoryType  # Import the enum from nova_ai
-                        nova_ai.memory.store_memory(
-                            content=f"User: {user_message}\nAssistant: {response}",
-                            memory_type=MemoryType.CONVERSATION_SUMMARY,
-                            topic="general",
-                            metadata={
-                                'session_id': session_id,
-                                'timestamp': datetime.now().isoformat()
-                            }
-                        )
-                        print(f"[SPEED] Conversation stored using basic memory system")
-                    else:
-                        print(f"[SPEED] Conversation not stored - no storage method available")
+                print(f"[MEMORY] Saving conversation to nova_ai_memory.json...")
+                
+                # Create a simple memory save function that writes directly to JSON
+                memory_file = Path(__file__).parent.parent / "Date" / "nova_ai_memory.json"
+                memory_file.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Load existing memory data
+                memory_data = {}
+                if memory_file.exists():
+                    try:
+                        with open(memory_file, 'r', encoding='utf-8') as f:
+                            memory_data = json.load(f)
+                    except:
+                        memory_data = {}
+                
+                # Ensure conversation list exists
+                if "conversation" not in memory_data:
+                    memory_data["conversation"] = []
+                
+                # Add user message
+                memory_data["conversation"].append({
+                    "role": "user",
+                    "content": user_message,
+                    "timestamp": datetime.now().isoformat(),
+                    "session_id": session_id
+                })
+                
+                # Add AI response
+                memory_data["conversation"].append({
+                    "role": "assistant",
+                    "content": response,
+                    "timestamp": datetime.now().isoformat(),
+                    "session_id": session_id
+                })
+                
+                # Save back to file
+                with open(memory_file, 'w', encoding='utf-8') as f:
+                    json.dump(memory_data, f, indent=2, ensure_ascii=False)
+                
+                print(f"[MEMORY] Conversation saved to nova_ai_memory.json (Total messages: {len(memory_data.get('conversation', []))})")
+                
+                # Also store locally if files manager is available
+                try:
+                    nova_ai.files.store_conversation(user_message, response)
+                except:
+                    pass
+                    
             except Exception as e:
-                print(f"Warning: Failed to store conversation: {e}")
+                print(f"[ERROR] Failed to save conversation to memory: {e}")
+                import traceback
+                traceback.print_exc()
         
         return jsonify({'response': response})
         
@@ -589,48 +513,19 @@ def memory_status():
     try:
         if not nova_ai:
             return jsonify({'error': 'Nova AI not initialized'}), 500
-        
-        # Check if EnhancedNovaAI is being used
-        if hasattr(nova_ai, 'vector_memory'):
-            # EnhancedNovaAI has vector and semantic memory
-            stats = {
-                'enabled': True,
-                'status': 'Enhanced memory system active',
-                'vector_memory_count': len(getattr(nova_ai.vector_memory, 'memory_store', [])) if hasattr(nova_ai.vector_memory, 'memory_store') else 0,
-                'semantic_memory_count': len(getattr(nova_ai.semantic_memory, 'concepts', [])) if hasattr(nova_ai.semantic_memory, 'concepts') else 0,
-                'conversation_summary': nova_ai.get_conversation_summary() if hasattr(nova_ai, 'get_conversation_summary') else {}
-            }
-            return jsonify(stats)
-        else:
-            # For basic AleChatBot - check memory attributes
-            if hasattr(nova_ai, 'memory_enabled') and nova_ai.memory_enabled and hasattr(nova_ai, 'memory') and nova_ai.memory:
-                stats = nova_ai.memory.get_memory_stats()
-                return jsonify({
-                    'enabled': True,
-                    'status': 'Memory system active',
-                    'stats': stats
-                })
-            elif hasattr(nova_ai, 'mem0_memory_agent') and nova_ai.mem0_memory_agent:
-                # Use mem0 memory agent if available
-                try:
-                    profile = nova_ai.mem0_memory_agent.get_user_profile()
-                    return jsonify({
-                        'enabled': True,
-                        'status': 'Mem0 memory system active',
-                        'stats': {
-                            'user_info': profile.get('user_info', {}),
-                            'facts': len(profile.get('facts', {})),
-                            'total_memories': len(profile.get('memories', [])) if 'memories' in profile else 0
-                        }
-                    })
-                except Exception:
-                    pass
             
-            # If no memory system is available
+        if not nova_ai.memory_enabled or not nova_ai.memory:
             return jsonify({
                 'enabled': False,
                 'status': 'Memory system disabled'
             })
+        
+        stats = nova_ai.memory.get_memory_stats()
+        return jsonify({
+            'enabled': True,
+            'status': 'Memory system active',
+            'stats': stats
+        })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -645,53 +540,15 @@ def memory_search():
         if not query:
             return jsonify({'error': 'No query provided'}), 400
             
-        if not nova_ai:
-            return jsonify({'error': 'Nova AI not available'}), 500
+        if not nova_ai or not nova_ai.memory_enabled or not nova_ai.memory:
+            return jsonify({'error': 'Memory system not available'}), 500
         
-        # Check if EnhancedNovaAI is being used
-        if hasattr(nova_ai, 'vector_memory'):
-            # Use EnhancedNovaAI's memory search capabilities
-            try:
-                # Search in vector memory
-                vector_memories = nova_ai.vector_memory.search_memory(query, limit=10) if hasattr(nova_ai.vector_memory, 'search_memory') else []
-                
-                # Search in semantic memory
-                semantic_memories = nova_ai.semantic_memory.search_concepts(query) if hasattr(nova_ai.semantic_memory, 'search_concepts') else []
-                
-                return jsonify({
-                    'query': query,
-                    'vector_memories': vector_memories,
-                    'semantic_memories': semantic_memories,
-                    'count': len(vector_memories) + len(semantic_memories)
-                })
-            except Exception as e:
-                print(f"Enhanced memory search failed: {e}")
-                # Fallback to basic memory search if EnhancedNovaAI memory search fails
-                pass
-        
-        # For basic AleChatBot, try different memory systems
-        if hasattr(nova_ai, 'memory') and nova_ai.memory:
-            # Use basic memory system
-            memories = nova_ai.memory.retrieve_memories(query, limit=10)
-            return jsonify({
-                'query': query,
-                'memories': memories,
-                'count': len(memories)
-            })
-        elif hasattr(nova_ai, 'mem0_memory_agent') and nova_ai.mem0_memory_agent:
-            # Use mem0 memory system
-            try:
-                result = nova_ai.mem0_memory_agent.get_memory_context(query)
-                return jsonify({
-                    'query': query,
-                    'memories': result.get('memories', []),
-                    'count': len(result.get('memories', []))
-                })
-            except Exception as e:
-                print(f"Mem0 memory search failed: {e}")
-        
-        # If no memory system is available
-        return jsonify({'error': 'Memory system not available'}), 500
+        memories = nova_ai.memory.retrieve_memories(query, limit=10)
+        return jsonify({
+            'query': query,
+            'memories': memories,
+            'count': len(memories)
+        })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -706,26 +563,8 @@ def get_time():
             from datetime import datetime
             now = datetime.now()
             return jsonify({'time': now.strftime('%I:%M %p')})
-        # Use get_time_in_location function - try different import paths
-        get_time_in_location = None
-        
-        # Try different import paths
-        try:
-            from core.nova_ai import get_time_in_location
-        except ImportError:
-            try:
-                from astra_ai.core.nova_ai import get_time_in_location
-            except ImportError:
-                try:
-                    # Define a simple fallback if import fails
-                    def get_time_in_location(location):
-                        from datetime import datetime
-                        return f"The current time in {location} is {datetime.now().strftime('%H:%M')}."
-                except:
-                    def get_time_in_location(location):
-                        from datetime import datetime
-                        return f"The current time in {location} is {datetime.now().strftime('%H:%M')}."
-
+        # Use your get_time_in_location function from nova_ai.py
+        from core.nova_ai import get_time_in_location
         time_str = get_time_in_location(location)
         # Extract just the time (e.g., "The current time in X is HH:MM")
         import re
@@ -754,36 +593,11 @@ def manual_refresh():
 def get_tasks():
     """Get all tasks"""
     try:
-        # Check if task management is available in Nova AI instance
-        if not nova_ai:
-            return jsonify({'error': 'Nova AI not initialized'}), 500
-            
-        if not hasattr(nova_ai, 'task_manager') or not nova_ai.task_manager:
+        if not nova_ai or not nova_ai.task_manager:
             return jsonify({'error': 'Task management not available'}), 500
 
         tasks = nova_ai.task_manager.get_all_tasks()
-        # Convert tasks to dictionaries
-        task_data = []
-        for task in tasks:
-            if hasattr(task, 'to_dict'):
-                task_data.append(task.to_dict())
-            else:
-                # Build task data manually if to_dict method doesn't exist
-                task_dict = {
-                    'id': getattr(task, 'id', str(uuid.uuid4())),
-                    'title': getattr(task, 'title', 'Unknown'),
-                    'description': getattr(task, 'description', ''),
-                    'status': getattr(task, 'status', 'pending'),
-                    'due_date': getattr(task, 'due_date', None),
-                    'priority': getattr(task, 'priority', 'medium'),
-                    'tags': getattr(task, 'tags', []),
-                    'created_at': getattr(task, 'created_at', datetime.now().isoformat())
-                }
-                if task_dict['due_date']:
-                    task_dict['due_date'] = task_dict['due_date'].isoformat()
-                if isinstance(task_dict['created_at'], datetime):
-                    task_dict['created_at'] = task_dict['created_at'].isoformat()
-                task_data.append(task_dict)
+        task_data = [task.to_dict() for task in tasks]
 
         return jsonify({
             'tasks': task_data,
@@ -796,7 +610,7 @@ def get_tasks():
 def create_task():
     """Create a new task"""
     try:
-        if not nova_ai or not hasattr(nova_ai, 'task_manager') or not nova_ai.task_manager:
+        if not nova_ai or not nova_ai.task_manager:
             return jsonify({'error': 'Task management not available'}), 500
 
         data = request.get_json()
@@ -824,33 +638,11 @@ def create_task():
         try:
             from core.task_management import TaskPriority
         except ImportError:
-            try:
-                from task_management import TaskPriority
-            except ImportError:
-                # Create a simple enum-like structure if import fails
-                class TaskPriority:
-                    LOW = 'low'
-                    MEDIUM = 'medium' 
-                    HIGH = 'high'
-                    URGENT = 'urgent'
-                    
-                priority_map = {
-                    'low': TaskPriority.LOW,
-                    'medium': TaskPriority.MEDIUM,
-                    'high': TaskPriority.HIGH,
-                    'urgent': TaskPriority.URGENT
-                }
-                priority = priority_map.get(priority_str.lower(), TaskPriority.MEDIUM)
-            else:
-                try:
-                    priority = TaskPriority(priority_str.lower())
-                except ValueError:
-                    priority = TaskPriority.MEDIUM
-        else:
-            try:
-                priority = TaskPriority(priority_str.lower())
-            except ValueError:
-                priority = TaskPriority.MEDIUM
+            from task_management import TaskPriority
+        try:
+            priority = TaskPriority(priority_str.lower())
+        except ValueError:
+            priority = TaskPriority.MEDIUM
 
         # Create task
         task = nova_ai.task_manager.create_task(
@@ -861,25 +653,9 @@ def create_task():
             tags=tags
         )
 
-        # Return task data
-        if hasattr(task, 'to_dict'):
-            task_data = task.to_dict()
-        else:
-            # Build task data manually
-            task_data = {
-                'id': getattr(task, 'id', str(uuid.uuid4())),
-                'title': getattr(task, 'title', title),
-                'description': getattr(task, 'description', description),
-                'status': getattr(task, 'status', 'pending'),
-                'due_date': getattr(task, 'due_date', due_date).isoformat() if hasattr(task, 'due_date') and task.due_date else due_date.isoformat(),
-                'priority': getattr(task, 'priority', priority_str),
-                'tags': getattr(task, 'tags', tags),
-                'created_at': datetime.now().isoformat()
-            }
-
         return jsonify({
             'success': True,
-            'task': task_data,
+            'task': task.to_dict(),
             'message': f'Task "{title}" created successfully'
         })
 
@@ -890,7 +666,7 @@ def create_task():
 def update_task(task_id):
     """Update a task"""
     try:
-        if not nova_ai or not hasattr(nova_ai, 'task_manager') or not nova_ai.task_manager:
+        if not nova_ai or not nova_ai.task_manager:
             return jsonify({'error': 'Task management not available'}), 500
 
         data = request.get_json()
@@ -900,28 +676,9 @@ def update_task(task_id):
 
         if success:
             task = nova_ai.task_manager.get_task(task_id)
-            if task:
-                if hasattr(task, 'to_dict'):
-                    task_data = task.to_dict()
-                else:
-                    # Build task data manually
-                    task_data = {
-                        'id': getattr(task, 'id', task_id),
-                        'title': getattr(task, 'title', ''),
-                        'description': getattr(task, 'description', ''),
-                        'status': getattr(task, 'status', 'pending'),
-                        'due_date': getattr(task, 'due_date', None),
-                        'priority': getattr(task, 'priority', 'medium'),
-                        'tags': getattr(task, 'tags', []),
-                    }
-                    if task_data['due_date'] and hasattr(task_data['due_date'], 'isoformat'):
-                        task_data['due_date'] = task_data['due_date'].isoformat()
-            else:
-                task_data = None
-                
             return jsonify({
                 'success': True,
-                'task': task_data,
+                'task': task.to_dict() if task else None,
                 'message': 'Task updated successfully'
             })
         else:
@@ -934,7 +691,7 @@ def update_task(task_id):
 def complete_task(task_id):
     """Mark a task as completed"""
     try:
-        if not nova_ai or not hasattr(nova_ai, 'task_manager') or not nova_ai.task_manager:
+        if not nova_ai or not nova_ai.task_manager:
             return jsonify({'error': 'Task management not available'}), 500
 
         success = nova_ai.task_manager.complete_task(task_id)
@@ -994,11 +751,7 @@ def delete_task(task_id):
 def analyze_vision():
     """Analyze image with AI vision system"""
     try:
-        # Check if AI vision is available
-        if not nova_ai:
-            return jsonify({'error': 'Nova AI not initialized'}), 500
-            
-        if not hasattr(nova_ai, 'ai_vision') or not nova_ai.ai_vision:
+        if not nova_ai or not nova_ai.ai_vision:
             return jsonify({'error': 'AI vision system not available'}), 500
 
         data = request.get_json()
@@ -1024,42 +777,35 @@ def analyze_vision():
             if auto_activated and user_query:
                 # Create analysis data for conversational response
                 analysis_data = {
-                    'scene_description': getattr(analysis, 'scene_description', ''),
-                    'objects_detected': getattr(analysis, 'objects_detected', []),
-                    'labels': getattr(analysis, 'labels', []),
+                    'scene_description': analysis.scene_description,
+                    'objects_detected': analysis.objects_detected,
+                    'labels': [],
                     'text_detected': getattr(analysis, 'text_detected', ''),
-                    'faces_detected': getattr(analysis, 'faces_detected', 0),
-                    'landmarks': getattr(analysis, 'landmarks', [])
+                    'faces_detected': 0,
+                    'landmarks': []
                 }
 
                 # Generate conversational response
-                if hasattr(nova_ai.ai_vision, '_generate_conversational_response'):
-                    conversational_response = loop.run_until_complete(
-                        nova_ai.ai_vision._generate_conversational_response(analysis_data, user_query)
-                    )
-                    # Update analysis response
-                    analysis.ai_response = conversational_response
-                else:
-                    # Fallback - just return the basic ai_response from analysis
-                    pass
+                conversational_response = loop.run_until_complete(
+                    nova_ai.ai_vision._generate_conversational_response(analysis_data, user_query)
+                )
 
-            # Create response data, handling cases where attributes may not exist
-            response_data = {
+                # Update analysis response
+                analysis.ai_response = conversational_response
+
+            return jsonify({
                 'success': True,
                 'analysis': {
-                    'id': getattr(analysis, 'id', str(uuid.uuid4())),
-                    'scene_description': getattr(analysis, 'scene_description', ''),
-                    'objects_detected': getattr(analysis, 'objects_detected', []),
-                    'ai_response': getattr(analysis, 'ai_response', 'Analysis completed'),
-                    'confidence_scores': getattr(analysis, 'confidence_scores', {}),
-                    'timestamp': getattr(analysis, 'timestamp', datetime.now()).isoformat(),
+                    'id': analysis.id,
+                    'scene_description': analysis.scene_description,
+                    'objects_detected': analysis.objects_detected,
+                    'ai_response': analysis.ai_response,
+                    'confidence_scores': analysis.confidence_scores,
+                    'timestamp': analysis.timestamp.isoformat(),
                     'auto_activated': auto_activated,
                     'analysis_type': analysis_type
                 }
-            }
-
-            return jsonify(response_data)
-            
+            })
         finally:
             loop.close()
 
@@ -1070,25 +816,20 @@ def analyze_vision():
 def get_vision_history():
     """Get vision analysis history"""
     try:
-        if not nova_ai or not hasattr(nova_ai, 'ai_vision') or not nova_ai.ai_vision:
+        if not nova_ai or not nova_ai.ai_vision:
             return jsonify({'error': 'AI vision system not available'}), 500
 
         limit = request.args.get('limit', 10, type=int)
-        
-        # Check if the vision system has the required method
-        if not hasattr(nova_ai.ai_vision, 'get_vision_history'):
-            return jsonify({'error': 'Vision history not available'}), 500
-            
         history = nova_ai.ai_vision.get_vision_history(limit)
 
         history_data = []
         for analysis in history:
             history_data.append({
-                'id': getattr(analysis, 'id', str(uuid.uuid4())),
-                'timestamp': getattr(getattr(analysis, 'timestamp', datetime.now()), 'isoformat', lambda: datetime.now().isoformat())(),
-                'scene_description': getattr(analysis, 'scene_description', ''),
-                'objects_detected': len(getattr(analysis, 'objects_detected', [])),
-                'analysis_type': getattr(analysis, 'analysis_type', 'unknown')
+                'id': analysis.id,
+                'timestamp': analysis.timestamp.isoformat(),
+                'scene_description': analysis.scene_description,
+                'objects_detected': len(analysis.objects_detected),
+                'analysis_type': analysis.analysis_type
             })
 
         return jsonify({
@@ -1104,13 +845,9 @@ def get_vision_history():
 def get_vision_statistics():
     """Get vision system statistics"""
     try:
-        if not nova_ai or not hasattr(nova_ai, 'ai_vision') or not nova_ai.ai_vision:
+        if not nova_ai or not nova_ai.ai_vision:
             return jsonify({'error': 'AI vision system not available'}), 500
 
-        # Check if the vision system has the required method
-        if not hasattr(nova_ai.ai_vision, 'get_vision_statistics'):
-            return jsonify({'error': 'Vision statistics not available'}), 500
-            
         stats = nova_ai.ai_vision.get_vision_statistics()
 
         return jsonify({
@@ -1121,240 +858,26 @@ def get_vision_statistics():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
-# ================ ENHANCEDNOVAI SPECIALIZED ENDPOINTS ================
-
-@app.route('/api/weather', methods=['POST'])
-def get_weather():
-    """Get weather information using Nova AI's weather service"""
-    try:
-        if not nova_ai:
-            return jsonify({'error': 'Nova AI not initialized'}), 500
-
-        # Check if weather service is available
-        if not hasattr(nova_ai, 'weather_service') or not nova_ai.weather_service:
-            return jsonify({'error': 'Weather service not available'}), 500
-
-        data = request.get_json()
-        location = data.get('location', 'New York')
-        
-        if not location:
-            return jsonify({'error': 'Location is required'}), 400
-
-        # Get weather data using weather service
-        try:
-            weather_data = nova_ai.weather_service.get_weather(location)
-        except AttributeError:
-            # If get_weather method doesn't exist, try get_comprehensive_weather_data
-            if hasattr(nova_ai.weather_service, 'get_comprehensive_weather_data'):
-                weather_data = nova_ai.weather_service.get_comprehensive_weather_data(location)
-            else:
-                return jsonify({'error': 'Weather service method not available'}), 500
-        
-        if isinstance(weather_data, dict) and 'error' in weather_data:
-            return jsonify({'error': weather_data['error']}), 500
-
-        return jsonify({
-            'location': location,
-            'weather': weather_data
-        })
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/forecast', methods=['POST'])
-def get_forecast():
-    """Get weather forecast using EnhancedNovaAI's weather service"""
-    try:
-        if not nova_ai:
-            return jsonify({'error': 'Nova AI not initialized'}), 500
-
-        # Check if EnhancedNovaAI with weather service is available
-        if not hasattr(nova_ai, 'weather_service'):
-            return jsonify({'error': 'Weather forecast service not available'}), 500
-
-        data = request.get_json()
-        location = data.get('location', 'New York')
-        
-        if not location:
-            return jsonify({'error': 'Location is required'}), 400
-
-        # Get forecast data
-        forecast_data = nova_ai.weather_service.get_forecast(location)
-        
-        if 'error' in forecast_data:
-            return jsonify({'error': forecast_data['error']}), 500
-
-        return jsonify({
-            'location': location,
-            'forecast': forecast_data
-        })
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/news', methods=['POST'])
-def get_news():
-    """Get news summary using Nova AI's news service"""
-    try:
-        if not nova_ai:
-            return jsonify({'error': 'Nova AI not initialized'}), 500
-
-        # Check if news service is available
-        news_service = None
-        if hasattr(nova_ai, 'news_system') and nova_ai.news_system:
-            news_service = nova_ai.news_system
-        elif hasattr(nova_ai, 'enhanced_news_system') and nova_ai.enhanced_news_system:
-            news_service = nova_ai.enhanced_news_system
-        elif hasattr(nova_ai, 'news_service') and nova_ai.news_service:
-            news_service = nova_ai.news_service
-        else:
-            return jsonify({'error': 'News service not available'}), 500
-
-        data = request.get_json()
-        query = data.get('query', 'latest news')
-        
-        if not query:
-            return jsonify({'error': 'Query is required'}), 400
-
-        # Get news summary - try different approaches based on the news system available
-        try:
-            if hasattr(news_service, 'get_news_summary'):
-                news_result = news_service.get_news_summary(
-                    query=query,
-                    allow_source_selection=False  # Disable interactive selection for API
-                )
-            elif hasattr(news_service, 'get_conversational_news'):
-                # For EnhancedNewsSystem
-                news_result = news_service.get_conversational_news(query)
-                # Format the result to match expected structure
-                if isinstance(news_result, str):
-                    news_result = {'summary': news_result, 'query': query}
-            else:
-                return jsonify({'error': 'News service method not available'}), 500
-        except Exception as e:
-            return jsonify({'error': f'Error retrieving news: {str(e)}'}), 500
-        
-        if not news_result or (isinstance(news_result, dict) and 'summary' not in news_result and not str(news_result).strip()):
-            return jsonify({'error': 'No news found'}), 404
-
-        return jsonify({
-            'query': query,
-            'news': news_result
-        })
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/features', methods=['GET'])
-def get_available_features():
-    """Get available features of the EnhancedNovaAI system"""
-    try:
-        if not nova_ai:
-            return jsonify({'error': 'Nova AI not initialized'}), 500
-
-        # Determine which features are available
-        features = {
-            'basic_chat': True,
-            'weather_service': hasattr(nova_ai, 'weather_service'),
-            'news_service': hasattr(nova_ai, 'news_system'),
-            'sentiment_analysis': hasattr(nova_ai, 'sentiment_analyzer'),
-            'vector_memory': hasattr(nova_ai, 'vector_memory'),
-            'semantic_memory': hasattr(nova_ai, 'semantic_memory'),
-            'search_capability': hasattr(nova_ai, 'search_client'),
-            'context_management': hasattr(nova_ai, 'context_manager'),
-            'response_generation': hasattr(nova_ai, 'response_generator')
-        }
-
-        return jsonify({
-            'features': features,
-            'enhanced_nova_ai': hasattr(nova_ai, 'process_message')
-        })
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/status', methods=['GET'])
 def get_status():
     """Get system status"""
     try:
-        # Determine which AI system is being used
-        is_enhanced = False
-        enhanced_features = {}
-        
-        if nova_ai:
-            # Check if this is EnhancedNovaAI
-            is_enhanced = hasattr(nova_ai, 'process_message') and hasattr(nova_ai, 'vector_memory')
-            
-            if is_enhanced:
-                # EnhancedNovaAI specific features
-                enhanced_features = {
-                    'weather_service_available': hasattr(nova_ai, 'weather_service'),
-                    'news_service_available': hasattr(nova_ai, 'news_system'),
-                    'sentiment_analysis_available': hasattr(nova_ai, 'sentiment_analyzer'),
-                    'vector_memory_available': hasattr(nova_ai, 'vector_memory'),
-                    'semantic_memory_available': hasattr(nova_ai, 'semantic_memory'),
-                    'search_available': hasattr(nova_ai, 'search_client'),
-                    'conversation_summary': nova_ai.get_conversation_summary() if hasattr(nova_ai, 'get_conversation_summary') else {}
-                }
-        
-        # Check for task management (works with both systems)
-        task_manager_available = False
-        task_stats = {}
-        if nova_ai and hasattr(nova_ai, 'task_manager') and nova_ai.task_manager:
-            try:
-                task_manager_available = True
-                task_stats = nova_ai.task_manager.get_task_statistics()
-            except:
-                task_manager_available = False
+        task_manager_available = nova_ai and nova_ai.task_manager is not None
+        task_stats = nova_ai.task_manager.get_task_statistics() if task_manager_available else {}
 
-        # Check for vision system (works with both systems)
-        vision_available = False
-        vision_stats = {}
-        if nova_ai and hasattr(nova_ai, 'ai_vision') and nova_ai.ai_vision:
-            try:
-                vision_available = True
-                if hasattr(nova_ai.ai_vision, 'get_vision_statistics'):
-                    vision_stats = nova_ai.ai_vision.get_vision_statistics()
-            except:
-                vision_available = False
-
-        # Check for memory system (works with both systems) 
-        memory_available = False
-        memory_status = {}
-        if nova_ai:
-            if (hasattr(nova_ai, 'memory') and nova_ai.memory) or (hasattr(nova_ai, 'mem0_memory_agent') and nova_ai.mem0_memory_agent):
-                memory_available = True
-                try:
-                    if hasattr(nova_ai, 'memory') and nova_ai.memory:
-                        memory_status = nova_ai.memory.get_memory_stats()
-                    elif hasattr(nova_ai, 'mem0_memory_agent') and nova_ai.mem0_memory_agent:
-                        profile = nova_ai.mem0_memory_agent.get_user_profile()
-                        memory_status = {
-                            'user_info': profile.get('user_info', {}),
-                            'facts_count': len(profile.get('facts', {})),
-                            'memories_count': len(profile.get('memories', [])) if 'memories' in profile else 0
-                        }
-                except:
-                    memory_status = {}
+        vision_available = nova_ai and nova_ai.ai_vision is not None
+        vision_stats = nova_ai.ai_vision.get_vision_statistics() if vision_available else {}
 
         return jsonify({
             'status': 'running',
             'nova_ai_initialized': nova_ai is not None,
-            'enhanced_nova_ai': is_enhanced,
-            'enhanced_features': enhanced_features,
             'file_watcher_active': file_watcher is not None and file_watcher.is_alive() if file_watcher else False,
             'browser_mode': True,
             'ui_mode': 'browser',
             'task_management_available': task_manager_available,
             'task_statistics': task_stats,
             'ai_vision_available': vision_available,
-            'vision_statistics': vision_stats,
-            'memory_system_available': memory_available,
-            'memory_status': memory_status
+            'vision_statistics': vision_stats
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1387,14 +910,14 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 def main():
-    print("[INFO] Starting Nova AI Desktop Interface (Browser Mode)...")
+    print("🚀 Starting Nova AI Desktop Interface (Browser Mode)...")
 
     # Check for required dependencies
     try:
         import watchdog
-        print("[SUCCESS] watchdog library found")
+        print("✅ watchdog library found")
     except ImportError:
-        print("[ERROR] watchdog library not found. Installing...")
+        print("❌ watchdog library not found. Installing...")
         try:
             import subprocess
             subprocess.check_call([sys.executable, "-m", "pip", "install", "watchdog"])

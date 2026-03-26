@@ -1,0 +1,1022 @@
+{
+  "user": {
+    "user_id": "usr_001",
+    "name": "Astra",
+    "created_at": "2025-10-21T11:50:00Z",
+    "status": "active",
+    "total_sessions": 3,
+    "last_seen": "2025-10-21T12:30:00Z",
+    "relationship_established": true
+  },
+
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2025-10-21T12:30:00Z",
+      "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
+    },
+
+    "memory_events": [
+      {
+        "event_id": "evt_001",
+        "type": "ADD",
+        "summary": "User likes watching anime during weekends",
+        "timestamp": "2025-10-16T17:08:03Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["interest"],
+          "emotional_intensity": 0.3,
+          "mood_context": "normal",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'I like to watch anime sometimes during the weekend.'",
+        "importance_score": 0.6,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "likes watching anime during weekends",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-16T17:08:03Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I like to watch anime sometimes during the weekend.",
+            "event_index": 0
+          },
+          "source_conversation_timestamp": "2025-10-16T17:08:03Z"
+        },
+        "Added_preference": "enjoys watching anime during weekends"
+      },
+      {
+        "event_id": "evt_002",
+        "type": "UPDATE",
+        "summary": "User now prefers to watch anime only on Sundays",
+        "timestamp": "2025-10-20T14:32:48Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.1,
+          "mood_context": "normal",
+          "confidence": 0.9
+        },
+        "semantic_context": {
+          "related_facts": ["evt_001"],
+          "confidence_score": 0.89,
+          "context_type": "preference_update",
+          "semantic_tags": ["anime", "time_preference"],
+          "similarity_hash": "aeeaec0b"
+        },
+        "importance_score": 0.6,
+        "confidence": 0.9,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": "likes watching anime during weekends",
+        "current_value": "prefers watching anime only on Sundays",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-20T14:32:48Z",
+          "original_summary": "User likes watching anime during weekends.",
+          "context": "User: Actually, I prefer Sundays only.",
+          "source_conversation_timestamp": "2025-10-20T14:32:48Z",
+          "cleanup_operation": "stacked_prefix_removal"
+        }
+      },
+
+      {
+        "event_id": "evt_003",
+        "type": "ADD",
+        "summary": "User enjoys Italian cuisine",
+        "timestamp": "2025-10-21T12:00:00Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["interest", "food"],
+          "emotional_intensity": 0.5,
+          "mood_context": "happy",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from input: 'I love Italian food, especially pasta.'",
+        "importance_score": 0.7,
+        "confidence": 0.8,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "enjoys Italian cuisine",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:00:00Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I love Italian food, especially pasta.",
+            "event_index": 2
+          },
+          "source_conversation_timestamp": "2025-10-21T12:00:00Z"
+        },
+        "Added_preference": "loves Italian food",
+        "context": "User: I love Italian food, especially pasta."
+      },
+
+      {
+        "event_id": "evt_004",
+        "type": "ADD",
+        "summary": "User likes going for morning walks",
+        "timestamp": "2025-10-21T12:02:00Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["health", "habit"],
+          "emotional_intensity": 0.6,
+          "mood_context": "motivated",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'I usually go for morning walks.'",
+        "importance_score": 0.65,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "enjoys morning walks",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:02:00Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I usually go for morning walks.",
+            "event_index": 3
+          },
+          "source_conversation_timestamp": "2025-10-21T12:02:00Z"
+        },
+        "Added_preference": "morning walks habit"
+      },
+
+      {
+        "event_id": "evt_005",
+        "type": "ADD",
+        "summary": "User enjoys coffee in the morning",
+        "timestamp": "2025-10-21T12:03:30Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["food", "drink"],
+          "emotional_intensity": 0.4,
+          "mood_context": "content",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from input: 'I always have coffee in the morning.'",
+        "importance_score": 0.6,
+        "confidence": 0.8,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "enjoys morning coffee",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:03:30Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I always have coffee in the morning.",
+            "event_index": 4
+          },
+          "source_conversation_timestamp": "2025-10-21T12:03:30Z"
+        },
+        "Added_preference": "morning coffee habit",
+        "context": "User: I always have coffee in the morning."
+      },
+
+      {
+        "event_id": "evt_006",
+        "type": "ADD",
+        "summary": "User prefers reading science fiction novels",
+        "timestamp": "2025-10-21T12:05:00Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["reading", "interest"],
+          "emotional_intensity": 0.5,
+          "mood_context": "curious",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'I enjoy reading sci-fi novels.'",
+        "importance_score": 0.7,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": null,
+        "current_value": "enjoys sci-fi novels",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:05:00Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I enjoy reading sci-fi novels.",
+            "event_index": 5
+          },
+          "source_conversation_timestamp": "2025-10-21T12:05:00Z"
+        },
+        "Added_preference": "sci-fi reading",
+        "context": "User: I enjoy reading sci-fi novels."
+      },
+
+      {
+        "event_id": "evt_007",
+        "type": "UPDATE",
+        "summary": "User also likes fantasy novels",
+        "timestamp": "2025-10-21T12:06:00Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["reading", "interest"],
+          "emotional_intensity": 0.6,
+          "mood_context": "happy",
+          "confidence": 0.88
+        },
+        "semantic_context": {
+          "related_facts": ["evt_006"],
+          "confidence_score": 0.87,
+          "context_type": "preference_update",
+          "semantic_tags": ["books", "genre"],
+          "similarity_hash": "bcd12345"
+        },
+        "importance_score": 0.7,
+        "confidence": 0.88,
+        "category": "personal_preferences",
+        "subcategory": "likes",
+        "previous_value": "enjoys sci-fi novels",
+        "current_value": "enjoys sci-fi and fantasy novels",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:06:00Z",
+          "original_summary": "User enjoys reading sci-fi novels.",
+          "context": "User: Actually, I also like fantasy novels.",
+          "source_conversation_timestamp": "2025-10-21T12:06:00Z",
+          "cleanup_operation": "merged_genres"
+        }
+      },
+
+      {
+        "event_id": "evt_008",
+        "type": "ADD",
+        "summary": "User's favorite author is Brandon Sanderson",
+        "timestamp": "2025-10-21T12:07:15Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["enthusiasm", "author_appreciation"],
+          "emotional_intensity": 0.75,
+          "mood_context": "excited",
+          "confidence": 0.92
+        },
+        "semantic_context": "Inferred from input: 'Brandon Sanderson is my favorite author!'",
+        "importance_score": 0.8,
+        "confidence": 0.92,
+        "category": "personal_preferences",
+        "subcategory": "favorites",
+        "previous_value": null,
+        "current_value": "Brandon Sanderson favorite author",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:07:15Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: Brandon Sanderson is my favorite author!",
+            "event_index": 8
+          },
+          "source_conversation_timestamp": "2025-10-21T12:07:15Z"
+        }
+      },
+
+      {
+        "event_id": "evt_009",
+        "type": "ADD",
+        "summary": "User prefers dark roast coffee",
+        "timestamp": "2025-10-21T12:08:00Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["preference", "taste"],
+          "emotional_intensity": 0.4,
+          "mood_context": "content",
+          "confidence": 0.85
+        },
+        "semantic_context": "Inferred from input: 'I prefer dark roast coffee, black.'",
+        "importance_score": 0.55,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "food_preferences",
+        "previous_value": null,
+        "current_value": "prefers dark roast black coffee",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:08:00Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I prefer dark roast coffee, black.",
+            "event_index": 9
+          },
+          "source_conversation_timestamp": "2025-10-21T12:08:00Z"
+        }
+      },
+
+      {
+        "event_id": "evt_010",
+        "type": "ADD",
+        "summary": "User walks for 45 minutes each morning",
+        "timestamp": "2025-10-21T12:08:45Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["health", "commitment"],
+          "emotional_intensity": 0.55,
+          "mood_context": "determined",
+          "confidence": 0.88
+        },
+        "semantic_context": "Inferred from input: 'I walk for about 45 minutes every morning.'",
+        "importance_score": 0.65,
+        "confidence": 0.88,
+        "category": "activity_behavior",
+        "subcategory": "daily_routine",
+        "previous_value": null,
+        "current_value": "morning walk 45 minutes daily",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:08:45Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I walk for about 45 minutes every morning.",
+            "event_index": 10
+          },
+          "source_conversation_timestamp": "2025-10-21T12:08:45Z"
+        }
+      },
+
+      {
+        "event_id": "evt_011",
+        "type": "ADD",
+        "summary": "User watches anime on Sunday evenings",
+        "timestamp": "2025-10-21T12:09:30Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["relaxation", "entertainment"],
+          "emotional_intensity": 0.5,
+          "mood_context": "relaxed",
+          "confidence": 0.87
+        },
+        "semantic_context": "Inferred from input: 'I usually watch anime on Sunday evenings, it's my relaxation time.'",
+        "importance_score": 0.65,
+        "confidence": 0.87,
+        "category": "personal_preferences",
+        "subcategory": "entertainment_habit",
+        "previous_value": null,
+        "current_value": "watches anime Sunday evenings",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:09:30Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I usually watch anime on Sunday evenings.",
+            "event_index": 11
+          },
+          "source_conversation_timestamp": "2025-10-21T12:09:30Z"
+        }
+      },
+
+      {
+        "event_id": "evt_012",
+        "type": "ADD",
+        "summary": "User loves trying new restaurants",
+        "timestamp": "2025-10-21T12:10:15Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["adventure", "curiosity"],
+          "emotional_intensity": 0.7,
+          "mood_context": "adventurous",
+          "confidence": 0.83
+        },
+        "semantic_context": "Inferred from input: 'I love trying new restaurants and cuisines.'",
+        "importance_score": 0.7,
+        "confidence": 0.83,
+        "category": "personal_preferences",
+        "subcategory": "food_culture",
+        "previous_value": null,
+        "current_value": "loves exploring new restaurants",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:10:15Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I love trying new restaurants and cuisines.",
+            "event_index": 12
+          },
+          "source_conversation_timestamp": "2025-10-21T12:10:15Z"
+        }
+      },
+
+      {
+        "event_id": "evt_013",
+        "type": "ADD",
+        "summary": "User reads before bedtime",
+        "timestamp": "2025-10-21T12:11:00Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["relaxation", "routine"],
+          "emotional_intensity": 0.45,
+          "mood_context": "calm",
+          "confidence": 0.89
+        },
+        "semantic_context": "Inferred from input: 'I always read for 30 minutes before bed.'",
+        "importance_score": 0.6,
+        "confidence": 0.89,
+        "category": "activity_behavior",
+        "subcategory": "sleep_routine",
+        "previous_value": null,
+        "current_value": "reads 30 minutes before bedtime",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:11:00Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I always read for 30 minutes before bed.",
+            "event_index": 13
+          },
+          "source_conversation_timestamp": "2025-10-21T12:11:00Z"
+        }
+      },
+
+      {
+        "event_id": "evt_014",
+        "type": "UPDATE",
+        "summary": "User wants to learn Python programming",
+        "timestamp": "2025-10-21T12:12:00Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": ["ambition", "learning_goal"],
+          "emotional_intensity": 0.75,
+          "mood_context": "motivated",
+          "confidence": 0.91
+        },
+        "semantic_context": {
+          "related_facts": [],
+          "confidence_score": 0.91,
+          "context_type": "learning_goal",
+          "semantic_tags": ["programming", "skill_development"],
+          "similarity_hash": "def45678"
+        },
+        "importance_score": 0.85,
+        "confidence": 0.91,
+        "category": "personal_development",
+        "subcategory": "learning_goals",
+        "previous_value": null,
+        "current_value": "wants to learn Python programming",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-10-21T12:12:00Z",
+          "original_summary": "User expressing learning interest",
+          "context": "User: I've been wanting to learn Python to build projects.",
+          "source_conversation_timestamp": "2025-10-21T12:12:00Z"
+        }
+      }
+    ],
+
+  "vector_index": {
+    "evt_001": [0.12, 0.23, 0.34, 0.45, 0.56, 0.67, 0.78, 0.89],
+    "evt_002": [0.15, 0.25, 0.33, 0.48, 0.55, 0.68, 0.75, 0.90],
+    "evt_003": [0.11, 0.21, 0.31, 0.41, 0.51, 0.61, 0.71, 0.81],
+    "evt_004": [0.14, 0.24, 0.34, 0.44, 0.54, 0.64, 0.74, 0.84],
+    "evt_005": [0.16, 0.26, 0.36, 0.46, 0.56, 0.66, 0.76, 0.86],
+    "evt_006": [0.13, 0.23, 0.33, 0.43, 0.53, 0.63, 0.73, 0.83],
+    "evt_007": [0.14, 0.24, 0.34, 0.44, 0.54, 0.64, 0.74, 0.84],
+    "evt_008": [0.13, 0.24, 0.35, 0.45, 0.55, 0.65, 0.74, 0.82],
+    "evt_009": [0.17, 0.27, 0.37, 0.47, 0.57, 0.67, 0.77, 0.87],
+    "evt_010": [0.15, 0.25, 0.35, 0.45, 0.55, 0.64, 0.74, 0.84],
+    "evt_011": [0.12, 0.22, 0.32, 0.42, 0.52, 0.62, 0.72, 0.82],
+    "evt_012": [0.14, 0.24, 0.34, 0.44, 0.54, 0.64, 0.74, 0.84],
+    "evt_013": [0.13, 0.23, 0.33, 0.43, 0.53, 0.63, 0.73, 0.83],
+    "evt_014": [0.18, 0.28, 0.38, 0.48, 0.58, 0.68, 0.78, 0.88]
+  },
+
+  "clusters": {
+    "cluster_001": {
+      "topic": "Anime Preferences",
+      "label": "Sunday Evening Anime Time",
+      "centroid_vector": [0.13, 0.24, 0.33, 0.46, 0.55, 0.67, 0.77, 0.88],
+      "event_ids": ["evt_001", "evt_002", "evt_011"],
+      "coherence_score": 0.94,
+      "last_updated": "2025-10-21T12:09:30Z",
+      "metadata": {
+        "dominant_tags": ["anime", "weekends", "Sundays", "watching habits", "entertainment"],
+        "cluster_type": "personal_preferences",
+        "member_count": 3,
+        "average_confidence": 0.87,
+        "temporal_span": "5 days",
+        "creation_timestamp": "2025-10-16T17:08:03Z",
+        "activity_type": "entertainment_relaxation"
+      },
+      "insights": {
+        "primary_pattern": "Sunday_evening_relaxation",
+        "consistency": 0.94,
+        "emotional_tone": "relaxation_entertainment",
+        "frequency": "weekly"
+      }
+    },
+    "cluster_002": {
+      "topic": "Food & Culinary Interests",
+      "label": "Gourmet Food Adventures",
+      "centroid_vector": [0.12, 0.22, 0.32, 0.42, 0.52, 0.62, 0.72, 0.82],
+      "event_ids": ["evt_003", "evt_005", "evt_009", "evt_012"],
+      "coherence_score": 0.89,
+      "last_updated": "2025-10-21T12:10:15Z",
+      "metadata": {
+        "dominant_tags": ["food", "coffee", "Italian cuisine", "restaurants", "culinary_exploration"],
+        "cluster_type": "personal_preferences",
+        "member_count": 4,
+        "average_confidence": 0.84,
+        "temporal_span": "10 minutes",
+        "creation_timestamp": "2025-10-21T12:00:00Z",
+        "cuisine_focus": "italian_and_international"
+      },
+      "insights": {
+        "food_preference": "adventurous_explorer",
+        "coffee_specificity": "dark_roast_black",
+        "restaurant_behavior": "frequency_high",
+        "emotional_connection": "joy_and_satisfaction"
+      }
+    },
+    "cluster_003": {
+      "topic": "Morning Wellness Routine",
+      "label": "Daily Health & Wellness",
+      "centroid_vector": [0.14, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85],
+      "event_ids": ["evt_004", "evt_005", "evt_010"],
+      "coherence_score": 0.91,
+      "last_updated": "2025-10-21T12:08:45Z",
+      "metadata": {
+        "dominant_tags": ["health", "routine", "walking", "coffee", "morning", "exercise"],
+        "cluster_type": "habitual_behavior",
+        "member_count": 3,
+        "average_confidence": 0.86,
+        "temporal_span": "6 minutes",
+        "creation_timestamp": "2025-10-21T12:02:00Z",
+        "time_of_day": "morning"
+      },
+      "insights": {
+        "daily_routine": "consistent_morning",
+        "physical_activity": "45_minutes_walking",
+        "wellness_score": "high_commitment",
+        "time_investment": "structured_schedule"
+      }
+    },
+    "cluster_004": {
+      "topic": "Reading Interests",
+      "label": "Literary Escape - Sci-Fi & Fantasy",
+      "centroid_vector": [0.13, 0.23, 0.34, 0.44, 0.54, 0.63, 0.73, 0.83],
+      "event_ids": ["evt_006", "evt_007", "evt_008", "evt_013"],
+      "coherence_score": 0.95,
+      "last_updated": "2025-10-21T12:11:00Z",
+      "metadata": {
+        "dominant_tags": ["books", "fantasy", "science fiction", "reading", "novels", "Brandon Sanderson", "bedtime"],
+        "cluster_type": "personal_preferences",
+        "member_count": 4,
+        "average_confidence": 0.89,
+        "temporal_span": "6 minutes",
+        "creation_timestamp": "2025-10-21T12:05:00Z",
+        "reading_context": "both_entertainment_and_sleep"
+      },
+      "insights": {
+        "favorite_author": "Brandon Sanderson",
+        "genre_preference": "fantasy_primary_scifi_secondary",
+        "reading_time": "bedtime_30_minutes",
+        "consistency": "daily_habit",
+        "emotional_engagement": "very_high_0.89"
+      }
+    },
+    "cluster_005": {
+      "topic": "Learning Goals",
+      "label": "Programming & Skill Development",
+      "centroid_vector": [0.18, 0.28, 0.38, 0.48, 0.58, 0.68, 0.78, 0.88],
+      "event_ids": ["evt_014"],
+      "coherence_score": 1.0,
+      "last_updated": "2025-10-21T12:12:00Z",
+      "metadata": {
+        "dominant_tags": ["programming", "Python", "learning", "goals", "projects", "skill_development"],
+        "cluster_type": "personal_development",
+        "member_count": 1,
+        "average_confidence": 0.91,
+        "temporal_span": "N/A",
+        "creation_timestamp": "2025-10-21T12:12:00Z",
+        "status": "new_goal"
+      },
+      "insights": {
+        "learning_target": "Python_programming",
+        "motivation": "project_based_learning",
+        "confidence": "high_0.91",
+        "learning_style": "hands_on_projects",
+        "expansion_potential": "high"
+      }
+    }
+  }
+  },
+
+  "conversation": [
+    {
+      "timestamp": "2025-10-21T12:00:00Z",
+      "role": "user",
+      "text": "I love Italian food, especially pasta."
+    },
+    {
+      "timestamp": "2025-10-21T12:00:30Z",
+      "role": "assistant",
+      "text": "Italian cuisine is amazing! Do you prefer pasta or pizza more?"
+    },
+    {
+      "timestamp": "2025-10-21T12:02:00Z",
+      "role": "user",
+      "text": "I usually go for morning walks."
+    },
+    {
+      "timestamp": "2025-10-21T12:02:30Z",
+      "role": "assistant",
+      "text": "Morning walks are refreshing! How long do you usually walk?"
+    },
+    {
+      "timestamp": "2025-10-21T12:03:30Z",
+      "role": "user",
+      "text": "I always have coffee in the morning."
+    },
+    {
+      "timestamp": "2025-10-21T12:04:00Z",
+      "role": "assistant",
+      "text": "Coffee is a great start to the day! Do you prefer it black or with milk?"
+    },
+    {
+      "timestamp": "2025-10-21T12:05:00Z",
+      "role": "user",
+      "text": "I enjoy reading sci-fi novels."
+    },
+    {
+      "timestamp": "2025-10-21T12:05:30Z",
+      "role": "assistant",
+      "text": "Sci-fi is exciting! Do you read fantasy as well?"
+    },
+    {
+      "timestamp": "2025-10-21T12:06:00Z",
+      "role": "user",
+      "text": "Actually, I also like fantasy novels."
+    },
+    {
+      "timestamp": "2025-10-21T12:06:30Z",
+      "role": "assistant",
+      "text": "Great! Sci-fi and fantasy both open up amazing worlds. Any favorite authors?"
+    },
+    {
+      "timestamp": "2025-10-21T12:07:15Z",
+      "role": "user",
+      "text": "Brandon Sanderson is my favorite author! His world-building is incredible."
+    },
+    {
+      "timestamp": "2025-10-21T12:07:45Z",
+      "role": "assistant",
+      "text": "Brandon Sanderson is legendary! Have you read the Mistborn series?"
+    },
+    {
+      "timestamp": "2025-10-21T12:08:00Z",
+      "role": "user",
+      "text": "Yes, I prefer dark roast coffee, black. And I walk for about 45 minutes every morning."
+    },
+    {
+      "timestamp": "2025-10-21T12:08:30Z",
+      "role": "assistant",
+      "text": "That's quite a commitment! Do you walk every single day, or is it on weekdays?"
+    },
+    {
+      "timestamp": "2025-10-21T12:09:30Z",
+      "role": "user",
+      "text": "I usually watch anime on Sunday evenings, it's my relaxation time."
+    },
+    {
+      "timestamp": "2025-10-21T12:10:00Z",
+      "role": "assistant",
+      "text": "Sunday anime sounds like the perfect wind-down ritual! What anime are you watching?"
+    },
+    {
+      "timestamp": "2025-10-21T12:10:15Z",
+      "role": "user",
+      "text": "I love trying new restaurants and cuisines. It's one of my favorite things to do!"
+    },
+    {
+      "timestamp": "2025-10-21T12:10:45Z",
+      "role": "assistant",
+      "text": "That's a wonderful hobby! Have you discovered any hidden gems lately?"
+    },
+    {
+      "timestamp": "2025-10-21T12:11:00Z",
+      "role": "user",
+      "text": "I always read for 30 minutes before bed. It helps me wind down."
+    },
+    {
+      "timestamp": "2025-10-21T12:11:30Z",
+      "role": "assistant",
+      "text": "A bedtime reading routine is so calming. What are you currently reading?"
+    },
+    {
+      "timestamp": "2025-10-21T12:12:00Z",
+      "role": "user",
+      "text": "I've been wanting to learn Python to build projects. Maybe some web apps."
+    },
+    {
+      "timestamp": "2025-10-21T12:12:30Z",
+      "role": "assistant",
+      "text": "Python is excellent for web development! Have you started learning yet?"
+    }
+  ],
+
+  "fact_history": {
+    "personal_preferences": {
+      "likes": [
+        {
+          "item": "likes watching anime during weekends",
+          "update_item": "prefers watching anime only on Sundays",
+          "added": "2025-10-16",
+          "updated": "2025-10-20",
+          "score": 0.90,
+          "event_references": ["evt_001", "evt_002", "evt_011"]
+        },
+        {
+          "item": "enjoys Italian cuisine",
+          "added": "2025-10-21",
+          "score": 0.85,
+          "event_references": ["evt_003"]
+        },
+        {
+          "item": "enjoys morning walks",
+          "added": "2025-10-21",
+          "score": 0.8,
+          "event_references": ["evt_004", "evt_010"]
+        },
+        {
+          "item": "enjoys morning coffee",
+          "update_item": "prefers dark roast black coffee",
+          "added": "2025-10-21",
+          "updated": "2025-10-21",
+          "score": 0.85,
+          "event_references": ["evt_005", "evt_009"]
+        },
+        {
+          "item": "enjoys sci-fi novels",
+          "update_item": "enjoys sci-fi and fantasy novels",
+          "added": "2025-10-21",
+          "updated": "2025-10-21",
+          "score": 0.88,
+          "event_references": ["evt_006", "evt_007"]
+        },
+        {
+          "item": "favorite author Brandon Sanderson",
+          "added": "2025-10-21",
+          "score": 0.92,
+          "event_references": ["evt_008"]
+        },
+        {
+          "item": "loves trying new restaurants",
+          "added": "2025-10-21",
+          "score": 0.83,
+          "event_references": ["evt_012"]
+        },
+        {
+          "item": "reads before bedtime",
+          "added": "2025-10-21",
+          "score": 0.89,
+          "event_references": ["evt_013"]
+        }
+      ],
+      "dislikes": [],
+      "avoid": [],
+      "always": [
+        {
+          "item": "always reads 30 minutes before bed",
+          "score": 0.89,
+          "event_references": ["evt_013"]
+        },
+        {
+          "item": "always drinks morning coffee",
+          "score": 0.85,
+          "event_references": ["evt_005", "evt_009"]
+        },
+        {
+          "item": "always walks in morning",
+          "score": 0.88,
+          "event_references": ["evt_004", "evt_010"]
+        }
+      ],
+      "style": [],
+      "conditional": [
+        {
+          "item": "watches anime on Sundays only",
+          "condition": "Sunday evenings",
+          "score": 0.94,
+          "event_references": ["evt_011"]
+        },
+        {
+          "item": "explores new restaurants regularly",
+          "condition": "leisure time",
+          "score": 0.83,
+          "event_references": ["evt_012"]
+        }
+      ],
+      "interests": [
+        {
+          "category": "reading",
+          "genres": ["sci-fi", "fantasy"],
+          "favorite_author": "Brandon Sanderson",
+          "reading_time": "bedtime_30_min",
+          "score": 0.89
+        },
+        {
+          "category": "entertainment",
+          "type": "anime",
+          "frequency": "weekly_sunday_evening",
+          "score": 0.94
+        },
+        {
+          "category": "wellness",
+          "activities": ["morning_walks_45min", "black_coffee"],
+          "score": 0.86
+        },
+        {
+          "category": "culinary",
+          "behavior": "adventurous_explorer",
+          "style": "trying_new_restaurants",
+          "score": 0.83
+        }
+      ]
+    },
+    "activity_behavior": {
+      "morning_routine": {
+        "items": ["walk_45_minutes", "black_coffee"],
+        "frequency": "daily",
+        "consistency": 0.88,
+        "event_references": ["evt_004", "evt_005", "evt_010"]
+      },
+      "evening_routine": {
+        "items": ["read_30_minutes"],
+        "frequency": "daily",
+        "consistency": 0.89,
+        "event_references": ["evt_013"]
+      },
+      "weekly_patterns": {
+        "sunday_evening": "anime_watching",
+        "consistency": 0.94,
+        "event_references": ["evt_011"]
+      }
+    },
+    "personal_development": {
+      "learning_goals": [
+        {
+          "goal": "learn Python programming",
+          "motivation": "build_projects",
+          "status": "not_started",
+          "priority": "high",
+          "confidence": 0.91,
+          "event_references": ["evt_014"]
+        }
+      ]
+    },
+    "name": ["Astra"],
+    "user_profile": {
+      "personality": "adventurous, disciplined, bookish, tech_interested",
+      "interests": ["reading", "anime", "food_exploration", "programming", "wellness"],
+      "consistency_score": 0.89,
+      "engagement_level": "high"
+    }
+  },
+
+  "sessions": {
+    "session_001": {
+      "started_at": "2025-10-21T11:50:00Z",
+      "ended_at": "2025-10-21T12:30:00Z",
+      "duration_seconds": 2400,
+      "conversation_events": ["evt_001","evt_002","evt_003","evt_004","evt_005","evt_006","evt_007","evt_008","evt_009","evt_010","evt_011","evt_012","evt_013","evt_014"],
+      "total_events": 14,
+      "topics_covered": ["anime", "food", "morning_routine", "reading", "authors", "coffee", "walking", "restaurants", "bedtime_reading", "learning_goals"],
+      "conversation_pairs": 22,
+      "session_quality": "excellent",
+      "engagement_level": "high"
+    }
+  },
+
+  "current_session": "session_001",
+
+   "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": true,
+    "established_user": true
+  },
+
+  "memory_categories": {
+    "user_identity": {
+      "name": "Astra",
+      "pronouns": "not_specified",
+      "status": "established_user"
+    },
+    "personal_preferences": {
+      "reading": ["sci-fi", "fantasy"],
+      "favorite_author": "Brandon Sanderson",
+      "food": ["Italian", "culinary_adventures"],
+      "coffee": "dark_roast_black",
+      "entertainment": "anime_sunday_evenings"
+    },
+    "task_project_tracking": {},
+    "activity_behavior": {
+      "morning_routine": {
+        "walk": "45_minutes_daily",
+        "coffee": "morning_essential",
+        "consistency": "very_high"
+      },
+      "evening_routine": {
+        "reading": "30_minutes_before_bed",
+        "consistency": "daily"
+      },
+      "weekly": {
+        "sunday_anime": "relaxation_time"
+      }
+    },
+    "user_instructions": {},
+    "current_state": {
+      "mood": "engaged",
+      "topic_interest": "diverse",
+      "openness": "high"
+    },
+    "personal_development": {
+      "learning_goals": ["Python_programming"],
+      "motivation": "project_based",
+      "priority": "high"
+    },
+    "communication_boundaries": {},
+    "contextual_rules": {},
+    "multi_identity": {},
+    "knowledge_expertise": {},
+    "tool_integration": {},
+    "response_adaptation": {},
+    "file_media": {},
+    "long_term_goals": {
+      "programming": "build_web_applications",
+      "culinary": "explore_global_cuisines"
+    },
+    "collaborator_relationships": {},
+    "data_privacy": {
+      "preferences": "stored",
+      "retention": "permanent"
+    },
+    "multimodal_preferences": {},
+    "system_awareness": {},
+    "session_themes": {
+      "current": "preference_discovery",
+      "emotional_arc": "positive_engagement"
+    },
+    "meta_memory": {
+      "events_created": 14,
+      "clusters_created": 5,
+      "last_reorganization": "2025-10-21T12:12:00Z"
+    },
+    "temporal_patterns": {
+      "morning_activity": "daily_45min_walk",
+      "weekly_pattern": "sunday_anime",
+      "bedtime": "30min_reading"
+    },
+    "search_external_info": {},
+    "greeting_patterns": {
+      "first_interaction": "2025-10-16T17:08:03Z",
+      "relationship_status": "established"
+    },
+    "conversation_analytics": {
+      "total_exchanges": 22,
+      "session_duration": "40_minutes",
+      "topics_discussed": 10,
+      "engagement": "high"
+    },
+    "news_weather_history": {},
+    "timezone_preferences": {}
+  },
+
+  "category_relationships": {},
+
+  "behavioral_adaptation": {
+    "response_style_preferences": {},
+    "communication_adaptations": {},
+    "learned_patterns": {},
+    "user_feedback_integration": {}
+  },
+
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  }
+}
+

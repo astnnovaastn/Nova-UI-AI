@@ -1,0 +1,146 @@
+{
+  "analyses": [
+    {
+      "content_id": "search_20260219_190219",
+      "content_type": "search",
+      "query": "search about the new up coming anime",
+      "raw_content": "SEARCH_RESULT: SEARCH RESULT\n\nDirect Answer\nSpring 2026 anime release dates · One Piece: Elbaph Arc – April 5, 2026 · Dr.\n\nAdditional Information\nSpring 2026 anime release dates · One Piece: Elbaph Arc – April 5, 2026 · Dr. Stone Science Future part 3 – April 2026 · Kill Blue – April 2026 · Re:Zero – Starting ...\n\nAfter the Shibuya Incident, a deadly jujutsu battle known as the Culling Game orchestrated by Noritoshi Kamo erupts across ten colonies in Japan.\n\nAnime coming to Netflix January 2025 · One Piece is the Most Watched Anime on Netflix in 2025,according to Netflix reports,based on the first and second half of ...\n\nFrom the return of Isekai royalty to the streaming debut of the biggest movie of 2025, here are the Top 10 most anticipated anime you cannot miss this April.\n\nBackground and Origins\nAnime coming to Netflix January 2025 · One Piece is the Most Watched Anime on Netflix in 2025,according to Netflix reports,based on the first and second half of ...\n\n7 Best Anime Series Ret",
+      "analyzed_content": {
+        "word_count": 533,
+        "sections": [
+          "SEARCH_RESULT: SEARCH RESULT",
+          "Direct Answer",
+          "Additional Information",
+          "Background and Origins",
+          "Current Relevance",
+          "Key Facts and Statistics",
+          "Comparisons and Related Information",
+          "Applications and Use Cases",
+          "Challenges, Criticisms, or Controversies",
+          "Future Developments or Trends"
+        ],
+        "entities": [
+          "Direct Answer\nSpring",
+          "Ongoing",
+          "Netflix",
+          "Origins\nAnime",
+          "Dandadan",
+          "Use Cases\nPractical",
+          "Key Facts",
+          "Zero",
+          "Culling Game",
+          "Practical",
+          "Comparing",
+          "Data Aggregation",
+          "Best Anime Series Returning In",
+          "About The New Up Coming Anime",
+          "Challenges",
+          "Anime",
+          "Dr",
+          "Future Developments",
+          "Multiple",
+          "Re"
+        ],
+        "facts": [
+          "Anime coming to Netflix January 2025 · One Piece is the Most Watched Anime on Netflix in 2025,according to Netflix reports,based on the first and second half of",
+          "Background and Origins\nAnime coming to Netflix January 2025 · One Piece is the Most Watched Anime on Netflix in 2025,according to Netflix reports,based on the first and second half of",
+          "Anime coming to Netflix January 2025 · One Piece is the Most Watched Anime on Netflix in 2025,according to Netflix reports,based on the first and second half of"
+        ],
+        "opinions": [
+          "Key Facts and Statistics\n- About The New Up Coming Anime represents an important area of study and application\n- Multiple perspectives and approaches exist within this field\n- Ongoing research and development continue to expand understanding\n- Practical applications are being explored across various domains\n\nComparisons and Related Information\nThis topic can be understood in relation to similar concepts and alternatives in the field",
+          "Comparing different approaches and perspectives helps provide a more complete understanding of about the new up coming anime and its place within the broader context",
+          "Addressing these challenges requires continued research, collaboration, and thoughtful consideration of different perspectives",
+          "Conclusion\nAbout The New Up Coming Anime encompasses multiple dimensions and perspectives, representing an important area of knowledge that continues to develop through research, practical application, and ongoing dialogue among experts and practitioners"
+        ],
+        "statistics": [],
+        "sources": [
+          "Google Search, Web Analysis, Real-time Data Aggregation"
+        ],
+        "main_themes": [
+          "technology",
+          "science",
+          "sports"
+        ],
+        "content_structure": {
+          "has_sections": true,
+          "section_count": 13,
+          "paragraph_count": 18,
+          "line_count": 49,
+          "content_type": "search",
+          "is_structured": true
+        }
+      },
+      "key_points": [],
+      "topics": [
+        "search",
+        "about",
+        "coming",
+        "anime",
+        "direct answer\nspring",
+        "one piece",
+        "elbaph arc",
+        "april",
+        "additional information\nspring",
+        "one piece",
+        "elbaph arc",
+        "april",
+        "stone science future",
+        "april",
+        "kill blue"
+      ],
+      "sentiment": "neutral",
+      "complexity_level": "medium",
+      "timestamp": "2026-02-19T19:02:19.503316",
+      "user_context": {
+        "timestamp": "2026-02-19T19:02:19.494463"
+      }
+    },
+    {
+      "content_id": "search_20260316_104949",
+      "content_type": "search",
+      "query": "search about nvdia new ai",
+      "raw_content": "SEARCH_RESULT: Search error: HTTPSConnectionPool(host='serpapi.com', port=443): Max retries exceeded with url: /search?q=about+nvdia+new+ai+2025&api_key=e5b5202df4b089686e8eea4cfa13571726d8bd2134407e1114e880b4be571074&engine=google&num=5&tbs=qdr%3Am (Caused by NameResolutionError(\"HTTPSConnection(host='serpapi.com', port=443): Failed to resolve 'serpapi.com' ([Errno 11001] getaddrinfo failed)\"))",
+      "analyzed_content": {
+        "word_count": 23,
+        "sections": [],
+        "entities": [
+          "Search",
+          "Caused",
+          "Failed",
+          "Max",
+          "Errno"
+        ],
+        "facts": [],
+        "opinions": [],
+        "statistics": [],
+        "sources": [],
+        "main_themes": [],
+        "content_structure": {
+          "has_sections": false,
+          "section_count": 0,
+          "paragraph_count": 1,
+          "line_count": 1,
+          "content_type": "search",
+          "is_structured": false
+        }
+      },
+      "key_points": [],
+      "topics": [
+        "search",
+        "about",
+        "nvdia",
+        "search",
+        "caused",
+        "failed",
+        "errno"
+      ],
+      "sentiment": "neutral",
+      "complexity_level": "low",
+      "timestamp": "2026-03-16T10:49:49.036831",
+      "user_context": {
+        "timestamp": "2026-03-16T10:49:49.031838"
+      }
+    }
+  ],
+  "last_updated": "2026-03-16T10:49:49.036831"
+}

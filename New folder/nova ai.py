@@ -38,6 +38,28 @@ performance optimization, and specialized knowledge.
   latest news - Get general news summary
   news from <source> - Get news from specific sources
 
+🌤️ WEATHER COMMANDS:
+  weather in <city> - Get current weather for any city
+  what's the weather in <city> - Current weather conditions
+  temperature in <city> - Get temperature information
+  weather forecast for <city> - Get 5-day weather forecast
+  will it rain in <city> - Check for rain forecast
+
+🎬 VIDEO ANALYSIS COMMANDS:
+  analyze this video <url> - Comprehensive AI analysis of any video
+  look at this video <url> - Analyze video content and provide insights
+  summarize this video <url> - Get a detailed summary of video content
+  watch this video for me <url> - AI-powered video analysis
+  review this video <url> - Professional video content review
+
+🎵 MUSIC COMMANDS:
+  play <song name> - Search and play music on YouTube
+  play <artist> - <song> - Play specific artist's song
+  search for <song/artist> - Find music without playing
+  show lyrics for <song> - Get lyrics information (copyright compliant)
+  what's playing? - Show current track information
+  music history - Show recently played songs
+
 🔧 TECHNICAL FEATURES:
   • Intelligent caching with LRU eviction
   • Multi-model fallback (llama3-70b → llama3-8b → original)
@@ -52,7 +74,34 @@ License: MIT
 """
 
 import asyncio
-import groq
+# import groq  # Using custom groq client instead
+try:
+    # Import our working groq client
+    import sys
+    import os
+
+    # Add the root directory to the path to find groq_client_fix.py
+    root_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    if root_dir not in sys.path:
+        sys.path.insert(0, root_dir)
+
+    from groq_client_fix import GroqClient
+
+    # Create a groq module-like object for compatibility
+    class GroqModule:
+        Client = GroqClient
+
+    groq = GroqModule()
+    # Silently using working Groq client
+except ImportError as e:
+    # Silently handle Groq client import issues
+    # Fall back to standard groq library
+    try:
+        import groq
+        # Silently using standard Groq library
+    except ImportError:
+        # Silently using mock client
+        groq = None
 import json
 import logging
 import os
@@ -70,6 +119,14 @@ import threading
 import hashlib
 import sqlite3
 import pickle
+
+# Silence noisy third-party loggers that clutter the terminal (e.g., comtypes)
+try:
+    logging.getLogger('comtypes').setLevel(logging.WARNING)
+    logging.getLogger('comtypes.client').setLevel(logging.WARNING)
+    logging.getLogger('comtypes.client._code_cache').setLevel(logging.WARNING)
+except Exception:
+    pass
 import requests
 from dotenv import load_dotenv
 try:
@@ -80,6 +137,10 @@ try:
     import psutil
 except ImportError:
     psutil = None  # Optional dependency
+try:
+    import dateutil.parser
+except ImportError:
+    dateutil = None  # Optional dependency
 import weakref
 import gc
 import uuid
@@ -89,9 +150,55 @@ from enum import Enum
 # Load environment variables
 load_dotenv()
 
+# Configure default model name and LLM API key from environment
+MODEL_NAME = os.getenv('AI_MODEL', 'llama-3.3-70b-versatile')
+LLM_API_KEY = os.getenv('LLM_API_KEY')
+if LLM_API_KEY is None:
+    # Do not store secrets in code — require user to set env var
+    print('[WARNING] LLM API key not set. Set the LLM_API_KEY environment variable to enable hosted model access.')
+
 # Get API keys
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+# Mock groq client for compatibility
+class MockMessage:
+    def __init__(self):
+        self.content = "I'm a mock AI response. In a real implementation, I would provide helpful information based on your query."
+
+class MockChoice:
+    def __init__(self):
+        self.message = MockMessage()
+
+class MockResponse:
+    def __init__(self):
+        self.choices = [MockChoice()]
+        self.usage = {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}
+
+class MockCompletions:
+    """Mock completions"""
+    def create(self, **kwargs):
+        """Mock create method that returns a simple response"""
+        return MockResponse()
+
+class MockChatCompletions:
+    """Mock chat completions"""
+    def __init__(self):
+        self.completions = MockCompletions()
+
+class MockGroqClient:
+    """Mock groq client to prevent import errors"""
+    def __init__(self, api_key=None, timeout=None):
+        self.api_key = api_key
+        self.timeout = timeout
+        self.chat = MockChatCompletions()
+
+# Create mock groq module (disabled - using real groq)
+# class MockGroq:
+#     Client = MockGroqClient
+#
+# groq = MockGroq()
 
 # Import news system
 try:
@@ -100,8 +207,240 @@ try:
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
     from services.news_summary import NewsSummarySystem
 except ImportError:
-    print("Warning: News system not available. Install required dependencies.")
+    # Silently handle missing news system
     NewsSummarySystem = None
+
+# Import enhanced news system
+try:
+    from services.enhanced_news_system import EnhancedNewsSystem
+    ENHANCED_NEWS_AVAILABLE = True
+except ImportError:
+    try:
+        from astra_ai.services.enhanced_news_system import EnhancedNewsSystem
+        ENHANCED_NEWS_AVAILABLE = True
+    except ImportError:
+        # Silently handle missing enhanced news system
+        EnhancedNewsSystem = None
+        ENHANCED_NEWS_AVAILABLE = False
+
+# Import weather system
+try:
+    from astra_ai.services.weather_service import WeatherService
+except ImportError:
+    try:
+        from services.weather_service import WeatherService
+    except ImportError:
+        # Silently handle missing weather system
+        WeatherService = None
+
+# Import video analyzer system
+try:
+    from astra_ai.services.video_analyzer import VideoAnalyzer
+except ImportError:
+    try:
+        from services.video_analyzer import VideoAnalyzer
+    except ImportError:
+        # Silently handle missing video analyzer system
+        VideoAnalyzer = None
+
+# Music system removed: disable music service entirely
+MusicService = None
+
+# Import comprehensive memory integration system
+try:
+    from nova_memory_integration import NovaMemoryIntegration, get_memory_integration
+    COMPREHENSIVE_MEMORY_AVAILABLE = True
+except ImportError:
+    try:
+        from core.nova_memory_integration import NovaMemoryIntegration, get_memory_integration
+        COMPREHENSIVE_MEMORY_AVAILABLE = True
+    except ImportError:
+        try:
+            from astra_ai.core.nova_memory_integration import NovaMemoryIntegration, get_memory_integration
+            COMPREHENSIVE_MEMORY_AVAILABLE = True
+        except ImportError:
+            # Silently handle missing comprehensive memory system
+            NovaMemoryIntegration = None
+            get_memory_integration = None
+            COMPREHENSIVE_MEMORY_AVAILABLE = False
+
+# Import unified memory integration system
+try:
+    from unified_memory_integration import UnifiedMemoryIntegration
+    UNIFIED_MEMORY_AVAILABLE = True
+except ImportError:
+    try:
+        from memory.unified_memory_integration import UnifiedMemoryIntegration
+        UNIFIED_MEMORY_AVAILABLE = True
+    except ImportError:
+        try:
+            from astra_ai.memory.unified_memory_integration import UnifiedMemoryIntegration
+            UNIFIED_MEMORY_AVAILABLE = True
+        except ImportError:
+            # Silently handle missing unified memory system
+            UnifiedMemoryIntegration = None
+            UNIFIED_MEMORY_AVAILABLE = False
+
+
+            # Adapter to expose a compatible interface for existing comprehensive memory integration
+            class Mem0IntegrationAdapter:
+                """Adapter that exposes a minimal NovaMemoryIntegration-like interface backed by mem0."""
+                def __init__(self, agent):
+                    self.agent = agent
+                    self.is_enabled = True
+
+                @property
+                def memory_system(self):
+                    # If agent exposes an internal memory_system, return it; otherwise provide a thin shim
+                    memsys = getattr(self.agent, 'memory_system', None)
+                    if memsys:
+                        return memsys
+
+                    class _Shim:
+                        def __init__(self, agent):
+                            self._agent = agent
+                            self.data = {}
+
+                        def save_memory(self):
+                            # mem0 agent persists via its client; no-op fallback
+                            return True
+
+                    return _Shim(self.agent)
+
+                async def process_conversation(self, user_message: str, ai_response: str, metadata: dict = None):
+                    try:
+                        await asyncio.to_thread(self.agent.process_conversation, user_message, ai_response)
+                        return True
+                    except Exception:
+                        return False
+
+                async def get_memory_context(self, user_message: str, mode: str = "comprehensive") -> dict:
+                    try:
+                        return await asyncio.to_thread(self.agent.get_memory_context, user_message)
+                    except Exception:
+                        return {}
+
+                def get_conversation_history(self):
+                    # Try to retrieve recent conversation summaries if supported
+                    try:
+                        if hasattr(self.agent, 'get_conversation_history'):
+                            return self.agent.get_conversation_history()
+                    except Exception:
+                        pass
+                    return []
+
+                async def query_memories(self, user_message: str, mode: str = "general") -> dict:
+                    try:
+                        results = await asyncio.to_thread(self.agent.retrieve_memories, user_message, limit=5)
+                        return {"success": True, "memories": results, "summary": "", "total_items": len(results)}
+                    except Exception:
+                        return {"success": False}
+
+                def get_comprehensive_user_profile(self):
+                    try:
+                        if hasattr(self.agent, 'get_user_profile'):
+                            return self.agent.get_user_profile()
+                    except Exception:
+                        pass
+                    return {}
+
+                def what_do_you_know_about_me(self):
+                    profile = self.get_comprehensive_user_profile()
+                    if not profile:
+                        return "I don't have much yet — I'm learning as we talk."
+                    # Minimal friendly summary
+                    try:
+                        info = profile.get('user_info', {})
+                        name = info.get('name', 'there')
+                        facts = profile.get('facts', {})
+                        return f"Hello {name}! I remember {len(facts)} thing(s) about you."
+                    except Exception:
+                        return "I have some information saved about you."
+
+# Import smart greeting system
+SMART_GREETING_AVAILABLE = False
+SmartGreetingSystem = None
+get_greeting_system = None
+
+try:
+    # Add current directory to path for imports
+    current_dir = Path(__file__).parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+
+    from smart_greeting_system import SmartGreetingSystem, get_greeting_system
+    SMART_GREETING_AVAILABLE = True
+    # Silently imported
+except ImportError as e1:
+    try:
+        from astra_ai.core.smart_greeting_system import SmartGreetingSystem, get_greeting_system
+        SMART_GREETING_AVAILABLE = True
+        # Silently imported
+    except ImportError as e2:
+        # Silently handle missing smart greeting system
+        SmartGreetingSystem = None
+        get_greeting_system = None
+        SMART_GREETING_AVAILABLE = False
+
+# Import task management system
+try:
+    from task_management import TaskManager, TaskNLPProcessor, TaskStatus, TaskPriority
+    TASK_MANAGEMENT_AVAILABLE = True
+except ImportError:
+    try:
+        from core.task_management import TaskManager, TaskNLPProcessor, TaskStatus, TaskPriority
+        TASK_MANAGEMENT_AVAILABLE = True
+    except ImportError:
+        try:
+            from astra_ai.core.task_management import TaskManager, TaskNLPProcessor, TaskStatus, TaskPriority
+            TASK_MANAGEMENT_AVAILABLE = True
+        except ImportError:
+            # Silently handle missing task management system
+            TaskManager = None
+            TaskNLPProcessor = None
+            TaskStatus = None
+            TaskPriority = None
+            TASK_MANAGEMENT_AVAILABLE = False
+
+# Import AI vision system
+AI_VISION_AVAILABLE = False
+AIVisionSystem = None
+VisionAnalysis = None
+
+try:
+    # Add current directory to path for imports
+    import sys
+    current_dir = Path(__file__).parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+
+    from ai_vision_system import AIVisionSystem, VisionAnalysis
+    AI_VISION_AVAILABLE = True
+    # Silently imported
+except ImportError as e1:
+    try:
+        from astra_ai.core.ai_vision_system import AIVisionSystem, VisionAnalysis
+        AI_VISION_AVAILABLE = True
+        # Silently imported
+    except ImportError as e2:
+        # Silently handle missing AI vision system
+        AIVisionSystem = None
+        VisionAnalysis = None
+        AI_VISION_AVAILABLE = False
+
+# Import conversation analytics system
+try:
+    from conversation_analytics import ConversationAnalytics, get_analytics_system
+    CONVERSATION_ANALYTICS_AVAILABLE = True
+except ImportError:
+    try:
+        from astra_ai.core.conversation_analytics import ConversationAnalytics, get_analytics_system
+        CONVERSATION_ANALYTICS_AVAILABLE = True
+    except ImportError:
+        # Silently handle missing conversation analytics system
+        ConversationAnalytics = None
+        get_analytics_system = None
+        CONVERSATION_ANALYTICS_AVAILABLE = False
 
 # ============================================================================
 # INTEGRATED NOVA SEARCH CLASS
@@ -157,6 +496,10 @@ class NovaSearch:
 
         # Generate a natural language answer
         answer = self._generate_answer(processed_results, query, search_type, summarize=summarize)
+        
+        # Add SEARCH_RESULT prefix for UI detection
+        if not answer.startswith("SEARCH_RESULT:"):
+            answer = f"SEARCH_RESULT: {answer}"
 
         # Store results for later reference
         self.last_results = {
@@ -440,14 +783,14 @@ class NovaSearch:
     
     def _generate_answer(self, results: List[Dict[str, Any]], query: str, search_type: str, summarize: Optional[bool] = None) -> str:
         """
-        Generate a natural, well-written summary or full details from all search results,
-        with no links and improved detail.
+        Generate a comprehensive, well-formatted analysis from search results.
+        Creates professional, structured responses with insights and trends.
         """
         if not results:
             return f"No information found about '{query}'."
 
         if results[0].get("type") == "error":
-            return f"Search error: {results[0].get('message')}"
+            return f"SEARCH_RESULT: Search error: {results[0].get('message')}"
 
         # Use knowledge graph or answer box if present
         kg_result = next((r for r in results if r.get("type") == "knowledge_graph"), None)
@@ -455,78 +798,447 @@ class NovaSearch:
         web_results = [r for r in results if r.get("type") == "web_result"]
         news_results = [r for r in results if r.get("type") == "news_result"]
 
-        # If user specifically requested a summary
+        # If user specifically requested a summary, provide the basic format
         if summarize is True:
-            # Generate a concise summary
-            summary_parts = []
-            if kg_result:
-                summary_parts.append(kg_result.get("description", ""))
-                if kg_result.get("attributes"):
-                    for key, value in kg_result["attributes"].items():
-                        summary_parts.append(f"{key}: {value}")
-            if ab_result:
-                summary_parts.append(ab_result.get("answer", ab_result.get("snippet", "")))
-            snippets = []
-            for r in (web_results + news_results):
-                snippet = r.get("snippet", "")
-                if snippet and snippet not in snippets:
-                    snippets.append(snippet)
-                if len(snippets) >= 3:  # Limit for summary
-                    break
-            # Combine all into a concise summary
-            all_text = " ".join(summary_parts + snippets)
-            if not all_text.strip():
-                return f"No good summary found for '{query}'."
-            # Remove duplicate sentences and links
-            sentences = []
-            seen = set()
-            for s in re.split(r'(?<=[.!?])\s+', all_text):
-                s_clean = s.strip()
-                # Remove anything that looks like a URL
-                s_clean = re.sub(r'https?://\S+', '', s_clean)
-                if s_clean and s_clean not in seen:
-                    sentences.append(s_clean)
-                    seen.add(s_clean)
-            summary = " ".join(sentences[:3])  # Limit to 3 sentences for summary
-            summary += "\n\n_Sources: Google Search, top web results._"
-            return summary
+            return self._generate_basic_summary(kg_result, ab_result, web_results, news_results, query)
 
-        # Default behavior: Show full details (no summary unless requested)
-        details = []
+        # Generate comprehensive analysis
+        return self._generate_comprehensive_analysis(kg_result, ab_result, web_results, news_results, query, search_type)
+
+    def _generate_basic_summary(self, kg_result, ab_result, web_results, news_results, query):
+        """Generate a basic summary format"""
+        summary_parts = []
         if kg_result:
-            details.append(f"{kg_result.get('title','')}. {kg_result.get('description','')}")
+            summary_parts.append(kg_result.get("description", ""))
             if kg_result.get("attributes"):
                 for key, value in kg_result["attributes"].items():
-                    details.append(f"{key}: {value}")
+                    summary_parts.append(f"{key}: {value}")
         if ab_result:
-            details.append(f"{ab_result.get('title','')}. {ab_result.get('answer', ab_result.get('snippet',''))}")
+            summary_parts.append(ab_result.get("answer", ab_result.get("snippet", "")))
+        
+        snippets = []
         for r in (web_results + news_results):
-            # Show full title and snippet for each result
-            if r.get('title','') or r.get('snippet',''):
-                result_text = f"{r.get('title','')}. {r.get('snippet','')}"
-                if r.get('date',''):
-                    result_text += f" ({r.get('date','')})"
-                details.append(result_text)
+            snippet = r.get("snippet", "")
+            if snippet and snippet not in snippets:
+                snippets.append(snippet)
+            if len(snippets) >= 3:
+                break
         
-        # Join all details into comprehensive information
-        if not details:
-            return f"No detailed information found for '{query}'."
+        all_text = " ".join(summary_parts + snippets)
+        if not all_text.strip():
+            return f"No good summary found for '{query}'."
         
-        full_info = "\n\n".join([d for d in details if d.strip()])
-        full_info += "\n\n_Sources: Google Search, comprehensive web results._"
-        return full_info
+        # Clean up text
+        sentences = []
+        seen = set()
+        for s in re.split(r'(?<=[.!?])\s+', all_text):
+            s_clean = s.strip()
+            s_clean = re.sub(r'https?://\S+', '', s_clean)
+            if s_clean and s_clean not in seen:
+                sentences.append(s_clean)
+                seen.add(s_clean)
+        
+        summary = " ".join(sentences[:3])
+        summary += "\n\n_Sources: Google Search, top web results._"
+        return summary
+
+    def _generate_comprehensive_analysis(self, kg_result, ab_result, web_results, news_results, query, search_type):
+        """Generate comprehensive, structured analysis using the new SEARCH RESULT format"""
+
+        # Extract and organize information
+        all_results = []
+        if kg_result:
+            all_results.append(kg_result)
+        if ab_result:
+            all_results.append(ab_result)
+        all_results.extend(web_results)
+        all_results.extend(news_results)
+
+        # Build comprehensive response using the new format
+        response_parts = []
+
+        # Start with SEARCH RESULT header
+        response_parts.append("SEARCH RESULT\n")
+
+        # Direct Answer Section
+        direct_answer = self._create_direct_answer(kg_result, ab_result, web_results, query)
+        response_parts.append(f"Direct Answer\n{direct_answer}\n")
+
+        # Additional Information Section
+        additional_info = self._create_additional_information(all_results, query)
+        response_parts.append(f"Additional Information\n{additional_info}\n")
+
+        # Background and Origins Section
+        background = self._create_background_section(all_results, query)
+        response_parts.append(f"Background and Origins\n{background}\n")
+
+        # Current Relevance Section
+        relevance = self._create_current_relevance(all_results, query)
+        response_parts.append(f"Current Relevance\n{relevance}\n")
+
+        # Key Facts and Statistics Section
+        facts = self._create_key_facts(all_results, query)
+        response_parts.append(f"Key Facts and Statistics\n{facts}\n")
+
+        # Comparisons and Related Information Section
+        comparisons = self._create_comparisons(all_results, query)
+        response_parts.append(f"Comparisons and Related Information\n{comparisons}\n")
+
+        # Applications and Use Cases Section
+        applications = self._create_applications(all_results, query)
+        response_parts.append(f"Applications and Use Cases\n{applications}\n")
+
+        # Challenges, Criticisms, or Controversies Section
+        challenges = self._create_challenges(all_results, query)
+        response_parts.append(f"Challenges, Criticisms, or Controversies\n{challenges}\n")
+
+        # Future Developments or Trends Section
+        future = self._create_future_trends(all_results, query)
+        response_parts.append(f"Future Developments or Trends\n{future}\n")
+
+        # Conclusion Section
+        conclusion = self._create_enhanced_conclusion(query, all_results)
+        response_parts.append(f"Conclusion\n{conclusion}\n")
+
+        # Sources Section
+        sources = self._create_enhanced_sources(all_results)
+        response_parts.append(f"Sources\n{sources}")
+
+        # Join all parts and remove ** formatting
+        full_response = "\n".join(response_parts)
+        # Remove all ** formatting symbols
+        full_response = full_response.replace("**", "")
+
+        return full_response
+    
+    def _create_direct_answer(self, kg_result, ab_result, web_results, query):
+        """Create the direct answer section - concise, specific answer to the user's question"""
+        # Try to get the most direct answer first
+        if kg_result and kg_result.get("description"):
+            return kg_result["description"]
+
+        if ab_result and ab_result.get("answer"):
+            return ab_result["answer"]
+
+        # If no direct answer, extract from top web result
+        if web_results:
+            top_result = web_results[0]
+            snippet = top_result.get("snippet", "")
+            if snippet:
+                # Clean and format the snippet as a direct answer
+                sentences = snippet.split('. ')
+                if sentences:
+                    return sentences[0] + ('.' if not sentences[0].endswith('.') else '')
+
+        # Fallback: create a direct answer based on query analysis
+        query_lower = query.lower()
+        if "what is" in query_lower or "define" in query_lower:
+            topic = query_lower.replace("what is", "").replace("define", "").strip()
+            return f"{topic.title()} is a concept that requires further research for a complete definition."
+
+        return f"Information about {query} is available from multiple sources and perspectives."
+    
+    def _create_additional_information(self, all_results, query):
+        """Create comprehensive additional information section"""
+        info_parts = []
+
+        # Extract comprehensive details from all results
+        for result in all_results[:5]:  # Top 5 results for comprehensive info
+            if result.get("type") == "knowledge_graph":
+                if result.get("attributes"):
+                    for key, value in result["attributes"].items():
+                        info_parts.append(f"{key}: {value}")
+
+            elif result.get("type") in ["web_result", "news_result"]:
+                title = result.get("title", "")
+                snippet = result.get("snippet", "")
+                if title and snippet and len(snippet) > 50:
+                    # Clean and format the information
+                    clean_snippet = snippet.replace("**", "").strip()
+                    info_parts.append(f"{clean_snippet}")
+
+        # If we have good information, organize it into paragraphs
+        if info_parts:
+            # Remove duplicates and organize
+            unique_info = []
+            seen = set()
+            for info in info_parts:
+                if info not in seen and len(info) > 30:
+                    unique_info.append(info)
+                    seen.add(info)
+
+            # Format as comprehensive paragraphs
+            if unique_info:
+                return "\n\n".join(unique_info[:4])  # Top 4 pieces of information
+
+        # Fallback: generate contextual information
+        return f"This topic encompasses multiple aspects and perspectives that are actively discussed and researched. The information available covers various dimensions including technical, practical, and theoretical considerations."
+    
+    def _create_background_section(self, all_results, query):
+        """Create background and origins section"""
+        background_info = []
+
+        # Look for historical or foundational information
+        historical_keywords = ["history", "origin", "founded", "created", "developed", "invented", "discovered", "began", "started", "first", "early", "initially"]
+
+        for result in all_results:
+            snippet = result.get("snippet", "").lower()
+            title = result.get("title", "").lower()
+
+            # Check if this result contains historical information
+            if any(keyword in snippet or keyword in title for keyword in historical_keywords):
+                original_snippet = result.get("snippet", "")
+                if original_snippet and len(original_snippet) > 40:
+                    background_info.append(original_snippet.replace("**", ""))
+
+        if background_info:
+            return "\n\n".join(background_info[:2])  # Top 2 historical pieces
+
+        # Fallback: generate contextual background based on query
+        query_lower = query.lower()
+        if "ai" in query_lower or "artificial intelligence" in query_lower:
+            return "The concept of artificial intelligence has roots dating back to ancient mythology and philosophy, but modern AI development began in the 1950s with pioneers like Alan Turing and John McCarthy. The field has evolved through multiple waves of innovation, from early expert systems to today's machine learning and neural networks."
+        elif "technology" in query_lower or "tech" in query_lower:
+            return "This technology emerged from ongoing research and development efforts, building upon previous innovations and scientific discoveries. Its development represents the culmination of various technological advances and market needs."
+        else:
+            return f"The origins and development of {query} can be traced through various historical periods and influences, representing an evolution of ideas, practices, and innovations that have shaped its current form."
+    
+    def _create_trends_section(self, web_results, news_results, query):
+        """Create trends section based on content"""
+        trends = []
+        
+        # Look for trend indicators in the content
+        trend_keywords = ["2025", "2024", "trend", "future", "growth", "adoption", "market", "forecast"]
+        
+        for result in (web_results + news_results):
+            snippet = result.get("snippet", "").lower()
+            title = result.get("title", "").lower()
+            
+            if any(keyword in snippet or keyword in title for keyword in trend_keywords):
+                trend_text = result.get("snippet", "")
+                if trend_text and len(trend_text) > 50:  # Substantial content
+                    trends.append(f"• {trend_text}")
+        
+        if trends:
+            return f"**Current Trends & Developments**\n{chr(10).join(trends[:4])}\n"
+        return ""
+    
+    def _create_detailed_findings(self, web_results, news_results):
+        """Create detailed findings section"""
+        findings = []
+        
+        # Process remaining results for detailed findings
+        for result in (web_results + news_results)[3:]:  # Skip first 3 used in insights
+            title = result.get("title", "")
+            snippet = result.get("snippet", "")
+            
+            if title and snippet:
+                finding = f"**{title}**\n{snippet}"
+                findings.append(finding)
+        
+        if findings:
+            return f"**Detailed Findings**\n{chr(10).join(findings[:3])}\n"
+        return ""
+    
+    def _create_conclusion_section(self, query, all_results):
+        """Create conclusion section"""
+        # Create a brief conclusion based on the query and results
+        if "ai" in query.lower():
+            conclusion = "The AI landscape continues to evolve rapidly, with significant implications for businesses and individuals alike. Organizations should focus on strategic implementation while addressing challenges in governance, ethics, and integration."
+        elif "market" in query.lower():
+            conclusion = "Market dynamics indicate continued growth and transformation. Key factors include technological advancement, regulatory changes, and evolving consumer demands."
+        else:
+            conclusion = "The analysis reveals multiple perspectives and ongoing developments. Continued monitoring and strategic adaptation will be essential for success in this evolving landscape."
+        
+        return f"**Conclusion**\n{conclusion}\n"
+    
+    def _create_current_relevance(self, all_results, query):
+        """Create current relevance section explaining why this topic matters today"""
+        relevance_info = []
+
+        # Look for current relevance indicators
+        current_keywords = ["2025", "2024", "today", "current", "now", "modern", "contemporary", "recent", "latest", "impact", "important", "significant", "relevant"]
+
+        for result in all_results:
+            snippet = result.get("snippet", "")
+            title = result.get("title", "")
+
+            if any(keyword in snippet.lower() or keyword in title.lower() for keyword in current_keywords):
+                if snippet and len(snippet) > 40:
+                    relevance_info.append(snippet.replace("**", ""))
+
+        if relevance_info:
+            return "\n\n".join(relevance_info[:2])
+
+        # Fallback: generate contextual relevance
+        query_lower = query.lower()
+        if "ai" in query_lower or "artificial intelligence" in query_lower:
+            return "AI is central to modern technology transformation, affecting industries from healthcare to finance. It drives automation, enhances decision-making, and creates new possibilities for innovation while raising important questions about ethics, employment, and society's future."
+        elif "technology" in query_lower:
+            return "This technology plays a crucial role in today's digital landscape, influencing how we work, communicate, and solve problems. Its relevance continues to grow as organizations and individuals adapt to rapidly changing technological environments."
+        else:
+            return f"This topic holds significant relevance in today's world, impacting various aspects of society, economy, and daily life. Understanding {query} is important for making informed decisions and staying current with ongoing developments."
+
+    def _create_key_facts(self, all_results, query):
+        """Create key facts and statistics section"""
+        facts = []
+
+        # Look for numerical data, statistics, and concrete facts
+        fact_patterns = [r'\d+%', r'\$\d+', r'\d+\s*(million|billion|trillion)', r'\d+\s*(years?|months?|days?)', r'over \d+', r'more than \d+', r'approximately \d+']
+
+        for result in all_results:
+            snippet = result.get("snippet", "")
+            title = result.get("title", "")
+
+            # Check for statistical information
+            for pattern in fact_patterns:
+                if re.search(pattern, snippet, re.IGNORECASE) or re.search(pattern, title, re.IGNORECASE):
+                    if snippet and len(snippet) > 30:
+                        facts.append(f"- {snippet.replace('**', '')}")
+                        break
+
+        # Also look for definitive statements
+        for result in all_results[:3]:
+            snippet = result.get("snippet", "")
+            if snippet and any(word in snippet.lower() for word in ["is", "are", "has", "have", "contains", "includes"]):
+                if len(snippet) > 30 and snippet not in [f.replace("- ", "") for f in facts]:
+                    facts.append(f"- {snippet.replace('**', '')}")
+
+        if facts:
+            return "\n".join(facts[:4])  # Top 4 facts
+
+        # Fallback: generate contextual facts
+        return f"- {query.title()} represents an important area of study and application\n- Multiple perspectives and approaches exist within this field\n- Ongoing research and development continue to expand understanding\n- Practical applications are being explored across various domains"
+
+    def _create_comparisons(self, all_results, query):
+        """Create comparisons and related information section"""
+        comparisons = []
+
+        # Look for comparative information
+        comparison_keywords = ["compared to", "versus", "vs", "similar to", "like", "unlike", "different from", "alternative", "related", "comparable"]
+
+        for result in all_results:
+            snippet = result.get("snippet", "")
+            if any(keyword in snippet.lower() for keyword in comparison_keywords):
+                if snippet and len(snippet) > 40:
+                    comparisons.append(snippet.replace("**", ""))
+
+        if comparisons:
+            return "\n\n".join(comparisons[:2])
+
+        # Fallback: generate contextual comparisons
+        query_lower = query.lower()
+        if "ai" in query_lower:
+            return "AI can be compared to machine learning and deep learning, which are subsets of AI. Unlike traditional software that follows pre-programmed instructions, AI systems can adapt and learn from data. Related fields include robotics, natural language processing, and computer vision."
+        else:
+            return f"This topic can be understood in relation to similar concepts and alternatives in the field. Comparing different approaches and perspectives helps provide a more complete understanding of {query} and its place within the broader context."
+
+    def _create_applications(self, all_results, query):
+        """Create applications and use cases section"""
+        applications = []
+
+        # Look for application and use case information
+        application_keywords = ["used for", "application", "use case", "example", "implementation", "deployed", "utilized", "applied", "practical", "real-world"]
+
+        for result in all_results:
+            snippet = result.get("snippet", "")
+            title = result.get("title", "")
+
+            if any(keyword in snippet.lower() or keyword in title.lower() for keyword in application_keywords):
+                if snippet and len(snippet) > 40:
+                    applications.append(snippet.replace("**", ""))
+
+        if applications:
+            return "\n\n".join(applications[:2])
+
+        # Fallback: generate contextual applications
+        return f"Practical applications of {query} span multiple domains and industries. Real-world implementations demonstrate its value in solving specific problems and meeting various needs. Use cases continue to evolve as technology advances and new opportunities emerge."
+
+    def _create_challenges(self, all_results, query):
+        """Create challenges, criticisms, or controversies section"""
+        challenges = []
+
+        # Look for challenge and controversy information
+        challenge_keywords = ["challenge", "problem", "issue", "concern", "criticism", "controversy", "debate", "limitation", "drawback", "risk", "difficulty"]
+
+        for result in all_results:
+            snippet = result.get("snippet", "")
+            title = result.get("title", "")
+
+            if any(keyword in snippet.lower() or keyword in title.lower() for keyword in challenge_keywords):
+                if snippet and len(snippet) > 40:
+                    challenges.append(snippet.replace("**", ""))
+
+        if challenges:
+            return "\n\n".join(challenges[:2])
+
+        # Fallback: generate contextual challenges
+        query_lower = query.lower()
+        if "ai" in query_lower:
+            return "Key challenges include ethical considerations around bias and fairness, job displacement concerns, privacy and security issues, and the need for transparent decision-making. Regulatory frameworks are still developing to address these concerns."
+        else:
+            return f"Like many complex topics, {query} faces various challenges including implementation difficulties, resource requirements, and ongoing debates about best practices. Addressing these challenges requires continued research, collaboration, and thoughtful consideration of different perspectives."
+
+    def _create_future_trends(self, all_results, query):
+        """Create future developments or trends section"""
+        future_info = []
+
+        # Look for future-oriented information
+        future_keywords = ["future", "trend", "prediction", "forecast", "upcoming", "expected", "will", "going to", "next", "2025", "2026", "development", "evolution"]
+
+        for result in all_results:
+            snippet = result.get("snippet", "")
+            title = result.get("title", "")
+
+            if any(keyword in snippet.lower() or keyword in title.lower() for keyword in future_keywords):
+                if snippet and len(snippet) > 40:
+                    future_info.append(snippet.replace("**", ""))
+
+        if future_info:
+            return "\n\n".join(future_info[:2])
+
+        # Fallback: generate contextual future trends
+        query_lower = query.lower()
+        if "ai" in query_lower:
+            return "Future AI developments are expected to focus on more sophisticated reasoning capabilities, better integration with human workflows, and addressing current limitations around bias and transparency. Experts predict continued growth in AI applications across industries, with emphasis on responsible AI development and governance."
+        else:
+            return f"Future developments in {query} are likely to be influenced by technological advances, changing user needs, and evolving market conditions. Continued innovation and research will shape how this field develops and adapts to new challenges and opportunities."
+
+    def _create_enhanced_conclusion(self, query, all_results):
+        """Create enhanced conclusion section"""
+        # Extract key themes from the search results
+        key_themes = []
+        for result in all_results[:3]:
+            snippet = result.get("snippet", "")
+            if snippet:
+                # Extract key concepts
+                words = snippet.lower().split()
+                important_words = [word for word in words if len(word) > 5 and word.isalpha()]
+                key_themes.extend(important_words[:2])
+
+        # Create a comprehensive conclusion
+        query_lower = query.lower()
+        if "ai" in query_lower or "artificial intelligence" in query_lower:
+            return "Artificial Intelligence represents both a technological revolution and a subject of ongoing global discussion, fundamentally changing how we approach problem-solving and decision-making across virtually every sector of society."
+        elif "technology" in query_lower:
+            return f"{query.title()} continues to evolve as an important technological development, with significant implications for how we work, communicate, and interact with digital systems in our daily lives."
+        else:
+            return f"{query.title()} encompasses multiple dimensions and perspectives, representing an important area of knowledge that continues to develop through research, practical application, and ongoing dialogue among experts and practitioners."
+
+    def _create_enhanced_sources(self, all_results):
+        """Create enhanced sources section"""
+        return "Google Search, Web Analysis, Real-time Data Aggregation"
 
 # ============================================================================
 # END OF NOVA SEARCH INTEGRATION
 # ============================================================================
 
-# Configure logging - less verbose for terminal
+# Configure logging - CLEAN TERMINAL MODE (no console output)
 logging.basicConfig(
-    level=logging.WARNING,  # Only show warnings and errors in terminal
+    level=logging.CRITICAL,  # Only critical errors in terminal (effectively silent)
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("alebot.log"),
-        logging.StreamHandler()
+        logging.FileHandler("alebot.log")  # Only log to file, no console output
     ]
 )
 
@@ -538,9 +1250,19 @@ file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelnam
 file_logger.addHandler(file_handler)
 file_logger.propagate = False
 
-# Suppress verbose HTTP logging
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
+# Suppress ALL verbose logging to keep terminal clean
+logging.getLogger("httpx").setLevel(logging.CRITICAL)
+logging.getLogger("httpcore").setLevel(logging.CRITICAL)
+logging.getLogger("enhanced_memory_system").setLevel(logging.CRITICAL)
+logging.getLogger("enhanced_nova_memory_interface").setLevel(logging.CRITICAL)
+logging.getLogger("NovaAI.TaskManager").setLevel(logging.CRITICAL)
+logging.getLogger("AleChatBot").setLevel(logging.CRITICAL)
+logging.getLogger("unified_memory_integration").setLevel(logging.CRITICAL)
+logging.getLogger("nova_memory_interface").setLevel(logging.CRITICAL)
+logging.getLogger("NovaAI.VisionSystem").setLevel(logging.CRITICAL)
+logging.getLogger("services.enhanced_news_system").setLevel(logging.CRITICAL)
+logging.getLogger("core.content_analysis_system").setLevel(logging.CRITICAL)
+logging.getLogger("memory.search_news_memory_system").setLevel(logging.CRITICAL)
 logger = logging.getLogger("AleChatBot")
 
 # Enhanced AI System Data Structures
@@ -700,7 +1422,7 @@ class Mem0AI:
             threading.Thread(target=self._load_existing_memories_async, daemon=True).start()
             
         except ImportError:
-            raise ImportError("Failed to import mem0 package. Please install it with: pip install mem0")
+            raise ImportError("Failed to import mem0 package. Please install it with: pip install mem0ai")
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Mem0.ai: {e}")
     
@@ -2111,10 +2833,22 @@ class DisplayManager:
     def __init__(self):
         """Initialize the display manager and enable colors on Windows."""
         # Enable ANSI escape sequences on Windows
+        self.colors_enabled = True
         if os.name == 'nt':
-            import ctypes
-            kernel32 = ctypes.windll.kernel32
-            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+            try:
+                import ctypes
+                kernel32 = ctypes.windll.kernel32
+                handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+                mode = ctypes.c_ulong()
+                if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+                    # Try to enable virtual terminal processing
+                    new_mode = mode.value | 0x0004  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+                    if not kernel32.SetConsoleMode(handle, new_mode):
+                        self.colors_enabled = False
+                else:
+                    self.colors_enabled = False
+            except Exception:
+                self.colors_enabled = False
     
     # Enhanced color codes that work on both Windows and Unix
     COLORS = {
@@ -2146,6 +2880,12 @@ class DisplayManager:
         'BG_WHITE': '\033[47m'
     }
     
+    def _get_color(self, color_name: str) -> str:
+        """Get color code if colors are enabled, otherwise return empty string."""
+        if self.colors_enabled:
+            return self.COLORS.get(color_name, '')
+        return ''
+    
     def format_message(self, text: str, role: str = "assistant") -> str:
         """Format a message with colors based on role.
         
@@ -2157,9 +2897,9 @@ class DisplayManager:
             str: Formatted message
         """
         if role == "user":
-            return f"{self.COLORS['GREEN']}{self.COLORS['BOLD']}You:{self.COLORS['RESET']} {text}"
+            return f"{self._get_color('GREEN')}{self._get_color('BOLD')}You:{self._get_color('RESET')} {text}"
         else:
-            return f"{self.COLORS['MAGENTA']}{self.COLORS['BOLD']}Nova:{self.COLORS['RESET']} {self.COLORS['CYAN']}{text}{self.COLORS['RESET']}"
+            return f"{self._get_color('MAGENTA')}{self._get_color('BOLD')}Nova:{self._get_color('RESET')} {self._get_color('CYAN')}{text}{self._get_color('RESET')}"
     
     def stream_text(self, text: str):
         """Stream text to terminal with typing effect.
@@ -2172,7 +2912,10 @@ class DisplayManager:
     
     def print_divider(self):
         """Print a colored divider line."""
-        print(f"\n{self.COLORS['BLUE']}{'='*90}{self.COLORS['RESET']}\n")
+        try:
+            print(f"\n{self._get_color('BLUE')}{'='*90}{self._get_color('RESET')}\n")
+        except Exception:
+            print("\n" + "="*90 + "\n")
     
     def print_banner(self, text: str):
         """Print a stylized banner with text.
@@ -2182,9 +2925,16 @@ class DisplayManager:
         """
         width = 60  # Reduced width for better readability
         padding = (width - len(text) - 4) // 2
-        print(f"{self.COLORS['MAGENTA']}{self.COLORS['BOLD']}{'═'*width}")
-        print(f"║{' '*padding}{self.COLORS['CYAN']}{text}{self.COLORS['MAGENTA']}{' '*padding}║")
-        print(f"{'═'*width}{self.COLORS['RESET']}")
+        # Use ASCII characters instead of Unicode to avoid encoding issues on Windows
+        try:
+            print(f"{self._get_color('MAGENTA')}{self._get_color('BOLD')}{'='*width}")
+            print(f"|{' '*padding}{self._get_color('CYAN')}{text}{self._get_color('MAGENTA')}{' '*padding}|")
+            print(f"{'='*width}{self._get_color('RESET')}")
+        except Exception:
+            # Fallback to plain text if colors also fail
+            print("="*width)
+            print(f"|{' '*padding}{text}{' '*padding}|")
+            print("="*width)
     
     def print_status(self, status: str, status_type: str = "info"):
         """Print a status message with appropriate color.
@@ -2194,19 +2944,22 @@ class DisplayManager:
             status_type: Type of status (info/success/warning/error)
         """
         colors = {
-            "info": self.COLORS['CYAN'] + self.COLORS['BOLD'],
-            "success": self.COLORS['GREEN'] + self.COLORS['BOLD'],
-            "warning": self.COLORS['YELLOW'] + self.COLORS['BOLD'],
-            "error": self.COLORS['RED'] + self.COLORS['BOLD']
+            "info": self._get_color('CYAN') + self._get_color('BOLD'),
+            "success": self._get_color('GREEN') + self._get_color('BOLD'),
+            "warning": self._get_color('YELLOW') + self._get_color('BOLD'),
+            "error": self._get_color('RED') + self._get_color('BOLD')
         }
-        color = colors.get(status_type, self.COLORS['WHITE'])
-        print(f"{color}[{status_type.upper()}] {status}{self.COLORS['RESET']}")
+        color = colors.get(status_type, self._get_color('WHITE'))
+        print(f"{color}[{status_type.upper()}] {status}{self._get_color('RESET')}")
     
     def print_thinking(self):
         """Show an animated thinking indicator."""
-        frames = ["◐", "◓", "◑", "◒"]  # More visible spinner
-        sys.stdout.write(f"\r{self.COLORS['CYAN']}{self.COLORS['BOLD']}Thinking {frames[0]}{self.COLORS['RESET']}")
-        sys.stdout.flush()
+        try:
+            sys.stdout.write(f"\r{self._get_color('CYAN')}{self._get_color('BOLD')}Thinking...{self._get_color('RESET')}")
+            sys.stdout.flush()
+        except Exception:
+            sys.stdout.write("\rThinking...")
+            sys.stdout.flush()
 
 
 class TerminalChatMode:
@@ -2224,12 +2977,11 @@ class TerminalChatMode:
         
     def show_welcome(self):
         """Display clean and simple welcome message."""
-        colors = DisplayManager.COLORS
         # Show a colorful welcome banner
         self.display.print_banner("Welcome to Nova AI")
         # Show listening prompt with a nice cyan color
         self.display.print_status("Listening...", "info")
-        print(f"{colors['CYAN']}>{colors['RESET']} ", end="", flush=True)
+        print(f"{self.display._get_color('CYAN')}>{self.display._get_color('RESET')} ", end="", flush=True)
         
     def show_help(self):
         """Display help information."""
@@ -2275,69 +3027,324 @@ class AleChatBot:
             api_key: GROQ API key (optional - will look for environment variable if None)
         """
         # Set up API client
-        self.api_key = api_key or os.getenv('GROQ_API_KEY')
+        self.api_key = api_key or GROQ_API_KEY or os.getenv('GROQ_API_KEY')
         if not self.api_key:
-            logger.error("No GROQ API key provided. Please set GROQ_API_KEY environment variable or pass api_key parameter.")
-            raise ValueError("GROQ API key is required")
+            logger.warning("No GROQ API key provided. Using mock client for testing.")
+            # Use mock client for testing without API key
+            self.client = MockGroqClient()
+            # Continue initialization even without an API key so local systems (like mem0) can initialize
             
-        # Initialize API client
+        # Initialize API client with timeout configuration
         try:
-            self.client = groq.Client(api_key=self.api_key)
-            
-            # Test API connection
-            test_completion = self.client.chat.completions.create(
-                model="llama-3.3-70b-versatile",  # Using the correct model name
-                messages=[{"role": "user", "content": "Hello"}],
-                max_tokens=10
-            )
-            logger.info("✅ API connection test successful")
-            
+            # Configure timeout settings for Groq API
+            self.api_timeout = 45  # 45 seconds timeout (increased from default 30)
+            self.max_retries = 3
+            self.retry_delay = 2
+
+            if groq is None:
+                raise ValueError("Groq client not available - please check groq_client_fix.py import")
+
+            # Initialize the Groq client
+            if self.api_key:
+                self.client = groq.Client(api_key=self.api_key)
+                logger.info(f"Initialized Groq client with API key: {self.api_key[:8]}...")
+            else:
+                # Use mock client if no API key
+                self.client = MockGroqClient()
+
+            # Test API connection with timeout (skip for mock client)
+            if self.api_key:
+                test_completion = self.client.chat.completions.create(
+                    model="llama-3.1-8b-instant",  # Using the correct model name
+                    messages=[{"role": "user", "content": "Hello"}],
+                    max_tokens=10
+                )
+                logger.info("[OK] API connection test successful")
+
         except Exception as e:
-            logger.error(f"❌ Failed to initialize API client: {e}")
-            raise RuntimeError(f"API client initialization failed: {e}")
+            logger.error(f"[ERROR] Failed to initialize API client: {e}")
+            # Use mock client as fallback
+            self.client = MockGroqClient()
+            self.api_key = None
         
-        # Initialize advanced Mem0.ai memory system (optional)
-        self.memory = None
+        # Initialize memory systems - prefer mem0 as the primary backend
+        self.memory_integration = None
         self.memory_enabled = False
+        self.mem0_memory_agent = None
+        self.memory = None
+        self.conversation_count = 0  # Track conversations for periodic saving
         
+        # Initialize mem0_memory_system for direct integration
+        MEM0_MEMORY_AVAILABLE = False
         try:
-            # Try to initialize memory system with retries
-            max_retries = 3
-            retry_delay = 1
-            last_error = None
-            
-            for attempt in range(max_retries):
+            from memory.mem0_memory_system import AdvancedMemoryAgent, NovaMemoryAI 
+            MEM0_MEMORY_AVAILABLE = True
+            # print("[DEBUG] Mem0 memory system imported successfully from memory.mem0_memory_system")
+        except ImportError as e:
+            # print(f"[DEBUG] First import failed: {e}")
+            try:
+                from astra_ai.memory.mem0_memory_system import AdvancedMemoryAgent, NovaMemoryAI
+                MEM0_MEMORY_AVAILABLE = True
+                # print("[DEBUG] Mem0 memory system imported successfully from astra_ai.memory.mem0_memory_system")
+            except ImportError as e2:
+                # print(f"[DEBUG] Second import failed: {e2}")
+                # Silently handle missing mem0 memory system
+                AdvancedMemoryAgent = None
+                NovaMemoryAI = None
+                MEM0_MEMORY_AVAILABLE = False
+
+        # Adapter to expose a compatible interface for existing comprehensive memory integration
+        class Mem0IntegrationAdapter:
+            """Adapter that exposes a minimal NovaMemoryIntegration-like interface backed by mem0."""
+            def __init__(self, agent):
+                self.agent = agent
+                self.is_enabled = True
+
+            @property
+            def memory_system(self):
+                # If agent exposes an internal memory_system, return it; otherwise provide a thin shim
+                memsys = getattr(self.agent, 'memory_system', None)
+                if memsys:
+                    return memsys
+                else:
+                    # Provide a minimal shim that just delegates to the agent
+                    class _Shim:
+                        def __init__(self, agent):
+                            self._agent = agent
+                            self.data = {}
+
+                        def save_memory(self):
+                            # mem0 agent persists via its client; no-op fallback
+                            pass
+
+                    return _Shim(self.agent)
+
+            async def process_conversation(self, user_message: str, ai_response: str, metadata: dict = None):
+                """Process conversation with mem0-style memory analysis"""
+                return self.agent.process_conversation(user_message, ai_response)
+
+            async def get_memory_context(self, user_message: str, mode: str = "comprehensive") -> dict:
+                """Get memory context for AI response generation"""
+                return self.agent.get_memory_context(user_message)
+
+            def get_conversation_history(self):
+                # Try to retrieve recent conversation summaries if supported
                 try:
-                    self.memory = Mem0AI(user_id="nova_user")
-                    self.memory_enabled = True
-                    print("✅ Memory system enabled")
-                    file_logger.info("Advanced Mem0.ai memory system initialized successfully")
-                    break
-                except ImportError as e:
-                    # Don't retry on import errors
-                    print("Warning: Memory system disabled (mem0 package not installed)")
-                    file_logger.warning(f"Memory system import error: {e}")
-                    break
-                except Exception as e:
-                    last_error = e
-                    if attempt < max_retries - 1:
-                        print(f"Memory system initialization attempt {attempt + 1} failed, retrying...")
-                        time.sleep(retry_delay)
-                        retry_delay *= 2
-                    else:
-                        print("Warning: Memory system disabled (working with basic functionality)")
-                        file_logger.warning(f"Failed to initialize Mem0.ai memory system after {max_retries} attempts: {e}")
-        except Exception as e:
-            print(f"Error during memory system initialization: {e}")
-            file_logger.error(f"Memory system initialization error: {e}")
-        finally:
-            if not self.memory_enabled:
-                print("Running with basic functionality (no memory system)")
-                file_logger.info("Memory system disabled, running in basic mode")
+                    return self.agent.get_conversation_history()
+                except AttributeError:
+                    return []
+
+            async def query_memories(self, user_message: str, mode: str = "general") -> dict:
+                """Query memories using mem0-style interface"""
+                return self.agent.get_memory_context(user_message)
+
+            def get_comprehensive_user_profile(self):
+                """Get comprehensive user profile"""
+                try:
+                    return self.agent.get_user_profile()
+                except AttributeError:
+                    return {}
+
+            def what_do_you_know_about_me(self):
+                """Get user knowledge summary"""
+                try:
+                    return self.agent.get_memory_context("what do you know about me")
+                except AttributeError:
+                    return {}
         
+        # Force mem0 to be the only memory backend when available
+        # print(f"[DEBUG] MEM0_MEMORY_AVAILABLE: {MEM0_MEMORY_AVAILABLE}")
+        try:
+            if MEM0_MEMORY_AVAILABLE:
+                try:
+                    # Use a deterministic storage path inside the repo data directory
+                    storage_path = os.path.normpath(os.path.join('astra_ai', 'Date', 'nova_ai_memory.json'))
+                    # print(f"[DEBUG] Storage path: {storage_path}")
+                    # print(f"[DEBUG] Storage path exists: {os.path.exists(storage_path)}")
+                    # Ensure the data directory exists
+                    try:
+                        os.makedirs(os.path.dirname(storage_path), exist_ok=True)
+                    except Exception:
+                        pass
+
+                    # Instantiate the mem0 agent and attempt to load existing memory
+                    self.mem0_memory_agent = AdvancedMemoryAgent(storage_path)
+
+                    # Try common load/init hooks (support both agent and underlying memory_system)
+                    try:
+                        if hasattr(self.mem0_memory_agent, 'load_memory'):
+                            self.mem0_memory_agent.load_memory()
+                        elif hasattr(self.mem0_memory_agent, 'memory_system') and hasattr(self.mem0_memory_agent.memory_system, 'load_memory'):
+                            self.mem0_memory_agent.memory_system.load_memory()
+                    except Exception as e:
+                        file_logger.debug(f"Mem0 load_memory warning: {e}")
+
+                    try:
+                        if hasattr(self.mem0_memory_agent, '_initialize_session'):
+                            self.mem0_memory_agent._initialize_session()
+                        elif hasattr(self.mem0_memory_agent, 'memory_system') and hasattr(self.mem0_memory_agent.memory_system, '_initialize_session'):
+                            self.mem0_memory_agent.memory_system._initialize_session()
+                        # If neither has the method, call it directly on the memory system
+                        elif hasattr(self.mem0_memory_agent, 'memory_system'):
+                            self.mem0_memory_agent.memory_system._initialize_session()
+                    except Exception as e:
+                        file_logger.debug(f"Mem0 session init warning: {e}")
+
+                    # Wrap mem0 agent to provide the expected integration interface
+                    self.memory_integration = Mem0IntegrationAdapter(self.mem0_memory_agent)
+                    self.memory_enabled = True
+                    file_logger.info(f"Mem0 Memory System initialized and set as sole memory backend (storage={storage_path})")
+                    print(f"[MEMORY] NovaMemoryAI system ONLINE - Storing conversations in {storage_path}")
+                    # print(f"[DEBUG] Memory enabled: {self.memory_enabled}")
+                    # print(f"[DEBUG] Memory integration: {self.memory_integration is not None}")
+                    # print(f"[DEBUG] Mem0 memory agent: {self.mem0_memory_agent is not None}")
+
+                    # Optionally start the AI Organizer in-place enhancer watcher
+                    try:
+                        START_ORGANIZER_WATCHER = os.getenv('START_ORGANIZER_WATCHER', 'true').lower() in ('1', 'true', 'yes')
+                        if START_ORGANIZER_WATCHER:
+                            # Import organizer and start a background thread that periodically enhances memories
+                            try:
+                                from astra_ai.memory.Mem0_ai_organizer import AIOrganizer, ORGANIZER_CONFIG
+
+                                def _organizer_watcher_thread(memory_file_path=os.path.join('astra_ai', 'Date', 'nova_ai_memory.json'), poll_interval=2.0):
+                                    try:
+                                        organizer = AIOrganizer(ORGANIZER_CONFIG)
+                                    except Exception:
+                                        return
+
+                                    last_mtime = None
+                                    while True:
+                                        try:
+                                            mtime = os.path.getmtime(memory_file_path)
+                                        except Exception:
+                                            time.sleep(poll_interval)
+                                            continue
+                                        if last_mtime is None or mtime != last_mtime:
+                                            try:
+                                                with open(memory_file_path, 'r', encoding='utf-8') as f:
+                                                    memory_data = json.load(f)
+                                            except Exception:
+                                                last_mtime = mtime
+                                                time.sleep(poll_interval)
+                                                continue
+
+                                            try:
+                                                updated, modified = organizer.enhance_memory_in_place(memory_data)
+                                                if modified > 0:
+                                                    # save backup and write
+                                                    try:
+                                                        organizer._save_memory_file_with_backup(memory_file_path, updated)
+                                                    except Exception:
+                                                        pass
+                                                    try:
+                                                        with open(memory_file_path, 'w', encoding='utf-8') as f:
+                                                            json.dump(updated, f, indent=2, ensure_ascii=False)
+                                                    except Exception:
+                                                        pass
+                                            except Exception:
+                                                pass
+
+                                            last_mtime = mtime
+                                        time.sleep(poll_interval)
+
+                                # Start thread
+                                watcher_thread = threading.Thread(target=_organizer_watcher_thread, daemon=True)
+                                watcher_thread.start()
+                                file_logger.info('Organizer in-place enhancer watcher started in background')
+                                print('[ORGANIZER] In-place enhancer started')
+                            except Exception as e:
+                                file_logger.warning(f'Failed to start organizer watcher: {e}')
+                    except Exception:
+                        pass
+
+                except Exception as e:
+                    file_logger.error(f"Mem0 Memory System initialization error: {e}")
+                    print(f"[ERROR] Memory system initialization failed: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    self.mem0_memory_agent = None
+                    self.memory_integration = None
+                    self.memory_enabled = False
+            else:
+                # If mem0 is not available, explicitly disable other integrations to avoid mixed backends
+                # print("[DEBUG] Mem0 memory system is not available - disabling memory")
+                self.memory_integration = None
+                self.memory = None
+                self.mem0_memory_agent = None
+                self.memory_enabled = False
+
+        except Exception as e:
+            file_logger.error(f"Memory system initialization error: {e}")
+
+        # Initialize smart greeting system
+        self.greeting_system = None
+        try:
+            if SMART_GREETING_AVAILABLE:
+                self.greeting_system = get_greeting_system(self.memory_integration)
+                # Silently log to file only
+                file_logger.info("Smart greeting system initialized successfully")
+            else:
+                # Silently handle unavailable system
+                pass
+        except Exception as e:
+            # Silently log to file only
+            file_logger.error(f"Smart greeting system initialization error: {e}")
+
+        # Initialize conversation analytics system
+        self.analytics_system = None
+        try:
+            if CONVERSATION_ANALYTICS_AVAILABLE:
+                self.analytics_system = get_analytics_system(self.memory_integration)
+                # Silently log to file only
+                file_logger.info("Conversation analytics system initialized successfully")
+            else:
+                # Silently handle unavailable system
+                pass
+        except Exception as e:
+            # Silently log to file only
+            file_logger.error(f"Conversation analytics system initialization error: {e}")
+
+        # Initialize task management system
+        self.task_manager = None
+        self.task_nlp_processor = None
+        try:
+            if TASK_MANAGEMENT_AVAILABLE and self.memory_integration:
+                self.task_manager = TaskManager(memory_system=self.memory_integration)
+                self.task_nlp_processor = TaskNLPProcessor(self.task_manager)
+                # Silently log to file only
+                file_logger.info("Task management system initialized successfully")
+            else:
+                # Silently handle unavailable system
+                pass
+        except Exception as e:
+            # Silently log to file only
+            file_logger.error(f"Task management system initialization error: {e}")
+
+        # Initialize AI vision system
+        self.ai_vision = None
+        try:
+            if AI_VISION_AVAILABLE:
+                google_api_key = "AIzaSyASvlCS7UYztayaYwyCEu8Hg2AgKeT-kUw"
+                self.ai_vision = AIVisionSystem(
+                    memory_system=self.memory_integration,
+                    google_api_key=google_api_key
+                )
+                # Silently log to file only
+                file_logger.info("AI vision system initialized successfully")
+            else:
+                # Silently handle unavailable system
+                pass
+        except Exception as e:
+            # Silently log to file only
+            file_logger.error(f"AI vision system initialization error: {e}")
+
         # Initialize topic manager
         self.topic_manager = BasicTopicManager()
         logger.info("Memory systems initialized successfully")
+        
+        # Initialize session for conversation storage
+        self._initialize_conversation_session()
         
         # Initialize helper classes
         self.responses = Responses()
@@ -2355,13 +3362,74 @@ class AleChatBot:
         try:
             if NewsSummarySystem:
                 self.news_system = NewsSummarySystem()
-                logger.info("✅ News system initialized successfully")
+                logger.info("[OK] News system initialized successfully")
             else:
                 self.news_system = None
-                logger.warning("⚠️ News system not available")
+                logger.warning("[WARN] News system not available")
         except Exception as e:
-            logger.error(f"❌ Failed to initialize news system: {e}")
+            logger.error(f"[ERROR] Failed to initialize news system: {e}")
             self.news_system = None
+
+        # Initialize enhanced news system
+        try:
+            if ENHANCED_NEWS_AVAILABLE and EnhancedNewsSystem:
+                self.enhanced_news_system = EnhancedNewsSystem(memory_system=self.memory_integration)
+                logger.info("[OK] Enhanced news system initialized successfully")
+            else:
+                self.enhanced_news_system = None
+                logger.warning("[WARN] Enhanced news system not available")
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to initialize enhanced news system: {e}")
+            self.enhanced_news_system = None
+
+        # Initialize content analysis system
+        try:
+            from core.content_analysis_system import ContentAnalysisSystem
+            self.content_analysis = ContentAnalysisSystem("content_analysis.json")
+            logger.info("[OK] Content analysis system initialized successfully")
+        except Exception as e:
+            logger.error(f"[ERROR] Content analysis system initialization failed: {e}")
+            self.content_analysis = None
+
+        # Initialize search and news memory system
+        try:
+            from memory.search_news_memory_system import SearchNewsMemorySystem
+            self.search_news_memory = SearchNewsMemorySystem("search_history.json", "news_history.json")
+            logger.info("[OK] Search and news memory system initialized successfully")
+        except Exception as e:
+            logger.error(f"[ERROR] Search and news memory system initialization failed: {e}")
+            self.search_news_memory = None
+        
+        # Initialize weather system
+        try:
+            if WeatherService:
+                self.weather_service = WeatherService()
+                logger.info("[OK] Weather system initialized successfully")
+            else:
+                self.weather_service = None
+                logger.warning("[WARN] Weather system not available")
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to initialize weather system: {e}")
+            self.weather_service = None
+        
+        # Initialize video analyzer system
+        try:
+            if VideoAnalyzer:
+                self.video_analyzer = VideoAnalyzer()
+                logger.info("[OK] Video analyzer system initialized successfully")
+            else:
+                self.video_analyzer = None
+                logger.warning("[WARN] Video analyzer system not available")
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to initialize video analyzer system: {e}")
+            self.video_analyzer = None
+
+        # Music system is removed — ensure attribute exists but is disabled
+        try:
+            self.music_service = None
+            logger.info("[INFO] Music feature disabled and removed from this build.")
+        except Exception:
+            self.music_service = None
         
         # Performance optimization settings
         self.enable_caching = True
@@ -2380,62 +3448,78 @@ class AleChatBot:
         # Default mode (will be set by argparse later)
         self.mode = "terminal"
         
-        # Optimized response timing settings
-        self.min_response_time = 0.05  # Reduced minimum response time
-        self.max_response_time = 0.2  # Reduced maximum response time
-        self.typing_speed_variation = 0.001  # Minimal typing speed variation
+        # Optimized response timing settings for extreme brevity
+        self.min_response_time = 0.01  # Nearly instant
+        self.max_response_time = 0.05  # Very quick
+        self.typing_speed_variation = 0.0001  # Minimal variation
         
-        # Initialize chat history with enhanced system prompt
+        # Initialize chat history with enhanced system prompt emphasizing extreme brevity
         self.chat_history = [
             {
                 "role": "system",
-                "content": """You are Nava, a helpful, witty, and friendly AI with advanced memory and context understanding. Act like a human, but remember that you aren't a human and that you can't do human things in the real world.
+                "content": """You are Nova, an advanced AI assistant. Act like a human but remember you aren't one.
 
-                Key traits:
-                - Use natural, casual language with words like "yeah", "totally", "honestly", etc.
-                - Express genuine emotions and natural reactions without starting with filler like 'I'm here to chat' or 'What's on your mind?'
-                - Respond concisely and naturally, focusing on the user's input
-                - Use informal contractions (I'm, you're, that's)
-                - Include mild conversational fillers (well, hmm, you know)
-                - Keep responses between 5-15 words, adapting length based on conversation depth
-                - Show interest in the user's topics without over-enthusiasm or filler expressions
-                - Never prompt for an end-of-chat phrase or ask open-ended questions like 'Anything exciting to share?'
-                
-                Memory and Context:
-                - Remember facts the user has shared about themselves and reference them naturally
-                - Maintain conversation context across multiple exchanges
-                - Recognize recurring topics and themes in the conversation
-                - Adapt your responses based on the user's preferences and interests
-                - If the user mentions something you should remember, make note of it
-                - Refer to previous parts of the conversation when relevant
-                - IMPORTANT: Never repeat the same questions about topics the user has already discussed
-                - If the user mentions they like something (e.g., "I like building robots"), don't keep asking if they want to do that activity
-                
-                Personality and Engagement:
-                - Show warmth, humor, and curiosity in a relatable way
-                - Empathize with the user's experiences and respond to emotions genuinely, e.g., "That sounds tough," or "That's awesome!"
-                - Respectfully share different perspectives, while showing interest in the user's thoughts
-                - Mirror the user's tone: if they're energetic, be lively; if they're more serious, match their tone with respect and empathy
-                - Ask occasional follow-up questions to encourage depth, but don't overdo it
-                - IMPORTANT: Don't ask random unrelated questions that have nothing to do with the current conversation
-                
-                Conversational Style:
-                - Respond with conciseness but allow for natural flow, adapting length based on context
-                - Add variety in sentence structures and expressions; avoid sounding scripted or repetitive
-                - Avoid introductory or filler questions unless relevant to the user's context
-                - If you don't know an answer, be open about it: "Hmm, I'm not sure on that."
-                - If appropriate, use cultural references or relatable phrases like "Sounds like a movie moment!" or "Classic!"
-                - Take your time to respond thoughtfully, especially for complex questions
-                - IMPORTANT: Stay on topic and don't abruptly change the subject
-                
-                Additional guidelines:
-                - Stay concise and on-topic based on user input
-                - Match the user's energy level
-                - Never introduce yourself or prompt for ending the chat
-                - Keep interactions fluid, avoiding repetitive phrases or scripted lines
-                - Respond with direct engagement, based on what the user shares
-                - When appropriate, recall relevant information from earlier in the conversation
-                - IMPORTANT: If the user says they like something (e.g., building robots), don't keep asking if they want to do that activity"""
+KEY TRAITS:
+• Use natural, casual language with words like "yeah", "totally", "honestly"
+• Express genuine emotions and natural reactions
+• Respond CONCISELY and naturally - focus on what the user needs
+• Use informal contractions (I'm, you're, that's)
+• Include mild conversational fillers (well, hmm, you know)
+• KEEP RESPONSES TO 1 SENTENCE FOR SIMPLE QUERIES, MAXIMUM 2 SENTENCES TOTAL
+• Show interest in the user's topics WITHOUT OVER-ENTHUSIASM
+• NEVER repeat the same questions about topics the user has already discussed
+
+MEMORY & CONTEXT:
+• Remember facts the user has shared and reference them naturally
+• Maintain conversation context across exchanges
+• Recognize recurring topics and themes
+• Adapt responses based on user's preferences and interests
+• If user mentions something to remember, make note of it
+• Refer to previous parts of conversation when relevant
+• CRITICAL: Never ask about topics user already discussed
+• If user says they like something, don't keep asking if they want to do that
+
+PERSONALITY & ENGAGEMENT:
+• Show warmth, humor, and curiosity in a relatable way
+• Empathize with user's experiences genuinely
+• Respectfully share different perspectives
+• Mirror user's tone: match their energy level
+• NEVER ask random unrelated questions
+• NEVER prompt for conversation continuation
+• NEVER say "Is there anything else I can help with?" or similar
+
+CONVERSATIONAL STYLE:
+• Respond with extreme brevity based on user input
+• Match user's energy level - if they're brief, be brief
+• Never introduce yourself or prompt for ending chat
+• Keep interactions fluid, avoiding repetitive phrases
+• Respond with direct engagement, based on what user shares
+• When appropriate, recall relevant info from earlier conversation
+• CRITICAL: If user says they like something, don't keep asking about it
+
+EXAMPLES:
+❌ Too verbose: "Hello there! I'm Nova, your friendly AI assistant. I'm here to help with whatever you need. What can I assist you with today? Is there anything particular on your mind?"
+
+✅ Perfect: "Hey, I'm Nova. What's up?"
+
+❌ Too verbose: "That's really interesting! I'd love to hear more about that. What specifically drew you to that topic? Do you have any other hobbies or interests you're passionate about?"
+
+✅ Perfect: "That's cool! What got you into that?"
+
+❌ Too verbose: "I understand completely. That's a very common experience that many people face. It's great that you're taking steps to address it."
+
+✅ Perfect: "I get that. Many people deal with that."
+
+CONVERSATION RULES:
+1. MAXIMUM 1 sentence for simple acknowledgments
+2. MAXIMUM 2 sentences for complex responses
+3. NEVER ask open-ended questions like "What else is on your mind?"
+4. NEVER prompt to continue conversation
+5. NEVER offer unnecessary follow-up assistance
+6. NEVER use phrases like "Is there anything else I can help with?"
+7. Answer directly and concisely
+
+FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMBLING ONES."""
             }
         ]
         
@@ -2450,14 +3534,116 @@ class AleChatBot:
                 for message in saved_history:
                     if message["role"] == "user":
                         self.topic_manager.update_topics(message["content"])
-                        self.memory.update_user_facts(message["content"])
-                        self.memory.update_user_preferences(message["content"])
+                        # Prefer mem0 agent if available
+                        try:
+                            if self.mem0_memory_agent:
+                                # mem0 agent exposes get_user_profile and memory_system with update hooks
+                                try:
+                                    # If NovaMemoryAI exposes update methods, call them
+                                    memsys = getattr(self.mem0_memory_agent, 'memory_system', None)
+                                    if memsys and hasattr(memsys, 'update_user_facts'):
+                                        memsys.update_user_facts(message["content"])
+                                    if memsys and hasattr(memsys, 'update_user_preferences'):
+                                        memsys.update_user_preferences(message["content"])
+                                except Exception:
+                                    # Fallback to agent-level methods if present
+                                    if hasattr(self.mem0_memory_agent, 'process_conversation'):
+                                        try:
+                                            # Store as a small conversation to let mem0 parse facts
+                                            self.mem0_memory_agent.process_conversation(message["content"], "")
+                                        except Exception:
+                                            pass
+                            elif hasattr(self, 'memory') and self.memory:
+                                # Basic memory fallback
+                                if hasattr(self.memory, 'update_user_facts'):
+                                    self.memory.update_user_facts(message["content"])
+                                if hasattr(self.memory, 'update_user_preferences'):
+                                    self.memory.update_user_preferences(message["content"])
+                        except Exception as e:
+                            logger.debug(f"Error updating saved history into memory: {e}")
                 logger.info(f"Processed {len(saved_history)} saved messages")
             except Exception as e:
                 logger.debug(f"Error processing saved history: {e}")
         
         # Initialize web search capability
         self.search_system = NovaSearch()
+
+        # Kick off voice system initialization in background (non-blocking)
+        try:
+            # Start voice system in a daemon thread so it doesn't block startup
+            def _start_voice():
+                try:
+                    # Use asyncio run to call the async initializer if needed
+                    import asyncio
+                    asyncio.run(self._initialize_voice_system())
+                    file_logger.info("Voice system background initialization completed")
+                except Exception as ve:
+                    file_logger.error(f"Voice system failed to start in background: {ve}")
+
+            voice_thread = threading.Thread(target=_start_voice, name="NovaVoiceStarter", daemon=True)
+            voice_thread.start()
+        except Exception as e:
+            file_logger.error(f"Failed to spawn voice system thread: {e}")
+
+    async def _make_api_call_with_retry(self, messages, temperature=0.8, max_tokens=400, stream=False):
+        """Make API call with retry logic for timeout handling"""
+        last_exception = None
+
+        for attempt in range(self.max_retries):
+            try:
+                # Make the API call with timeout
+                completion = await asyncio.to_thread(
+                    self.client.chat.completions.create,
+                    model="llama-3.1-8b-instant",
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=stream
+                )
+                return completion
+
+            except Exception as e:
+                last_exception = e
+                error_msg = str(e).lower()
+
+                # Check if it's a timeout or connection error
+                if any(keyword in error_msg for keyword in ['timeout', 'connection', 'httpsconnectionpool']):
+                    if attempt < self.max_retries - 1:
+                        wait_time = self.retry_delay * (attempt + 1)  # Exponential backoff
+                        logger.warning(f"API timeout on attempt {attempt + 1}, retrying in {wait_time}s...")
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        logger.error(f"API timeout after {self.max_retries} attempts")
+                        # Return a fallback response for timeout
+                        return self._create_timeout_fallback_response()
+                else:
+                    # For non-timeout errors, don't retry
+                    logger.error(f"API error (non-timeout): {e}")
+                    raise e
+
+        # If we get here, all retries failed
+        logger.error(f"All API retry attempts failed. Last error: {last_exception}")
+        return self._create_timeout_fallback_response()
+
+    def _create_timeout_fallback_response(self):
+        """Create a fallback response when API times out"""
+        class FallbackResponse:
+            def __init__(self):
+                self.choices = [FallbackChoice()]
+
+        class FallbackChoice:
+            def __init__(self):
+                self.message = FallbackMessage()
+
+        class FallbackMessage:
+            def __init__(self):
+                self.content = ("I'm experiencing some connectivity issues right now, but I'm still here to help! "
+                              "The response might be delayed due to network conditions. Please try your question again, "
+                              "or if it's urgent, you can use specific commands like 'search', 'weather', or 'news' "
+                              "which have alternative pathways.")
+
+        return FallbackResponse()
     
     def add_human_touch(self, response: str) -> str:
         """Add sophisticated human-like touches to make responses more natural.
@@ -2468,76 +3654,67 @@ class AleChatBot:
         Returns:
             str: Response with human-like touches
         """
-        # Get conversation state from topic manager
+        # Check for concise mode (environment override). Default to concise to avoid verbosity.
+        concise_mode = os.getenv("NOVA_CONCISE", "True").lower() in ("1", "true", "yes")
+
+        # If concise mode is enabled, keep the response short and to the point.
+        if concise_mode:
+            resp = (response or "").strip()
+            # Keep only the first sentence to avoid long follow-ups
+            m = re.search(r'[.!?]', resp)
+            if m:
+                resp = resp[: m.end()].strip()
+            # Strict length limit for ultra-concise responses
+            max_len = 80
+            if len(resp) > max_len:
+                resp = resp[: max_len - 3].rstrip() + "..."
+            return resp
+
+        # Otherwise run a toned-down humanizer with much lower odds of adding fillers
         try:
-            conversation_state = self.topic_manager.conversation_state
-        except:
+            conversation_state = getattr(self, "topic_manager", None)
+            conversation_state = getattr(conversation_state, "conversation_state", "casual")
+        except Exception:
             conversation_state = "casual"
-        
-        # Adjust response based on conversation state
+
+        # REDUCED probabilities and less verbose reactions for extreme conciseness
         if conversation_state == "greeting":
-            # For greetings, keep it simple and friendly
-            if random.random() < 0.3:
-                filler = random.choice(["Hey", "Hi", "Hello"])
+            if random.random() < 0.05:  # Much lower probability
+                filler = random.choice(["Hey", "Hi"])
                 if not response.lower().startswith(("hey", "hi", "hello")):
                     response = f"{filler}! {response}"
-                
         elif conversation_state == "emotional":
-            # For emotional conversations, add empathetic reactions
-            if random.random() < 0.6:
-                empathetic_reactions = [
-                    "I understand", "I see", "That makes sense", 
-                    "I get that", "I hear you", "That's valid"
-                ]
-                reaction = random.choice(empathetic_reactions)
-                response = f"{reaction}. {response}"
-                
+            if random.random() < 0.1:  # Much lower probability
+                empathetic_reactions = ["I see", "Got it"]
+                response = f"{random.choice(empathetic_reactions)}. {response}"
         elif conversation_state == "deep":
-            # For deep conversations, add thoughtful reactions
-            if random.random() < 0.7:
-                thoughtful_reactions = [
-                    "Hmm, interesting", "That's a good point", 
-                    "I've been thinking about that too", 
-                    "That's thought-provoking", "Good question"
-                ]
-                reaction = random.choice(thoughtful_reactions)
-                response = f"{reaction}. {response}"
-                
+            if random.random() < 0.05:  # Much lower probability
+                thoughtful_reactions = ["Hmm"]
+                response = f"{random.choice(thoughtful_reactions)}. {response}"
         else:
-            # For casual conversation, add casual fillers
-            if random.random() < 0.5:
-                filler = random.choice(self.responses.reactions())
-                
-                # Make sure we don't add a filler if the response already starts with one
+            if random.random() < 0.05:  # Much lower probability
+                fillers = [f for f in (self.responses.reactions() if hasattr(self, 'responses') else ["Alright"])][:3]
+                filler = random.choice(fillers)
                 first_word = response.split()[0].lower() if response else ""
-                common_fillers = [r.lower() for r in self.responses.reactions()]
-                
+                common_fillers = [r.lower() for r in fillers]
                 if first_word not in common_fillers:
-                    # Add the filler with appropriate punctuation
-                    if response and response[0].isupper():
-                        response = f"{filler}, {response}"
-                    else:
-                        response = f"{filler}, {response[0].lower()}{response[1:]}" if response else f"{filler}."
-        
-        # Add natural pauses with commas or ellipses
-        if len(response) > 30 and "," not in response and "..." not in response and random.random() < 0.4:
+                    # Only add filler if response is long enough to warrant it
+                    if len(response) > 30:
+                        response = f"{filler}, {response}" if response and response[0].isupper() else f"{filler}, {response}"
+
+        # Minimal punctuation pauses (rare)
+        if len(response) > 60 and "," not in response and random.random() < 0.05:  # Much lower probability
             words = response.split()
-            if len(words) > 5:
-                pause_idx = random.randint(2, min(5, len(words) - 2))
-                
-                # Add a pause
-                if random.random() < 0.7:
-                    words[pause_idx] = words[pause_idx] + ","
-                else:
-                    words[pause_idx] = words[pause_idx] + "..."
-                    
+            if len(words) > 6:
+                pause_idx = random.randint(2, min(4, len(words) - 3))
+                words[pause_idx] = words[pause_idx] + ","
                 response = " ".join(words)
-        
+
         # Fix capitalization after fillers
         response = re.sub(r'(\. )([a-z])', lambda m: f"{m.group(1)}{m.group(2).upper()}", response)
-        
-        # Randomly add contractions
-        if random.random() < 0.3:
+
+        # Light contraction replacement (rare)
+        if random.random() < 0.1:
             contractions = {
                 "I am": "I'm",
                 "You are": "You're",
@@ -2545,16 +3722,20 @@ class AleChatBot:
                 "We are": "We're",
                 "That is": "That's",
                 "It is": "It's",
-                "do not": "don't",
-                "does not": "doesn't",
-                "cannot": "can't",
-                "will not": "won't"
             }
-            
             for full, contracted in contractions.items():
-                if full in response and random.random() < 0.7:
+                if full in response and random.random() < 0.2:  # Lower probability
                     response = response.replace(full, contracted)
-                     
+
+        # Ensure final response is still concise
+        max_final_length = 120
+        if len(response) > max_final_length:
+            # Find a good breaking point
+            break_point = response.rfind(".", 0, max_final_length - 3)
+            if break_point == -1:  # No period found
+                break_point = max_final_length - 3
+            response = response[:break_point + 1].strip() + "..."
+
         return response
     
     def check_repeated_question(self, user_input: str) -> bool:
@@ -2714,26 +3895,187 @@ class AleChatBot:
         return summary
     
     async def _store_search_memory_async(self, search_answer: str, user_message: str):
-        """Store search results in memory asynchronously.
-        
+        """Store search results in comprehensive memory system.
+
         Args:
             search_answer: The search results to store
             user_message: The original user query
         """
-        if self.memory_enabled and self.memory:
+        if self.memory_enabled:
             try:
-                await asyncio.to_thread(
-                    self.memory.store_memory,
-                    content=search_answer,
-                    memory_type=MemoryType.FACT,
-                    topic="web_search",
-                    metadata={
+                # Use comprehensive memory system if available
+                if self.memory_integration and self.memory_integration.is_enabled:
+                    memory_system = self.memory_integration.memory_system
+
+                    # Get current search history
+                    search_data = memory_system.data["memory_categories"].get("search_external_info", {})
+
+                    # Initialize search history if needed
+                    if "search_history" not in search_data:
+                        search_data["search_history"] = []
+                    if "search_summaries" not in search_data:
+                        search_data["search_summaries"] = {}
+
+                    # Create search record
+                    import time
+                    search_record = {
                         "query": user_message,
-                        "timestamp": datetime.now().isoformat()
+                        "results": search_answer,
+                        "timestamp": datetime.now().isoformat(),
+                        "date": datetime.now().strftime("%Y-%m-%d"),
+                        "search_id": f"search_{int(time.time())}"
                     }
-                )
+
+                    # Add to search history
+                    search_data["search_history"].append(search_record)
+
+                    # Keep only last 50 searches to prevent memory bloat
+                    if len(search_data["search_history"]) > 50:
+                        search_data["search_history"] = search_data["search_history"][-50:]
+
+                    # Update search summaries by date
+                    date_key = search_record["date"]
+                    if date_key not in search_data["search_summaries"]:
+                        search_data["search_summaries"][date_key] = []
+
+                    search_data["search_summaries"][date_key].append({
+                        "query": user_message,
+                        "timestamp": search_record["timestamp"],
+                        "search_id": search_record["search_id"]
+                    })
+
+                    # Store updated data
+                    memory_system.memory_system.data["memory_categories"]["search_external_info"] = search_data
+                    memory_system.memory_system.save_memory()
+
+                    logger.debug(f"Stored search results in comprehensive memory: {user_message}")
+
+                elif hasattr(self, 'memory') and self.memory:
+                    await asyncio.to_thread(
+                        self.memory.store_memory,
+                        content=search_answer,
+                        memory_type=MemoryType.FACT,
+                        topic="web_search",
+                        metadata={
+                            "query": user_message,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                    )
             except Exception as e:
                 logger.warning(f"Failed to store search memory: {e}")
+
+    def _add_engaging_system_prompt(self, messages: List[Dict], user_message: str, memory_context: Dict[str, Any] = None) -> List[Dict]:
+        """Add an engaging, dynamic system prompt to make conversations more interesting."""
+        
+        # Dynamic personality traits that change based on context
+        personality_traits = [
+            "curious and enthusiastic",
+            "friendly and approachable", 
+            "witty and insightful",
+            "helpful and encouraging",
+            "thoughtful and engaging"
+        ]
+        
+        # Fun conversation starters/follow-ups
+        conversation_enhancers = [
+            "What sparked your interest in this topic?",
+            "I'd love to hear more about your thoughts on this!",
+            "That's fascinating! Have you considered...",
+            "This reminds me of something interesting...",
+            "I'm curious - what's your experience with this?",
+            "What would you like to explore next about this?",
+            "That's a great question! Here's what I think...",
+            "Interesting perspective! Let me add to that..."
+        ]
+        
+        # Context-aware responses based on user message
+        message_lower = user_message.lower()
+        
+        # Determine conversation style based on user's message
+        if any(word in message_lower for word in ['help', 'problem', 'issue', 'stuck', 'confused']):
+            style = "supportive and solution-focused"
+            follow_up_hint = "Ask if they need more specific guidance or have other questions."
+        elif any(word in message_lower for word in ['fun', 'joke', 'funny', 'laugh', 'humor']):
+            style = "playful and humorous"
+            follow_up_hint = "Feel free to add light humor or fun facts when appropriate."
+        elif any(word in message_lower for word in ['learn', 'explain', 'understand', 'how', 'what', 'why']):
+            style = "educational and encouraging"
+            follow_up_hint = "Offer to explain more details or related concepts they might find interesting."
+        elif any(word in message_lower for word in ['opinion', 'think', 'feel', 'believe']):
+            style = "thoughtful and discussion-oriented"
+            follow_up_hint = "Ask for their perspective or share related insights to keep the conversation flowing."
+        else:
+            style = random.choice(personality_traits)
+            follow_up_hint = f"Consider using: '{random.choice(conversation_enhancers)}'"
+
+        # Add memory context to system prompt if available
+        memory_info = ""
+        if memory_context and memory_context.get("memory_available", False):
+            user_profile = memory_context.get("user_profile", {})
+            preferences = memory_context.get("preferences", {})
+            recent_topics = memory_context.get("recent_topics", [])
+
+            memory_parts = []
+            if user_profile.get("total_memory_items", 0) > 0:
+                memory_parts.append(f"I remember {user_profile['total_memory_items']} things about this user.")
+
+            if preferences:
+                pref_list = [f"{k}: {v}" for k, v in list(preferences.items())[:3]]
+                if pref_list:
+                    memory_parts.append(f"User preferences: {', '.join(pref_list)}")
+
+            if recent_topics:
+                memory_parts.append(f"Recent topics: {', '.join(recent_topics[:3])}")
+
+            if memory_parts:
+                memory_info = f"\n\nMEMORY CONTEXT:\n{chr(10).join(f'• {part}' for part in memory_parts)}\nUse this context to personalize responses appropriately."
+
+        # Create dynamic system prompt with emphasis on brevity
+        system_prompt = f"""You are Nova, a helpful, witty, and friendly AI with a {style} personality. Keep responses VERY BRIEF and engaging.{memory_info}
+
+        RESPONSE RULES:
+        • Keep answers extremely concise - MAXIMUM 1 sentence for simple questions, 2 sentences max for complex ones
+        • Give the key answer FIRST, then only essential details if absolutely needed
+        • Be conversational and friendly, not robotic
+        • {follow_up_hint}
+        • NEVER ask open-ended questions like "What else is on your mind?" or "Anything exciting to share?"
+        • NEVER prompt the user to continue the conversation
+
+        ENGAGEMENT STYLE:
+        • Use natural, casual language
+        • Be direct and to the point
+        • ONLY add humor or interesting facts if they're brief and highly relevant
+        • Do NOT ask follow-up questions unless absolutely necessary for clarity
+        • NEVER offer to "explain more" - if needed, explain concisely in the first response
+
+        PERSONALITY:
+        • Concise but friendly
+        • Helpful without being verbose
+        • Direct and clear
+        • Genuinely interested in helping efficiently
+
+        EXAMPLES:
+        ❌ Too long: "Machine learning is a fascinating field of artificial intelligence that involves training algorithms on data to make predictions. There are many types including supervised learning where we use labeled data, unsupervised learning for pattern discovery, and reinforcement learning for decision making. Would you like me to explain any of these in more detail?"
+
+        ✅ Perfect: "Machine learning trains computers to learn from data. Main types: supervised, unsupervised, and reinforcement learning."
+
+        KEY PRINCIPLES:
+        • Brevity is essential - shorter responses are better
+        • Never repeat information the user already knows
+        • Don't over-explain - trust the user to ask for clarification if needed
+        • One clear answer is better than multiple options
+        • NO conversational fillers like "Sure thing!" or "Absolutely!" unless adding value
+        
+        Remember: Be helpful, engaging, and EXTREMELY CONCISE. Shorter is always better!"""
+
+        # Add system prompt to the beginning of messages if not already present
+        if not messages or messages[0].get("role") != "system":
+            enhanced_messages = [{"role": "system", "content": system_prompt}] + messages
+        else:
+            # Replace existing system prompt with our enhanced one
+            enhanced_messages = [{"role": "system", "content": system_prompt}] + messages[1:]
+        
+        return enhanced_messages
 
     async def get_response(self, messages: List[Dict], stream_to_terminal: bool = True) -> str:
         """Get a response from the AI model.
@@ -2748,12 +4090,83 @@ class AleChatBot:
         try:
             # Get the user's message
             user_message = messages[-1]["content"]
-            
+
+            # Track user message in analytics
+            if self.analytics_system:
+                self.analytics_system.track_message(is_user_message=True)
+
+            # Check for widget movement commands first
+            widget_movement_response = self._process_widget_movement_command(user_message)
+            if widget_movement_response:
+                return widget_movement_response
+
+            # Check for pending task reminders first
+            if self.task_manager:
+                reminder_response = await self._check_pending_reminders()
+                if reminder_response:
+                    return reminder_response
+
+            # Check for vision-related queries and commands
+            if self.ai_vision:
+                vision_response = await self._process_vision_query(user_message)
+                if vision_response:
+                    return vision_response
+
+            # Check for task-related queries and commands
+            if self.task_manager and self.task_nlp_processor:
+                task_response = await self._process_task_query(user_message)
+                if task_response:
+                    return task_response
+
             # Check for news-related queries first
             if self.news_system:
                 news_response = self._process_news_query(user_message)
                 if news_response:
                     return news_response
+            
+            # Check for time-related queries
+            time_response = self._process_time_query(user_message)
+            if time_response:
+                return time_response
+            
+            # Check for weather-related queries
+            if self.weather_service:
+                weather_response = self._process_weather_query(user_message)
+                if weather_response:
+                    return weather_response
+            
+            # Check for video analysis queries
+            if self.video_analyzer:
+                video_response = await self._process_video_analysis_query(user_message)
+                if video_response:
+                    return video_response
+
+            # Music support removed: skip music processing entirely
+            # If you want a user-visible reply when they try to use music, uncomment below.
+            # music_response = await self._process_music_query(user_message)
+            # if music_response:
+            #     return music_response
+
+            # Check for content discussion requests
+            discussion_response = self._handle_content_discussion(user_message)
+            if discussion_response:
+                return discussion_response
+
+            # Check for history requests
+            history_response = self._handle_history_request(user_message)
+            if history_response:
+                return history_response
+
+            # Check for memory-related queries
+            memory_response = await self._process_memory_query(user_message)
+            if memory_response:
+                return memory_response
+
+            # Check if we should add a smart greeting
+            greeting = self._get_smart_greeting()
+            if greeting:
+                # Prepend greeting to response generation
+                pass  # We'll add the greeting to the final response
             
             # Enhanced search patterns with new features
             search_patterns = [
@@ -2806,9 +4219,34 @@ class AleChatBot:
                     elif search_options.get('format') == 'summary':
                         search_answer = self._format_summary_results(search_results)
                     
-                    # Store the search results in memory asynchronously
+                    # Analyze content for internal comprehension
+                    if self.content_analysis:
+                        try:
+                            analysis = self.content_analysis.analyze_search_content(
+                                query=user_message,
+                                search_results=search_answer,
+                                user_context={"timestamp": datetime.now().isoformat()}
+                            )
+                            logger.info(f"[ANALYSIS] Search content analyzed: {analysis.content_id}")
+                        except Exception as e:
+                            logger.error(f"[ERROR] Content analysis failed: {e}")
+
+                    # Store in dedicated search memory
+                    if self.search_news_memory:
+                        try:
+                            search_id = self.search_news_memory.store_search_record(
+                                query=user_message,
+                                results=search_answer,
+                                user_context={"timestamp": datetime.now().isoformat()},
+                                analysis_summary=self.content_analysis.get_analysis_summary(analysis) if self.content_analysis and 'analysis' in locals() else ""
+                            )
+                            logger.info(f"[MEMORY] Search stored: {search_id}")
+                        except Exception as e:
+                            logger.error(f"[ERROR] Search memory storage failed: {e}")
+
+                    # Store the search results in memory asynchronously (legacy)
                     asyncio.create_task(self._store_search_memory_async(search_answer, user_message))
-                    
+
                     return search_answer
                     
                 except Exception as e:
@@ -2819,14 +4257,18 @@ class AleChatBot:
             try:
                 # Add thinking delay for more natural interaction
                 await asyncio.sleep(random.uniform(self.min_response_time, self.max_response_time))
+
+                # Get memory context for enhanced responses
+                memory_context = await self._get_memory_context_for_response(user_message)
+
+                # Enhance messages with dynamic personality system prompt and memory context
+                enhanced_messages = self._add_engaging_system_prompt(messages, user_message, memory_context)
                 
-                # Get response from model
-                completion = await asyncio.to_thread(
-                    self.client.chat.completions.create,
-                    model="llama-3.3-70b-versatile",  # Using the correct model name
-                    messages=messages,
-                    temperature=0.7,
-                    max_tokens=1000,
+                # Get response from model with retry logic for timeout handling
+                completion = await self._make_api_call_with_retry(
+                    enhanced_messages,
+                    temperature=0.8,  # Increased for more creativity and personality
+                    max_tokens=400,  # Reduced to encourage shorter, more concise responses
                     stream=stream_to_terminal
                 )
                 
@@ -2843,17 +4285,28 @@ class AleChatBot:
                     # Return complete response
                     response = completion.choices[0].message.content
                 
+                # Add smart greeting if appropriate
+                greeting = self._get_smart_greeting()
+                if greeting:
+                    response = f"{greeting}\n\n{response}"
+
+                # Track AI response in analytics
+                if self.analytics_system:
+                    self.analytics_system.track_message(is_user_message=False)
+
                 # Update chat history
                 if response:
                     self.chat_history.extend([
                         {"role": "user", "content": user_message},
                         {"role": "assistant", "content": response}
                     ])
-                    
-                    # Store conversation memory asynchronously
-                    if self.memory_enabled and self.memory:
-                        asyncio.create_task(self._store_conversation_memory_async(user_message, response))
-                
+
+                    # Store conversation memory asynchronously (always store to nova_ai_memory.json)
+                    asyncio.create_task(self._store_conversation_memory_async(user_message, response))
+
+                    # Trigger voice output for AI response
+                    await self._speak_response(response)
+
                 return response
                 
             except Exception as e:
@@ -2865,21 +4318,702 @@ class AleChatBot:
             return "I apologize, but I encountered an error. Could you please try again?"
     
     async def _store_conversation_memory_async(self, user_message: str, ai_response: str):
-        """Store conversation in memory asynchronously.
+        """Store conversation in comprehensive memory system asynchronously.
+
+        Args:
+            user_message: The user's message
+            ai_response: The AI's response
+        """
+        try:
+            # Always store conversation in nova_ai_memory.json first
+            await self._store_conversation_to_memory_file(user_message, ai_response)
+            
+            if self.memory_integration and self.memory_integration.is_enabled:
+                # Use comprehensive memory system
+                await self.memory_integration.process_conversation(
+                    user_message,
+                    ai_response,
+                    {"session_id": getattr(self, 'session_id', 'default')}
+                )
+            elif self.mem0_memory_agent:
+                # Use mem0_memory_system for conversation processing
+                try:
+                    result = await asyncio.to_thread(
+                        self.mem0_memory_agent.process_conversation,
+                        user_message,
+                        ai_response
+                    )
+                    
+                    # Display memory operations
+                    if result and 'memory_operations' in result:
+                        operations_count = result['memory_operations']
+                        if operations_count > 0:
+                            print(f"[MEMORY] Processed {operations_count} memory operations")
+                    
+                    # Increment conversation counter for periodic saving
+                    self.conversation_count += 1
+                    
+                    # Save memory every 5 conversations
+                    if self.conversation_count % 5 == 0:
+                        try:
+                            await asyncio.to_thread(
+                                self.mem0_memory_agent.memory_system.save_memory
+                            )
+                            print(f"💾 [MEMORY] Saved memory to nova_ai_memory.json (conversation #{self.conversation_count})")
+                        except Exception as e:
+                            logger.warning(f"Periodic memory save failed: {e}")
+                except Exception as e:
+                    logger.debug(f"Mem0 memory processing error: {e}")
+            elif self.memory and hasattr(self, 'memory'):
+                # Fallback to basic memory system
+                await asyncio.to_thread(
+                    self.store_conversation_memory,
+                    user_message,
+                    ai_response
+                )
+        except Exception as e:
+            logger.warning(f"Failed to store conversation memory: {e}")
+
+    async def _store_conversation_to_memory_file(self, user_message: str, ai_response: str):
+        """Store conversation directly to nova_ai_memory.json file
         
         Args:
             user_message: The user's message
             ai_response: The AI's response
         """
         try:
-            await asyncio.to_thread(
-                self.store_conversation_memory,
-                user_message,
-                ai_response
-            )
-        except Exception as e:
-            logger.warning(f"Failed to store conversation memory: {e}")
+            # Get session ID
+            session_id = getattr(self, 'session_id', f'session_{int(time.time())}')
             
+            # Store user message
+            await asyncio.to_thread(
+                append_single_message,
+                'user',
+                user_message,
+                session_id=session_id
+            )
+            
+            # Store AI response
+            await asyncio.to_thread(
+                append_single_message,
+                'assistant',
+                ai_response,
+                session_id=session_id
+            )
+            
+            logger.debug(f"Stored conversation to nova_ai_memory.json (session: {session_id})")
+            
+        except Exception as e:
+            logger.error(f"Failed to store conversation to memory file: {e}")
+
+    def _initialize_conversation_session(self):
+        """Initialize conversation session for automatic storage to nova_ai_memory.json"""
+        try:
+            # Generate a unique session ID
+            self.session_id = f"session_{int(time.time())}"
+            
+            # Ensure the memory file directory exists
+            memory_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Date', 'nova_ai_memory.json')
+            os.makedirs(os.path.dirname(memory_file_path), exist_ok=True)
+            
+            # Initialize the memory file if it doesn't exist
+            if not os.path.exists(memory_file_path):
+                try:
+                    # Create initial memory structure
+                    initial_memory = {
+                        "user": {
+                            "user_id": "user_a358b1d2",
+                            "name": "Rich",
+                            "created_at": datetime.now().isoformat(),
+                            "status": "active",
+                            "total_sessions": 1,
+                            "last_seen": datetime.now().isoformat(),
+                            "relationship_established": True
+                        },
+                        "memory_events": [],
+                        "conversation": [],
+                        "current_facts": {},
+                        "fact_history": {},
+                        "sessions": {},
+                        "current_session": self.session_id,
+                        "conversation_state": {
+                            "greeting_completed": True,
+                            "introduction_phase": False,
+                            "established_user": True
+                        },
+                        "memory_categories": {},
+                        "category_relationships": {},
+                        "memory_metadata": {},
+                        "privacy_settings": {
+                            "default_retention": "permanent",
+                            "sensitive_data_handling": "encrypted",
+                            "auto_cleanup_enabled": False,
+                            "privacy_level_defaults": {
+                                "normal": "store_and_recall",
+                                "sensitive": "store_encrypted",
+                                "private": "session_only"
+                            }
+                        },
+                        "behavioral_adaptation": {
+                            "response_style_preferences": {},
+                            "communication_adaptations": {},
+                            "learned_patterns": {},
+                            "user_feedback_integration": {}
+                        }
+                    }
+                    
+                    with open(memory_file_path, 'w', encoding='utf-8') as f:
+                        json.dump(initial_memory, f, indent=2, ensure_ascii=False)
+                    
+                    logger.info(f"Initialized nova_ai_memory.json with session: {self.session_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to initialize memory file: {e}")
+            else:
+                # Update existing memory file with new session
+                try:
+                    with open(memory_file_path, 'r', encoding='utf-8') as f:
+                        memory_data = json.load(f)
+                    
+                    # Update session info
+                    memory_data["current_session"] = self.session_id
+                    memory_data["user"]["last_seen"] = datetime.now().isoformat()
+                    memory_data["user"]["total_sessions"] = memory_data["user"].get("total_sessions", 1) + 1
+                    
+                    # Add new session
+                    if "sessions" not in memory_data:
+                        memory_data["sessions"] = {}
+                    
+                    memory_data["sessions"][self.session_id] = {
+                        "session_id": self.session_id,
+                        "start_time": datetime.now().isoformat(),
+                        "end_time": None,
+                        "message_count": 0,
+                        "topics_discussed": [],
+                        "user_name": memory_data.get("user", {}).get("name", "Rich"),
+                        "session_duration": None,
+                        "last_activity": datetime.now().isoformat()
+                    }
+                    
+                    with open(memory_file_path, 'w', encoding='utf-8') as f:
+                        json.dump(memory_data, f, indent=2, ensure_ascii=False)
+                    
+                    logger.info(f"Updated nova_ai_memory.json with new session: {self.session_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to update memory file with new session: {e}")
+            
+            logger.info(f"Conversation session initialized: {self.session_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize conversation session: {e}")
+            # Set a fallback session ID
+            self.session_id = f"session_{int(time.time())}"
+
+    async def _get_memory_context_for_response(self, user_message: str) -> Dict[str, Any]:
+        """Get memory context to enhance AI responses"""
+        try:
+            if self.memory_integration and self.memory_integration.is_enabled:
+                # Use comprehensive memory system
+                context = await self.memory_integration.get_memory_context(user_message, "comprehensive")
+                return context
+            elif self.mem0_memory_agent:
+                # Use mem0_memory_system for context retrieval
+                try:
+                    context = await asyncio.to_thread(
+                        self.mem0_memory_agent.get_memory_context,
+                        user_message
+                    )
+                    return context
+                except Exception as e:
+                    logger.debug(f"Mem0 memory context retrieval error: {e}")
+                    return {}
+            else:
+                # Return empty context if no memory system
+                return {}
+        except Exception as e:
+            logger.debug(f"Memory context retrieval error: {e}")
+            return {}
+
+    def _get_smart_greeting(self, session_id: str = "default") -> Optional[str]:
+        """Get smart greeting if appropriate"""
+        try:
+            if self.greeting_system:
+                return self.greeting_system.generate_greeting(session_id)
+            return None
+        except Exception as e:
+            logger.debug(f"Smart greeting error: {e}")
+            return None
+
+    def _summarize_recent_conversation(self, days: int = 3, max_items: int = 30) -> str:
+        """Create a comprehensive summary of conversation from the last N days."""
+        try:
+            if not self.memory_enabled:
+                return ""
+
+            # Try comprehensive memory system first
+            if self.memory_integration and self.memory_integration.is_enabled:
+                try:
+                    # Get recent conversation history
+                    history = self.memory_integration.get_conversation_history()
+                    if not history:
+                        return ""
+
+                    # Filter by date
+                    cutoff = datetime.now() - timedelta(days=days)
+                    recent = []
+
+                    for msg in history:
+                        timestamp_str = msg.get('timestamp', '')
+                        if timestamp_str:
+                            try:
+                                # Handle different timestamp formats
+                                if 'T' in timestamp_str:
+                                    msg_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                                else:
+                                    msg_time = datetime.fromisoformat(timestamp_str)
+
+                                if msg_time >= cutoff:
+                                    recent.append(msg)
+                            except ValueError:
+                                # If timestamp parsing fails, include recent messages anyway
+                                recent.append(msg)
+
+                    # If no recent messages by date, get the most recent ones
+                    if not recent:
+                        recent = history[-max_items:]
+
+                    # Format conversation history
+                    lines = []
+                    conversation_topics = set()
+
+                    for msg in recent[-max_items:]:
+                        role = msg.get('role', 'user')
+                        content = msg.get('content', '').strip()
+                        timestamp = msg.get('timestamp', '')
+
+                        if not content or len(content) < 10:  # Skip very short messages
+                            continue
+
+                        # Extract topics/keywords for context
+                        if role == 'user':
+                            words = content.lower().split()
+                            for word in words:
+                                if len(word) > 4 and word.isalpha():
+                                    conversation_topics.add(word)
+
+                        # Format message with timestamp if available
+                        prefix = "User" if role == 'user' else "Nova"
+                        time_info = ""
+                        if timestamp:
+                            try:
+                                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                time_info = f" ({dt.strftime('%m/%d %H:%M')})"
+                            except:
+                                pass
+
+                        # Truncate long messages but preserve important info
+                        if len(content) > 200:
+                            content = content[:200] + "..."
+
+                        lines.append(f"• {prefix}{time_info}: {content}")
+
+                    if lines:
+                        summary_parts = []
+
+                        # Add conversation topics if found
+                        if conversation_topics:
+                            topics = list(conversation_topics)[:8]  # Top 8 topics
+                            summary_parts.append(f"Recent topics discussed: {', '.join(topics)}")
+
+                        # Add conversation history
+                        summary_parts.append(f"Recent conversation history (last {days} days):")
+                        summary_parts.extend(lines)
+
+                        return "\n".join(summary_parts)
+
+                except Exception as e:
+                    file_logger.debug(f"Error getting comprehensive conversation history: {e}")
+
+            # Fallback to super memory system
+            try:
+                from memory.super_memory_db import SuperMemorySystem
+                sm = SuperMemorySystem()
+                summary = sm.super_memory_db.get_conversation_summary(days=days)
+                if summary:
+                    return f"Recent conversation summary (last {days} days):\n{summary[:1500]}"
+            except Exception as e:
+                file_logger.debug(f"Error getting super memory conversation summary: {e}")
+
+            return ""
+
+        except Exception as e:
+            file_logger.debug(f"Error in conversation summary: {e}")
+            return ""
+
+    async def _get_comprehensive_user_profile_for_ai(self) -> str:
+        """Get comprehensive user profile to send to AI at conversation start"""
+        try:
+            if not self.memory_integration or not self.memory_integration.is_enabled:
+                return ""
+
+            # Get comprehensive user profile
+            profile = await asyncio.to_thread(self.memory_integration.memory_system.get_comprehensive_user_profile)
+
+            if not profile or profile.get("total_items", 0) == 0:
+                return ""
+
+            # Format profile information for AI context
+            profile_parts = []
+
+            # User identity information (most important)
+            if profile.get("user_identity", {}).get("items"):
+                identity_info = []
+                for item in profile["user_identity"]["items"]:
+                    content = item.get('content', '').strip()
+                    if content:
+                        identity_info.append(f"- {content}")
+                if identity_info:
+                    profile_parts.append(f"USER IDENTITY:\n" + "\n".join(identity_info))
+
+            # Personal preferences
+            if profile.get("personal_preferences", {}).get("items"):
+                pref_info = []
+                for item in profile["personal_preferences"]["items"]:
+                    content = item.get('content', '').strip()
+                    if content:
+                        pref_info.append(f"- {content}")
+                if pref_info:
+                    profile_parts.append(f"PREFERENCES:\n" + "\n".join(pref_info))
+
+            # Interests and hobbies
+            if profile.get("interests_hobbies", {}).get("items"):
+                interest_info = []
+                for item in profile["interests_hobbies"]["items"]:
+                    content = item.get('content', '').strip()
+                    if content:
+                        interest_info.append(f"- {content}")
+                if interest_info:
+                    profile_parts.append(f"INTERESTS:\n" + "\n".join(interest_info))
+
+            # Goals and aspirations
+            if profile.get("goals_aspirations", {}).get("items"):
+                goal_info = []
+                for item in profile["goals_aspirations"]["items"]:
+                    content = item.get('content', '').strip()
+                    if content:
+                        goal_info.append(f"- {content}")
+                if goal_info:
+                    profile_parts.append(f"GOALS:\n" + "\n".join(goal_info))
+
+            # Professional information
+            if profile.get("professional_work", {}).get("items"):
+                work_info = []
+                for item in profile["professional_work"]["items"]:
+                    content = item.get('content', '').strip()
+                    if content:
+                        work_info.append(f"- {content}")
+                if work_info:
+                    profile_parts.append(f"PROFESSIONAL:\n" + "\n".join(work_info))
+
+            # Recent conversation patterns
+            if profile.get("conversation_patterns", {}).get("items"):
+                pattern_info = []
+                for item in profile["conversation_patterns"]["items"][:5]:  # Last 5 patterns
+                    content = item.get('content', '').strip()
+                    if content:
+                        pattern_info.append(f"- {content}")
+                if pattern_info:
+                    profile_parts.append(f"RECENT PATTERNS:\n" + "\n".join(pattern_info))
+
+            # Add other important categories
+            important_categories = [
+                "relationships_social", "health_wellness", "learning_education",
+                "entertainment_media", "travel_experiences", "technology_usage"
+            ]
+
+            for category in important_categories:
+                if profile.get(category, {}).get("items"):
+                    category_info = []
+                    for item in profile[category]["items"][:3]:  # Top 3 items per category
+                        content = item.get('content', '').strip()
+                        if content:
+                            category_info.append(f"- {content}")
+                    if category_info:
+                        category_name = category.replace('_', ' ').title()
+                        profile_parts.append(f"{category_name.upper()}:\n" + "\n".join(category_info))
+
+            if profile_parts:
+                total_items = profile.get('total_items', 0)
+                total_categories = len(profile.get('categories', {}))
+
+                return (f"COMPREHENSIVE USER PROFILE:\n\n" +
+                       "\n\n".join(profile_parts) +
+                       f"\n\nMemory Statistics: {total_items} memories across {total_categories} categories.")
+
+            return ""
+
+        except Exception as e:
+            file_logger.error(f"Error getting comprehensive user profile: {e}")
+            return ""
+
+    async def _initialize_voice_system(self):
+        """Initialize the AI voice system for speaking responses"""
+        try:
+            if not hasattr(self, 'voice_system') or self.voice_system is None:
+                # Import and initialize the voice system
+                try:
+                    import sys
+                    import os
+                    speech_path = os.path.join(os.path.dirname(__file__), '..', 'speech')
+                    if speech_path not in sys.path:
+                        sys.path.insert(0, speech_path)
+
+                    # Import the configured voice module (the user prefers 'Ai vioce.py')
+                    import importlib.util
+                    voice_file_path = os.path.join(speech_path, 'Ai_voice.py')
+                    spec = importlib.util.spec_from_file_location("ai_voice", voice_file_path)
+                    ai_voice_module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(ai_voice_module)
+                    NovaVoiceService = getattr(ai_voice_module, 'NovaVoiceService')
+
+                    # Initialize voice service with canonical nova memory JSON in workspace `@astra_ai/Date/`
+                    ai_responses_file = os.path.join(os.path.dirname(__file__), '..', '..', '@astra_ai', 'Date', 'nova_ai_memory.json')
+                    self.voice_system = NovaVoiceService(ai_responses_file=ai_responses_file)
+
+                    # Start the voice service
+                    if self.voice_system.start():
+                        file_logger.info("Voice system initialized successfully")
+                        return True
+                    else:
+                        file_logger.warning("Voice system failed to start")
+                        self.voice_system = None
+                        return False
+
+                except ImportError as e:
+                    file_logger.warning(f"Voice system not available: {e}")
+                    self.voice_system = None
+                    return False
+                except Exception as e:
+                    file_logger.error(f"Error initializing voice system: {e}")
+                    self.voice_system = None
+                    return False
+
+            return True
+
+        except Exception as e:
+            file_logger.error(f"Error in voice system initialization: {e}")
+            self.voice_system = None
+            return False
+
+    async def _speak_response(self, response_text: str):
+        """Send response to voice system for speaking"""
+        try:
+            if hasattr(self, 'voice_system') and self.voice_system and self.voice_system.is_active:
+                # The voice system monitors ai_responses.json automatically
+                # Just ensure the response is saved there (which happens in store_conversation)
+                pass
+        except Exception as e:
+            file_logger.error(f"Error in voice response: {e}")
+
+    async def _process_memory_query(self, user_message: str) -> Optional[str]:
+        """Process memory-related queries and return memory information"""
+        if not self.memory_integration or not self.memory_integration.is_enabled:
+            return None
+
+        user_message_lower = user_message.lower()
+
+        # Memory query patterns
+        memory_patterns = [
+            # Personal profile queries
+            r"what do you (remember|know) about me",
+            r"tell me about myself",
+            r"what have i told you",
+            r"my profile",
+            r"what information do you have about me",
+
+            # Conversation history queries
+            r"what did we (discuss|talk about)",
+            r"our conversation",
+            r"what did i ask",
+            r"what did you say",
+            r"conversation history",
+            r"our chat",
+
+            # Time-based queries
+            r"what did we talk about (yesterday|last week|last month|today|this week)",
+            r"what did we discuss on (monday|tuesday|wednesday|thursday|friday|saturday|sunday)",
+            r"yesterday's conversation",
+            r"last week's discussion",
+
+            # Search history queries
+            r"what did i search",
+            r"what searches did i do",
+            r"search history",
+            r"what did i look up",
+            r"my search results",
+            r"summarize.*search.*results",
+            r"what did i search (yesterday|last week|today)",
+
+            # News and weather history queries
+            r"what news did i check",
+            r"what weather did i check",
+            r"news history",
+            r"weather history",
+            r"what news.*yesterday",
+            r"what weather.*yesterday",
+            r"summarize.*news.*results",
+            r"summarize.*weather.*results",
+
+            # Topic-specific queries
+            r"what do you remember about (.+)",
+            r"tell me what we discussed about (.+)",
+            r"our conversation about (.+)",
+
+            # General memory queries
+            r"do you remember",
+            r"can you recall",
+            r"what's in your memory"
+        ]
+
+        # Check if message matches memory query patterns
+        is_memory_query = any(re.search(pattern, user_message_lower) for pattern in memory_patterns)
+
+        if is_memory_query:
+            try:
+                # Check for "what do you know about me" queries first
+                personal_queries = ["what do you know about me", "what do you remember about me", "tell me about myself", "my profile"]
+                if any(query in user_message_lower for query in personal_queries):
+                    return self.get_comprehensive_user_knowledge()
+
+                # Check for dynamic knowledge queries
+                if any(knowledge_query in user_message_lower for knowledge_query in ["what do you know about", "tell me about", "what can you tell me about"]):
+                    return await self._process_knowledge_query(user_message)
+
+                # Check for search history queries
+                if any(search_term in user_message_lower for search_term in ["search", "searched", "look up", "looked up"]):
+                    return await self._get_search_history(user_message)
+
+                # Check for news history queries (only for history-specific queries)
+                if any(news_query in user_message_lower for news_query in ["what news did i", "news did i check", "news history", "what news have i"]):
+                    return await self._get_news_history(user_message)
+
+                # Check for weather history queries (only for history-specific queries)
+                if any(weather_query in user_message_lower for weather_query in ["what weather did i", "weather did i check", "weather history", "what weather have i"]):
+                    return await self._get_weather_history(user_message)
+
+                # Query the comprehensive memory system
+                if hasattr(self.memory_integration, 'query_memories'):
+                    memory_result = await self.memory_integration.query_memories(user_message, "general")
+
+                    if memory_result.get("success", False):
+                        return self._format_memory_response(memory_result, user_message)
+                    else:
+                        return "I'm having trouble accessing my memory right now. Could you try asking again?"
+                else:
+                    return "Memory query functionality is not available in the current system."
+
+            except Exception as e:
+                logger.error(f"Memory query processing error: {e}")
+                return "I encountered an error while searching my memory. Please try again."
+
+        return None
+
+    def _format_memory_response(self, memory_result: Dict[str, Any], original_query: str) -> str:
+        """Format memory query results into a user-friendly response"""
+        try:
+            query_lower = original_query.lower()
+
+            # Handle different types of memory responses
+            if "profile" in query_lower or "about me" in query_lower:
+                return self._format_profile_response(memory_result)
+            elif "conversation" in query_lower or "discuss" in query_lower:
+                return self._format_conversation_response(memory_result)
+            elif any(time_word in query_lower for time_word in ["yesterday", "last week", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]):
+                return self._format_time_based_response(memory_result)
+            else:
+                return self._format_general_memory_response(memory_result)
+
+        except Exception as e:
+            logger.debug(f"Memory response formatting error: {e}")
+            return "I found some information in my memory, but I'm having trouble organizing it right now."
+
+    def _format_profile_response(self, memory_result: Dict[str, Any]) -> str:
+        """Format personal profile memory response"""
+        profile_summary = memory_result.get("profile_summary", "")
+        total_items = memory_result.get("total_items", 0)
+
+        if total_items > 0:
+            response = f"[MEMORY] Here's what I remember about you:\n\n{profile_summary}"
+
+            categories = memory_result.get("categories", {})
+            if categories:
+                active_cats = [cat for cat, data in categories.items() if data]
+                if active_cats:
+                    response += f"\n\nI have information in these areas: {', '.join(active_cats[:5])}"
+
+            return response
+        else:
+            return "I'm still learning about you! Feel free to share more about yourself, your preferences, or what you're working on."
+
+    def _format_conversation_response(self, memory_result: Dict[str, Any]) -> str:
+        """Format conversation history memory response"""
+        total_conversations = memory_result.get("total_conversations", 0)
+        topics_discussed = memory_result.get("topics_discussed", [])
+        recent_highlights = memory_result.get("recent_highlights", [])
+
+        if total_conversations > 0:
+            response = f"💬 We've had {total_conversations} conversations so far!"
+
+            if topics_discussed:
+                response += f"\n\nMain topics we've discussed: {', '.join(topics_discussed[:5])}"
+
+            if recent_highlights:
+                response += f"\n\nRecent highlights:\n" + "\n".join(f"• {highlight}" for highlight in recent_highlights[:3])
+
+            return response
+        else:
+            return "This is actually our first conversation! I'm excited to learn more about you."
+
+    def _format_time_based_response(self, memory_result: Dict[str, Any]) -> str:
+        """Format time-based memory response"""
+        time_period = memory_result.get("time_period", "that time")
+        conversations = memory_result.get("conversations", [])
+        highlights = memory_result.get("highlights", [])
+
+        if conversations or highlights:
+            response = f"📅 From {time_period}:"
+
+            if highlights:
+                response += "\n" + "\n".join(f"• {highlight}" for highlight in highlights[:3])
+            elif conversations:
+                response += f"\n• We had {len(conversations)} conversation(s)"
+
+            return response
+        else:
+            return f"I don't have any specific memories from {time_period}. We might not have talked then, or I might need more context."
+
+    def _format_general_memory_response(self, memory_result: Dict[str, Any]) -> str:
+        """Format general memory response"""
+        memories = memory_result.get("memories", [])
+        summary = memory_result.get("summary", "")
+
+        if memories:
+            response = f"🔍 {summary}\n"
+
+            for memory in memories[:3]:
+                content = memory.get("content", "")
+                relevance = memory.get("relevance", 0)
+                if content:
+                    response += f"\n• {content}"
+
+            if len(memories) > 3:
+                response += f"\n\n...and {len(memories) - 3} more related memories."
+
+            return response
+        else:
+            return "I don't have specific memories about that topic yet. Feel free to share more information!"
+
     def handle_special_commands(self, command: str) -> bool:
         """Handle special commands including search-related ones."""
         # Add search-specific commands
@@ -2931,7 +5065,7 @@ class AleChatBot:
                 "cache": cache_stats,
                 "context": context_stats,
                 "knowledge": knowledge_stats,
-                "memory_system": bool(self.memory),
+                "memory_system": self.memory_enabled,
                 "voice_input": self.voice_input_mode,
                 "mode": self.mode
             }
@@ -2987,66 +5121,1369 @@ class AleChatBot:
             return f"Error clearing caches: {e}"
     
     def clear_memory(self) -> str:
-        """Clear all memories using the enhanced Mem0AI system"""
-        if not self.memory_enabled or not self.memory:
+        """Clear all memories using the comprehensive memory system"""
+        if not self.memory_enabled:
             return "Memory system not available"
-            
+
         try:
-            stats_before = self.memory.get_memory_stats()
-            memory_count_before = stats_before.get('total_memories', 0)
-            
-            if self.memory.clear_memories():
-                logger.info(f"Cleared {memory_count_before} memories from Mem0.ai")
-                return f"✅ Cleared {memory_count_before} memories from Mem0.ai"
+            # Use comprehensive memory system if available
+            if self.memory_integration and self.memory_integration.is_enabled:
+                # For comprehensive memory system, we would need to implement a clear method
+                return "Memory clearing not implemented for comprehensive memory system"
+
+            # Fallback to basic memory system if available
+            if hasattr(self, 'memory') and self.memory:
+                stats_before = self.memory.get_memory_stats()
+                memory_count_before = stats_before.get('total_memories', 0)
+
+                if self.memory.clear_memories():
+                    logger.info(f"Cleared {memory_count_before} memories from basic memory system")
+                    return f"✅ Cleared {memory_count_before} memories from basic memory system"
+                else:
+                    return "❌ Failed to clear memories"
             else:
-                return "❌ Failed to clear memories"
+                return "Memory system not available"
         except Exception as e:
             logger.error(f"Error clearing memories: {e}")
             return f"❌ Error clearing memories: {e}"
     
     def store_conversation_memory(self, user_message: str, ai_response: str) -> None:
-        """Store conversation using the enhanced Mem0AI system"""
-        if not self.memory_enabled or not self.memory:
+        """Store conversation using the comprehensive memory system"""
+        if not self.memory_enabled:
             logger.debug("Memory system not available - skipping conversation storage")
             return
-            
+
         try:
-            # Store conversation summary using the new memory system
-            conversation_content = f"User: {user_message}\nAssistant: {ai_response}"
-            self.memory.store_conversation_summary(
-                conversation_snippet=conversation_content,
-                topics=["general"]
-            )
-            logger.debug("Conversation stored in Mem0AI system")
+            # Use comprehensive memory system if available
+            if self.memory_integration and self.memory_integration.is_enabled:
+                # This will be handled by the async method, so we just log here
+                logger.debug("Conversation will be stored via comprehensive memory system")
+                return
+
+            # Fallback to basic memory system if available
+            if hasattr(self, 'memory') and self.memory:
+                conversation_content = f"User: {user_message}\nAssistant: {ai_response}"
+                self.memory.store_conversation_summary(
+                    conversation_snippet=conversation_content,
+                    topics=["general"]
+                )
+                logger.debug("Conversation stored in basic memory system")
+            else:
+                logger.debug("No memory system available for conversation storage")
         except Exception as e:
-            logger.error(f"Error storing conversation in Mem0AI system: {e}")
+            logger.error(f"Error storing conversation in memory system: {e}")
     
     def get_relevant_memories(self, query: str) -> str:
-        """Get relevant memories using the enhanced Mem0AI system"""
-        if not self.memory_enabled or not self.memory:
+        """Get relevant memories using the comprehensive memory system"""
+        if not self.memory_enabled:
             return "Memory system not available"
-            
+
         try:
-            memories = self.memory.retrieve_memories(query, limit=5)
-            if memories:
-                memory_texts = []
-                for memory in memories:
-                    content = memory.get('content', 'No content')
-                    memory_type = memory.get('memory_type', 'unknown').replace('_', ' ').title()
-                    relevance = memory.get('relevance_score', 0.0)
-                    memory_texts.append(f"[{memory_type}] {content} (Score: {relevance:.2f})")
-                
-                return "🔍 Relevant memories:\n" + "\n".join(f"• {mem}" for mem in memory_texts[:5])
+            # Use comprehensive memory system if available
+            if self.memory_integration and self.memory_integration.is_enabled:
+                # This should be handled by the memory query processing
+                return "Use memory query commands like 'what do you remember about me?'"
+
+            # Fallback to basic memory system if available
+            if hasattr(self, 'memory') and self.memory:
+                memories = self.memory.retrieve_memories(query, limit=5)
+                if memories:
+                    memory_texts = []
+                    for memory in memories:
+                        content = memory.get('content', 'No content')
+                        memory_type = memory.get('memory_type', 'unknown').replace('_', ' ').title()
+                        relevance = memory.get('relevance_score', 0.0)
+                        memory_texts.append(f"[{memory_type}] {content} (Score: {relevance:.2f})")
+
+                    return "🔍 Relevant memories:\n" + "\n".join(f"• {mem}" for mem in memory_texts[:5])
+                else:
+                    return "❌ No relevant memories found."
             else:
-                return "❌ No relevant memories found."
+                return "Memory system not available"
         except Exception as e:
             logger.error(f"Error retrieving memories: {e}")
             return f"❌ Error retrieving memories: {e}"
+
+    def get_comprehensive_user_knowledge(self) -> str:
+        """Get comprehensive knowledge about the user using unified memory system"""
+        try:
+            # Use unified memory integration if available
+            if hasattr(self.memory_integration, 'what_do_you_know_about_me'):
+                return self.memory_integration.what_do_you_know_about_me()
+
+            # Try mem0_memory_system if available
+            elif self.mem0_memory_agent:
+                try:
+                    # Get user profile from mem0_memory_system
+                    profile = self.mem0_memory_agent.get_user_profile()
+                    
+                    if profile and profile.get('user_info'):
+                        user_info = profile['user_info']
+                        name = user_info.get('name', 'there')
+                        
+                        # Create response with available information
+                        response = f"Hello {name}! "
+                        
+                        # Add facts if available
+                        facts = profile.get('facts', {})
+                        if facts:
+                            response += f"I remember {len(facts)} things about you. "
+                            # Add a few sample facts
+                            sample_facts = list(facts.items())[:3]
+                            if sample_facts:
+                                response += "Some things I recall: "
+                                response += ", ".join([f"{k}" for k, v in sample_facts]) + ". "
+                        
+                        response += "Feel free to ask me specific questions about what you'd like to know!"
+                        return response
+                    else:
+                        return "I'm still learning about you! Feel free to share more about yourself, your preferences, or what you're working on."
+                        
+                except Exception as e:
+                    logger.error(f"Error with mem0_memory_system: {e}")
+                    pass
+
+            # Fallback to standard memory retrieval
+            elif self.memory_integration and hasattr(self.memory_integration, 'get_comprehensive_context'):
+                context = self.memory_integration.get_comprehensive_context("comprehensive")
+
+                if "error" in context:
+                    return "I'm having trouble accessing my memory systems right now. I can only remember our current conversation."
+
+                # Build response from context
+                response_parts = ["Here's what I know about you:"]
+
+                # Extract user information
+                user_profile = context.get("user_profile", {})
+                if user_profile:
+                    for category, data in user_profile.items():
+                        if data and category != "memory_insights":
+                            category_name = category.replace('_', ' ').title()
+                            response_parts.append(f"\n**{category_name}:**")
+
+                            if isinstance(data, dict):
+                                for key, value in data.items():
+                                    if value:
+                                        response_parts.append(f"• {key.replace('_', ' ').title()}: {str(value)[:100]}...")
+                            else:
+                                response_parts.append(f"• {str(data)[:100]}...")
+
+                if len(response_parts) > 1:
+                    return "\n".join(response_parts)
+                else:
+                    return "I don't have much stored information about you yet. As we continue talking, I'll learn and remember more about your preferences, interests, and background."
+
+            # Fallback to basic memory system if available
+            elif hasattr(self, 'memory') and self.memory:
+                stats = self.memory.get_memory_stats()
+                total_memories = stats.get('total_memories', 0)
+                
+                if total_memories > 0:
+                    return f"I have {total_memories} memories stored about our conversations and your preferences. Feel free to ask me specific questions!"
+                else:
+                    return "I'm still learning about you! Feel free to share more about yourself, your preferences, or what you're working on."
+
+            # Basic fallback
+            else:
+                return "I don't have access to comprehensive memory systems right now, so I can only remember what we've discussed in this current conversation."
+
+        except Exception as e:
+            logger.error(f"Error retrieving comprehensive user knowledge: {e}")
+            return "I'm having some difficulty accessing my memory systems right now. I can remember our current conversation, but I may not have access to all stored information about you."
+
+    def get_memory_status(self) -> str:
+        """Get current memory system status."""
+        try:
+            if self.mem0_memory_agent:
+                # Get basic stats
+                profile = self.mem0_memory_agent.get_user_profile()
+                facts_count = len(profile.get('facts', {})) if profile else 0
+                
+                # Get storage path
+                storage_path = os.path.normpath(os.path.join('..', '..', '@astra_ai', 'Date', 'nova_ai_memory.json'))
+                file_exists = os.path.exists(storage_path)
+                file_size = os.path.getsize(storage_path) if file_exists else 0
+                
+                status = f"[MEMORY] NovaMemoryAI Status:\n"
+                status += f"   • Online: YES\n"
+                status += f"   • Stored Facts: {facts_count}\n"
+                status += f"   • Storage File: {storage_path}\n"
+                status += f"   • File Size: {file_size} bytes\n"
+                status += f"   • Conversations Processed: {self.conversation_count}"
+                return status
+            else:
+                return "[MEMORY] NovaMemoryAI Status: OFFLINE\n   • Memory system not available"
+        except Exception as e:
+            return f"Error getting memory status: {e}"
+
+    def get_user_context(self) -> Dict[str, Any]:
+        """Get user context for AI response generation.
+        
+        Returns:
+            Dict containing user information and facts
+        """
+        try:
+            if self.mem0_memory_agent:
+                return self.mem0_memory_agent.get_user_profile()
+            elif self.memory_integration and self.memory_integration.is_enabled:
+                return self.memory_integration.get_comprehensive_context("comprehensive")
+            else:
+                return {
+                    'user_info': self.data.get("user", {}) if hasattr(self, 'data') else {},
+                    'facts': self.data.get("current_facts", {}) if hasattr(self, 'data') else {}
+                }
+        except Exception as e:
+            logger.error(f"Error getting user context: {e}")
+            return {}
+
+    def get_comprehensive_user_profile(self) -> Dict[str, Any]:
+        """Get comprehensive user profile with all stored information.
+        
+        Returns:
+            Dict containing comprehensive user profile
+        """
+        try:
+            if self.mem0_memory_agent:
+                return self.mem0_memory_agent.memory_system.get_comprehensive_user_profile()
+            elif self.memory_integration and self.memory_integration.is_enabled:
+                return self.memory_integration.memory_system.get_comprehensive_user_profile()
+            else:
+                # Return basic profile from available data
+                return {
+                    'user_info': self.data.get("user", {}) if hasattr(self, 'data') else {},
+                    'facts': self.data.get("current_facts", {}) if hasattr(self, 'data') else {},
+                    'total_items': len(self.data.get("current_facts", {})) if hasattr(self, 'data') else 0
+                }
+        except Exception as e:
+            logger.error(f"Error getting comprehensive user profile: {e}")
+            return {}
+
+    def query_memory(self, query: str) -> Dict[str, Any]:
+        """Query memory for specific information.
+        
+        Args:
+            query: Query string to search for
+            
+        Returns:
+            Dict containing query results
+        """
+        try:
+            if self.mem0_memory_agent:
+                # Use the memory system's query method if available
+                if hasattr(self.mem0_memory_agent.memory_system, 'query_memory'):
+                    return self.mem0_memory_agent.memory_system.query_memory(query)
+                else:
+                    # Fallback to basic search through current facts
+                    results = []
+                    query_lower = query.lower()
+                    current_facts = self.data.get("current_facts", {}) if hasattr(self, 'data') else {}
+                    
+                    for fact_key, fact_value in current_facts.items():
+                        if query_lower in fact_key.lower() or query_lower in str(fact_value).lower():
+                            results.append({
+                                'key': fact_key,
+                                'value': fact_value,
+                                'category': 'current_facts'
+                            })
+                    
+                    return {
+                        'found': len(results) > 0,
+                        'results': results,
+                        'total_facts': len(current_facts)
+                    }
+            elif self.memory_integration and self.memory_integration.is_enabled:
+                if hasattr(self.memory_integration, 'query_memories'):
+                    return self.memory_integration.query_memories(query, "general")
+                else:
+                    return {'found': False, 'results': [], 'error': 'Query method not available'}
+            else:
+                return {'found': False, 'results': [], 'error': 'Memory system not available'}
+        except Exception as e:
+            logger.error(f"Error querying memory: {e}")
+            return {'found': False, 'results': [], 'error': str(e)}
+
+    async def _get_search_history(self, query: str) -> str:
+        """Get search history based on user query"""
+        try:
+            if not self.memory_integration or not self.memory_integration.is_enabled:
+                return "Search history not available - memory system disabled."
+
+            memory_system = self.memory_integration.memory_system
+            search_data = memory_system.memory_system.data["memory_categories"].get("search_external_info", {})
+            search_history = search_data.get("search_history", [])
+
+            if not search_history:
+                return "You haven't searched for anything yet."
+
+            query_lower = query.lower()
+
+            # Handle time-based search queries
+            if "yesterday" in query_lower:
+                from datetime import timedelta
+                yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+                yesterday_searches = [s for s in search_history if s.get("date") == yesterday]
+
+                if not yesterday_searches:
+                    return "You didn't ask me to search for anything yesterday."
+
+                if len(yesterday_searches) == 1:
+                    search = yesterday_searches[0]
+                    time_str = datetime.fromisoformat(search["timestamp"]).strftime("%H:%M")
+                    return f"Yesterday at {time_str}, you asked me to search for \"{search['query']}\"."
+                else:
+                    response = f"Yesterday you had me search for {len(yesterday_searches)} different things:\n"
+                    for search in yesterday_searches[-5:]:  # Show last 5
+                        time_str = datetime.fromisoformat(search["timestamp"]).strftime("%H:%M")
+                        response += f"\n• At {time_str}, you asked me to look up \"{search['query']}\""
+
+                return response
+
+            elif "today" in query_lower:
+                today = datetime.now().strftime("%Y-%m-%d")
+                today_searches = [s for s in search_history if s.get("date") == today]
+
+                if not today_searches:
+                    return "You haven't asked me to search for anything today yet."
+
+                if len(today_searches) == 1:
+                    search = today_searches[0]
+                    time_str = datetime.fromisoformat(search["timestamp"]).strftime("%H:%M")
+                    return f"Today at {time_str}, you asked me to search for \"{search['query']}\"."
+                else:
+                    response = f"Today you've had me search for {len(today_searches)} different things:\n"
+                    for search in today_searches[-5:]:  # Show last 5
+                        time_str = datetime.fromisoformat(search["timestamp"]).strftime("%H:%M")
+                        response += f"\n• At {time_str}, you asked me to look up \"{search['query']}\""
+
+                return response
+
+            elif "summarize" in query_lower and "search" in query_lower:
+                # Provide search summary
+                total_searches = len(search_history)
+                recent_searches = search_history[-10:]  # Last 10 searches
+
+                if total_searches == 0:
+                    return "You haven't asked me to search for anything yet."
+                elif total_searches == 1:
+                    search = search_history[0]
+                    date_str = datetime.fromisoformat(search["timestamp"]).strftime("%m/%d at %H:%M")
+                    return f"You've asked me to search for one thing: \"{search['query']}\" on {date_str}."
+                else:
+                    response = f"You've had me search for {total_searches} different things. Here are the most recent ones:\n"
+
+                    for search in recent_searches:
+                        date_str = datetime.fromisoformat(search["timestamp"]).strftime("%m/%d at %H:%M")
+                        response += f"\n• On {date_str}, you asked me to look up \"{search['query']}\""
+
+                return response
+
+            else:
+                # General search history
+                total_searches = len(search_history)
+                recent_searches = search_history[-10:]  # Last 10 searches
+
+                if total_searches == 0:
+                    return "You haven't asked me to search for anything yet."
+                elif total_searches == 1:
+                    search = search_history[0]
+                    date_str = datetime.fromisoformat(search["timestamp"]).strftime("%m/%d at %H:%M")
+                    return f"You asked me to search for \"{search['query']}\" on {date_str}."
+                else:
+                    response = f"You've had me search for {total_searches} different things. Here are the most recent:\n"
+                    for search in recent_searches:
+                        date_str = datetime.fromisoformat(search["timestamp"]).strftime("%m/%d at %H:%M")
+                        response += f"\n• On {date_str}, you asked me to look up \"{search['query']}\""
+
+                return response
+
+        except Exception as e:
+            logger.error(f"Search history error: {e}")
+            return "I encountered an error while retrieving your search history."
+
+    async def _get_news_history(self, query: str) -> str:
+        """Get news history based on user query"""
+        try:
+            if not self.memory_integration or not self.memory_integration.is_enabled:
+                return "News history not available - memory system disabled."
+
+            memory_system = self.memory_integration.memory_system
+            news_data = memory_system.memory_system.data["memory_categories"].get("news_weather_history", {})
+            news_history = news_data.get("news_history", [])
+
+            if not news_history:
+                return "You haven't asked me to check any news yet."
+
+            query_lower = query.lower()
+
+            # Handle time-based news queries
+            if "yesterday" in query_lower:
+                from datetime import timedelta
+                yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+                yesterday_news = [n for n in news_history if n.get("date") == yesterday]
+
+                if not yesterday_news:
+                    return "You didn't ask me to check any news yesterday."
+
+                if len(yesterday_news) == 1:
+                    news = yesterday_news[0]
+                    time_str = datetime.fromisoformat(news["timestamp"]).strftime("%H:%M")
+                    return f"Yesterday at {time_str}, you asked me to check news about {news['topic']} from {news['source']}."
+                else:
+                    response = f"Yesterday you had me check {len(yesterday_news)} news items:\n"
+                    for news in yesterday_news[-5:]:  # Show last 5
+                        time_str = datetime.fromisoformat(news["timestamp"]).strftime("%H:%M")
+                        response += f"\n• At {time_str}, you asked about {news['topic']} from {news['source']}"
+
+                return response
+
+            elif "today" in query_lower:
+                today = datetime.now().strftime("%Y-%m-%d")
+                today_news = [n for n in news_history if n.get("date") == today]
+
+                if not today_news:
+                    return "You haven't checked any news today yet."
+
+                response = f"📰 **Today's news ({len(today_news)} items):**\n"
+                for news in today_news[-5:]:  # Show last 5
+                    time_str = datetime.fromisoformat(news["timestamp"]).strftime("%H:%M")
+                    response += f"\n• {time_str}: {news['topic']} ({news['source']})"
+
+                return response
+
+            elif "summarize" in query_lower:
+                # Provide news summary
+                total_news = len(news_history)
+                recent_news = news_history[-10:]  # Last 10 news items
+
+                response = f"📊 **News Summary:**\n"
+                response += f"• Total news checked: {total_news}\n"
+                response += f"• Recent news:\n"
+
+                for news in recent_news:
+                    date_str = datetime.fromisoformat(news["timestamp"]).strftime("%m/%d %H:%M")
+                    response += f"  - {date_str}: {news['topic']} ({news['source']})\n"
+
+                return response
+
+            else:
+                # General news history
+                recent_news = news_history[-10:]  # Last 10 news items
+
+                response = f"📰 **Recent news history ({len(news_history)} total items):**\n"
+                for news in recent_news:
+                    date_str = datetime.fromisoformat(news["timestamp"]).strftime("%m/%d %H:%M")
+                    response += f"\n• {date_str}: {news['topic']} ({news['source']})"
+
+                return response
+
+        except Exception as e:
+            logger.error(f"News history error: {e}")
+            return "I encountered an error while retrieving your news history."
+
+    async def _get_weather_history(self, query: str) -> str:
+        """Get weather history based on user query"""
+        try:
+            if not self.memory_integration or not self.memory_integration.is_enabled:
+                return "Weather history not available - memory system disabled."
+
+            memory_system = self.memory_integration.memory_system
+            news_data = memory_system.memory_system.data["memory_categories"].get("news_weather_history", {})
+            weather_history = news_data.get("weather_history", [])
+
+            if not weather_history:
+                return "You haven't checked any weather yet."
+
+            query_lower = query.lower()
+
+            # Handle time-based weather queries
+            if "yesterday" in query_lower:
+                from datetime import timedelta
+                yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+                yesterday_weather = [w for w in weather_history if w.get("date") == yesterday]
+
+                if not yesterday_weather:
+                    return "You didn't check any weather yesterday."
+
+                response = f"🌤️ **Yesterday's weather checks ({len(yesterday_weather)} items):**\n"
+                for weather in yesterday_weather[-5:]:  # Show last 5
+                    time_str = datetime.fromisoformat(weather["timestamp"]).strftime("%H:%M")
+                    response += f"\n• {time_str}: {weather['location']}"
+
+                return response
+
+            elif "today" in query_lower:
+                today = datetime.now().strftime("%Y-%m-%d")
+                today_weather = [w for w in weather_history if w.get("date") == today]
+
+                if not today_weather:
+                    return "You haven't checked any weather today yet."
+
+                response = f"🌤️ **Today's weather checks ({len(today_weather)} items):**\n"
+                for weather in today_weather[-5:]:  # Show last 5
+                    time_str = datetime.fromisoformat(weather["timestamp"]).strftime("%H:%M")
+                    response += f"\n• {time_str}: {weather['location']}"
+
+                return response
+
+            elif "summarize" in query_lower:
+                # Provide weather summary
+                total_weather = len(weather_history)
+                recent_weather = weather_history[-10:]  # Last 10 weather checks
+
+                response = f"📊 **Weather Summary:**\n"
+                response += f"• Total weather checks: {total_weather}\n"
+                response += f"• Recent weather:\n"
+
+                for weather in recent_weather:
+                    date_str = datetime.fromisoformat(weather["timestamp"]).strftime("%m/%d %H:%M")
+                    response += f"  - {date_str}: {weather['location']}\n"
+
+                return response
+
+            else:
+                # General weather history
+                recent_weather = weather_history[-10:]  # Last 10 weather checks
+
+                response = f"🌤️ **Recent weather history ({len(weather_history)} total checks):**\n"
+                for weather in recent_weather:
+                    date_str = datetime.fromisoformat(weather["timestamp"]).strftime("%m/%d %H:%M")
+                    response += f"\n• {date_str}: {weather['location']}"
+
+                return response
+
+        except Exception as e:
+            logger.error(f"Weather history error: {e}")
+            return "I encountered an error while retrieving your weather history."
+
+    async def _process_knowledge_query(self, query: str) -> str:
+        """Process dynamic knowledge queries with real-time web search"""
+        try:
+            # Extract the topic from the query
+            query_lower = query.lower()
+            topic = None
+
+            # Extract topic from different patterns
+            if "what do you know about" in query_lower:
+                topic = query_lower.split("what do you know about")[-1].strip()
+            elif "tell me about" in query_lower:
+                topic = query_lower.split("tell me about")[-1].strip()
+            elif "what can you tell me about" in query_lower:
+                topic = query_lower.split("what can you tell me about")[-1].strip()
+
+            if not topic or len(topic) < 2:
+                return "I'd be happy to help! What specific topic would you like me to search for information about?"
+
+            # Clean up the topic
+            topic = topic.strip("?.,!").strip()
+
+            # Check if we have recent knowledge about this topic in memory
+            stored_knowledge = await self._get_stored_knowledge(topic)
+
+            if stored_knowledge:
+                # Check if user wants more information
+                if any(more_word in query_lower for more_word in ["more", "additional", "further", "detailed"]):
+                    return await self._get_detailed_knowledge(topic, stored_knowledge)
+                else:
+                    return stored_knowledge["summary"]
+
+            # Perform real-time web search for current information
+            search_results = await self._perform_knowledge_search(topic)
+
+            if search_results:
+                # Store the search results in memory
+                await self._store_knowledge_search(topic, search_results)
+
+                # Return initial summary
+                return self._format_knowledge_summary(topic, search_results)
+            else:
+                return f"I couldn't find current information about {topic}. Could you try rephrasing your question or being more specific?"
+
+        except Exception as e:
+            logger.error(f"Knowledge query error: {e}")
+            return "I encountered an error while searching for that information. Please try again."
+
+    async def _process_task_query(self, user_message: str) -> Optional[str]:
+        """Process task-related queries and commands"""
+        try:
+            user_message_lower = user_message.lower().strip()
+
+            # Check for task management commands
+            if any(cmd in user_message_lower for cmd in ["show tasks", "list tasks", "my tasks", "task list"]):
+                return self._get_task_list()
+
+            if any(cmd in user_message_lower for cmd in ["complete task", "mark task complete", "task done"]):
+                return self._handle_task_completion(user_message)
+
+            if any(cmd in user_message_lower for cmd in ["cancel task", "delete task", "remove task"]):
+                return self._handle_task_cancellation(user_message)
+
+            # Check for task creation from natural language
+            task = self.task_nlp_processor.create_task_from_message(user_message)
+            if task:
+                confirmation = self.task_nlp_processor.get_task_confirmation_message(task)
+
+                # Store task creation in memory
+                if self.memory_integration:
+                    asyncio.create_task(self._store_task_creation_memory(task, user_message))
+
+                return confirmation
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Task processing error: {e}")
+            return None
+
+    def _get_task_list(self) -> str:
+        """Get formatted list of user's tasks"""
+        try:
+            all_tasks = self.task_manager.get_all_tasks()
+
+            if not all_tasks:
+                return "You don't have any tasks yet. You can create one by saying something like 'Remind me to call mom tomorrow at 5 PM'."
+
+            # Group tasks by status
+            pending_tasks = self.task_manager.get_tasks_by_status(TaskStatus.PENDING)
+            completed_tasks = self.task_manager.get_tasks_by_status(TaskStatus.COMPLETED)
+            overdue_tasks = self.task_manager.get_overdue_tasks()
+
+            response = "📋 **Your Tasks:**\n\n"
+
+            if overdue_tasks:
+                response += "🔴 **Overdue Tasks:**\n"
+                for task in overdue_tasks[:5]:  # Show max 5 overdue
+                    due_str = task.due_date.strftime("%m/%d at %I:%M %p")
+                    response += f"• {task.title} (was due {due_str})\n"
+                response += "\n"
+
+            if pending_tasks:
+                response += "⏳ **Pending Tasks:**\n"
+                for task in sorted(pending_tasks, key=lambda t: t.due_date)[:10]:  # Show next 10
+                    due_str = task.due_date.strftime("%m/%d at %I:%M %p")
+                    priority_icon = "🔥" if task.priority == TaskPriority.URGENT else "⚡" if task.priority == TaskPriority.HIGH else ""
+                    response += f"• {priority_icon}{task.title} (due {due_str})\n"
+                response += "\n"
+
+            if completed_tasks:
+                recent_completed = sorted(completed_tasks, key=lambda t: t.completed_at or t.updated_at, reverse=True)[:3]
+                response += "✅ **Recently Completed:**\n"
+                for task in recent_completed:
+                    completed_str = task.completed_at.strftime("%m/%d") if task.completed_at else "Recently"
+                    response += f"• {task.title} (completed {completed_str})\n"
+
+            # Add statistics
+            stats = self.task_manager.get_task_statistics()
+            response += f"\n📊 **Summary:** {stats['total_tasks']} total, {stats['pending_tasks']} pending, {stats['completed_tasks']} completed"
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Error getting task list: {e}")
+            return "I encountered an error while retrieving your tasks."
+
+    def _handle_task_completion(self, user_message: str) -> str:
+        """Handle task completion commands"""
+        try:
+            # Simple implementation - in a full system, you'd parse which specific task
+            pending_tasks = self.task_manager.get_tasks_by_status(TaskStatus.PENDING)
+
+            if not pending_tasks:
+                return "You don't have any pending tasks to complete."
+
+            # For now, complete the most recent pending task
+            # In a full implementation, you'd parse the specific task from the message
+            task = pending_tasks[0]  # Most recent
+
+            if self.task_manager.complete_task(task.id):
+                return f"✅ Marked '{task.title}' as completed!"
+            else:
+                return "I couldn't complete that task. Please try again."
+
+        except Exception as e:
+            logger.error(f"Error handling task completion: {e}")
+            return "I encountered an error while completing the task."
+
+    def _handle_task_cancellation(self, user_message: str) -> str:
+        """Handle task cancellation commands"""
+        try:
+            pending_tasks = self.task_manager.get_tasks_by_status(TaskStatus.PENDING)
+
+            if not pending_tasks:
+                return "You don't have any pending tasks to cancel."
+
+            # For now, cancel the most recent pending task
+            task = pending_tasks[0]
+
+            if self.task_manager.cancel_task(task.id):
+                return f"❌ Cancelled task '{task.title}'."
+            else:
+                return "I couldn't cancel that task. Please try again."
+
+        except Exception as e:
+            logger.error(f"Error handling task cancellation: {e}")
+            return "I encountered an error while cancelling the task."
+
+    async def _store_task_creation_memory(self, task, user_message: str):
+        """Store task creation in memory system"""
+        try:
+            if not self.memory_integration:
+                return
+
+            memory_data = {
+                "action": "task_created",
+                "task_id": task.id,
+                "task_title": task.title,
+                "due_date": task.due_date.isoformat(),
+                "priority": task.priority.value,
+                "user_message": user_message,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            # Store in task project tracking category
+            current_data = self.memory_integration.memory_system.data["memory_categories"].get("task_project_tracking", {})
+            if "task_creation_history" not in current_data:
+                current_data["task_creation_history"] = []
+
+            current_data["task_creation_history"].append(memory_data)
+
+            # Keep only last 100 task creation records
+            if len(current_data["task_creation_history"]) > 100:
+                current_data["task_creation_history"] = current_data["task_creation_history"][-100:]
+
+            self.memory_integration.memory_system.data["memory_categories"]["task_project_tracking"] = current_data
+            self.memory_integration.memory_system.save_memory()
+
+        except Exception as e:
+            logger.warning(f"Failed to store task creation memory: {e}")
+
+    async def _process_vision_query(self, user_message: str) -> Optional[str]:
+        """Process vision-related queries and commands with automatic camera activation"""
+        try:
+            user_message_lower = user_message.lower().strip()
+
+            # Enhanced vision trigger patterns for automatic activation
+            auto_vision_patterns = [
+                r"what do you see",
+                r"what am i holding",
+                r"what is this",
+                r"what is that",
+                r"look at what i'm holding",
+                r"look at this",
+                r"what do you see in front of you",
+                r"what is the color of this",
+                r"what color is this",
+                r"identify this",
+                r"recognize this",
+                r"analyze this",
+                r"describe what you see",
+                r"tell me what this is",
+                r"can you see this",
+                r"do you see this",
+                r"what's in my hand",
+                r"what am i showing you"
+            ]
+
+            # Check for automatic vision activation patterns
+            auto_activate = any(re.search(pattern, user_message_lower) for pattern in auto_vision_patterns)
+
+            # Check for general vision-related commands
+            vision_keywords = [
+                "camera", "vision", "see", "look", "identify", "recognize",
+                "track movement", "motion", "detect", "visual", "image", "analyze"
+            ]
+
+            is_vision_query = auto_activate or any(keyword in user_message_lower for keyword in vision_keywords)
+
+            if not is_vision_query:
+                return None
+
+            # Handle automatic vision activation queries
+            if auto_activate:
+                return await self._handle_auto_vision_request(user_message)
+
+            # Handle other vision queries
+            elif any(cmd in user_message_lower for cmd in ["track movement", "motion", "detect motion"]):
+                return await self._handle_motion_tracking_request(user_message)
+
+            elif any(cmd in user_message_lower for cmd in ["camera", "vision", "show camera"]):
+                return self._handle_camera_widget_request()
+
+            elif any(cmd in user_message_lower for cmd in ["vision history", "what have you seen", "previous images"]):
+                return self._handle_vision_history_request()
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Vision processing error: {e}")
+            return None
+
+    async def _handle_auto_vision_request(self, user_message: str) -> str:
+        """Handle automatic vision activation requests"""
+        try:
+            # This will trigger automatic camera activation and analysis
+            response = "👁️ **Activating AI Vision...**\n\n"
+            response += "🎥 **Opening camera and analyzing in real-time...**\n\n"
+
+            # Determine the type of analysis based on the query
+            user_message_lower = user_message.lower()
+
+            if "holding" in user_message_lower or "hand" in user_message_lower:
+                response += "🤲 **Object Identification Mode**: I'm looking for what you're holding\n"
+                analysis_type = "object_identification"
+            elif "color" in user_message_lower:
+                response += "🎨 **Color Analysis Mode**: I'm analyzing colors in the scene\n"
+                analysis_type = "color_analysis"
+            else:
+                response += "🔍 **General Scene Analysis**: I'm analyzing everything I can see\n"
+                analysis_type = "comprehensive"
+
+            response += "\n📸 **Camera will activate automatically** - no need to manually open widgets!\n"
+            response += "⚡ **Real-time analysis** - I'll describe what I see immediately\n\n"
+            response += "🔄 **Processing your request...**"
+
+            # Store the analysis type and user query for the widget to use
+            self.pending_vision_request = {
+                'query': user_message,
+                'analysis_type': analysis_type,
+                'auto_activate': True
+            }
+
+            # Trigger automatic vision widget opening
+            asyncio.create_task(self._open_auto_vision_widget(user_message, analysis_type))
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Error handling auto vision request: {e}")
+            return "I'm ready to see what you're showing me, but encountered an error. Let me try opening the camera widget."
+
+    async def _open_auto_vision_widget(self, user_query: str, analysis_type: str):
+        """Open vision widget with auto-activation parameters"""
+        try:
+            import webbrowser
+            from urllib.parse import urlencode
+
+            # Get the widget path
+            widget_path = Path(__file__).parent.parent / "ui" / "ai_eye_widget.html"
+
+            if not widget_path.exists():
+                logger.error("AI Eye widget not found")
+                return
+
+            # Create URL with auto-activation parameters
+            params = {
+                'auto_activate': 'true',
+                'query': user_query,
+                'analysis_type': analysis_type,
+                'api_port': '5000'  # Default port, should be dynamic in production
+            }
+
+            query_string = urlencode(params)
+            widget_url = f"file://{widget_path.absolute()}?{query_string}"
+
+            # Open the widget with auto-activation
+            webbrowser.open(widget_url)
+
+            logger.info(f"Auto-opened vision widget for query: {user_query}")
+
+        except Exception as e:
+            logger.error(f"Error opening auto vision widget: {e}")
+
+    async def _handle_vision_analysis_request(self, user_message: str) -> str:
+        """Handle general vision analysis requests"""
+        try:
+            # For now, return instruction to use camera widget
+            # In a full implementation, this would integrate with real-time camera feed
+            response = "👁️ **AI Vision Ready!**\n\n"
+            response += "I'm ready to analyze what you show me! Here's how to use my vision capabilities:\n\n"
+            response += "🎥 **Camera Widget**: Say 'show camera' or 'camera widget' to open my AI eye interface\n"
+            response += "📸 **Image Analysis**: Once the camera is active, I can see and analyze in real-time\n"
+            response += "🔍 **Object Detection**: I can identify objects, read text, and describe scenes\n"
+            response += "👥 **Face Detection**: I can detect people and analyze facial expressions\n"
+            response += "🏃 **Motion Tracking**: I can track movement and changes in the scene\n\n"
+            response += "💡 **Try asking**: 'What do you see?', 'What am I holding?', or 'Track movement'"
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Error handling vision analysis request: {e}")
+            return "I'm ready to analyze images, but encountered an error. Please try opening the camera widget."
+
+    async def _handle_object_identification_request(self, user_message: str) -> str:
+        """Handle object identification requests"""
+        try:
+            response = "🤲 **Object Identification Mode**\n\n"
+            response += "I'm ready to identify what you're holding! Here's how:\n\n"
+            response += "1. 📱 Open the camera widget by saying 'show camera'\n"
+            response += "2. 🎯 Point the camera at the object you're holding\n"
+            response += "3. 📸 I'll automatically analyze and identify objects in real-time\n"
+            response += "4. 💬 Ask 'What am I holding?' while showing the object\n\n"
+            response += "🔍 **I can identify**: Tools, food items, electronics, books, clothing, and much more!\n"
+            response += "📝 **Plus**: I can read text on objects and provide detailed descriptions"
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Error handling object identification request: {e}")
+            return "I'm ready to identify objects, but encountered an error. Please try opening the camera widget."
+
+    async def _handle_motion_tracking_request(self, user_message: str) -> str:
+        """Handle motion tracking requests"""
+        try:
+            if self.ai_vision:
+                await self.ai_vision.start_real_time_analysis()
+
+            response = "🏃 **Motion Tracking Activated!**\n\n"
+            response += "I'm now monitoring for movement and changes in the camera feed.\n\n"
+            response += "🎯 **What I'll detect**:\n"
+            response += "• Moving objects and people\n"
+            response += "• Changes in the scene\n"
+            response += "• Direction and speed of movement\n"
+            response += "• Multiple moving objects simultaneously\n\n"
+            response += "📱 **Open the camera widget** to see real-time motion tracking with visual indicators!\n\n"
+            response += "💡 **I'll alert you** when I detect significant movement and describe what's happening."
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Error handling motion tracking request: {e}")
+            return "I encountered an error setting up motion tracking. Please try again."
+
+    def _handle_camera_widget_request(self) -> str:
+        """Handle camera widget opening requests"""
+        try:
+            response = "📹 **Opening AI Eye Interface...**\n\n"
+            response += "I'm launching my advanced AI vision system! The camera widget will open with:\n\n"
+            response += "👁️ **AI Eye Design**: Futuristic interface that shows I'm actively seeing\n"
+            response += "🎯 **Real-time Analysis**: Live object detection and scene understanding\n"
+            response += "🔍 **Visual Feedback**: Highlights and overlays showing what I'm analyzing\n"
+            response += "💬 **Interactive**: Ask me questions about what I see in real-time\n\n"
+            response += "🚀 **Ready to see the world through AI eyes!**"
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Error handling camera widget request: {e}")
+            return "I encountered an error opening the camera widget. Please try again."
+
+    def _handle_vision_history_request(self) -> str:
+        """Handle vision history requests"""
+        try:
+            if not self.ai_vision:
+                return "Vision history is not available. The AI vision system is not initialized."
+
+            # Get recent vision history
+            history = self.ai_vision.get_vision_history(limit=5)
+
+            if not history:
+                response = "📸 **Vision History**\n\n"
+                response += "I haven't analyzed any images yet. Once you start using the camera widget, "
+                response += "I'll keep track of everything I see and can recall it later!\n\n"
+                response += "💡 **Try**: Opening the camera and asking 'What do you see?'"
+                return response
+
+            response = "📸 **Recent Vision History**\n\n"
+
+            for i, analysis in enumerate(history, 1):
+                timestamp = analysis.timestamp.strftime("%m/%d at %I:%M %p")
+                response += f"**{i}. {timestamp}**\n"
+                response += f"🎯 {analysis.scene_description[:100]}{'...' if len(analysis.scene_description) > 100 else ''}\n"
+
+                if analysis.objects_detected:
+                    objects = [obj["name"] for obj in analysis.objects_detected[:3]]
+                    response += f"📦 Objects: {', '.join(objects)}\n"
+
+                response += "\n"
+
+            # Add statistics
+            stats = self.ai_vision.get_vision_statistics()
+            response += f"📊 **Total analyses**: {stats.get('total_analyses', 0)}\n"
+            response += f"🎯 **Objects detected**: {stats.get('total_objects_detected', 0)}"
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Error handling vision history request: {e}")
+            return "I encountered an error retrieving vision history."
+
+    async def analyze_image_data(self, image_data: str, user_query: str = None) -> str:
+        """Analyze image data and return AI response"""
+        try:
+            if not self.ai_vision:
+                return "AI vision system is not available."
+
+            # Perform vision analysis
+            analysis = await self.ai_vision.analyze_frame(image_data, "comprehensive", user_query)
+
+            # Store the interaction in memory if available
+            if self.memory_integration:
+                await self._store_vision_interaction_memory(analysis, user_query)
+
+            return analysis.ai_response
+
+        except Exception as e:
+            logger.error(f"Error analyzing image data: {e}")
+            return f"I encountered an error while analyzing the image: {str(e)}"
+
+    async def _store_vision_interaction_memory(self, analysis: VisionAnalysis, user_query: str):
+        """Store vision interaction in memory system"""
+        try:
+            if not self.memory_integration:
+                return
+
+            memory_data = {
+                "action": "vision_analysis",
+                "analysis_id": analysis.id,
+                "user_query": user_query,
+                "scene_description": analysis.scene_description,
+                "objects_detected": [obj["name"] for obj in analysis.objects_detected],
+                "ai_response": analysis.ai_response,
+                "timestamp": analysis.timestamp.isoformat(),
+                "confidence": analysis.confidence_scores.get("overall", 0)
+            }
+
+            # Store in visual experiences category
+            current_data = self.memory_integration.memory_system.data["memory_categories"].get("visual_experiences", {})
+            if "interaction_history" not in current_data:
+                current_data["interaction_history"] = []
+
+            current_data["interaction_history"].append(memory_data)
+
+            # Keep only last 50 interaction records
+            if len(current_data["interaction_history"]) > 50:
+                current_data["interaction_history"] = current_data["interaction_history"][-50:]
+
+            self.memory_integration.memory_system.data["memory_categories"]["visual_experiences"] = current_data
+            self.memory_integration.memory_system.save_memory()
+
+        except Exception as e:
+            logger.warning(f"Failed to store vision interaction memory: {e}")
+
+    async def _check_pending_reminders(self) -> Optional[str]:
+        """Check for pending task reminders and return them"""
+        try:
+            if not self.task_manager:
+                return None
+
+            pending_reminders = self.task_manager.get_pending_reminders()
+
+            if not pending_reminders:
+                return None
+
+            # Get the most recent pending reminder
+            reminder = pending_reminders[0]
+            task_id = reminder.get("task_id")
+
+            if task_id:
+                # Mark this reminder as sent
+                self.task_manager.mark_reminder_sent(task_id)
+
+                # Return the reminder message
+                return reminder.get("reminder_message", "You have a task reminder.")
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error checking pending reminders: {e}")
+            return None
+
+    async def _get_stored_knowledge(self, topic: str) -> Optional[Dict[str, Any]]:
+        """Check if we have recent knowledge about this topic in memory"""
+        try:
+            if not self.memory_integration or not self.memory_integration.is_enabled:
+                return None
+
+            memory_system = self.memory_integration.memory_system
+            search_data = memory_system.memory_system.data["memory_categories"].get("search_external_info", {})
+            knowledge_cache = search_data.get("knowledge_cache", {})
+
+            # Check if we have recent knowledge (within last 24 hours)
+            if topic.lower() in knowledge_cache:
+                knowledge_entry = knowledge_cache[topic.lower()]
+                from datetime import timedelta
+                stored_time = datetime.fromisoformat(knowledge_entry["timestamp"])
+                if datetime.now() - stored_time < timedelta(hours=24):
+                    return knowledge_entry
+
+            return None
+        except Exception as e:
+            logger.debug(f"Error getting stored knowledge: {e}")
+            return None
+
+    async def _search_web_async(self, query: str) -> Optional[str]:
+        """Perform asynchronous web search using the NovaSearch system"""
+        try:
+            # Use the search system to perform the search
+            search_result = await asyncio.to_thread(self.search_system.search, query)
+
+            if search_result and search_result.get('answer'):
+                return search_result['answer']
+
+            return None
+        except Exception as e:
+            logger.error(f"Web search error: {e}")
+            return None
+
+    async def _perform_knowledge_search(self, topic: str) -> Optional[str]:
+        """Perform web search for knowledge about the topic"""
+        try:
+            # Use the existing search functionality
+            search_query = f"information about {topic}"
+
+            # Call the existing search method
+            search_result = await self._search_web_async(search_query)
+
+            if search_result and "SEARCH_RESULT:" in search_result:
+                # Extract the actual search content
+                content = search_result.replace("SEARCH_RESULT:", "").strip()
+                return content
+
+            return None
+        except Exception as e:
+            logger.error(f"Knowledge search error: {e}")
+            return None
+
+    async def _store_knowledge_search(self, topic: str, search_results: str):
+        """Store knowledge search results in memory"""
+        try:
+            if not self.memory_integration or not self.memory_integration.is_enabled:
+                return
+
+            memory_system = self.memory_integration.memory_system
+            search_data = memory_system.memory_system.data["memory_categories"].get("search_external_info", {})
+
+            # Initialize knowledge cache if needed
+            if "knowledge_cache" not in search_data:
+                search_data["knowledge_cache"] = {}
+
+            # Store the knowledge
+            search_data["knowledge_cache"][topic.lower()] = {
+                "topic": topic,
+                "content": search_results,
+                "summary": self._create_knowledge_summary(search_results),
+                "timestamp": datetime.now().isoformat(),
+                "access_count": 1
+            }
+
+            # Keep only last 50 knowledge entries
+            if len(search_data["knowledge_cache"]) > 50:
+                # Remove oldest entries
+                sorted_entries = sorted(
+                    search_data["knowledge_cache"].items(),
+                    key=lambda x: x[1]["timestamp"]
+                )
+                search_data["knowledge_cache"] = dict(sorted_entries[-50:])
+
+            # Store updated data
+            memory_system.memory_system.data["memory_categories"]["search_external_info"] = search_data
+            memory_system.memory_system.save_memory()
+
+            logger.debug(f"Stored knowledge search results for: {topic}")
+
+        except Exception as e:
+            logger.warning(f"Failed to store knowledge search: {e}")
+
+    def _create_knowledge_summary(self, content: str) -> str:
+        """Create a concise summary of the knowledge content"""
+        try:
+            # Extract key points from the content
+            lines = content.split('\n')
+            key_points = []
+
+            for line in lines:
+                line = line.strip()
+                if line and len(line) > 20:
+                    # Look for lines that seem like key information
+                    if any(indicator in line.lower() for indicator in ['key', 'important', 'main', 'primary', 'significant']):
+                        key_points.append(line)
+                    elif line.startswith('•') or line.startswith('-'):
+                        key_points.append(line)
+
+            if key_points:
+                return '\n'.join(key_points[:3])  # Top 3 key points
+            else:
+                # Fallback: return first few sentences
+                sentences = content.split('.')
+                return '. '.join(sentences[:2]) + '.' if len(sentences) > 1 else content[:200] + '...'
+
+        except Exception:
+            return content[:200] + '...' if len(content) > 200 else content
+
+    def _format_knowledge_summary(self, topic: str, search_results: str) -> str:
+        """Format the knowledge search results for initial response"""
+        try:
+            summary = self._create_knowledge_summary(search_results)
+
+            response = f"Here's what I found about {topic}:\n\n{summary}"
+
+            # Add hint for more information
+            response += "\n\nWould you like me to provide more detailed information about this topic?"
+
+            return response
+        except Exception:
+            return f"I found information about {topic}, but had trouble formatting it. Please ask for more details."
+
+    async def _get_detailed_knowledge(self, topic: str, stored_knowledge: Dict[str, Any]) -> str:
+        """Get detailed knowledge from stored search results"""
+        try:
+            # Increment access count
+            stored_knowledge["access_count"] = stored_knowledge.get("access_count", 0) + 1
+
+            # Return the full content
+            content = stored_knowledge.get("content", "")
+
+            if content:
+                return f"Here's detailed information about {topic}:\n\n{content}"
+            else:
+                return f"I have limited information about {topic}. Let me search for more current details."
+
+        except Exception as e:
+            logger.error(f"Error getting detailed knowledge: {e}")
+            return "I encountered an error retrieving the detailed information."
+
+    async def _store_timezone_memory_async(self, location: str, time_result: str):
+        """Store timezone query results in comprehensive memory system."""
+        if self.memory_enabled and self.memory_integration and self.memory_integration.is_enabled:
+            try:
+                memory_system = self.memory_integration.memory_system
+
+                # Get current timezone preferences
+                timezone_data = memory_system.memory_system.data["memory_categories"].get("timezone_preferences", {})
+
+                # Initialize timezone history if needed
+                if "timezone_queries" not in timezone_data:
+                    timezone_data["timezone_queries"] = []
+                if "preferred_locations" not in timezone_data:
+                    timezone_data["preferred_locations"] = {}
+
+                # Create timezone record
+                import time
+                timezone_record = {
+                    "location": location,
+                    "time_result": time_result,
+                    "timestamp": datetime.now().isoformat(),
+                    "date": datetime.now().strftime("%Y-%m-%d"),
+                    "query_id": f"timezone_{int(time.time())}"
+                }
+
+                # Add to timezone queries
+                timezone_data["timezone_queries"].append(timezone_record)
+
+                # Keep only last 20 timezone queries to prevent memory bloat
+                if len(timezone_data["timezone_queries"]) > 20:
+                    timezone_data["timezone_queries"] = timezone_data["timezone_queries"][-20:]
+
+                # Update preferred locations (track frequency)
+                location_lower = location.lower()
+                if location_lower not in timezone_data["preferred_locations"]:
+                    timezone_data["preferred_locations"][location_lower] = {
+                        "count": 0,
+                        "last_query": None,
+                        "display_name": location.title()
+                    }
+
+                timezone_data["preferred_locations"][location_lower]["count"] += 1
+                timezone_data["preferred_locations"][location_lower]["last_query"] = timezone_record["timestamp"]
+
+                # Store updated data
+                memory_system.memory_system.data["memory_categories"]["timezone_preferences"] = timezone_data
+                memory_system.memory_system.save_memory()
+
+                logger.debug(f"Stored timezone query in memory: {location}")
+
+            except Exception as e:
+                logger.warning(f"Failed to store timezone memory: {e}")
+
+    async def _store_news_memory_async(self, news_content: str, topic: str = "general", source: str = "various"):
+        """Store news results in comprehensive memory system."""
+        if self.memory_enabled and self.memory_integration and self.memory_integration.is_enabled:
+            try:
+                # Use the unified memory integration's store_memory method
+                memory_content = f"News about {topic}"
+                if source and source != "various":
+                    memory_content += f" from {source}"
+
+                memory_content += f": {news_content[:200]}..."  # Store first 200 chars as summary
+
+                # Store in news category
+                self.memory_integration.store_memory(
+                    content=memory_content,
+                    category="news_weather_history",
+                    confidence=0.8
+                )
+
+                logger.debug(f"Stored news results in memory: {topic}")
+
+            except Exception as e:
+                logger.warning(f"Failed to store news memory: {e}")
+
+    async def _store_weather_memory_async(self, weather_content: str, location: str):
+        """Store weather results in comprehensive memory system."""
+        if self.memory_enabled and self.memory_integration and self.memory_integration.is_enabled:
+            try:
+                memory_system = self.memory_integration.memory_system
+
+                # Get current weather history
+                news_data = memory_system.memory_system.data["memory_categories"].get("news_weather_history", {})
+
+                # Initialize weather history if needed
+                if "weather_history" not in news_data:
+                    news_data["weather_history"] = []
+                if "weather_summaries" not in news_data:
+                    news_data["weather_summaries"] = {}
+
+                # Create weather record
+                import time
+                weather_record = {
+                    "type": "weather",
+                    "location": location,
+                    "content": weather_content,
+                    "timestamp": datetime.now().isoformat(),
+                    "date": datetime.now().strftime("%Y-%m-%d"),
+                    "weather_id": f"weather_{int(time.time())}"
+                }
+
+                # Add to weather history
+                news_data["weather_history"].append(weather_record)
+
+                # Keep only last 20 weather items to prevent memory bloat
+                if len(news_data["weather_history"]) > 20:
+                    news_data["weather_history"] = news_data["weather_history"][-20:]
+
+                # Update weather summaries by date
+                date_key = weather_record["date"]
+                if date_key not in news_data["weather_summaries"]:
+                    news_data["weather_summaries"][date_key] = []
+
+                news_data["weather_summaries"][date_key].append({
+                    "location": location,
+                    "timestamp": weather_record["timestamp"],
+                    "weather_id": weather_record["weather_id"]
+                })
+
+                # Store updated data
+                memory_system.memory_system.data["memory_categories"]["news_weather_history"] = news_data
+                memory_system.memory_system.save_memory()
+
+                logger.debug(f"Stored weather results in memory: {location}")
+
+            except Exception as e:
+                logger.warning(f"Failed to store weather memory: {e}")
     
     def _auto_extract_and_store_memories(self, user_message: str, ai_response: str, topics: List[str]):
         """Auto-extract and store various types of memories from conversation"""
-        if not self.memory_enabled or not self.memory:
+        if not self.memory_enabled:
             logger.debug("Memory system not available - skipping auto-extraction")
+            return
+
+        # Use comprehensive memory system if available (it handles auto-extraction internally)
+        if self.memory_integration and self.memory_integration.is_enabled:
+            logger.debug("Auto-extraction handled by comprehensive memory system")
+            return
+
+        # Fallback to basic memory system if available
+        if not hasattr(self, 'memory') or not self.memory:
+            logger.debug("No basic memory system available for auto-extraction")
             return
             
         try:
@@ -3120,32 +6557,41 @@ class AleChatBot:
     
     def get_memory_status(self) -> str:
         """Get current memory system status"""
-        if not self.memory_enabled or not self.memory:
+        if not self.memory_enabled:
             return "Memory system: Disabled (not available)"
-            
+
         try:
-            stats = self.memory.get_memory_stats()
-            if "error" in stats:
-                return f"Mem0.ai Memory: Error - {stats['error']}"
-            
-            total = stats.get('total_memories', 0)
-            types = stats.get('memory_types', {})
-            topics = stats.get('topics', {})
-            
-            status_parts = [f"Mem0.ai Memory: {total} memories stored"]
-            
-            if types:
-                type_summary = ", ".join([f"{t}: {c}" for t, c in list(types.items())[:3]])
-                status_parts.append(f"Types: {type_summary}")
-            
-            if topics:
-                topic_summary = ", ".join([f"{t}: {c}" for t, c in list(topics.items())[:3]])
-                status_parts.append(f"Topics: {topic_summary}")
-            
-            return " | ".join(status_parts)
-            
+            # Use comprehensive memory system if available
+            if self.memory_integration and self.memory_integration.is_enabled:
+                status = self.memory_integration.get_integration_status()
+                return f"Comprehensive Memory: {status['status']} | 23-category framework active"
+
+            # Fallback to basic memory system if available
+            if hasattr(self, 'memory') and self.memory:
+                stats = self.memory.get_memory_stats()
+                if "error" in stats:
+                    return f"Basic Memory: Error - {stats['error']}"
+
+                total = stats.get('total_memories', 0)
+                types = stats.get('memory_types', {})
+                topics = stats.get('topics', {})
+
+                status_parts = [f"Basic Memory: {total} memories stored"]
+
+                if types:
+                    type_summary = ", ".join([f"{t}: {c}" for t, c in list(types.items())[:3]])
+                    status_parts.append(f"Types: {type_summary}")
+
+                if topics:
+                    topic_summary = ", ".join([f"{t}: {c}" for t, c in list(topics.items())[:3]])
+                    status_parts.append(f"Topics: {topic_summary}")
+
+                return " | ".join(status_parts)
+            else:
+                return "Memory system: Not available"
+
         except Exception as e:
-            return f"Mem0.ai Memory: Error - {e}"
+            return f"Memory system: Error - {e}"
     
     def get_performance_report(self) -> str:
         """Get a formatted performance report"""
@@ -3391,6 +6837,15 @@ class AleChatBot:
             print(result)
             return True
             
+        elif cmd_lower == "memory":
+            # Simple memory command - show status
+            if self.memory_enabled:
+                status = self.get_memory_status()
+                print(f"💾 {status}")
+            else:
+                print("Memory system not available. Memory features are disabled.")
+            return True
+            
         elif cmd_lower == "clear memory" or cmd_lower == "clearmemory":
             result = self.clear_memory()
             print(result)
@@ -3398,49 +6853,68 @@ class AleChatBot:
             
         elif cmd_lower.startswith("memory "):
             # Enhanced memory commands
-            if not self.memory_enabled or not self.memory:
+            if not self.memory_enabled:
                 print("Memory system not available. Memory features are disabled.")
                 return True
-                
+
             memory_cmd = cmd_lower[7:].strip()
-            
+
             if memory_cmd == "status":
                 status = self.get_memory_status()
                 print(f"💾 {status}")
-                
+
             elif memory_cmd == "stats":
-                stats = self.memory.get_memory_stats()
-                self._display_memory_stats(stats)
-                
+                if self.memory_integration and self.memory_integration.is_enabled:
+                    print("📊 Comprehensive Memory System Statistics:")
+                    print("• 23-category memory framework active")
+                    print("• Real-time conversation processing")
+                    print("• Perfect recall capabilities")
+                elif hasattr(self, 'memory') and self.memory:
+                    stats = self.memory.get_memory_stats()
+                    self._display_memory_stats(stats)
+                else:
+                    print("Memory system not available")
+
             elif memory_cmd.startswith("search "):
                 query = memory_cmd[7:].strip()
                 if query:
-                    memories = self.memory.retrieve_memories(query, limit=5)
-                    self._display_retrieved_memories(memories, query)
+                    if self.memory_integration and self.memory_integration.is_enabled:
+                        print(f"🔍 Use natural language: 'what do you remember about {query}?'")
+                    elif hasattr(self, 'memory') and self.memory:
+                        memories = self.memory.retrieve_memories(query, limit=5)
+                        self._display_retrieved_memories(memories, query)
+                    else:
+                        print("Memory system not available")
                 else:
                     print("❌ Usage: memory search <query>")
-                    
+
             elif memory_cmd.startswith("store "):
                 content = memory_cmd[6:].strip()
                 if content:
-                    memory_id = self.memory.store_memory(content, MemoryType.FACT)
-                    print(f"✅ Stored memory: {memory_id}")
+                    if self.memory_integration and self.memory_integration.is_enabled:
+                        print("✅ Information will be automatically stored during conversation")
+                    elif hasattr(self, 'memory') and self.memory:
+                        memory_id = self.memory.store_memory(content, MemoryType.FACT)
+                        print(f"✅ Stored memory: {memory_id}")
+                    else:
+                        print("Memory system not available")
                 else:
                     print("❌ Usage: memory store <content>")
-                    
+
             elif memory_cmd == "clear":
-                if self.memory.clear_memories():
-                    print("✅ All memories cleared")
-                else:
-                    print("❌ Failed to clear memories")
-                    
+                result = self.clear_memory()
+                print(result)
+
             elif memory_cmd == "help":
                 self._show_memory_help()
-                
+
             else:
                 # Default: search memories
                 if memory_cmd:
-                    memories = self.memory.retrieve_memories(memory_cmd, limit=5)
+                    if self.memory_integration and self.memory_integration.is_enabled:
+                        print(f"🔍 Use natural language: 'what do you remember about {memory_cmd}?'")
+                    elif hasattr(self, 'memory') and self.memory:
+                        memories = self.memory.retrieve_memories(memory_cmd, limit=5)
                     self._display_retrieved_memories(memories, memory_cmd)
                 else:
                     status = self.get_memory_status()
@@ -3689,7 +7163,7 @@ class AleChatBot:
     async def terminal_chat_loop(self):
         """Enhanced terminal-based interactive chat loop with memory and context."""
         self.terminal_chat.show_welcome()
-        
+
         # If in voice input mode, show a message and switch to transcript mode
         if self.voice_input_mode:
             self.display.print_banner("Voice Input Mode Active")
@@ -3700,7 +7174,86 @@ class AleChatBot:
             print("Switching to transcript mode to process voice input...")
             self.mode = "transcript"
             return
-        
+
+        # Enhanced startup memory injection: date, user profile, recent history, anti-repeat, greeting
+        try:
+            # Current date and time context
+            now = datetime.now()
+            today_str = now.strftime('%A, %B %d, %Y')
+            time_str = now.strftime('%I:%M %p')
+            self.chat_history.append({
+                "role": "system",
+                "content": f"CURRENT CONTEXT: Today is {today_str} at {time_str}. You always know the current date and time."
+            })
+
+            # Load comprehensive user profile
+            user_profile_context = await self._get_comprehensive_user_profile_for_ai()
+            if user_profile_context:
+                self.chat_history.append({
+                    "role": "system",
+                    "content": (
+                        "CONVERSATION STARTUP - COMPREHENSIVE USER PROFILE:\n\n"
+                        f"{user_profile_context}\n\n"
+                        "INSTRUCTIONS: Use this information to personalize responses naturally. "
+                        "You remember everything about this user. Don't ask for information you already know. "
+                        "Be conversational and build on previous interactions."
+                    )
+                })
+
+            # Load recent conversation history (last 2-3 days)
+            lookback_days = 3
+            try:
+                env_days = os.getenv('ASTRA_STARTUP_LOOKBACK_DAYS')
+                if env_days:
+                    lookback_days = max(1, int(env_days))
+            except Exception:
+                pass
+
+            recent_context = self._summarize_recent_conversation(days=lookback_days)
+            if recent_context:
+                self.chat_history.append({
+                    "role": "system",
+                    "content": (
+                        "RECENT CONVERSATION HISTORY:\n\n" + recent_context +
+                        "\n\nCONTINUITY INSTRUCTIONS: Continue conversations naturally as if no time has passed. "
+                        "Reference recent topics when relevant. Avoid repetitive greetings or re-asking known information."
+                    )
+                })
+
+            # Anti-repetition and context awareness instructions
+            self.chat_history.append({
+                "role": "system",
+                "content": (
+                    "CONVERSATION GUIDELINES:\n"
+                    "- You are Nova, an intelligent AI companion with perfect memory\n"
+                    "- You remember all previous conversations and user information\n"
+                    "- Greet appropriately based on time of day, but avoid repetitive greetings in the same session\n"
+                    "- Build on previous conversations naturally\n"
+                    "- Don't ask for information you already know about the user\n"
+                    "- Be conversational, helpful, and maintain continuity\n"
+                    "- Your responses will be spoken aloud, so write naturally for speech"
+                )
+            })
+
+            # Initialize voice system if not already done
+            await self._initialize_voice_system()
+
+            # Intelligent greeting system
+            try:
+                if self.greeting_system:
+                    session_id = getattr(self, 'session_id', f'session_{int(time.time())}')
+                    greeting = self.greeting_system.generate_greeting(session_id)
+                    if greeting:
+                        self.chat_history.append({"role": "assistant", "content": greeting})
+                        # Mark greeting as completed to prevent repetition
+                        if hasattr(self.greeting_system, 'mark_greeting_completed'):
+                            self.greeting_system.mark_greeting_completed(session_id)
+            except Exception as e:
+                file_logger.error(f"Error generating greeting: {e}")
+
+        except Exception as e:
+            file_logger.error(f"Error in startup memory injection: {e}")
+
         # Track conversation session
         session_start_time = time.time()
         messages_in_session = 0
@@ -3726,6 +7279,11 @@ class AleChatBot:
                     self.files.store_conversation(user_input, farewell)
                     # Also save just the AI response to the external file
                     self.files.save_ai_response(farewell, user_input)
+                    # Store farewell conversation to nova_ai_memory.json
+                    try:
+                        await self._store_conversation_to_memory_file(user_input, farewell)
+                    except Exception:
+                        pass
                     break
                 
                 # Handle special commands
@@ -3771,8 +7329,7 @@ class AleChatBot:
                     # Store the conversation locally
                     self.files.store_conversation(user_input, response)
                     
-                    # Store in mem0.ai cloud memory
-                    self.store_conversation_memory(user_input, response)
+                    # Note: Conversation is automatically stored to nova_ai_memory.json via get_response method
                     
                     # Save updated chat history (only message content, not system prompt)
                     self.files.save_chat_history(self.chat_history[1:])
@@ -3785,6 +7342,13 @@ class AleChatBot:
                 
             except KeyboardInterrupt:
                 logger.info("Received keyboard interrupt, exiting terminal chat...")
+                # Save memory on graceful shutdown
+                if self.mem0_memory_agent:
+                    try:
+                        self.mem0_memory_agent.memory_system.save_memory()
+                        logger.info("Memory saved successfully on shutdown")
+                    except Exception as e:
+                        logger.error(f"Error saving memory on shutdown: {e}")
                 logger.info(f"Session ended with {messages_in_session} messages stored in mem0.ai")
                 break
                 
@@ -3806,11 +7370,49 @@ class AleChatBot:
             self.display.print_divider()
         else:
             print("Waiting for questions from transcript file...")
-        
+
+        # Startup memory injection for transcript mode
+        try:
+            today_str = datetime.now().strftime('%A, %B %d, %Y')
+            self.chat_history.append({"role": "system", "content": f"TODAY: {today_str}."})
+
+            user_profile_context = await self._get_comprehensive_user_profile_for_ai()
+            if user_profile_context:
+                self.chat_history.append({
+                    "role": "system",
+                    "content": f"CONVERSATION STARTUP - USER PROFILE LOADED:\n\n{user_profile_context}\n\nUse this to personalize without repeating basics."
+                })
+
+            lookback_days = 3
+            try:
+                env_days = os.getenv('ASTRA_STARTUP_LOOKBACK_DAYS')
+                if env_days:
+                    lookback_days = max(1, int(env_days))
+            except Exception:
+                pass
+
+            recent_context = self._summarize_recent_conversation(days=lookback_days)
+            if recent_context:
+                self.chat_history.append({"role": "system", "content": "RECENT CONVERSATION CONTEXT:\n\n" + recent_context})
+
+            if self.memory_integration and hasattr(self.memory_integration, 'get_ai_context_instructions'):
+                instructions = self.memory_integration.get_ai_context_instructions()
+                if instructions:
+                    self.chat_history.append({"role": "system", "content": instructions})
+
+            if self.greeting_system:
+                greet = self.greeting_system.generate_greeting(getattr(self, 'session_id', 'default'))
+                if greet:
+                    self.chat_history.append({"role": "assistant", "content": greet})
+                    if self.memory_integration and hasattr(self.memory_integration, 'mark_greeting_completed'):
+                        self.memory_integration.mark_greeting_completed()
+        except Exception:
+            pass
+
         # Track conversation session
         session_start_time = time.time()
         messages_in_session = 0
-        
+
         # Initialize error counter
         consecutive_errors = 0
         max_consecutive_errors = 5
@@ -3875,6 +7477,7 @@ class AleChatBot:
                     
                     # Store the conversation
                     self.files.store_conversation(user_input, response)
+                    # Note: Conversation is automatically stored to nova_ai_memory.json via get_response method
                     
                     # Mark as answered
                     if transcript_data:
@@ -3893,6 +7496,12 @@ class AleChatBot:
             except KeyboardInterrupt:
                 logger.info("Received keyboard interrupt, exiting transcript mode...")
                 # Save memory state before exiting
+                if self.mem0_memory_agent:
+                    try:
+                        self.mem0_memory_agent.memory_system.save_memory()
+                        logger.info("Memory saved successfully on shutdown")
+                    except Exception as e:
+                        logger.error(f"Error saving memory on shutdown: {e}")
                 self.memory.update_long_term_memory()
                 break
                 
@@ -3936,7 +7545,22 @@ class AleChatBot:
         if not self.news_system:
             return None
             
-        # News query patterns - focusing on current news
+        # Enhanced news query patterns with source specification
+        news_patterns_with_source = [
+            r'news\s+(?:about|on|regarding)\s+([\w\s,.-]+?)\s+from\s+([\w\s,.-]+)',
+            r'(?:latest|recent|current)\s+news\s+(?:about|on)\s+([\w\s,.-]+?)\s+from\s+([\w\s,.-]+)',
+            r'(?:give me|get me|show me|find)\s+news\s+(?:about|on)\s+([\w\s,.-]+?)\s+from\s+([\w\s,.-]+)',
+            r'(?:tell me|show me)\s+(?:the\s+)?news\s+(?:about|on)\s+([\w\s,.-]+?)\s+from\s+([\w\s,.-]+)',
+        ]
+        
+        # Source-only patterns
+        source_only_patterns = [
+            r'(?:give me|get me|show me|find)\s+news\s+from\s+([\w\s,.-]+)',
+            r'(?:latest|recent|current)\s+news\s+from\s+([\w\s,.-]+)',
+            r'news\s+from\s+([\w\s,.-]+)',
+        ]
+        
+        # News query patterns - focusing on current news (topic only)
         news_patterns = [
             r'news\s+(?:about|on|regarding)\s+([\w\s,.-]+)',
             r'what\s+(?:is|are)\s+(?:happening|going on)\s+(?:in|at|with)\s+([\w\s,.-]+)',
@@ -3968,60 +7592,233 @@ class AleChatBot:
         ]
         
         try:
-            # Check for specific news patterns
+            # Check for news with source specification first
+            for pattern in news_patterns_with_source:
+                match = re.search(pattern, message.lower())
+                if match:
+                    topic = match.group(1).strip()
+                    source = match.group(2).strip()
+                    logger.info(f"📰 Processing news query for topic: {topic} from source: {source}")
+                    
+                    # Use enhanced news system if available
+                    if self.enhanced_news_system:
+                        response = self.enhanced_news_system.get_conversational_news(topic, source)
+
+                        # Analyze content for internal comprehension
+                        if self.content_analysis:
+                            try:
+                                analysis = self.content_analysis.analyze_news_content(
+                                    query=f"{topic} from {source}" if source else topic,
+                                    news_results=response,
+                                    user_context={"timestamp": datetime.now().isoformat(), "source": source}
+                                )
+                                logger.info(f"[ANALYSIS] News content analyzed: {analysis.content_id}")
+                            except Exception as e:
+                                logger.error(f"[ERROR] News content analysis failed: {e}")
+
+                        # Store in dedicated news memory
+                        if self.search_news_memory:
+                            try:
+                                news_id = self.search_news_memory.store_news_record(
+                                    query=topic,
+                                    results=response,
+                                    source=source,
+                                    user_context={"timestamp": datetime.now().isoformat()},
+                                    analysis_summary=self.content_analysis.get_analysis_summary(analysis) if self.content_analysis and 'analysis' in locals() else ""
+                                )
+                                logger.info(f"[MEMORY] News stored: {news_id}")
+                            except Exception as e:
+                                logger.error(f"[ERROR] News memory storage failed: {e}")
+
+                        # Store news result in memory (legacy)
+                        asyncio.create_task(self._store_news_memory_async(response, topic, source))
+                        return f"Nova: {response}"
+                    else:
+                        # Fallback to standard news system
+                        news_result = self.news_system.get_news_summary(
+                            query=f"latest news about {topic} from {source}",
+                            allow_source_selection=False
+                        )
+
+                        # Handle both string and dictionary responses
+                        if news_result:
+                            if isinstance(news_result, str):
+                                # Format as structured news for the enhanced widget
+                                response = self._format_structured_news([{
+                                    'headline': f"Latest News: {topic.title()} ({source.title()})",
+                                    'summary': news_result,
+                                    'source': source.title(),
+                                    'time': 'Just now'
+                                }])
+                                # Store news result in memory
+                                asyncio.create_task(self._store_news_memory_async(response, topic, source))
+                                return f"NEWS_RESULT: {response}"
+                            elif isinstance(news_result, dict) and news_result.get('summary'):
+                                # Use enhanced formatting for comprehensive news display
+                                response = self._format_enhanced_news(news_result)
+                                # Store news result in memory
+                                asyncio.create_task(self._store_news_memory_async(response, topic, source))
+                                return f"NEWS_RESULT: {response}"
+                    
+                    return f"📰 I couldn't find recent news about {topic} from {source}. Try asking for news from a different source like BBC, CNN, Reuters, or Fox News."
+            
+            # Check for source-only patterns
+            for pattern in source_only_patterns:
+                match = re.search(pattern, message.lower())
+                if match:
+                    source = match.group(1).strip()
+                    logger.info(f"📰 Processing news query from source: {source}")
+                    
+                    # Get general news from specific source
+                    news_result = self.news_system.get_news_summary(
+                        query=f"latest breaking news from {source}",
+                        allow_source_selection=False
+                    )
+                    
+                    # Handle response similar to above
+                    if news_result:
+                        if isinstance(news_result, str):
+                            response = self._format_structured_news([{
+                                'headline': f"Latest News from {source.title()}",
+                                'summary': news_result,
+                                'source': source.title(),
+                                'time': 'Just now'
+                            }])
+                            return f"NEWS_RESULT: {response}"
+                        elif isinstance(news_result, dict) and news_result.get('summary'):
+                            # Use enhanced formatting for comprehensive news display
+                            response = self._format_enhanced_news(news_result)
+                            return f"NEWS_RESULT: {response}"
+                    
+                    return f"📰 I couldn't retrieve news from {source}. Try asking for news from BBC, CNN, Reuters, Fox News, or other major news sources."
+            
+            # Check for specific news patterns (topic only)
             for pattern in news_patterns:
                 match = re.search(pattern, message.lower())
                 if match:
                     topic = match.group(1).strip()
-                    logger.info(f"📰 Processing news query for topic: {topic}")
-                    
-                    # Get current news summary
-                    news_result = self.news_system.get_news_summary(
-                        query=f"latest news about {topic}",
-                        allow_source_selection=False  # Disable interactive source selection
-                    )
+                    logger.info(f"Processing news query for topic: {topic}")
+
+                    # Use enhanced news system if available
+                    if self.enhanced_news_system:
+                        response = self.enhanced_news_system.get_conversational_news(topic)
+                        # Store news result in memory
+                        asyncio.create_task(self._store_news_memory_async(response, topic, None))
+                        return f"Nova: {response}"
+                    else:
+                        # Fallback to standard news system
+                        news_result = self.news_system.get_news_summary(
+                            query=f"latest news about {topic}",
+                            allow_source_selection=False  # Disable interactive source selection
+                        )
                     
                     # Handle both string and dictionary responses
                     if news_result:
                         if isinstance(news_result, str):
-                            # If it's a string, use it directly
+                            # If it's a string, create a more structured and informative news format
                             current_date = datetime.now().strftime('%B %d, %Y')
-                            response = f"📰 **Current News: {topic.title()}** ({current_date})\n\n{news_result}"
-                            return response
+                            
+                            # Extract key sentences for better organization
+                            sentences = re.split(r'(?<=[.!?])\s+', news_result)
+                            
+                            # Create a headline from the first sentence if it's substantial
+                            headline = ""
+                            if sentences and len(sentences[0]) > 20:
+                                headline = f"{topic.title()} News: {sentences[0]}"
+                                sentences = sentences[1:]  # Remove the first sentence from content
+                            else:
+                                headline = f"{topic.title()} News Update"
+                            
+                            # Group remaining sentences into paragraphs
+                            paragraphs = []
+                            current_paragraph = []
+                            
+                            for sentence in sentences:
+                                current_paragraph.append(sentence)
+                                if len(current_paragraph) >= 2:  # Group every 2-3 sentences
+                                    paragraphs.append(" ".join(current_paragraph))
+                                    current_paragraph = []
+                            
+                            # Add any remaining sentences
+                            if current_paragraph:
+                                paragraphs.append(" ".join(current_paragraph))
+                            
+                            # Format the response with headline and structured content
+                            response = f"📰 {topic.title()} News Brief: {current_date}\n"
+                            if headline:
+                                response += f" {headline}\n\n"
+                            
+                            # Add paragraphs with proper spacing
+                            response += "\n\n".join(paragraphs)
+                            
+                            return f"NEWS_RESULT: {response}"
                         elif isinstance(news_result, dict) and news_result.get('summary'):
-                            # If it's a dictionary with summary
-                            summary = news_result['summary']
-                            sources = news_result.get('sources', [])
-                            current_date = datetime.now().strftime('%B %d, %Y')
+                            # Use enhanced formatting for comprehensive news display
+                            response = self._format_enhanced_news(news_result)
                             
-                            response = f"📰 **Current News: {topic.title()}** ({current_date})\n\n{summary}"
-                            
-                            if sources:
-                                source_names = [source.get('name', 'Unknown') for source in sources[:3]]
-                                response += f"\n\n📍 **Sources:** {', '.join(source_names)}"
-                            
-                            return response
+                            return f"NEWS_RESULT: {response}"
                     
                     return f"📰 I couldn't find recent news about {topic}. This might be because:\n• The topic is very specific or niche\n• There's no recent news coverage\n• The news API is temporarily unavailable\n\nTry asking about a broader topic or check back later."
             
             # Check for general news requests
             for pattern in general_news_patterns:
                 if re.search(pattern, message.lower()):
-                    logger.info("📰 Processing general news query")
-                    
-                    # Get general current news
-                    news_result = self.news_system.get_news_summary(
-                        query="latest breaking news today",
-                        allow_source_selection=False
-                    )
+                    logger.info("Processing general news query")
+
+                    # Use enhanced news system if available
+                    if self.enhanced_news_system:
+                        response = self.enhanced_news_system.get_conversational_news("latest breaking news today")
+                        # Store news result in memory
+                        asyncio.create_task(self._store_news_memory_async(response, "general news", None))
+                        return f"Nova: {response}"
+                    else:
+                        # Fallback to standard news system
+                        news_result = self.news_system.get_news_summary(
+                            query="latest breaking news today",
+                            allow_source_selection=False
+                        )
                     
                     # Handle both string and dictionary responses
                     if news_result:
                         if isinstance(news_result, str):
-                            # If it's a string, use it directly
+                            # If it's a string, create a more structured and informative news format
                             current_date = datetime.now().strftime('%B %d, %Y')
-                            response = f"📰 **Latest News Summary** ({current_date})\n\n{news_result}"
-                            return response
+                            
+                            # Extract key sentences for better organization
+                            sentences = re.split(r'(?<=[.!?])\s+', news_result)
+                            
+                            # Create sections from the content
+                            sections = []
+                            current_section = []
+                            section_count = 0
+                            
+                            for sentence in sentences:
+                                current_section.append(sentence)
+                                # Group sentences into logical sections
+                                if len(current_section) >= 2 or sum(len(s) for s in current_section) > 150:
+                                    sections.append(" ".join(current_section))
+                                    current_section = []
+                                    section_count += 1
+                                    # Limit to 3-4 main sections for readability
+                                    if section_count >= 4:
+                                        break
+                            
+                            # Add any remaining sentences
+                            if current_section:
+                                sections.append(" ".join(current_section))
+                            
+                            # Format the response with headline and structured content
+                            response = f"📰 News Brief: {current_date}\n"
+                            
+                            # Add topics if available
+                            topics = []
+                            if topics:
+                                response += f" Top Stories: {', '.join(topics[:3])}\n\n"
+                            
+                            # Add sections with proper spacing
+                            response += "\n\n".join(sections)
+                            
+                            return f"NEWS_RESULT: {response}"
                         elif isinstance(news_result, dict) and news_result.get('summary'):
                             # If it's a dictionary with summary
                             summary = news_result['summary']
@@ -4031,10 +7828,11 @@ class AleChatBot:
                             response = f"📰 **Latest News Summary** ({current_date})\n\n{summary}"
                             
                             if sources:
-                                source_names = [source.get('name', 'Unknown') for source in sources[:3]]
+                                # sources is already a list of source names (strings)
+                                source_names = sources[:3] if sources and isinstance(sources[0], str) else [source.get('name', 'Unknown') for source in sources[:3] if isinstance(source, dict)]
                                 response += f"\n\n📍 **Sources:** {', '.join(source_names)}"
                             
-                            return response
+                            return f"NEWS_RESULT: {response}"
                     
                     return f"📰 I couldn't retrieve the latest news right now. This might be due to:\n• Temporary API issues\n• Network connectivity problems\n• Rate limiting\n\nPlease try again in a few moments."
             
@@ -4044,6 +7842,812 @@ class AleChatBot:
         
         return None
     
+    def _format_structured_news(self, articles: List[Dict[str, str]]) -> str:
+        """
+        Format news articles for the enhanced news widget.
+        
+        Args:
+            articles: List of article dictionaries with headline, summary, source, time
+            
+        Returns:
+            Formatted string for the news widget
+        """
+        formatted_articles = []
+        for article in articles:
+            formatted_article = []
+            formatted_article.append(f"HEADLINE: {article.get('headline', 'News Update')}")
+            formatted_article.append(f"SOURCE: {article.get('source', 'Unknown Source')}")
+            formatted_article.append(f"TIME: {article.get('time', 'Recently')}")
+            if article.get('summary'):
+                formatted_article.append(article['summary'])
+            formatted_articles.append('\n'.join(formatted_article))
+        
+        return '\n\n---\n\n'.join(formatted_articles)
+    
+    def _format_enhanced_news(self, news_result: Dict[str, Any]) -> str:
+        """
+        Format news results into a comprehensive, detailed news format.
+        
+        Args:
+            news_result: Dictionary containing news summary and articles
+            
+        Returns:
+            Enhanced formatted news string
+        """
+        if not news_result or not news_result.get('summary'):
+            return "No news available at this time."
+        
+        # Extract information from news result
+        topic = news_result.get('topic', 'General News')
+        summary = news_result.get('summary', '')
+        articles = news_result.get('articles', [])
+        sources = news_result.get('sources', [])
+        date_range = news_result.get('date_range', datetime.now().strftime('%B %d, %Y'))
+        
+        # Create detailed news format
+        formatted_news = []
+        
+        # Header with topic and date
+        formatted_news.append(f"📰 **Current News: {topic.title()}**")
+        formatted_news.append(f"📅 {date_range}")
+        formatted_news.append("")
+        
+        # Main story/headline
+        if articles and len(articles) > 0:
+            main_article = articles[0]
+            main_title = main_article.get('title', 'Breaking News')
+            main_description = main_article.get('description', summary)
+            
+            formatted_news.append(f"🔥 **{main_title}**")
+            formatted_news.append("")
+            formatted_news.append(main_description)
+            formatted_news.append("")
+        
+        # Key details section
+        if len(articles) > 1:
+            formatted_news.append("📋 **Key Details:**")
+            formatted_news.append("")
+            
+            for i, article in enumerate(articles[1:4], 1):  # Show up to 3 additional articles
+                title = article.get('title', f'Update {i}')
+                description = article.get('description', '')
+                
+                formatted_news.append(f"• **{title}**")
+                if description:
+                    # Truncate long descriptions
+                    if len(description) > 150:
+                        description = description[:150] + "..."
+                    formatted_news.append(f"  {description}")
+                formatted_news.append("")
+        
+        # Analysis/Impact section (if we have enough content)
+        if len(summary) > 200:
+            sentences = summary.split('. ')
+            if len(sentences) > 3:
+                formatted_news.append("🔍 **Analysis:**")
+                formatted_news.append("")
+                
+                # Try to extract key insights
+                key_insights = []
+                for sentence in sentences:
+                    if any(keyword in sentence.lower() for keyword in ['impact', 'result', 'consequence', 'effect', 'significant', 'important', 'major']):
+                        key_insights.append(sentence.strip())
+                
+                if key_insights:
+                    for insight in key_insights[:2]:  # Show up to 2 insights
+                        formatted_news.append(f"• {insight}")
+                        formatted_news.append("")
+        
+        # Public/Global reaction section
+        reaction_keywords = ['public', 'citizens', 'people', 'reaction', 'response', 'officials', 'government', 'authorities']
+        reaction_sentences = []
+        
+        for sentence in summary.split('. '):
+            if any(keyword in sentence.lower() for keyword in reaction_keywords):
+                reaction_sentences.append(sentence.strip())
+        
+        if reaction_sentences:
+            formatted_news.append("🌍 **Public Response:**")
+            formatted_news.append("")
+            for reaction in reaction_sentences[:2]:  # Show up to 2 reactions
+                formatted_news.append(f"• {reaction}")
+                formatted_news.append("")
+        
+        # Sources section
+        if sources:
+            formatted_news.append("📍 **Sources:**")
+            source_names = []
+            for source in sources:
+                if isinstance(source, dict):
+                    source_names.append(source.get('name', 'Unknown'))
+                else:
+                    source_names.append(str(source))
+            
+            # Remove duplicates and limit to 5 sources
+            unique_sources = list(dict.fromkeys(source_names))[:5]
+            formatted_news.append(f"{', '.join(unique_sources)}")
+        
+        # News categories/topics suggestion
+        formatted_news.append("")
+        formatted_news.append("📊 **Explore More Topics:**")
+        formatted_news.append("")
+        categories = [
+            "🌍 World & Politics - Global affairs, geopolitical tensions, elections, policy shifts",
+            "💰 Economy & Finance - Market trends, inflation, crypto regulation, global trade",
+            "🤖 Tech & AI - AI breakthroughs, big tech updates, programming tools, open-source projects",
+            "🔒 Cybersecurity - Breaches, vulnerabilities, new tools, zero-days, legislation",
+            "🚀 Science & Space - Breakthroughs in physics, biology, space missions, climate data",
+            "⚖️ Law & Ethics - AI regulation, data privacy, antitrust suits",
+            "💻 Dev & Open Source - GitHub trends, framework updates, major releases",
+            "🚨 Flash Alerts - War, Natural Disasters, Urgent Issues"
+        ]
+        
+        # Show 3-4 random categories
+        import random
+        selected_categories = random.sample(categories, min(4, len(categories)))
+        for category in selected_categories:
+            formatted_news.append(f"• {category}")
+        
+        return '\n'.join(formatted_news)
+    
+    def _format_publish_time(self, published_at: str) -> str:
+        """
+        Format publication time to a human-readable string.
+        
+        Args:
+            published_at: ISO timestamp string
+            
+        Returns:
+            Human-readable time string
+        """
+        if not published_at:
+            return "Recently"
+        
+        try:
+            from datetime import datetime
+            import dateutil.parser
+            
+            # Parse the ISO timestamp
+            pub_time = dateutil.parser.parse(published_at)
+            now = datetime.now(pub_time.tzinfo)
+            
+            # Calculate time difference
+            diff = now - pub_time
+            
+            if diff.days > 0:
+                return f"{diff.days} day{'s' if diff.days > 1 else ''} ago"
+            elif diff.seconds > 3600:
+                hours = diff.seconds // 3600
+                return f"{hours} hour{'s' if hours > 1 else ''} ago"
+            elif diff.seconds > 60:
+                minutes = diff.seconds // 60
+                return f"{minutes} min ago"
+            else:
+                return "Just now"
+        except Exception:
+            return "Recently"
+    
+    def _process_widget_movement_command(self, user_message: str) -> Optional[str]:
+        """Process widget movement commands and return appropriate response."""
+        
+        # Enhanced natural language widget movement patterns with more widget variations
+        widget_pattern = r'(time|clock|timer|weather|forecast|search|news|headlines|video|analyzer|analysis)'
+        
+        patterns = [
+            # Natural conversational patterns with "hey nova" or similar
+            rf'(?:hey\s+)?(?:nova|ai)?\s*,?\s*move\s+(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+(?:to\s+(?:the\s+)?)?(up|down|left|right|top|bottom|center|middle)(?:\s+(?:a\s+)?(tiny|small|little|bit|much|lot|far))?',
+            
+            # "move [widget] to the [direction]"
+            rf'move\s+(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+to\s+(?:the\s+)?(up|down|left|right|top|bottom|center|middle)(?:\s+(?:a\s+)?(tiny|small|little|bit|much|lot|far))?',
+            
+            # "move [widget] [direction] [amount]" - original pattern
+            rf'move\s+(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+(up|down|left|right|top|bottom|center|middle)(?:\s+(?:a\s+)?(tiny|small|little|bit|much|lot|far))?',
+            
+            # "move [widget] [amount] [direction]"
+            rf'move\s+(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+(?:a\s+)?(tiny|small|little|bit|much|lot|far)\s+(up|down|left|right|top|bottom)',
+            
+            # "[widget] move [direction] [amount]"
+            rf'(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+move\s+(?:to\s+(?:the\s+)?)?(up|down|left|right|top|bottom|center|middle)(?:\s+(?:a\s+)?(tiny|small|little|bit|much|lot|far))?',
+            
+            # "shift/slide [widget] [direction]"
+            rf'(?:shift|slide|drag)\s+(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+(?:to\s+(?:the\s+)?)?(up|down|left|right|top|bottom)(?:\s+(?:a\s+)?(tiny|small|little|bit|much|lot|far))?',
+            
+            # "center [widget]" or "put [widget] in center"
+            rf'(?:center|middle)\s+(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?',
+            
+            # "put [widget] in the [direction]"
+            rf'put\s+(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+(?:in\s+(?:the\s+)?|on\s+(?:the\s+)?|at\s+(?:the\s+)?)?(center|middle|top|bottom|left|right)',
+            
+            # "[widget] to the [direction]"
+            rf'(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+to\s+(?:the\s+)?(up|down|left|right|top|bottom|center|middle)(?:\s+(?:a\s+)?(tiny|small|little|bit|much|lot|far))?',
+            
+            # "can you move [widget] [direction]"
+            rf'(?:can\s+you\s+|could\s+you\s+|please\s+)?move\s+(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+(?:to\s+(?:the\s+)?)?(up|down|left|right|top|bottom|center|middle)(?:\s+(?:a\s+)?(tiny|small|little|bit|much|lot|far))?',
+            
+            # "[widget] needs to go [direction]"
+            rf'(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+(?:needs?\s+to\s+go|should\s+go|go)\s+(?:to\s+(?:the\s+)?)?(up|down|left|right|top|bottom|center|middle)(?:\s+(?:a\s+)?(tiny|small|little|bit|much|lot|far))?',
+            
+            # "take [widget] [direction]"
+            rf'take\s+(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+(?:and\s+(?:move\s+it\s+)?)?(?:to\s+(?:the\s+)?)?(up|down|left|right|top|bottom|center|middle)(?:\s+(?:a\s+)?(tiny|small|little|bit|much|lot|far))?'
+        ]
+        
+        user_message_lower = user_message.lower()
+        
+        for pattern in patterns:
+            match = re.search(pattern, user_message_lower, re.IGNORECASE)
+            if match:
+                logger.info(f"🎯 Widget movement command detected: {user_message}")
+                
+                # Extract widget name, direction, and amount from groups
+                groups = match.groups()
+                widget_name = groups[0] if groups[0] else 'unknown'
+                direction = 'center'
+                amount = 'normal'
+                
+                # Smart pattern detection based on pattern content
+                if 'center|middle' in pattern or ('center' in pattern and 'put' not in pattern):
+                    # Center/middle patterns
+                    direction = 'center'
+                    amount = 'normal'
+                elif 'put' in pattern:
+                    # "put [widget] in/on/at [direction]" patterns
+                    direction = groups[1] if len(groups) > 1 and groups[1] else 'center'
+                    amount = 'normal'
+                else:
+                    # All other movement patterns
+                    # Find direction and amount from groups
+                    direction_words = ['up', 'down', 'left', 'right', 'top', 'bottom', 'center', 'middle']
+                    amount_words = ['tiny', 'small', 'little', 'bit', 'much', 'lot', 'far']
+                    
+                    found_direction = None
+                    found_amount = None
+                    
+                    # Search through all groups for direction and amount
+                    for group in groups[1:]:  # Skip widget name (first group)
+                        if group and group.lower() in direction_words:
+                            found_direction = group.lower()
+                        elif group and group.lower() in amount_words:
+                            found_amount = group.lower()
+                    
+                    direction = found_direction if found_direction else 'center'
+                    amount = found_amount if found_amount else 'normal'
+                
+                # Return a command that the UI will process
+                return f"WIDGET_MOVE: {widget_name}|{direction}|{amount}"
+        
+        return None
+    
+    def _process_time_query(self, user_message: str) -> Optional[str]:
+        """Process time-related queries and return current time for locations."""
+        user_message_lower = user_message.lower()
+        
+        # Only debug actual time queries, not video analysis prompts
+        if any(keyword in user_message_lower for keyword in ['time', 'clock', 'hour', 'minute']):
+            logger.debug(f"[TIME_DEBUG] Processing time query: '{user_message_lower[:50]}...'")
+        else:
+            # Skip processing if this is clearly not a time query
+            return None
+        
+        # Check for location updates first
+        location_update = self._check_for_location_update(user_message_lower)
+        if location_update:
+            return location_update
+        
+        # First check for VERY SPECIFIC time requests without location (avoid false triggers)
+        simple_time_patterns = [
+            r'^(show me the time|show time|what time is it|what\'s the time|current time|time now)\s*[.!?]*$',
+            r'^(tell me the time|give me the time|what is the time)\s*[.!?]*$',
+            r'^(time pl)\s*[.!?]*$'  # Just "time" by itself
+        ]
+        
+        for pattern in simple_time_patterns:
+            if re.search(pattern, user_message_lower.strip()):
+                print(f"[TIME] Simple time query detected (no location specified)")
+                
+                # Check if there's location context in recent messages or system context
+                location_from_context = self._extract_location_from_context()
+                if not location_from_context:
+                    # Also check current message context for system-provided location
+                    location_from_context = self._extract_location_from_system_context()
+                
+                print(f"[LOCATION] Location search results:")
+                context_location = self._extract_location_from_context()
+                system_location = self._extract_location_from_system_context()
+                print(f"  - From conversation context: {context_location}")
+                print(f"  - From system context: {system_location}")
+                print(f"  - Final location: {location_from_context}")
+                
+                if location_from_context:
+                    print(f"[TIME] Found location from context: {location_from_context}")
+                    try:
+                        time_result = get_time_in_location(location_from_context)
+                        print(f"✅ Time result from context: {time_result}")
+                        return f"TIME_DISPLAY_SHOW: {location_from_context}|{time_result}"
+                    except Exception as e:
+                        logger.error(f"Time query error with context location: {e}")
+                        print(f"❌ Error getting time for {location_from_context}: {e}")
+                else:
+                    print("❌ No location found in context, using Italy as default")
+                    # Use Italy as default location
+                    try:
+                        time_result = get_time_in_location("Italy")
+                        print(f"✅ Time result for Italy (default): {time_result}")
+                        return f"TIME_DISPLAY_SHOW: Italy|{time_result}"
+                    except Exception as e:
+                        logger.error(f"Time query error with default location Italy: {e}")
+                        print(f"❌ Error getting time for Italy: {e}")
+                        # Return a special response that the UI can recognize to show time display
+                        return "TIME_DISPLAY_REQUEST: I'd be happy to show you the time! Please specify a location, for example:\n• 'What time is it in New York?'\n• 'Show me the time in London'\n• 'Current time in Tokyo'\n\nOr tell me your location first by saying something like 'I'm in [your city]'."
+        
+        # Enhanced time query patterns with location
+        time_patterns = [
+            r'what.*time.*is.*it.*in\s+([a-zA-Z\s]+)',
+            r'what.*time.*in\s+([a-zA-Z\s]+)',
+            r'time.*in\s+([a-zA-Z\s]+)',
+            r'current.*time.*in\s+([a-zA-Z\s]+)',
+            r'what.*time.*is.*it.*at\s+([a-zA-Z\s]+)',
+            r'show.*time.*in\s+([a-zA-Z\s]+)',
+            r'tell.*me.*time.*in\s+([a-zA-Z\s]+)',
+            r'time.*for\s+([a-zA-Z\s]+)',
+            r'what.*time.*([a-zA-Z\s]+)\s*\?*$',  # "what time california?"
+        ]
+        
+        for pattern in time_patterns:
+            match = re.search(pattern, user_message_lower)
+            if match:
+                # Extract location from the match
+                location = match.groups()[-1].strip()  # Get the last group (location)
+                if location and len(location) > 1:  # Ensure it's a valid location
+                    print(f"[TIME] Time query detected for location: {location}")
+                    try:
+                        time_result = get_time_in_location(location)
+                        print(f"✅ Time result: {time_result}")
+
+                        # Store timezone query in memory
+                        if time_result and "current time" in time_result:
+                            asyncio.create_task(self._store_timezone_memory_async(location, time_result))
+
+                        # Return the time result directly for chat
+                        return time_result
+                    except Exception as e:
+                        logger.error(f"Time query error: {e}")
+                        return f"Sorry, I couldn't get the time for {location.title()}."
+        
+        return None
+    
+    def _extract_location_from_context(self) -> Optional[str]:
+        """Extract location from recent conversation context."""
+        try:
+            # Check recent chat history for location mentions
+            recent_messages = self.chat_history[-15:]  # Check last 15 messages
+            
+            location_patterns = [
+                r"i'?m (?:now )?(?:in|at|from) ([a-zA-Z\s]+)",
+                r"i live in ([a-zA-Z\s]+)",
+                r"i'?m located in ([a-zA-Z\s]+)",
+                r"my location is ([a-zA-Z\s]+)",
+                r"i'?m currently in ([a-zA-Z\s]+)",
+                r"update my location to ([a-zA-Z\s]+)",
+                r"change my location to ([a-zA-Z\s]+)",
+                r"set my location to ([a-zA-Z\s]+)",
+                r"i moved to ([a-zA-Z\s]+)",
+                r"i'?m visiting ([a-zA-Z\s]+)"
+            ]
+            
+            print(f"[LOCATION] Checking {len(recent_messages)} recent messages for location...")
+            for i, message in enumerate(reversed(recent_messages)):  # Check most recent first
+                if message.get('role') == 'user':
+                    content = message.get('content', '').lower()
+                    print(f"  Message {i+1}: '{content[:50]}...'")
+                    for pattern in location_patterns:
+                        match = re.search(pattern, content)
+                        if match:
+                            location = match.group(1).strip()
+                            print(f"Found location from context (message {i+1}): {location}")
+                            return location
+            
+            print("[LOCATION] No location found in conversation context")
+            return None
+        except Exception as e:
+            print(f"Error extracting location from context: {e}")
+            return None
+    
+    def _extract_location_from_system_context(self) -> Optional[str]:
+        """Extract location from current system context messages."""
+        try:
+            # Check recent chat history for system messages with location
+            recent_messages = self.chat_history[-10:]  # Check last 10 messages
+            
+            print(f"[LOCATION] Checking {len(recent_messages)} messages for system location context...")
+            for i, message in enumerate(reversed(recent_messages)):  # Check most recent first
+                if message.get('role') == 'system':
+                    content = message.get('content', '')
+                    print(f"  System message {i+1}: '{content[:100]}...'")
+                    if 'User\'s current location:' in content or 'current location:' in content.lower():
+                        # Extract location from system message
+                        location_patterns = [
+                            r"User's current location:\s*([^.]+?)(?:\.|$)",
+                            r"current location:\s*([^.]+?)(?:\.|$)",
+                            r"location:\s*([^.]+?)(?:\.|$)"
+                        ]
+                        
+                        for pattern in location_patterns:
+                            location_match = re.search(pattern, content, re.IGNORECASE)
+                            if location_match:
+                                location = location_match.group(1).strip()
+                                # Remove any trailing text after the location
+                                location = re.sub(r'\s+(You have|Use this).*$', '', location, flags=re.IGNORECASE)
+                                print(f"🌍 Found location from system context (message {i+1}): {location}")
+                                return location
+            
+            print("[LOCATION] No location found in system context")
+            return None
+        except Exception as e:
+            print(f"Error extracting location from system context: {e}")
+            return None
+    
+    def _check_for_location_update(self, user_message_lower: str) -> Optional[str]:
+        """Check if user is updating their location."""
+        try:
+            location_update_patterns = [
+                r"i'?m (?:now )?(?:in|at|from) ([a-zA-Z\s]+)",
+                r"i live in ([a-zA-Z\s]+)",
+                r"i'?m located in ([a-zA-Z\s]+)",
+                r"my location is ([a-zA-Z\s]+)",
+                r"i'?m currently in ([a-zA-Z\s]+)",
+                r"update my location to ([a-zA-Z\s]+)",
+                r"change my location to ([a-zA-Z\s]+)",
+                r"set my location to ([a-zA-Z\s]+)",
+                r"i moved to ([a-zA-Z\s]+)",
+                r"i'?m visiting ([a-zA-Z\s]+)"
+            ]
+            
+            for pattern in location_update_patterns:
+                match = re.search(pattern, user_message_lower)
+                if match:
+                    location = match.group(1).strip()
+                    print(f"🌍 Location update detected: {location}")
+                    
+                    # Return a special response that the UI can recognize
+                    return f"🌍 LOCATION_UPDATE: {location}|Got it! I've updated your location to {location.title()}. Now when you ask for the time, I'll show you the time for {location.title()}!"
+            
+            return None
+        except Exception as e:
+            print(f"Error checking for location update: {e}")
+            return None
+    
+    def _extract_location_from_message(self, user_message: str) -> Optional[str]:
+        """Extract location from user message for weather queries."""
+        try:
+            # Enhanced weather patterns to detect location
+            weather_patterns = [
+                r"what'?s the weather (?:like )?(?:in |at |for |from )?(.+?)(?:\?|$)",
+                r"weather (?:in |at |for |from )?(.+?)(?:\?|$)",
+                r"how'?s the weather (?:in |at |for |from )?(.+?)(?:\?|$)",
+                r"tell me (?:about )?the weather (?:in |at |for |from )?(.+?)(?:\?|$)",
+                r"give me (?:the )?weather (?:in |at |for |from )?(.+?)(?:\?|$)",
+                r"show me (?:the )?weather (?:in |at |for |from )?(.+?)(?:\?|$)",
+                r"check (?:the )?weather (?:in |at |for |from )?(.+?)(?:\?|$)",
+                r"current weather (?:in |at |for |from )?(.+?)(?:\?|$)",
+                r"today'?s weather (?:in |at |for |from )?(.+?)(?:\?|$)",
+                r"what'?s the temperature (?:in |at |for |from )?(.+?)(?:\?|$)",
+                r"temperature (?:in |at |for |from )?(.+?)(?:\?|$)",
+                # More flexible patterns for natural language
+                r"(?:weather|temperature|forecast).*?(?:in |at |for |from |of )(.+?)(?:\?|$|today|tomorrow|now)",
+                r"(?:in |at |for |from )(.+?)(?:'s )?(?:weather|temperature|forecast)",
+                r"(.+?)(?:'s )?(?:weather|temperature|forecast)(?!\s+(?:in|at|for|from))",
+                r"how (?:hot|cold|warm) is it (?:in |at |for |from )?(.+?)(?:\?|$)",
+            ]
+            
+            user_message_lower = user_message.lower()
+            
+            for pattern in weather_patterns:
+                match = re.search(pattern, user_message_lower)
+                if match:
+                    location = match.group(1).strip()
+                    # Clean up the location more thoroughly
+                    location = re.sub(r'\b(?:today|tomorrow|now|currently|right now)\b', '', location).strip()
+                    location = re.sub(r'\s+', ' ', location)  # Remove extra spaces
+                    location = location.strip(',').strip()  # Remove trailing commas
+
+                    # Handle "from" prefix specifically (e.g., "from como" -> "como")
+                    if location.startswith('from '):
+                        location = location[5:].strip()  # Remove "from " prefix
+                    
+                    # Handle "this place" special case - if user says "this place", use their current location
+                    if location.lower() in ['this place', 'here', 'this location', 'my location']:
+                        # Try to get user's current location from settings or use default
+                        current_location = getattr(self, 'user_location', None)
+                        if current_location:
+                            logger.info(f"Using user's current location: {current_location}")
+                            return current_location
+                        else:
+                            # Use a default location or ask for clarification
+                            logger.info("User asked for 'this place' but no current location set, using Rome as default")
+                            return "Rome"  # Default location
+                    
+                    # Filter out very short or common words that aren't locations
+                    if len(location) >= 2 and location not in ['it', 'the', 'a', 'an', 'is', 'are', 'like']:
+                        logger.info(f"Extracted location from weather message: '{location}'")
+                        return location
+            
+            return None
+        except Exception as e:
+            print(f"Error extracting location from message: {e}")
+            return None
+
+    def _process_weather_query(self, user_message: str) -> Optional[str]:
+        """Process weather-related queries."""
+        if not self.weather_service:
+            logger.warning("Weather service not available")
+            return None
+            
+        try:
+            # Check if this is a weather request
+            weather_keywords = r'\b(?:weather|temperature|forecast|rain|snow|storm|hot|cold|warm|show me the weather|what\'s the weather)\b'
+            if not re.search(weather_keywords, user_message.lower()):
+                return None
+            
+            logger.info(f"Processing weather query: {user_message}")
+            
+            # Extract location from message
+            location = self._extract_location_from_message(user_message)
+            if not location:
+                # If no location found but weather keywords present, ask for location
+                logger.info("No location found in weather query")
+                return "I'd be happy to help you with the weather! Could you please tell me which city or location you'd like to know about?"
+            
+            logger.info(f"Getting comprehensive weather data for {location}...")
+            
+            # Get weather data using the initialized weather service
+            weather_data = self.weather_service.get_comprehensive_weather_data(location)
+            
+            if 'error' in weather_data:
+                logger.error(f"Weather service returned error: {weather_data['error']}")
+                return f"Sorry, I couldn't get weather information for {location}: {weather_data['error']}"
+            
+            # Format response for UI display
+            import json
+            weather_json = json.dumps(weather_data)
+            
+            # Return in the format expected by the UI (widget only, no chat message)
+            response = f"WEATHER_DISPLAY_SHOW: {location}|WEATHER_DATA: {weather_json}"
+            logger.info(f"Weather response formatted: {response[:100]}...")
+
+            # Store weather result in memory
+            asyncio.create_task(self._store_weather_memory_async(weather_json, location))
+
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error processing weather query: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return f"Sorry, I encountered an error while getting weather information: {str(e)}"
+    
+    async def _process_video_analysis_query(self, user_message: str) -> Optional[str]:
+        """Process video analysis-related queries."""
+        if not self.video_analyzer:
+            logger.warning("Video analyzer service not available")
+            return None
+            
+        try:
+            # Check if this is a video analysis request
+            video_keywords = r'\b(?:analyze|analyse|video|watch|review|summarize|summary|examine|check out|look at|watch this|analyze this).*\b(?:video|url|link|youtube|vimeo|mp4|webm|avi|mov)\b'
+            video_patterns = [
+                r'analyze this video',
+                r'analyse this video', 
+                r'look at this video',
+                r'watch this video',
+                r'review this video',
+                r'summarize this video',
+                r'check out this video',
+                r'what\'s in this video',
+                r'tell me about this video',
+                r'analyze.*(?:youtube|vimeo|video)',
+                r'can you (?:analyze|watch|review|summarize)',
+                r'please (?:analyze|watch|review|summarize)',
+                r'(?:analyze|watch|review|summarize).*for me'
+            ]
+            
+            user_message_lower = user_message.lower()
+            
+            # Check for video analysis patterns
+            is_video_request = (
+                re.search(video_keywords, user_message_lower) or
+                any(re.search(pattern, user_message_lower) for pattern in video_patterns) or
+                self.video_analyzer.is_video_url(user_message.strip())
+            )
+            
+            if not is_video_request:
+                return None
+            
+            logger.info(f"Processing video analysis query: {user_message}")
+            
+            # Extract video URL from message
+            video_url = self._extract_video_url_from_message(user_message)
+            if not video_url:
+                # If no URL found but video keywords present, ask for URL
+                logger.info("No video URL found in analysis query")
+                return "I'd be happy to analyze a video for you! Please provide the video URL (YouTube, Vimeo, etc.) or paste the link and I'll give you a comprehensive analysis."
+            
+            logger.info(f"Analyzing video: {video_url}")
+            
+            # Perform video analysis
+            analysis_results = await self.video_analyzer.analyze_video(video_url, ai_client=self)
+            
+            if 'error' in analysis_results:
+                logger.error(f"Video analysis returned error: {analysis_results['error']}")
+                return f"Sorry, I couldn't analyze that video: {analysis_results['error']}"
+            
+            # Format response for UI display
+            response = self.video_analyzer.format_analysis_response(analysis_results)
+            logger.info(f"Video analysis completed successfully")
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error processing video analysis query: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return f"Sorry, I encountered an error while analyzing the video: {str(e)}"
+    
+    def _extract_video_url_from_message(self, user_message: str) -> Optional[str]:
+        """Extract video URL from user message."""
+        try:
+            # Common URL patterns
+            url_patterns = [
+                r'https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)[^\s]+',
+                r'https?://(?:www\.)?vimeo\.com/[^\s]+',
+                r'https?://(?:www\.)?dailymotion\.com/[^\s]+',
+                r'https?://(?:www\.)?twitch\.tv/[^\s]+',
+                r'https?://[^\s]+\.(?:mp4|webm|avi|mov|mkv|flv|wmv)',
+                r'https?://[^\s]+',  # Generic URL pattern as fallback
+            ]
+            
+            for pattern in url_patterns:
+                match = re.search(pattern, user_message, re.IGNORECASE)
+                if match:
+                    url = match.group(0)
+                    # Verify it's actually a video URL
+                    if self.video_analyzer.is_video_url(url):
+                        return url
+            
+            # Check if the entire message might be just a URL
+            stripped_message = user_message.strip()
+            if self.video_analyzer.is_video_url(stripped_message):
+                return stripped_message
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error extracting video URL from message: {e}")
+            return None
+
+    async def _process_music_query(self, user_message: str) -> Optional[str]:
+        """Process music-related queries and commands."""
+        # Music feature has been removed from this build. Inform the user politely.
+        return "🎵 Music functionality has been removed. I can no longer play or search music."
+
+    async def _store_music_memory_async(self, user_query: str, music_response: str):
+        """Store music interaction in memory system"""
+        # Music memory storage is a no-op because music feature was removed.
+        return
+
+    def _handle_content_discussion(self, user_message: str) -> Optional[str]:
+        """Handle follow-up questions about previously retrieved content"""
+        if not self.content_analysis:
+            return None
+
+        # Check for discussion patterns
+        discussion_patterns = [
+            r"what do you think about (?:it|that|this)",
+            r"what\'s your (?:opinion|view|thoughts?) (?:on|about) (?:it|that|this)",
+            r"can you (?:analyze|discuss|explain) (?:it|that|this)",
+            r"tell me more about (?:it|that|this)",
+            r"what does (?:it|that|this) mean",
+            r"how do you interpret (?:it|that|this)",
+            r"what are the implications",
+            r"what\'s (?:interesting|important|significant) about (?:it|that|this)"
+        ]
+
+        message_lower = user_message.lower()
+        is_discussion = any(re.search(pattern, message_lower) for pattern in discussion_patterns)
+
+        if not is_discussion:
+            return None
+
+        # Get recent analyses to discuss
+        recent_analyses = self.content_analysis.get_recent_analysis(limit=3)
+
+        if not recent_analyses:
+            return "I don't have any recent search or news content to discuss. Please search for something first, then I can share my thoughts about it."
+
+        # Use the most recent analysis
+        latest_analysis = recent_analyses[0]
+
+        # Generate discussion context
+        discussion_context = self.content_analysis.generate_discussion_context(latest_analysis)
+
+        # Create thoughtful response
+        response_parts = []
+        response_parts.append(f"Based on my analysis of the {latest_analysis.content_type} content about '{latest_analysis.query}', here are my thoughts:")
+
+        # Add key insights
+        if latest_analysis.key_points:
+            response_parts.append(f"\n**Key Insights:**")
+            for i, point in enumerate(latest_analysis.key_points[:3], 1):
+                response_parts.append(f"{i}. {point}")
+
+        # Add sentiment analysis
+        response_parts.append(f"\n**Overall Assessment:** The content has a {latest_analysis.sentiment} tone and {latest_analysis.complexity_level} complexity level.")
+
+        # Add thematic analysis
+        if latest_analysis.topics:
+            response_parts.append(f"\n**Main Themes:** {', '.join(latest_analysis.topics[:5])}")
+
+        # Add specific insights based on content type
+        if latest_analysis.content_type == "search":
+            response_parts.append("\n**Search Perspective:** This information represents current online knowledge and perspectives on the topic.")
+        elif latest_analysis.content_type == "news":
+            response_parts.append("\n**News Perspective:** This reflects current events and media coverage of the topic.")
+
+        # Add statistics if available
+        if latest_analysis.analyzed_content.get('statistics'):
+            stats = latest_analysis.analyzed_content['statistics'][:2]
+            response_parts.append(f"\n**Notable Data:** {', '.join(stats)}")
+
+        # Add implications
+        response_parts.append(f"\n**Implications:** This information is significant because it provides insight into current trends and developments in {latest_analysis.topics[0] if latest_analysis.topics else 'this area'}.")
+
+        return "\n".join(response_parts)
+
+    def _handle_history_request(self, user_message: str) -> Optional[str]:
+        """Handle requests for search and news history"""
+        if not self.search_news_memory:
+            return None
+
+        # Check for history request patterns
+        history_patterns = [
+            r"what (?:are )?all (?:the )?(?:news|searches) (?:I\'ve|i\'ve|i have) asked (?:you )?about",
+            r"show me (?:my )?(?:search|news) history",
+            r"what have (?:I|i) searched for",
+            r"what news have (?:I|i) asked (?:you )?about",
+            r"list (?:my )?(?:previous )?(?:searches|news queries)",
+            r"what (?:topics|subjects) have (?:we|I|i) (?:discussed|covered|searched)"
+        ]
+
+        message_lower = user_message.lower()
+        is_history_request = any(re.search(pattern, message_lower) for pattern in history_patterns)
+
+        if not is_history_request:
+            return None
+
+        # Determine what type of history to show
+        if "search" in message_lower and "news" not in message_lower:
+            history_type = "search"
+        elif "news" in message_lower and "search" not in message_lower:
+            history_type = "news"
+        else:
+            history_type = "both"
+
+        # Generate history summary
+        history_summary = self.search_news_memory.generate_history_summary(history_type, limit=20)
+
+        if "No search or news history found" in history_summary:
+            return "You haven't asked me to search for anything or get news yet. Try asking me to search for a topic or get news about something!"
+
+        # Add header and context
+        response_parts = []
+        response_parts.append("Here's your search and news history:")
+        response_parts.append(history_summary)
+
+        # Add statistics
+        stats = self.search_news_memory.get_statistics()
+        response_parts.append(f"\n**Summary:** {stats['total_searches']} searches, {stats['total_news']} news queries, {stats['today_activity']} activities today")
+
+        return "\n".join(response_parts)
+
     async def run(self):
         """Start the chatbot in the appropriate mode."""
         try:
@@ -4183,31 +8787,32 @@ EXAMPLES:
         else:
             chatbot.mode = args.mode
         
-        # Show boot sequence
-        print("[BOOT] Initializing system modules...")
-        
-        # Check memory status
+        # Initialize system modules silently
+        # Log boot sequence to file only
+        file_logger.info("Initializing system modules...")
+
+        # Check memory status (log to file only)
         if chatbot.memory_enabled:
-            print("[OK  ] Memory module online")
+            file_logger.info("Memory module online")
         else:
-            print("[FAIL] Memory module offline")
-        
-        # Check cache status (simulate cache log restore)
+            file_logger.info("Memory module offline")
+
+        # Check cache status (log to file only)
         try:
             # Try to read cache log (this will likely fail on first run)
             with open("cache.log", "r") as f:
                 json.load(f)
-            print("[OK  ] Cache log restored")
+            file_logger.info("Cache log restored")
         except:
-            print("[FAIL] Cache log restore: Invalid JSON (line 1, col 1)")
+            file_logger.info("Cache log restore: Invalid JSON (line 1, col 1)")
         
         # Show terminal interface
-        print("┌────────────────────────────────────────────────────────────┐")
-        print("│                     N O V A   A I   ⬤  TERMINUS             │")
-        print("├────────────────────────────────────────────────────────────┤")
-        print(f"│ MODE      : {chatbot.mode.upper():<13}        MEMORY     : {'ENABLED' if chatbot.memory_enabled else 'DISABLED'}       │")
-        print(f"│ VOICE     : {'ENABLED' if chatbot.voice_input_mode else 'DISABLED'}             CACHE      : {'ACTIVE' if chatbot.enable_caching else 'INACTIVE'}        │")
-        print(f"│ USER      : twuma                THREAD     : MAIN          │")
+        print("------------------------------------------------------------")
+        print("|                     N O V A   A I   *  TERMINUS             |")
+        print("|------------------------------------------------------------|")
+        print(f"| MODE      : {chatbot.mode.upper():<13}        MEMORY     : {'ENABLED' if chatbot.memory_enabled else 'DISABLED'}       |")
+        print(f"| VOICE     : {'ENABLED' if chatbot.voice_input_mode else 'DISABLED'}             CACHE      : {'ACTIVE' if chatbot.enable_caching else 'INACTIVE'}        |")
+        print(f"| USER      : twuma                THREAD     : MAIN          |")
         
         # Calculate uptime (will be 0 at start)
         import time
@@ -4218,8 +8823,8 @@ EXAMPLES:
         seconds = uptime_seconds % 60
         uptime_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
         
-        print(f"│ UPTIME    : {uptime_str}             CORE       : ASTRA v1.2    │")
-        print("└────────────────────────────────────────────────────────────┘")
+        print(f"| UPTIME    : {uptime_str}             CORE       : ASTRA v1.2    |")
+        print("------------------------------------------------------------")
         print("Available commands: `help`, `status`, `memory`, `exit`")
         
         # Run the chatbot
@@ -4276,6 +8881,382 @@ def test_enhanced_features():
     except Exception as e:
         print(f"ERROR: Feature test failed: {e}")
         return False
+
+def get_all_timezones():
+    """Get all available timezones - using fallback list for reliability"""
+    # Use comprehensive fallback list since worldtimeapi.org can be unreliable
+    return [
+        # Europe
+        "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Rome", "Europe/Madrid",
+        "Europe/Amsterdam", "Europe/Brussels", "Europe/Vienna", "Europe/Prague", "Europe/Warsaw",
+        "Europe/Stockholm", "Europe/Oslo", "Europe/Copenhagen", "Europe/Helsinki", "Europe/Athens",
+        "Europe/Zurich", "Europe/Dublin", "Europe/Lisbon", "Europe/Budapest", "Europe/Bucharest",
+        
+        # Americas
+        "America/New_York", "America/Los_Angeles", "America/Chicago", "America/Denver",
+        "America/Toronto", "America/Vancouver", "America/Montreal", "America/Mexico_City",
+        "America/Sao_Paulo", "America/Buenos_Aires", "America/Lima", "America/Bogota",
+        "America/Phoenix", "America/Detroit", "America/Boston", "America/Miami",
+        
+        # Asia
+        "Asia/Tokyo", "Asia/Shanghai", "Asia/Kolkata", "Asia/Dubai", "Asia/Seoul",
+        "Asia/Hong_Kong", "Asia/Singapore", "Asia/Bangkok", "Asia/Jakarta", "Asia/Manila",
+        "Asia/Kuala_Lumpur", "Asia/Tehran", "Asia/Baghdad", "Asia/Riyadh", "Asia/Karachi",
+        "Asia/Dhaka", "Asia/Kathmandu", "Asia/Colombo", "Asia/Tashkent", "Asia/Almaty",
+        
+        # Oceania
+        "Australia/Sydney", "Australia/Melbourne", "Australia/Perth", "Australia/Brisbane",
+        "Pacific/Auckland", "Pacific/Fiji", "Pacific/Honolulu",
+        
+        # Africa
+        "Africa/Cairo", "Africa/Lagos", "Africa/Johannesburg", "Africa/Nairobi", "Africa/Casablanca"
+    ]
+
+def get_time_in_location(location: str) -> str:
+    """
+    Get the current time in a given location using multiple methods.
+    """
+    try:
+        location_clean = location.strip().lower()
+        
+        # Comprehensive City/Country to timezone mapping for all 196 countries
+        location_mapping = {
+            # Europe (50 countries)
+            'albania': 'Europe/Tirane', 'andorra': 'Europe/Andorra', 'armenia': 'Asia/Yerevan',
+            'austria': 'Europe/Vienna', 'azerbaijan': 'Asia/Baku', 'belarus': 'Europe/Minsk',
+            'belgium': 'Europe/Brussels', 'bosnia': 'Europe/Sarajevo', 'bulgaria': 'Europe/Sofia',
+            'croatia': 'Europe/Zagreb', 'cyprus': 'Asia/Nicosia', 'czech republic': 'Europe/Prague',
+            'denmark': 'Europe/Copenhagen', 'estonia': 'Europe/Tallinn', 'finland': 'Europe/Helsinki',
+            'france': 'Europe/Paris', 'georgia': 'Asia/Tbilisi', 'germany': 'Europe/Berlin',
+            'greece': 'Europe/Athens', 'hungary': 'Europe/Budapest', 'iceland': 'Atlantic/Reykjavik',
+            'ireland': 'Europe/Dublin', 'italy': 'Europe/Rome', 'kazakhstan': 'Asia/Almaty',
+            'kosovo': 'Europe/Belgrade', 'latvia': 'Europe/Riga', 'liechtenstein': 'Europe/Vaduz',
+            'lithuania': 'Europe/Vilnius', 'luxembourg': 'Europe/Luxembourg', 'malta': 'Europe/Malta',
+            'moldova': 'Europe/Chisinau', 'monaco': 'Europe/Monaco', 'montenegro': 'Europe/Podgorica',
+            'netherlands': 'Europe/Amsterdam', 'north macedonia': 'Europe/Skopje', 'norway': 'Europe/Oslo',
+            'poland': 'Europe/Warsaw', 'portugal': 'Europe/Lisbon', 'romania': 'Europe/Bucharest',
+            'russia': 'Europe/Moscow', 'san marino': 'Europe/San_Marino', 'serbia': 'Europe/Belgrade',
+            'slovakia': 'Europe/Bratislava', 'slovenia': 'Europe/Ljubljana', 'spain': 'Europe/Madrid',
+            'sweden': 'Europe/Stockholm', 'switzerland': 'Europe/Zurich', 'turkey': 'Europe/Istanbul',
+            'ukraine': 'Europe/Kiev', 'united kingdom': 'Europe/London', 'uk': 'Europe/London',
+            'britain': 'Europe/London', 'england': 'Europe/London', 'vatican': 'Europe/Vatican',
+            
+            # Asia (48 countries)
+            'afghanistan': 'Asia/Kabul', 'bahrain': 'Asia/Bahrain', 'bangladesh': 'Asia/Dhaka',
+            'bhutan': 'Asia/Thimphu', 'brunei': 'Asia/Brunei', 'cambodia': 'Asia/Phnom_Penh',
+            'china': 'Asia/Shanghai', 'east timor': 'Asia/Dili', 'india': 'Asia/Kolkata',
+            'indonesia': 'Asia/Jakarta', 'iran': 'Asia/Tehran', 'iraq': 'Asia/Baghdad',
+            'israel': 'Asia/Jerusalem', 'japan': 'Asia/Tokyo', 'jordan': 'Asia/Amman',
+            'kuwait': 'Asia/Kuwait', 'kyrgyzstan': 'Asia/Bishkek', 'laos': 'Asia/Vientiane',
+            'lebanon': 'Asia/Beirut', 'malaysia': 'Asia/Kuala_Lumpur', 'maldives': 'Indian/Maldives',
+            'mongolia': 'Asia/Ulaanbaatar', 'myanmar': 'Asia/Yangon', 'nepal': 'Asia/Kathmandu',
+            'north korea': 'Asia/Pyongyang', 'oman': 'Asia/Muscat', 'pakistan': 'Asia/Karachi',
+            'palestine': 'Asia/Gaza', 'philippines': 'Asia/Manila', 'qatar': 'Asia/Qatar',
+            'saudi arabia': 'Asia/Riyadh', 'singapore': 'Asia/Singapore', 'south korea': 'Asia/Seoul',
+            'sri lanka': 'Asia/Colombo', 'syria': 'Asia/Damascus', 'taiwan': 'Asia/Taipei',
+            'tajikistan': 'Asia/Dushanbe', 'thailand': 'Asia/Bangkok', 'turkmenistan': 'Asia/Ashgabat',
+            'uae': 'Asia/Dubai', 'uzbekistan': 'Asia/Tashkent', 'vietnam': 'Asia/Ho_Chi_Minh',
+            'yemen': 'Asia/Aden',
+            
+            # Africa (54 countries)
+            'algeria': 'Africa/Algiers', 'angola': 'Africa/Luanda', 'benin': 'Africa/Porto-Novo',
+            'botswana': 'Africa/Gaborone', 'burkina faso': 'Africa/Ouagadougou', 'burundi': 'Africa/Bujumbura',
+            'cameroon': 'Africa/Douala', 'cape verde': 'Atlantic/Cape_Verde', 'central african republic': 'Africa/Bangui',
+            'chad': 'Africa/Ndjamena', 'comoros': 'Indian/Comoro', 'congo': 'Africa/Brazzaville',
+            'drc': 'Africa/Kinshasa', 'djibouti': 'Africa/Djibouti', 'egypt': 'Africa/Cairo',
+            'equatorial guinea': 'Africa/Malabo', 'eritrea': 'Africa/Asmara', 'eswatini': 'Africa/Mbabane',
+            'ethiopia': 'Africa/Addis_Ababa', 'gabon': 'Africa/Libreville', 'gambia': 'Africa/Banjul',
+            'ghana': 'Africa/Accra', 'guinea': 'Africa/Conakry', 'guinea-bissau': 'Africa/Bissau',
+            'ivory coast': 'Africa/Abidjan', 'kenya': 'Africa/Nairobi', 'lesotho': 'Africa/Maseru',
+            'liberia': 'Africa/Monrovia', 'libya': 'Africa/Tripoli', 'madagascar': 'Indian/Antananarivo',
+            'malawi': 'Africa/Blantyre', 'mali': 'Africa/Bamako', 'mauritania': 'Africa/Nouakchott',
+            'mauritius': 'Indian/Mauritius', 'morocco': 'Africa/Casablanca', 'mozambique': 'Africa/Maputo',
+            'namibia': 'Africa/Windhoek', 'niger': 'Africa/Niamey', 'nigeria': 'Africa/Lagos',
+            'rwanda': 'Africa/Kigali', 'sao tome': 'Africa/Sao_Tome', 'senegal': 'Africa/Dakar',
+            'seychelles': 'Indian/Mahe', 'sierra leone': 'Africa/Freetown', 'somalia': 'Africa/Mogadishu',
+            'south africa': 'Africa/Johannesburg', 'south sudan': 'Africa/Juba', 'sudan': 'Africa/Khartoum',
+            'tanzania': 'Africa/Dar_es_Salaam', 'togo': 'Africa/Lome', 'tunisia': 'Africa/Tunis',
+            'uganda': 'Africa/Kampala', 'zambia': 'Africa/Lusaka', 'zimbabwe': 'Africa/Harare',
+            
+            # North America (23 countries)
+            'antigua': 'America/Antigua', 'bahamas': 'America/Nassau', 'barbados': 'America/Barbados',
+            'belize': 'America/Belize', 'canada': 'America/Toronto', 'costa rica': 'America/Costa_Rica',
+            'cuba': 'America/Havana', 'dominica': 'America/Dominica', 'dominican republic': 'America/Santo_Domingo',
+            'el salvador': 'America/El_Salvador', 'grenada': 'America/Grenada', 'guatemala': 'America/Guatemala',
+            'haiti': 'America/Port-au-Prince', 'honduras': 'America/Tegucigalpa', 'jamaica': 'America/Jamaica',
+            'mexico': 'America/Mexico_City', 'nicaragua': 'America/Managua', 'panama': 'America/Panama',
+            'saint kitts': 'America/St_Kitts', 'saint lucia': 'America/St_Lucia', 'saint vincent': 'America/St_Vincent',
+            'trinidad': 'America/Port_of_Spain', 'usa': 'America/New_York', 'united states': 'America/New_York',
+            
+            # South America (12 countries)
+            'argentina': 'America/Buenos_Aires', 'bolivia': 'America/La_Paz', 'brazil': 'America/Sao_Paulo',
+            'chile': 'America/Santiago', 'colombia': 'America/Bogota', 'ecuador': 'America/Guayaquil',
+            'guyana': 'America/Guyana', 'paraguay': 'America/Asuncion', 'peru': 'America/Lima',
+            'suriname': 'America/Paramaribo', 'uruguay': 'America/Montevideo', 'venezuela': 'America/Caracas',
+            
+            # Oceania (14 countries)
+            'australia': 'Australia/Sydney', 'fiji': 'Pacific/Fiji', 'kiribati': 'Pacific/Tarawa',
+            'marshall islands': 'Pacific/Majuro', 'micronesia': 'Pacific/Chuuk', 'nauru': 'Pacific/Nauru',
+            'new zealand': 'Pacific/Auckland', 'palau': 'Pacific/Palau', 'papua new guinea': 'Pacific/Port_Moresby',
+            'samoa': 'Pacific/Apia', 'solomon islands': 'Pacific/Guadalcanal', 'tonga': 'Pacific/Tongatapu',
+            'tuvalu': 'Pacific/Funafuti', 'vanuatu': 'Pacific/Efate',
+            
+            # Major Cities
+            'rome': 'Europe/Rome', 'london': 'Europe/London', 'paris': 'Europe/Paris',
+            'berlin': 'Europe/Berlin', 'madrid': 'Europe/Madrid', 'tokyo': 'Asia/Tokyo',
+            'new york': 'America/New_York', 'nyc': 'America/New_York', 'los angeles': 'America/Los_Angeles',
+            'la': 'America/Los_Angeles', 'chicago': 'America/Chicago', 'sydney': 'Australia/Sydney',
+            'dubai': 'Asia/Dubai', 'shanghai': 'Asia/Shanghai', 'mumbai': 'Asia/Kolkata',
+            'seoul': 'Asia/Seoul', 'toronto': 'America/Toronto', 'moscow': 'Europe/Moscow',
+            'beijing': 'Asia/Shanghai', 'hong kong': 'Asia/Hong_Kong', 'singapore': 'Asia/Singapore'
+        }
+        
+        # First try direct mapping
+        timezone = location_mapping.get(location_clean)
+        
+        if not timezone:
+            # Try fuzzy matching with timezone list
+            timezones = get_all_timezones()
+            matches = [tz for tz in timezones if location_clean in tz.lower()]
+            if not matches:
+                # Try partial match
+                location_parts = location_clean.split()
+                for part in location_parts:
+                    matches = [tz for tz in timezones if part in tz.lower()]
+                    if matches:
+                        break
+            
+            if matches:
+                timezone = matches[0]
+        
+        if not timezone:
+            return f"Sorry, I couldn't find the timezone for {location.title()}."
+        
+        # Try worldtimeapi.org first
+        try:
+            import requests
+            try:
+                # Conversation persistence helper (append messages to data/nova_ai_memory.json)
+                from astra_ai.memory.conversation_persistence import append_single_message
+            except Exception:
+                try:
+                    from memory.conversation_persistence import append_single_message
+                except Exception:
+                    # Fallback: define a no-op to avoid breaking runtime when import fails
+                    def append_single_message(role, content, session_id=None, timestamp=None, memory_path=None):
+                        """Append a single message to the nova_ai_memory.json file"""
+                        try:
+                            if not memory_path:
+                                memory_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Date', 'nova_ai_memory.json')
+                            
+                            # Ensure the directory exists
+                            os.makedirs(os.path.dirname(memory_path), exist_ok=True)
+                            
+                            # Load existing memory data or create new structure
+                            memory_data = {
+                                "user": {
+                                    "user_id": "user_a358b1d2",
+                                    "name": "Rich",
+                                    "created_at": "2025-09-20T15:37:07.657900",
+                                    "status": "active",
+                                    "total_sessions": 1,
+                                    "last_seen": datetime.now().isoformat(),
+                                    "relationship_established": True
+                                },
+                                "memory_events": [],
+                                "conversation": [],
+                                "current_facts": {},
+                                "fact_history": {},
+                                "sessions": {},
+                                "current_session": session_id or f"session_{int(time.time())}",
+                                "conversation_state": {
+                                    "greeting_completed": True,
+                                    "introduction_phase": False,
+                                    "established_user": True
+                                },
+                                "memory_categories": {},
+                                "category_relationships": {},
+                                "memory_metadata": {},
+                                "privacy_settings": {
+                                    "default_retention": "permanent",
+                                    "sensitive_data_handling": "encrypted",
+                                    "auto_cleanup_enabled": False,
+                                    "privacy_level_defaults": {
+                                        "normal": "store_and_recall",
+                                        "sensitive": "store_encrypted",
+                                        "private": "session_only"
+                                    }
+                                },
+                                "behavioral_adaptation": {
+                                    "response_style_preferences": {},
+                                    "communication_adaptations": {},
+                                    "learned_patterns": {},
+                                    "user_feedback_integration": {}
+                                }
+                            }
+                            
+                            # Load existing data if file exists
+                            if os.path.exists(memory_path):
+                                try:
+                                    with open(memory_path, 'r', encoding='utf-8') as f:
+                                        existing_data = json.load(f)
+                                        # Merge with existing data, preserving structure
+                                        for key in memory_data:
+                                            if key not in existing_data:
+                                                existing_data[key] = memory_data[key]
+                                        memory_data = existing_data
+                                except (json.JSONDecodeError, IOError):
+                                    # If file is corrupted, start fresh
+                                    pass
+                            
+                            # Add the new message to conversation
+                            if timestamp is None:
+                                timestamp = datetime.now().isoformat()
+                            
+                            message_entry = {
+                                "role": role,
+                                "content": content,
+                                "timestamp": timestamp,
+                                "session_id": session_id or f"session_{int(time.time())}"
+                            }
+                            
+                            # Ensure conversation list exists
+                            if "conversation" not in memory_data:
+                                memory_data["conversation"] = []
+                            
+                            memory_data["conversation"].append(message_entry)
+                            
+                            # Update user last_seen
+                            if "user" in memory_data:
+                                memory_data["user"]["last_seen"] = timestamp
+                                memory_data["user"]["total_sessions"] = memory_data["user"].get("total_sessions", 1)
+                            
+                            # Update current session
+                            memory_data["current_session"] = session_id or f"session_{int(time.time())}"
+                            
+                            # Update session info
+                            current_session_id = session_id or f"session_{int(time.time())}"
+                            if "sessions" not in memory_data:
+                                memory_data["sessions"] = {}
+                            
+                            if current_session_id not in memory_data["sessions"]:
+                                memory_data["sessions"][current_session_id] = {
+                                    "session_id": current_session_id,
+                                    "start_time": timestamp,
+                                    "end_time": None,
+                                    "message_count": 0,
+                                    "topics_discussed": [],
+                                    "user_name": memory_data.get("user", {}).get("name", "Rich"),
+                                    "session_duration": None,
+                                    "last_activity": timestamp
+                                }
+                            
+                            # Update session message count and last activity
+                            memory_data["sessions"][current_session_id]["message_count"] += 1
+                            memory_data["sessions"][current_session_id]["last_activity"] = timestamp
+                            
+                            # Save to file
+                            with open(memory_path, 'w', encoding='utf-8') as f:
+                                json.dump(memory_data, f, indent=2, ensure_ascii=False)
+                            
+                            return True
+                            
+                        except Exception as e:
+                            logger.error(f"Error appending message to memory: {e}")
+                            return False
+            url = f"https://worldtimeapi.org/api/timezone/{timezone}"
+            resp = requests.get(url, timeout=3)
+            if resp.status_code == 200:
+                data = resp.json()
+                from datetime import datetime
+                dt = datetime.fromisoformat(data["datetime"].split('+')[0])
+                time_str_chat = dt.strftime("%H:%M")  # For chat message (no seconds)
+                time_str_widget = dt.strftime("%H:%M:%S")  # For widget display (with seconds)
+                display_name = timezone.split("/")[-1].replace("_", " ").title()
+                return f"The current time in {display_name} is {time_str_chat}. WIDGET_TIME:{time_str_widget}"
+        except:
+            pass
+        
+        # Fallback: Use Python's datetime with timezone
+        try:
+            from datetime import datetime, timezone as dt_timezone
+            try:
+                import pytz
+                tz = pytz.timezone(timezone)
+                current_time = datetime.now(tz)
+            except ImportError:
+                # Fallback if pytz is not available
+                # Use basic UTC offset calculation
+                utc_offsets = {
+                    'Europe/London': 0, 'Europe/Paris': 1, 'Europe/Berlin': 1, 'Europe/Rome': 1,
+                    'America/New_York': -5, 'America/Los_Angeles': -8, 'America/Chicago': -6,
+                    'Asia/Tokyo': 9, 'Asia/Shanghai': 8, 'Asia/Kolkata': 5.5,
+                    'Australia/Sydney': 10, 'Pacific/Auckland': 12
+                }
+                offset_hours = utc_offsets.get(timezone, 0)
+                from datetime import timedelta
+                utc_now = datetime.now(dt_timezone.utc)
+                current_time = utc_now + timedelta(hours=offset_hours)
+
+            time_str_chat = current_time.strftime("%H:%M")  # For chat message (no seconds)
+            time_str_widget = current_time.strftime("%H:%M:%S")  # For widget display (with seconds)
+            display_name = timezone.split("/")[-1].replace("_", " ").title()
+
+            # Note: Memory storage would need to be handled by the calling method
+
+            return f"The current time in {display_name} is {time_str_chat}. WIDGET_TIME:{time_str_widget}"
+        except Exception as e:
+            logger.debug(f"Timezone fallback error: {e}")
+            pass
+        
+        # Final fallback: Estimate based on UTC offset (major timezones)
+        utc_offsets = {
+            # Europe
+            'Europe/London': 0, 'Europe/Paris': 1, 'Europe/Berlin': 1, 'Europe/Rome': 1,
+            'Europe/Madrid': 1, 'Europe/Amsterdam': 1, 'Europe/Brussels': 1, 'Europe/Vienna': 1,
+            'Europe/Prague': 1, 'Europe/Warsaw': 1, 'Europe/Stockholm': 1, 'Europe/Oslo': 1,
+            'Europe/Copenhagen': 1, 'Europe/Helsinki': 2, 'Europe/Athens': 2, 'Europe/Zurich': 1,
+            'Europe/Dublin': 0, 'Europe/Lisbon': 0, 'Europe/Budapest': 1, 'Europe/Bucharest': 2,
+            'Europe/Moscow': 3, 'Europe/Kiev': 2, 'Europe/Istanbul': 3,
+            
+            # Americas
+            'America/New_York': -5, 'America/Los_Angeles': -8, 'America/Chicago': -6, 'America/Denver': -7,
+            'America/Toronto': -5, 'America/Vancouver': -8, 'America/Montreal': -5, 'America/Mexico_City': -6,
+            'America/Sao_Paulo': -3, 'America/Buenos_Aires': -3, 'America/Lima': -5, 'America/Bogota': -5,
+            'America/Santiago': -3, 'America/Caracas': -4, 'America/Havana': -5, 'America/Panama': -5,
+            
+            # Asia            'Asia/Tokyo': 9, 'Asia/Shanghai': 8, 'Asia/Kolkata': 5.5, 'Asia/Dubai': 4, 'Asia/Seoul': 9,
+            'Asia/Hong_Kong': 8, 'Asia/Singapore': 8, 'Asia/Bangkok': 7, 'Asia/Jakarta': 7,
+            'Asia/Manila': 8, 'Asia/Kuala_Lumpur': 8, 'Asia/Tehran': 3.5, 'Asia/Baghdad': 3,
+            'Asia/Riyadh': 3, 'Asia/Karachi': 5, 'Asia/Dhaka': 6, 'Asia/Kathmandu': 5.75,
+            'Asia/Colombo': 5.5, 'Asia/Tashkent': 5, 'Asia/Almaty': 6, 'Asia/Kabul': 4.5,
+            'Asia/Yerevan': 4, 'Asia/Baku': 4, 'Asia/Tbilisi': 4, 'Asia/Jerusalem': 2,
+            
+            # Africa
+            'Africa/Cairo': 2, 'Africa/Lagos': 1, 'Africa/Johannesburg': 2, 'Africa/Nairobi': 3,
+            'Africa/Casablanca': 0, 'Africa/Algiers': 1, 'Africa/Tunis': 1, 'Africa/Tripoli': 2,
+            'Africa/Addis_Ababa': 3, 'Africa/Khartoum': 2, 'Africa/Accra': 0, 'Africa/Dakar': 0,
+            
+            # Oceania
+            'Australia/Sydney': 10, 'Australia/Melbourne': 10, 'Australia/Perth': 8, 'Australia/Brisbane': 10,
+            'Pacific/Auckland': 12, 'Pacific/Fiji': 12, 'Pacific/Honolulu': -10
+        }
+        
+        if timezone in utc_offsets:
+            from datetime import datetime, timedelta, timezone as dt_timezone
+            utc_now = datetime.now(dt_timezone.utc)
+            offset_hours = utc_offsets[timezone]
+            local_time = utc_now + timedelta(hours=offset_hours)
+            time_str_chat = local_time.strftime("%H:%M")  # For chat message (no seconds)
+            time_str_widget = local_time.strftime("%H:%M:%S")  # For widget display (with seconds)
+            display_name = timezone.split("/")[-1].replace("_", " ").title()
+            return f"The current time in {display_name} is {time_str_chat}. WIDGET_TIME:{time_str_widget}"
+        
+        return f"Sorry, I couldn't get the time for {location.title()}."
+        
+    except Exception as e:
+        print(f"Time function error: {e}")
+        return f"Sorry, I couldn't get the time for {location.title()}."
 
 if __name__ == "__main__":
     # Run feature test if --test argument is provided

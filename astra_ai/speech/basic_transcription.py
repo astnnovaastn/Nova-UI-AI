@@ -1,146 +1,100 @@
-import speech_recognition as sr
-import os
+"""basic_transcription.py
+
+Simple Python client for Fish.Audio text-to-speech endpoint.
+
+Replace `API_KEY` with your Fish.Audio API key.
+"""
+from typing import Optional, Dict, Any
 import json
-import groq
-import time
-from datetime import datetime
 
-# Initialize speech recognition
-recognizer = sr.Recognizer()
-microphone = sr.Microphone()
+try:
+    import requests
+except Exception:  # pragma: no cover - runtime dependency
+    requests = None
 
-# Initialize Groq client for Whisper
-api_key = "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"
-client = groq.Client(api_key=api_key)
+API_KEY = "4953751730bd4aec90411a1951cabce2"
+VOICE_ID = "6bf9194b81814fb59dc8006ef9ad39b3"  # Jarvis voice (example)
+TTS_ENDPOINT = "https://api.fish.audio/v1/text-to-speech"
 
-# File to save transcriptions
-transcription_file = "transcription.json"
 
-# Create empty transcription file if it doesn't exist
-if not os.path.exists(transcription_file):
-    with open(transcription_file, "w", encoding="utf-8") as f:
-        json.dump([], f)
+def generate_speech(text: str, *, api_key: str = API_KEY, voice_id: str = VOICE_ID,
+                    fmt: str = "mp3", voice_settings: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    """Generate speech using Fish.Audio and return the audio URL.
 
-def print_colored(text, color="white"):
-    """Print colored text to the console."""
-    colors = {
-        "red": "\033[91m",
-        "green": "\033[92m",
-        "yellow": "\033[93m",
-        "blue": "\033[94m",
-        "cyan": "\033[96m",
-        "white": "\033[97m",
-        "reset": "\033[0m"
+    Returns the `audioUrl` on success, or None on failure.
+    """
+    if requests is None:
+        raise RuntimeError("requests package is required: pip install requests")
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
     }
-    print(f"{colors.get(color, colors['white'])}{text}{colors['reset']}")
 
-def transcribe_with_whisper(audio_file):
-    """Transcribe audio using Whisper via Groq."""
+    payload = {
+        "modelId": voice_id,
+        "input": text,
+        "format": fmt,
+    }
+
+    if voice_settings:
+        payload["voiceSettings"] = voice_settings
+
+    resp = requests.post(TTS_ENDPOINT, headers=headers, data=json.dumps(payload), timeout=30)
+
     try:
-        # Read the audio file
-        with open(audio_file, "rb") as f:
-            audio_data = f.read()
-        
-        # Call Groq API
-        response = client.audio.transcriptions.create(
-            model="whisper-large-v3",
-            file=("audio.wav", audio_data),
-            language="en",
-            temperature=0.0
-        )
-        
-        # Get the transcribed text
-        if hasattr(response, 'text'):
-            return response.text.strip()
+        resp.raise_for_status()
+    except Exception as e:
+        # Bubble up a readable error
+        # Include status code and response body for callers to inspect
+        status = getattr(resp, 'status_code', None)
+        body = resp.text if resp is not None else ''
+        raise RuntimeError(f"TTS request failed: {e} - status={status} - body={body}")
+
+    data = resp.json()
+    return data.get("audioUrl")
+
+
+if __name__ == "__main__":
+    # Quick manual test
+    test_text = "Hello! This is your Jarvis voice testing from the Python client."
+    try:
+        url = generate_speech(test_text)
+        if url:
+            print("Audio URL:", url)
         else:
-            return str(response).strip()
-    
-    except Exception as e:
-        print_colored(f"Transcription error: {str(e)}", "red")
-        return ""
+            print("No audio URL returned from Fish.Audio")
+    except Exception as err:
+        # Provide helpful guidance for 402/invalid key errors and fallback
+        msg = str(err)
+        print("Error generating speech:", msg)
 
-def save_to_json(text):
-    """Save transcription to JSON file."""
-    try:
-        # Create entry
-        entry = {
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "text": text,
-            "transcription_mode": "whisper-large-v3"
-        }
-        
-        # Load existing data
-        try:
-            with open(transcription_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError):
-            data = []
-        
-        # Add new entry
-        data.append(entry)
-        
-        # Save back to file
-        with open(transcription_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        
-        print_colored(f"Saved to {transcription_file}", "blue")
-    
-    except Exception as e:
-        print_colored(f"Error saving to JSON: {str(e)}", "red")
-
-# Print welcome message
-print_colored("=" * 50, "cyan")
-print_colored("BASIC SPEECH TRANSCRIPTION", "cyan")
-print_colored("=" * 50, "cyan")
-print_colored("This program will transcribe your speech and save it to transcription.json", "white")
-print_colored("Press Ctrl+C to stop", "white")
-print_colored("=" * 50, "cyan")
-
-# Adjust for ambient noise
-with microphone as source:
-    print_colored("Adjusting for ambient noise... Please wait.", "yellow")
-    recognizer.adjust_for_ambient_noise(source, duration=1.0)
-    print_colored("Ready! Speak into your microphone.", "green")
-
-    # Main loop
-    try:
-        while True:
-            print_colored("Listening...", "cyan")
-            
-            # Listen for audio
+        # Detect payment/invalid key errors and attempt offline fallback
+        if '402' in msg or 'Payment Required' in msg or 'Invalid api key' in msg:
+            print("Detected API key / balance issue (402). Attempting offline fallback...")
+            # Try pyttsx3 first
             try:
-                audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
-                
-                print_colored("Processing speech...", "yellow")
-                
-                # Save audio to a temporary file
-                temp_file = f"temp_audio_{int(time.time())}.wav"
-                with open(temp_file, "wb") as f:
-                    f.write(audio.get_wav_data())
-                
-                # Transcribe with Whisper
-                text = transcribe_with_whisper(temp_file)
-                
-                # Clean up temp file
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-                
-                if text:
-                    # Display the transcribed text
-                    print_colored(f"You said: {text}", "green")
-                    
-                    # Save to transcription.json
-                    save_to_json(text)
-                else:
-                    print_colored("No speech detected or couldn't transcribe.", "yellow")
-                    
-            except sr.WaitTimeoutError:
-                print_colored("No speech detected. Listening again...", "yellow")
-            except sr.UnknownValueError:
-                print_colored("Could not understand audio. Please try again.", "yellow")
-            except Exception as e:
-                print_colored(f"Error: {str(e)}", "red")
-                
-    except KeyboardInterrupt:
-        print_colored("\nStopping transcription service...", "yellow")
-        print_colored("Transcription service stopped.", "yellow")
+                import pyttsx3
+                engine = pyttsx3.init()
+                engine.say(test_text)
+                engine.runAndWait()
+                print("✅ Fallback via pyttsx3 succeeded")
+            except Exception as e_py:
+                print(f"pyttsx3 fallback failed: {e_py}")
+                # Try a simple demo tone via sounddevice
+                try:
+                    import numpy as np
+                    import sounddevice as sd
+                    sample_rate = 44100
+                    duration = 2.0
+                    frequency = 440.0
+                    t = np.linspace(0, duration, int(sample_rate * duration), False)
+                    audio = (np.sin(2 * np.pi * frequency * t) * 0.2).astype(np.float32)
+                    sd.play(audio, samplerate=sample_rate)
+                    sd.wait()
+                    print("✅ Demo tone played via sounddevice")
+                except Exception as e_sd:
+                    print(f"Demo tone fallback failed: {e_sd}")
+                    print("Please set a valid Fish.Audio API key in basic_transcription.py or install pyttsx3/sounddevice for local fallback.")
+        else:
+            print("Unexpected error - please inspect the message above")

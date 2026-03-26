@@ -4649,21 +4649,45 @@ AI: {response}
             self.session_id = f"session_{int(time.time())}"
 
     async def _get_memory_context_for_response(self, user_message: str) -> Dict[str, Any]:
-        """Get memory context to enhance AI responses"""
+        """Get memory context to enhance AI responses
+        
+        Uses the daily session memory pipeline that:
+        - Creates one session per calendar day
+        - Tracks if session has been processed by AI organizer
+        - Sends unprocessed sessions to organizer for daily summary
+        - Reads cached organizer summaries for processed sessions
+        """
         try:
             base_context = {}
             
-            # Get session context from mem0_memory_system
+            # Get processed memory from the daily session pipeline
             if self.mem0_memory_agent:
                 try:
-                    # Get current session context (includes past sessions summary)
+                    # Get daily memory context from pipeline
+                    # This handles organizer processing and caching automatically
                     session_context = await asyncio.to_thread(
-                        self.mem0_memory_agent.get_current_session_context
+                        self.mem0_memory_agent._get_processed_daily_memory_context
                     )
                     if session_context:
                         base_context["session_context"] = session_context
+                        base_context["memory_processed"] = True
+                        
+                        # Extract daily summary if available for system prompt enrichment
+                        if "daily_summary" in session_context:
+                            base_context["daily_summary"] = session_context["daily_summary"]
+                        if "daily_topics" in session_context:
+                            base_context["daily_topics"] = session_context["daily_topics"]
                 except Exception as e:
-                    logger.debug(f"Session context retrieval error: {e}")
+                    logger.debug(f"Processed daily memory context error: {e}")
+                    # Fall back to regular context if pipeline fails
+                    try:
+                        session_context = await asyncio.to_thread(
+                            self.mem0_memory_agent.get_current_session_context
+                        )
+                        if session_context:
+                            base_context["session_context"] = session_context
+                    except Exception as e2:
+                        logger.debug(f"Fallback session context error: {e2}")
             
             if self.memory_integration and self.memory_integration.is_enabled:
                 # Use comprehensive memory system

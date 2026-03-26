@@ -41,6 +41,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 from typing import Iterable, Optional, List, Dict, Tuple
 import logging
 
+# Initialize logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
 try:
     from sentence_transformers import SentenceTransformer
     SENTENCE_TRANSFORMERS_AVAILABLE = True
@@ -8540,53 +8544,113 @@ class NovaMemoryAI:
         self.data["memory_engine"]["memory_events"].append(update_event)
 
     def _initialize_session(self):
-        """Initialize a new conversation session with proper state management"""
-        current_time = datetime.now().isoformat()
-        session_id = f"session_{uuid.uuid4().hex[:8]}"
-
-        # Determine if this is an established user
-        has_previous_sessions = len(self.data.get("sessions", {})) > 0
-        has_user_facts = len(self.data.get("fact_history", {})) > 0
-        user_name = self.data["user"].get("name")
-
-        # Create new session
-        new_session = ConversationSession(
-            session_id=session_id,
-            start_time=current_time,
-            user_name=user_name,
-            last_activity=current_time
-        )
-
-        # Store session
-        self.data["sessions"][session_id] = asdict(new_session)
-        self.data["current_session"] = session_id
-
-        # Retrieve context from past sessions for AI memory
-        past_session_context = ""
-        if has_previous_sessions:
-            past_session_context = self.get_past_session_context(limit=3, hours_back=72)
+        """Initialize or reuse a daily conversation session
         
-        # Store context in session for AI access
-        if past_session_context:
-            self.data["sessions"][session_id]["past_context"] = past_session_context
-            print("[MEMORY] Context from past sessions prepared for AI")
-
-        # Update conversation state based on user history
-        if has_previous_sessions or (has_user_facts and user_name):
-            # This is a returning user - skip introduction phase
-            self.data["conversation_state"]["introduction_phase"] = False
-            self.data["conversation_state"]["established_user"] = True
-            self.data["conversation_state"]["greeting_completed"] = True  # Startup greeting counts
-            self.data["user"]["relationship_established"] = True
+        Creates one session per calendar day. If a session for today already exists,
+        reuses it instead of creating a new session.
+        """
+        current_time = datetime.now().isoformat()
+        today_date = current_time.split('T')[0]  # YYYY-MM-DD format
+        
+        # Check if today's session already exists
+        existing_session_id = self._get_today_session_id()
+        
+        if existing_session_id:
+            # Reuse today's session
+            self.data["current_session"] = existing_session_id
+            session = self.data["sessions"][existing_session_id]
+            session["last_activity"] = current_time
+            session["current_duration"] = self._calculate_current_duration(session["start_time"])
+            print(f"[SESSION] Reusing today's session: {existing_session_id}")
         else:
-            # This is a new user - needs introduction
-            self.data["conversation_state"]["introduction_phase"] = True
-            self.data["conversation_state"]["established_user"] = False
-            self.data["conversation_state"]["greeting_completed"] = False
-
-        # Update user metadata
-        self.data["user"]["total_sessions"] = len(self.data["sessions"])
+            # Create new daily session
+            session_id = f"session_{today_date.replace('-', '_')}"
+            
+            # Determine if this is an established user
+            has_previous_sessions = len(self.data.get("sessions", {})) > 0
+            has_user_facts = len(self.data.get("fact_history", {})) > 0
+            user_name = self.data["user"].get("name")
+            
+            # Create new session with daily session structure
+            new_session = ConversationSession(
+                session_id=session_id,
+                start_time=current_time,
+                date=today_date,
+                user_name=user_name,
+                last_activity=current_time
+            )
+            
+            # Store session
+            session_dict = asdict(new_session)
+            # Ensure organizer_status is properly initialized
+            if "organizer_status" not in session_dict:
+                session_dict["organizer_status"] = {
+                    "sent_to_organizer": False,
+                    "organizer_summary_ready": False,
+                    "organizer_file": None,
+                    "last_processed": None
+                }
+            
+            self.data["sessions"][session_id] = session_dict
+            self.data["current_session"] = session_id
+            print(f"[SESSION] Created new daily session: {session_id}")
+            
+            # Retrieve context from past sessions for AI memory
+            past_session_context = ""
+            if has_previous_sessions:
+                past_session_context = self.get_past_session_context(limit=3, hours_back=72)
+            
+            # Store context in session for AI access
+            if past_session_context:
+                self.data["sessions"][session_id]["past_context"] = past_session_context
+                print("[MEMORY] Context from past sessions prepared for AI")
+            
+            # Update conversation state based on user history
+            if has_previous_sessions or (has_user_facts and user_name):
+                # This is a returning user - skip introduction phase
+                self.data["conversation_state"]["introduction_phase"] = False
+                self.data["conversation_state"]["established_user"] = True
+                self.data["conversation_state"]["greeting_completed"] = True
+                self.data["user"]["relationship_established"] = True
+            else:
+                # This is a new user - needs introduction
+                self.data["conversation_state"]["introduction_phase"] = True
+                self.data["conversation_state"]["established_user"] = False
+                self.data["conversation_state"]["greeting_completed"] = False
+            
+            # Update user metadata
+            self.data["user"]["total_sessions"] = len(self.data["sessions"])
+        
         self.data["user"]["last_seen"] = current_time
+    
+    def _get_today_session_id(self) -> Optional[str]:
+        """Get the session ID for today if it exists"""
+        today_date = datetime.now().isoformat().split('T')[0]
+        
+        for session_id, session in self.data.get("sessions", {}).items():
+            session_date = session.get("date", session.get("start_time", "").split('T')[0])
+            if session_date == today_date:
+                return session_id
+        
+        return None
+    
+    def _calculate_current_duration(self, start_time: str) -> str:
+        """Calculate duration from start_time to now"""
+        try:
+            start = datetime.fromisoformat(start_time)
+            now = datetime.now()
+            delta = now - start
+            
+            minutes = int(delta.total_seconds() / 60)
+            hours = minutes // 60
+            remaining_mins = minutes % 60
+            
+            if hours > 0:
+                return f"{hours} hours, {remaining_mins} minutes"
+            else:
+                return f"{remaining_mins} minutes"
+        except:
+            return "unknown"
 
     def _end_current_session(self):
         """End the current conversation session and finalize all metadata"""
@@ -10767,6 +10831,185 @@ class NovaMemoryAI:
         print(f"🧹 Memory optimized: Removed {len(old_dates)} old logs and {len(rarely_accessed)} unused facts")
         self.save_all_data()
 
+    # ============================================================================
+    # MEMORY PROCESSING PIPELINE
+    # ============================================================================
+    
+    def _process_current_session_with_organizer(self) -> bool:
+        """Process current session with organizer if not yet processed
+        
+        Collects all messages for the current day and sends to organizer for incremental updates.
+        
+        Returns:
+            True if processing was attempted, False if already processed
+        """
+        try:
+            current_session_id = self.data.get("current_session")
+            if not current_session_id:
+                return False
+            
+            session = self.data["sessions"].get(current_session_id)
+            if not session:
+                return False
+            
+            date = session.get("date", session.get("start_time", "").split('T')[0])
+            
+            # Check if organizer output already exists for this date
+            organizer_output_dir = os.path.join("astra_ai", "Date", "organizer_summaries")
+            output_file = os.path.join(organizer_output_dir, f"{date}.json")
+            
+            last_processed_count = 0
+            if os.path.exists(output_file):
+                try:
+                    with open(output_file, 'r', encoding='utf-8') as f:
+                        existing_data = json.load(f)
+                        last_processed_count = existing_data.get("message_count", 0)
+                except Exception:
+                    last_processed_count = 0
+            
+            # Collect ALL messages for this date from ALL sessions
+            all_messages_for_day = []
+            session_ids_for_day = []
+            
+            for sess_id, sess_data in self.data.get("sessions", {}).items():
+                sess_date = sess_data.get("date", sess_data.get("start_time", "").split('T')[0])
+                if sess_date == date:
+                    session_ids_for_day.append(sess_id)
+                    # Get messages for this session
+                    for msg in self.data.get("conversation", []):
+                        if msg.get("session_id") == sess_id:
+                            all_messages_for_day.append({
+                                "role": msg.get("role", "user"),
+                                "content": msg.get("content", ""),
+                                "timestamp": msg.get("timestamp", "")
+                            })
+            
+            # Sort messages by timestamp
+            all_messages_for_day.sort(key=lambda x: x.get("timestamp", ""))
+            
+            total_message_count = len(all_messages_for_day)
+            
+            # Check if there are new messages to process
+            if total_message_count <= last_processed_count:
+                logger.info(f"[ORGANIZER] No new messages for {date} (current: {total_message_count}, processed: {last_processed_count})")
+                return False
+            
+            # Build conversation text from all messages
+            conversation_text = ""
+            for conv in all_messages_for_day:
+                role = conv.get("role", "user").upper()
+                content = conv.get("content", "")
+                conversation_text += f"{role}: {content}\n"
+            
+            # Send to organizer
+            try:
+                from astra_ai.memory.Mem0_ai_organizer import AIOrganizer, ORGANIZER_CONFIG
+                
+                organizer = AIOrganizer(ORGANIZER_CONFIG, memory_system=self)
+                organizer_output = organizer.organize_daily_conversations(date, session_ids_for_day, conversation_text)
+                
+                # Update session organizer status
+                for sess_id in session_ids_for_day:
+                    if sess_id in self.data["sessions"]:
+                        sess = self.data["sessions"][sess_id]
+                        if "organizer_status" not in sess:
+                            sess["organizer_status"] = {}
+                        
+                        sess["organizer_status"]["sent_to_organizer"] = True
+                        sess["organizer_status"]["organizer_summary_ready"] = True
+                        sess["organizer_status"]["organizer_file"] = f"organizer_summaries/{date}.json"
+                        sess["organizer_status"]["last_processed"] = datetime.now().isoformat()
+                        sess["organizer_status"]["last_processed_message_count"] = total_message_count
+                
+                logger.info(f"[ORGANIZER] Processed {len(session_ids_for_day)} sessions for {date} ({total_message_count} messages)")
+                return True
+                
+            except Exception as e:
+                logger.warning(f"Error sending session to organizer: {e}")
+                return False
+                
+        except Exception as e:
+            logger.warning(f"Error in organizer processing: {e}")
+            return False
+    
+    def _get_session_organized_summary(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Read the organized summary for a session from organizer output
+        
+        Args:
+            session_id: The session ID to get summary for
+        
+        Returns:
+            Dictionary with organized summary or None if not found
+        """
+        try:
+            session = self.data["sessions"].get(session_id)
+            if not session:
+                return None
+            
+            date = session.get("date", session.get("start_time", "").split('T')[0])
+            
+            organizer_output_dir = os.path.join("astra_ai", "Date", "organizer_summaries")
+            output_file = os.path.join(organizer_output_dir, f"{date}.json")
+            
+            if os.path.exists(output_file):
+                with open(output_file, 'r', encoding='utf-8') as f:
+                    organizer_data = json.load(f)
+                    return organizer_data
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Error reading organizer summary: {e}")
+            return None
+    
+    def _get_processed_daily_memory_context(self) -> Dict[str, Any]:
+        """Build memory context for current daily session
+        
+        For the current session (today):
+        1. Check if it's been processed by organizer
+        2. If not processed: process it now
+        3. If processed: read cached summary
+        4. Return organized context
+        
+        Returns:
+            Dictionary with processed memory context ready for nova_ai
+        """
+        try:
+            current_session_id = self.data.get("current_session")
+            if not current_session_id:
+                # No session, fall back to regular context
+                return self.get_memory_context("")
+            
+            session = self.data["sessions"].get(current_session_id)
+            if not session:
+                return self.get_memory_context("")
+            
+            # Try to process with organizer if not yet sent
+            self._process_current_session_with_organizer()
+            
+            # Get organized summary if available
+            organizer_summary = self._get_session_organized_summary(current_session_id)
+            
+            # Build the context
+            context = {
+                'user_info': self.data.get("user", {}),
+                'today_session': session,
+                'current_facts': self.data.get("fact_history", {}),
+                'recent_events': self.data.get("memory_engine", {}).get("memory_events", [])[-5:],
+                'conversation_history': self.data.get("conversation", [])[-10:],
+                'processed': True
+            }
+            
+            # Add organizer summary if available
+            if organizer_summary:
+                context['daily_summary'] = organizer_summary.get('daily_summary', '')
+                context['daily_topics'] = organizer_summary.get('topics', [])
+            
+            return context
+            
+        except Exception as e:
+            logger.warning(f"Error building processed memory context: {e}")
+            return self.get_memory_context("")
 
     def get_memory_context(self, query: str = "") -> Dict[str, Any]:
         """Get memory context for AI response generation"""
