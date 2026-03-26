@@ -62,6 +62,7 @@ memory_auto_optimizer.log
 alebot*.log
 gitkey.pub
 acli.exe
+astra_ai/Date/backups/
 
 # OS-specific
 .DS_Store
