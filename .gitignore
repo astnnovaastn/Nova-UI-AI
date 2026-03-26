@@ -51,6 +51,17 @@ logs/
 config/config.json
 voice_recordings/
 transcriptions/
+ai_responses.json
+search_history.json
+processed_messages.json
+content_analysis.json
+weather_data.json
+temp_*.json
+*.log
+memory_auto_optimizer.log
+alebot*.log
+gitkey.pub
+acli.exe
 
 # OS-specific
 .DS_Store
