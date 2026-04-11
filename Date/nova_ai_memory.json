@@ -6,6 +6,12 @@
     "status": "active"
   },
   "memory_events": [],
-  "conversation": [],
+  "conversation": [
+    {
+      "role": "assistant",
+      "content": "Now using improved voice listening with silence detection. System will listen only when you're speaking and stop when you finish talking for 1.5 seconds. Using ElevenLabs for text to speech.",
+      "timestamp": "2026-04-04T20:30:00Z"
+    }
+  ],
   "current_session": "default_session"
 }

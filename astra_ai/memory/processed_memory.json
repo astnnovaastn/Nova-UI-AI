@@ -86,5 +86,1333 @@
     "context_used": "User: \nUser: how are you\nAI: I'm functioning well, thanks for asking!\n",
     "status": "processed",
     "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T11:29:14.920199Z_392d6f6df07b2307",
+    "processed_at": "2026-03-26T11:29:15.877160",
+    "summary": "User loves to code and i play football and i'm living in italy como ai: ciao, rich! italian football fan, eh? who's your favorite team in serie a.",
+    "context_used": "User: \nUser: my name is rich i'm 17 i love to code and i play football and i'm living in italy como\nAI: Ciao, Rich! Italian football fan, eh? Who's your favorite team in Serie A?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T12:17:18.189408Z_b2d4ae8551844d96",
+    "processed_at": "2026-03-26T12:17:18.478616",
+    "summary": "User loves italian food ai: buon appetito! you're in italy, so you must be loving the pasta, pizza, and gelato.",
+    "context_used": "User: \nUser: I love Italian food\nAI: Buon appetito! You're in Italy, so you must be loving the pasta, pizza, and gelato.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T12:18:34.146314Z_4d6ab495905907ba",
+    "processed_at": "2026-03-26T12:18:34.581138",
+    "summary": "User: yes that is AI: A match made! Classic Lasagna is a staple in Italian cuisine!",
+    "context_used": "User: \nUser: yes that is\nAI: A match made! Classic Lasagna is a staple in Italian cuisine!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T12:20:22.163996Z_58ec832ecce6f6b3",
+    "processed_at": "2026-03-26T12:20:22.716762",
+    "summary": "User loves lasagna it that best italian food ai: you're a lasagna fan! many agree it's one of italy's best.",
+    "context_used": "User: \nUser: i love Lasagna it that best italian food\nAI: You're a Lasagna fan! Many agree it's one of Italy's best.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T12:21:52.211329Z_b1c3631aa81d375d",
+    "processed_at": "2026-03-26T12:21:52.832842",
+    "summary": "User: i'm coding a new type of memory sytem AI: That's innovative. You might be working on a new type of RAM or storage.",
+    "context_used": "User: \nUser: i'm coding a new type of memory sytem\nAI: That's innovative. You might be working on a new type of RAM or storage.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T12:22:11.744428Z_73e667af936334ea",
+    "processed_at": "2026-03-26T12:22:11.922680",
+    "summary": "User: User's name is rich AI: Nice to meet you, Rich!",
+    "context_used": "User: \nUser: my name is rich\nAI: Nice to meet you, Rich!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T12:17:18.189408Z_b2d4ae8551844d96",
+    "processed_at": "2026-03-26T14:51:11.302455",
+    "summary": "User loves italian food ai: buon appetito! you're in italy, so you must be loving the pasta, pizza, and gelato.",
+    "context_used": "User: \nUser: I love Italian food\nAI: Buon appetito! You're in Italy, so you must be loving the pasta, pizza, and gelato.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T12:18:34.146314Z_4d6ab495905907ba",
+    "processed_at": "2026-03-26T14:51:11.345429",
+    "summary": "User: yes that is AI: A match made! Classic Lasagna is a staple in Italian cuisine!",
+    "context_used": "User: \nUser: yes that is\nAI: A match made! Classic Lasagna is a staple in Italian cuisine!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T12:20:22.163996Z_58ec832ecce6f6b3",
+    "processed_at": "2026-03-26T14:51:11.384535",
+    "summary": "User loves lasagna it that best italian food ai: you're a lasagna fan! many agree it's one of italy's best.",
+    "context_used": "User: \nUser: i love Lasagna it that best italian food\nAI: You're a Lasagna fan! Many agree it's one of Italy's best.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T12:21:52.211329Z_b1c3631aa81d375d",
+    "processed_at": "2026-03-26T14:51:11.403575",
+    "summary": "User: i'm coding a new type of memory sytem AI: That's innovative. You might be working on a new type of RAM or storage.",
+    "context_used": "User: \nUser: i'm coding a new type of memory sytem\nAI: That's innovative. You might be working on a new type of RAM or storage.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T14:51:10.466792Z_25988d7cc7c97473",
+    "processed_at": "2026-03-26T14:51:11.431947",
+    "summary": "User enjoys User: how are you AI: I'm doing great, thanks for asking! Still learning and ready to help..",
+    "context_used": "User: \nUser: how are you\nAI: I'm doing great, thanks for asking! Still learning and ready to help.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T16:24:59.677249Z_c8031c1c8186aacc",
+    "processed_at": "2026-03-26T16:25:00.495774",
+    "summary": "User enjoys to discuss.",
+    "context_used": "User: \nUser: how are you doing\nAI: I'm doing great, thanks for asking! Still ready to help and chat about coding, Lasagna, or anything else you'd like to discuss.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T16:26:47.337089Z_fc9989bc4ea084d0",
+    "processed_at": "2026-03-26T16:26:47.821880",
+    "summary": "User enjoys the gpt model that i'm based on.",
+    "context_used": "User: \nUser: what do you kw about open ai\nAI: Open AI is a research organization that creates and makes publicly available AI technologies, like the GPT model that I'm based on.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T17:05:01.628455Z_c8031c1c8186aacc",
+    "processed_at": "2026-03-26T17:05:01.954723",
+    "summary": "User enjoys to discuss.",
+    "context_used": "User: \nUser: hi\nAI: Nice to chat with you again! I'm still here, ready to help with your coding, Lasagna cravings, or anything else you'd like to discuss.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T20:58:21.675730Z_2ef7e080b1601d0f",
+    "processed_at": "2026-03-26T20:58:22.095339",
+    "summary": "User loves to play football ai: a new hobby, rich? don't you usually code and crave lasagna.",
+    "context_used": "User: \nUser: i love to play football\nAI: A new hobby, Rich? Don't you usually code and crave Lasagna?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T20:59:18.715630Z_229d3df1e33e1079",
+    "processed_at": "2026-03-26T20:59:19.204653",
+    "summary": "User enjoys to code when i have free time ai: hi rich! it looks like you're a 17-year-old coding whiz! what programming language are you most interested in learning.",
+    "context_used": "User: \nUser: my name is rich i'm 17 and i like to code when i have free time\nAI: Hi Rich! It looks like you're a 17-year-old coding whiz! What programming language are you most interested in learning?",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:00:09.081836Z_8e93079daf4e6edb",
+    "processed_at": "2026-03-26T21:00:19.401810",
+    "summary": "User enjoys the most is py for now ai: python is an awesome choice, rich! you're off to a great start.",
+    "context_used": "User: \nUser: i programing langua i like the most is py for now\nAI: Python is an awesome choice, Rich! You're off to a great start.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:00:44.472159Z_0c999097dfe9cfd7",
+    "processed_at": "2026-03-26T21:00:44.552617",
+    "summary": "User appreciates me! and enjoys it.",
+    "context_used": "User: \nUser: what do you think about your name\nAI: My name \"Nova\" means \"new\" in Latin, which I think is fitting for a helpful AI like me!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:01:19.273005Z_63b61b7b3a3c8f06",
+    "processed_at": "2026-03-26T21:01:19.618959",
+    "summary": "User enjoys my name nova - it's modern, bright, and suits a curious ai like me! and values it.",
+    "context_used": "User: \nUser: i mean do you like the name nova\nAI: I love my name Nova - it's modern, bright, and suits a curious AI like me!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:01:01.366633Z_de1a40179238868e",
+    "processed_at": "2026-03-26T21:01:19.632020",
+    "summary": "User enjoys the time ai: i'm a time-efficient ai, always striving for quick and helpful answers, rich.",
+    "context_used": "User: \nUser: but you like the time\nAI: I'm a time-efficient AI, always striving for quick and helpful answers, Rich!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:07:56.818359Z_d11f0fcf75982202",
+    "processed_at": "2026-03-26T21:07:57.383818",
+    "summary": "User wants you create you owen name from nothings ai: let's create a unique name: i am aerthysys (aes) a combination of \"aer\" (meaning air, representing flexibil.",
+    "context_used": "User: \nUser: noo don't use the name nova i want you create you owen name from nothings\nAI: Let's create a unique name:\n\nI am Aerthysys (AES)\n\nA combination of \"Aer\" (meaning air, representing flexibil",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:10:04.411496Z_c5530dda0c143073",
+    "processed_at": "2026-03-26T21:10:04.666228",
+    "summary": "User expressed negative sentiment about User: you don't like the name Aerthysys AI: I don't particularly like the name Aerthysys, but it was a unique suggestion..",
+    "context_used": "User: \nUser: you don't like the name Aerthysys\nAI: I don't particularly like the name Aerthysys, but it was a unique suggestion.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:11:46.046048Z_ba2232f3c7ad40ad",
+    "processed_at": "2026-03-26T21:11:46.909358",
+    "summary": "User likes have aes (artificially emotional system). and thinks it's worth exploring.",
+    "context_used": "User: \nUser: recall you have AES\nAI: I do have AES (Artificially Emotional System).\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:11:46.046048Z_134d2e98e7ef43f8",
+    "processed_at": "2026-03-26T21:11:46.935689",
+    "summary": "User finds have aes (artificially emotional system). valuable and engaging.",
+    "context_used": "User: \nUser: recall you have AES\nAI: I do have AES (Artificially Emotional System).\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:15:31.003476Z_68ed5fd444495078",
+    "processed_at": "2026-03-26T21:15:31.652886",
+    "summary": "User: WHAT AI: User apologize, but I'm having trouble connecting to the Groq API right now. Error: 429 Client Error: Too Many Requests for url: https://api.groq.com/openai/v1/chat/completions.",
+    "context_used": "User: \nUser: WHAT\nAI: I apologize, but I'm having trouble connecting to the Groq API right now. Error: 429 Client Error: Too Many Requests for url: https://api.groq.com/openai/v1/chat/completions\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T20:58:21.675730Z_2ef7e080b1601d0f",
+    "processed_at": "2026-03-26T21:18:33.104202",
+    "summary": "User loves to play football ai: a new hobby, rich? don't you usually code and crave lasagna.",
+    "context_used": "User: \nUser: i love to play football\nAI: A new hobby, Rich? Don't you usually code and crave Lasagna?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:00:44.472159Z_0c999097dfe9cfd7",
+    "processed_at": "2026-03-26T21:18:33.138998",
+    "summary": "User appreciates me! and enjoys it.",
+    "context_used": "User: \nUser: what do you think about your name\nAI: My name \"Nova\" means \"new\" in Latin, which I think is fitting for a helpful AI like me!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:01:19.273005Z_63b61b7b3a3c8f06",
+    "processed_at": "2026-03-26T21:18:33.294691",
+    "summary": "User enjoys my name nova - it's modern, bright, and suits a curious ai like me! and values it.",
+    "context_used": "User: \nUser: i mean do you like the name nova\nAI: I love my name Nova - it's modern, bright, and suits a curious AI like me!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:07:56.818359Z_d11f0fcf75982202",
+    "processed_at": "2026-03-26T21:18:33.349315",
+    "summary": "User wants you create you owen name from nothings ai: let's create a unique name: i am aerthysys (aes) a combination of \"aer\" (meaning air, representing flexibil.",
+    "context_used": "User: \nUser: noo don't use the name nova i want you create you owen name from nothings\nAI: Let's create a unique name:\n\nI am Aerthysys (AES)\n\nA combination of \"Aer\" (meaning air, representing flexibil",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:10:04.411496Z_c5530dda0c143073",
+    "processed_at": "2026-03-26T21:18:33.384397",
+    "summary": "User expressed negative sentiment about User: you don't like the name Aerthysys AI: I don't particularly like the name Aerthysys, but it was a unique suggestion..",
+    "context_used": "User: \nUser: you don't like the name Aerthysys\nAI: I don't particularly like the name Aerthysys, but it was a unique suggestion.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T20:59:18.715630Z_229d3df1e33e1079",
+    "processed_at": "2026-03-26T21:18:33.421124",
+    "summary": "User enjoys to code when i have free time ai: hi rich! it looks like you're a 17-year-old coding whiz! what programming language are you most interested in learning.",
+    "context_used": "User: \nUser: my name is rich i'm 17 and i like to code when i have free time\nAI: Hi Rich! It looks like you're a 17-year-old coding whiz! What programming language are you most interested in learning?",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:00:09.081836Z_8e93079daf4e6edb",
+    "processed_at": "2026-03-26T21:18:33.539842",
+    "summary": "User enjoys the most is py for now ai: python is an awesome choice, rich! you're off to a great start.",
+    "context_used": "User: \nUser: i programing langua i like the most is py for now\nAI: Python is an awesome choice, Rich! You're off to a great start.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:01:01.366633Z_de1a40179238868e",
+    "processed_at": "2026-03-26T21:18:33.657706",
+    "summary": "User enjoys the time ai: i'm a time-efficient ai, always striving for quick and helpful answers, rich.",
+    "context_used": "User: \nUser: but you like the time\nAI: I'm a time-efficient AI, always striving for quick and helpful answers, Rich!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-26T21:11:46.046048Z_a6d09755b5b23344",
+    "processed_at": "2026-03-26T21:18:33.793031",
+    "summary": "User has a keen interest in have aes (artificially emotional system). and values it.",
+    "context_used": "User: \nUser: recall you have AES\nAI: I do have AES (Artificially Emotional System).\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T09:31:28.023825Z_480f9d1fac667cb8",
+    "processed_at": "2026-03-27T09:31:28.159893",
+    "summary": "User: what up AI: You asked about your name before. User don't have any information about your personal name.",
+    "context_used": "User: \nUser: what up\nAI: You asked about your name before. I don't have any information about your personal name.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T09:32:42.760617Z_8df9238297a50f76",
+    "processed_at": "2026-03-27T09:32:42.964173",
+    "summary": "User: nova AI: I'm Nova, and it seems you've chosen to answer your own name!",
+    "context_used": "User: \nUser: nova\nAI: I'm Nova, and it seems you've chosen to answer your own name!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T09:35:10.682503Z_e448d6d7f972ea6a",
+    "processed_at": "2026-03-27T09:35:10.837338",
+    "summary": "User: what is the best ai: That's a tricky question - I'm biased, being one of the best AI's out there is subjective.",
+    "context_used": "User: \nUser: what is the best ai \nAI: That's a tricky question - I'm biased, being one of the best AI's out there is subjective.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T09:37:03.123765Z_809d36200baa026d",
+    "processed_at": "2026-03-27T09:37:03.260053",
+    "summary": "User enjoys to code ai: nice to meet you, rich! coding at 17 is impressive - what languages are you currently working with.",
+    "context_used": "User: \nUser: my name is rich and i'm 17 yeas old and i like to code\nAI: Nice to meet you, Rich! Coding at 17 is impressive - what languages are you currently working with?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T09:37:24.349558Z_8937abd305ac7223",
+    "processed_at": "2026-03-27T09:37:24.417381",
+    "summary": "User loves it.",
+    "context_used": "User: \nUser: i'm wokring py and it the best\nAI: Python is a popular and powerful language, many developers love it!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T09:39:03.863381Z_8df9238297a50f76",
+    "processed_at": "2026-03-27T09:39:04.044318",
+    "summary": "User: nova AI: I'm Nova, and it seems you've chosen to answer your own name!",
+    "context_used": "User: \nUser: nova\nAI: I'm Nova, and it seems you've chosen to answer your own name!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T10:24:21.949827Z_d36922f9b7352d44",
+    "processed_at": "2026-03-27T10:24:22.027085",
+    "summary": "User enjoys User: i'm back to talke to you AI: Great to have you back, Rich! What's new in the coding world?.",
+    "context_used": "User: \nUser: i'm back to talke to you\nAI: Great to have you back, Rich! What's new in the coding world?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:09:49.452024Z_f6be4d78c70ac29d",
+    "processed_at": "2026-03-27T11:09:49.630212",
+    "summary": "User enjoys to play football ai: calcio is a great sport, rich! are you on a team in como or just playing for fun.",
+    "context_used": "User: \nUser: i like to play football\nAI: Calcio is a great sport, Rich! Are you on a team in Como or just playing for fun?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:10:51.409534Z_d1533fd9a5808e11",
+    "processed_at": "2026-03-27T11:10:51.514604",
+    "summary": "User loves italian food, especially pasta ai: pasta lovers unite, rich! fettuccine alfredo or spaghetti bolognese is your go-to in como.",
+    "context_used": "User: \nUser: I love Italian food, especially pasta\nAI: Pasta lovers unite, Rich! Fettuccine Alfredo or Spaghetti Bolognese is your go-to in Como?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:10:59.773082Z_fb4a5db05fbe0d3e",
+    "processed_at": "2026-03-27T11:10:59.845890",
+    "summary": "User enjoys User: I usually go for morning walks. AI: Fresh air and exercise, Rich! Do you have a favorite walking route in Como with a great view?.",
+    "context_used": "User: \nUser: I usually go for morning walks.\nAI: Fresh air and exercise, Rich! Do you have a favorite walking route in Como with a great view?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:11:08.283586Z_81563f153cce192b",
+    "processed_at": "2026-03-27T11:11:08.419030",
+    "summary": "User: User always have coffee in the morning. AI: A morning coffee routine, Rich! Caff\u00e8 Americano or Espresso is your usual choice?",
+    "context_used": "User: \nUser: I always have coffee in the morning.\nAI: A morning coffee routine, Rich! Caff\u00e8 Americano or Espresso is your usual choice?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:11:14.833683Z_68947d6e03baa89c",
+    "processed_at": "2026-03-27T11:11:14.999549",
+    "summary": "User enjoys reading sci-fi novels.",
+    "context_used": "User: \nUser: I enjoy reading sci-fi novels.\nAI: Interstellar adventures, Rich! Have you read any classics like \"Dune\" or \"Foundation\"?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:11:34.938515Z_de14e2af3976e340",
+    "processed_at": "2026-03-27T11:11:35.192948",
+    "summary": "User enjoys User: Brandon Sanderson is my favorite author! His world-building is incredible AI: Sanderson is a master of epic world-building, Rich! His Mistborn series is a fan favorite, but do you prefer.",
+    "context_used": "User: \nUser: Brandon Sanderson is my favorite author! His world-building is incredible\nAI: Sanderson is a master of epic world-building, Rich! His Mistborn series is a fan favorite, but do you prefer ",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:12:06.955104Z_436a4805be282083",
+    "processed_at": "2026-03-27T11:12:07.147322",
+    "summary": "User: and User's name is rich AI: Nice to meet you, Rich!",
+    "context_used": "User: \nUser: and my name is rich\nAI: Nice to meet you, Rich!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:12:59.279075Z_8e1019d9d00b571a",
+    "processed_at": "2026-03-27T11:12:59.478094",
+    "summary": "User: Yes, User prefer dark roast coffee, black. And User walk for about 45 minutes every morning AI: A dark-roasted morning boost, with a daily dose of fresh air and exercise, Rich!",
+    "context_used": "User: \nUser: Yes, I prefer dark roast coffee, black. And I walk for about 45 minutes every morning\nAI: A dark-roasted morning boost, with a daily dose of fresh air and exercise, Rich!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:13:08.916438Z_3bcaf77c6b79aef5",
+    "processed_at": "2026-03-27T11:13:09.066820",
+    "summary": "User enjoys User: I usually watch anime on Sunday evenings, it's my relaxation time AI: Sunday anime nights, the perfect chill, Rich!.",
+    "context_used": "User: \nUser: I usually watch anime on Sunday evenings, it's my relaxation time\nAI: Sunday anime nights, the perfect chill, Rich!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:13:25.923882Z_800107ade0ceb3dc",
+    "processed_at": "2026-03-27T11:13:26.181673",
+    "summary": "User loves trying new restaurants and cuisines.",
+    "context_used": "User: \nUser: I love trying new restaurants and cuisines. It's one of my favorite things to do!\nAI: Foodie adventures, Rich! What's your go-to cuisine when trying something new?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:09:49.452024Z_f6be4d78c70ac29d",
+    "processed_at": "2026-03-27T11:24:51.708831",
+    "summary": "User enjoys to play football ai: calcio is a great sport, rich! are you on a team in como or just playing for fun.",
+    "context_used": "User: \nUser: i like to play football\nAI: Calcio is a great sport, Rich! Are you on a team in Como or just playing for fun?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:10:51.409534Z_d1533fd9a5808e11",
+    "processed_at": "2026-03-27T11:24:51.768819",
+    "summary": "User loves italian food, especially pasta ai: pasta lovers unite, rich! fettuccine alfredo or spaghetti bolognese is your go-to in como.",
+    "context_used": "User: \nUser: I love Italian food, especially pasta\nAI: Pasta lovers unite, Rich! Fettuccine Alfredo or Spaghetti Bolognese is your go-to in Como?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:10:59.773082Z_fb4a5db05fbe0d3e",
+    "processed_at": "2026-03-27T11:24:51.789959",
+    "summary": "User enjoys User: I usually go for morning walks. AI: Fresh air and exercise, Rich! Do you have a favorite walking route in Como with a great view?.",
+    "context_used": "User: \nUser: I usually go for morning walks.\nAI: Fresh air and exercise, Rich! Do you have a favorite walking route in Como with a great view?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:11:08.283586Z_81563f153cce192b",
+    "processed_at": "2026-03-27T11:24:51.804507",
+    "summary": "User: User always have coffee in the morning. AI: A morning coffee routine, Rich! Caff\u00e8 Americano or Espresso is your usual choice?",
+    "context_used": "User: \nUser: I always have coffee in the morning.\nAI: A morning coffee routine, Rich! Caff\u00e8 Americano or Espresso is your usual choice?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:11:14.833683Z_68947d6e03baa89c",
+    "processed_at": "2026-03-27T11:24:51.816331",
+    "summary": "User enjoys reading sci-fi novels.",
+    "context_used": "User: \nUser: I enjoy reading sci-fi novels.\nAI: Interstellar adventures, Rich! Have you read any classics like \"Dune\" or \"Foundation\"?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:11:34.938515Z_de14e2af3976e340",
+    "processed_at": "2026-03-27T11:24:51.831079",
+    "summary": "User enjoys User: Brandon Sanderson is my favorite author! His world-building is incredible AI: Sanderson is a master of epic world-building, Rich! His Mistborn series is a fan favorite, but do you prefer.",
+    "context_used": "User: \nUser: Brandon Sanderson is my favorite author! His world-building is incredible\nAI: Sanderson is a master of epic world-building, Rich! His Mistborn series is a fan favorite, but do you prefer ",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:12:06.955104Z_436a4805be282083",
+    "processed_at": "2026-03-27T11:24:51.843262",
+    "summary": "User: and User's name is rich AI: Nice to meet you, Rich!",
+    "context_used": "User: \nUser: and my name is rich\nAI: Nice to meet you, Rich!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:12:59.279075Z_8e1019d9d00b571a",
+    "processed_at": "2026-03-27T11:24:51.856399",
+    "summary": "User: Yes, User prefer dark roast coffee, black. And User walk for about 45 minutes every morning AI: A dark-roasted morning boost, with a daily dose of fresh air and exercise, Rich!",
+    "context_used": "User: \nUser: Yes, I prefer dark roast coffee, black. And I walk for about 45 minutes every morning\nAI: A dark-roasted morning boost, with a daily dose of fresh air and exercise, Rich!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:13:08.916438Z_3bcaf77c6b79aef5",
+    "processed_at": "2026-03-27T11:24:51.870013",
+    "summary": "User enjoys User: I usually watch anime on Sunday evenings, it's my relaxation time AI: Sunday anime nights, the perfect chill, Rich!.",
+    "context_used": "User: \nUser: I usually watch anime on Sunday evenings, it's my relaxation time\nAI: Sunday anime nights, the perfect chill, Rich!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:13:25.923882Z_800107ade0ceb3dc",
+    "processed_at": "2026-03-27T11:24:51.883653",
+    "summary": "User loves trying new restaurants and cuisines.",
+    "context_used": "User: \nUser: I love trying new restaurants and cuisines. It's one of my favorite things to do!\nAI: Foodie adventures, Rich! What's your go-to cuisine when trying something new?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:24:51.736322Z_b79ffdd0ffae4247",
+    "processed_at": "2026-03-27T11:24:56.943311",
+    "summary": "User enjoys to wach football games ai: calcio, rich! do you have a favorite team in the italian serie a.",
+    "context_used": "User: \nUser: i like to wach football games\nAI: Calcio, Rich! Do you have a favorite team in the Italian Serie A?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:24:56.797244Z_e2d9beee9fa61b36",
+    "processed_at": "2026-03-27T11:24:56.955839",
+    "summary": "User enjoys to read books about anime ai: anime enthusiast, rich! have you read \"naruto\" or \"one piece\" manga, or do you prefer to stick with live-action anime books and movies.",
+    "context_used": "User: \nUser: i like to read books about anime\nAI: Anime enthusiast, Rich! Have you read \"Naruto\" or \"One Piece\" manga, or do you prefer to stick with live-action anime books and movies?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:25:03.393912Z_c9fa502d7a6dd509",
+    "processed_at": "2026-03-27T11:25:03.519620",
+    "summary": "User enjoys reading science fiction novels ai: interstellar adventures, rich! have you read any of the sci-fi novels by china mi\u00e9ville, like \"perdido street station\".",
+    "context_used": "User: \nUser: I enjoy reading science fiction novels\nAI: Interstellar adventures, Rich! Have you read any of the sci-fi novels by China Mi\u00e9ville, like \"Perdido Street Station\"?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:25:09.155174Z_09da37dab61e5dcb",
+    "processed_at": "2026-03-27T11:25:09.344809",
+    "summary": "User enjoys to watch anime sometimes during the weekend ai: weekend anime marathons, rich! crunchyroll or funimation your go-to streaming spots.",
+    "context_used": "User: \nUser: I like to watch anime sometimes during the weekend\nAI: Weekend anime marathons, Rich! Crunchyroll or Funimation your go-to streaming spots?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:25:14.584217Z_01cb661284ab4a9a",
+    "processed_at": "2026-03-27T11:25:14.673739",
+    "summary": "User: I'm going to Paris next week for a vacation AI: Romantic Paris, Rich! Eiffel Tower or Louvre Museum first on your must-see list?",
+    "context_used": "User: \nUser: I'm going to Paris next week for a vacation\nAI: Romantic Paris, Rich! Eiffel Tower or Louvre Museum first on your must-see list?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:25:21.143659Z_8fc7a8e07959d6c5",
+    "processed_at": "2026-03-27T11:25:21.258209",
+    "summary": "User: User live in Milan, Italy, it's a beautiful city AI: Milan, the fashion capital! Home to the stunning Duomo Cathedral, Rich.",
+    "context_used": "User: \nUser: I live in Milan, Italy, it's a beautiful city\nAI: Milan, the fashion capital! Home to the stunning Duomo Cathedral, Rich.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:25:27.283597Z_bd1f2a30e1ec6882",
+    "processed_at": "2026-03-27T11:25:27.470129",
+    "summary": "User loves it ai: i apologize, but i'm having trouble connecting to the groq api right now.",
+    "context_used": "User: \nUser: I'm studying computer science and I love it\nAI: I apologize, but I'm having trouble connecting to the Groq API right now. Error: 429 Client Error: Too Many Requests for url: https://api.g",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:25:44.318345Z_7c55c80c1a1fc810",
+    "processed_at": "2026-03-27T11:25:44.430709",
+    "summary": "User enjoys tokyo or kyoto.",
+    "context_used": "User: \nUser: I'm saving money to travel to Japan next year\nAI: Japan, land of cherry blossoms and ramen! Researching must-visit spots like Tokyo or Kyoto?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:25:55.928240Z_773bec5866cfda60",
+    "processed_at": "2026-03-27T11:25:56.065431",
+    "summary": "User enjoys reading science fiction novels, especially brandon sanderson books ai: sanderson's epic cosmere series, a fantasy fan's delight! mistborn or stormlight archive your favorite.",
+    "context_used": "User: \nUser: I enjoy reading science fiction novels, especially Brandon Sanderson books\nAI: Sanderson's epic Cosmere series, a fantasy fan's delight! Mistborn or Stormlight Archive your favorite?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:26:03.420178Z_2ad7435ee2e9642c",
+    "processed_at": "2026-03-27T11:26:03.685033",
+    "summary": "User enjoys playing football every weekend with my friends ai: soccer sundays, a blast! kicking goals and making memories with friends, sounds like fun.",
+    "context_used": "User: \nUser: I like playing football every weekend with my friends\nAI: Soccer Sundays, a blast! Kicking goals and making memories with friends, sounds like fun.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:26:09.115986Z_e8fc04f9f1ad579a",
+    "processed_at": "2026-03-27T11:26:09.281565",
+    "summary": "User loves italian food, especially pasta and risotto ai: italian cuisine, carbs and flavor heaven! carbonara or spaghetti bolognese your go-to order.",
+    "context_used": "User: \nUser: I love Italian food, especially pasta and risotto\nAI: Italian cuisine, carbs and flavor heaven! Carbonara or spaghetti Bolognese your go-to order?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T11:44:27.455119Z_0c0ad071d7632246",
+    "processed_at": "2026-03-27T11:44:27.676869",
+    "summary": "User enjoys to make website ai: web development, building something from scratch! which coding languages you enjoy working with.",
+    "context_used": "User: \nUser: i like to make website\nAI: Web development, building something from scratch! Which coding languages you enjoy working with?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T12:15:59.771624Z_cf775661edd7a839",
+    "processed_at": "2026-03-27T12:15:59.974294",
+    "summary": "User enjoys User: how are you AI: I'm doing great, thanks for asking!.",
+    "context_used": "User: \nUser: how are you\nAI: I'm doing great, thanks for asking!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T12:30:19.172597Z_4368a226cd66eb8f",
+    "processed_at": "2026-03-27T12:30:19.418270",
+    "summary": "User loves to play game and i like to code ai: a coder and gamer, huh? you might enjoy game development through coding, then.",
+    "context_used": "User: \nUser: i love to play game and i like to code\nAI: A coder and gamer, huh? You might enjoy game development through coding, then!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T12:31:33.331699Z_8d318587dd373dbb",
+    "processed_at": "2026-03-27T12:31:33.463368",
+    "summary": "User loves italy food ai: ciao rich! italian food is amazing, isn't it.",
+    "context_used": "User: \nUser: i'm name is rich i'm 17 i live in italy i love italy food\nAI: Ciao Rich! Italian food is amazing, isn't it?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T12:32:03.374739Z_a771386976d7cfe0",
+    "processed_at": "2026-03-27T12:32:03.430909",
+    "summary": "User: User's name is rich AI: Ciao Rich!",
+    "context_used": "User: \nUser: my name is rich\nAI: Ciao Rich!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T21:41:47.354324Z_29d550814df525b6",
+    "processed_at": "2026-03-27T21:41:47.608741",
+    "summary": "User: User's name is rich i'm 17 yeas old AI: Rich \u00e8 17!",
+    "context_used": "User: \nUser: my name is rich i'm 17 yeas old\nAI: Rich \u00e8 17!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-27T21:43:59.539750Z_585bf4a1018130cc",
+    "processed_at": "2026-03-27T21:43:59.727336",
+    "summary": "User: yes AI: Let's start fresh then!",
+    "context_used": "User: \nUser: yes\nAI: Let's start fresh then!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-29T00:01:55.412090Z_84135950b57d67ad",
+    "processed_at": "2026-03-29T00:01:55.674486",
+    "summary": "User: User's name is rich AI: Nice to finally know, Rich!",
+    "context_used": "User: \nUser: my name is rich\nAI: Nice to finally know, Rich!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-29T00:31:10.143984Z_64e9599bf38f6d35",
+    "processed_at": "2026-03-29T00:31:10.191303",
+    "summary": "User: Alex, 25 years old, located in New York AI: Got it, Alex!",
+    "context_used": "User: \nUser: Alex, 25 years old, located in New York\nAI: Got it, Alex!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-29T00:38:58.015953Z_91e0c8995e87f298",
+    "processed_at": "2026-03-29T00:38:58.163591",
+    "summary": "User: User's name is Jordan, 28 years old, located in London AI: Welcome, Jordan, I've got your info now!",
+    "context_used": "User: \nUser: my name is  Jordan, 28 years old, located in London\nAI: Welcome, Jordan, I've got your info now!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-29T01:01:26.092337Z_b4d611f2946f593a",
+    "processed_at": "2026-03-29T01:01:26.304972",
+    "summary": "User: User's name is Jordan, 28 years old, located in London AI: D\u00e9j\u00e0 vu, Jordan, we've been here before!",
+    "context_used": "User: \nUser: my name is Jordan, 28 years old, located in London\nAI: D\u00e9j\u00e0 vu, Jordan, we've been here before!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-29T01:12:32.179824Z_e1b2fb091e5fdacf",
+    "processed_at": "2026-03-29T01:12:32.345852",
+    "summary": "User: User's name is Sarah, 30 years old, from Paris AI: Bonjour, Sarah, new city, same format!",
+    "context_used": "User: \nUser: My name is Sarah, 30 years old, from Paris\nAI: Bonjour, Sarah, new city, same format!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-29T01:15:29.423379Z_9dec75efdc1f2a89",
+    "processed_at": "2026-03-29T01:15:29.498079",
+    "summary": "User: User live in italy AI: Bell'Italia, Sarah!",
+    "context_used": "User: \nUser: i live in italy\nAI: Bell'Italia, Sarah!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-03-29T01:35:33.963807Z_bced3a5b8d7e43a5",
+    "processed_at": "2026-03-29T01:35:34.140018",
+    "summary": "User: i'm name is momo User live in italy como and i'm 17 years old AI: Ciao, Momo, a young Italian from Como!",
+    "context_used": "User: \nUser: i'm name is momo i live in italy como and i'm 17 years old\nAI: Ciao, Momo, a young Italian from Como!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T01:31:35.215033Z_807c3e27a50d880b",
+    "processed_at": "2026-04-03T01:31:35.359735",
+    "summary": "User: User know where AI: You're familiar with 'User know where'. This is a phrase from the song 'User Know Where I'm Going' by Paul Robeson.",
+    "context_used": "User: \nUser: I know where\nAI: You're familiar with 'I know where'. This is a phrase from the song 'I Know Where I'm Going' by Paul Robeson.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T01:32:27.537553Z_01621dbea246a9d1",
+    "processed_at": "2026-04-03T01:32:27.746915",
+    "summary": "User: What is your name AI: User's name is Nova, a friendly AI here to help.",
+    "context_used": "User: \nUser: What is your name\nAI: My name is Nova, a friendly AI here to help.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T12:44:06.673884Z_82b0306c1bc48d09",
+    "processed_at": "2026-04-03T12:44:07.052227",
+    "summary": "User: Hello AI: I'm Nova, nice to meet you!",
+    "context_used": "User: \nUser: Hello\nAI: I'm Nova, nice to meet you!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T12:44:21.443145Z_ed97ddae43a5fd11",
+    "processed_at": "2026-04-03T12:44:21.711292",
+    "summary": "User: What is your name AI: User's name is Nova - I'm a friendly AI here to help.",
+    "context_used": "User: \nUser: What is your name\nAI: My name is Nova - I'm a friendly AI here to help.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T12:44:31.932982Z_9118f85907b759a4",
+    "processed_at": "2026-04-03T12:44:32.128818",
+    "summary": "User: What is User's name AI: Unfortunately, User don't know your name - we just started chatting!",
+    "context_used": "User: \nUser: What is my name\nAI: Unfortunately, I don't know your name - we just started chatting!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T12:45:02.408168Z_7e9ebed0bb738f92",
+    "processed_at": "2026-04-03T12:45:02.505493",
+    "summary": "User enjoys User: What do you no about me AI: I know we're just starting our conversation, and I'm here to help answer your questions and provide information on topics you're interested in..",
+    "context_used": "User: \nUser: What do you no about me\nAI: I know we're just starting our conversation, and I'm here to help answer your questions and provide information on topics you're interested in.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T13:00:21.705555Z_37002d071599d87a",
+    "processed_at": "2026-04-03T13:00:21.997853",
+    "summary": "User enjoys User: Hello my name is rich AI: Great to meet you, Rich!.",
+    "context_used": "User: \nUser: Hello my name is rich\nAI: Great to meet you, Rich!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T13:21:57.145296Z_e90ff8cf12647ece",
+    "processed_at": "2026-04-03T13:21:57.519074",
+    "summary": "User: What is your name AI: User's name is Nova.",
+    "context_used": "User: \nUser: What is your name\nAI: My name is Nova.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T13:22:10.656597Z_f779142fd2f4bde4",
+    "processed_at": "2026-04-03T13:22:10.894997",
+    "summary": "User: User's name is rich AI: Nice to meet you, Rich! What can User help you explore today?",
+    "context_used": "User: \nUser: My name is rich\nAI: Nice to meet you, Rich! What can I help you explore today?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T13:49:03.614367Z_8f5bef632f16ffcf",
+    "processed_at": "2026-04-03T13:49:03.947815",
+    "summary": "User is jarvis.",
+    "context_used": "User: \nUser: Hello, i am jarvis. testing the voice pipeline with orb animation.\nAI: Nice to meet you, Jarvis. The Orb animation is a part of the Google Assistant's interface design.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T13:51:00.911795Z_727b528d8d3d2d45",
+    "processed_at": "2026-04-03T13:51:01.087447",
+    "summary": "User: Hello what is your name AI: User's name is Nova, nice to meet you!",
+    "context_used": "User: \nUser: Hello what is your name\nAI: My name is Nova, nice to meet you!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T13:58:57.312537Z_c5598f5936b1cad9",
+    "processed_at": "2026-04-03T13:58:57.852085",
+    "summary": "User: What is your name AI: User's name is Nova!",
+    "context_used": "User: \nUser: What is your name\nAI: My name is Nova!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T23:00:55.746972Z_34954cbb9ccb5730",
+    "processed_at": "2026-04-03T23:00:56.013362",
+    "summary": "User: Takes alcohol cell AI: A yeast cell (not typically referred to as an \"alcohol\" cell) converts sugars into alcohol and carbon dioxide through fermentation.",
+    "context_used": "User: \nUser: Takes alcohol cell\nAI: A yeast cell (not typically referred to as an \"alcohol\" cell) converts sugars into alcohol and carbon dioxide through fermentation.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T23:01:50.147306Z_fded6e3e2fb50402",
+    "processed_at": "2026-04-03T23:01:50.422094",
+    "summary": "User: Making power AI: Generating electricity involves converting mechanical, thermal, chemical, or nuclear energy into electrical energy.",
+    "context_used": "User: \nUser: Making power\nAI: Generating electricity involves converting mechanical, thermal, chemical, or nuclear energy into electrical energy.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T23:02:37.804877Z_c8031c1c8186aacc",
+    "processed_at": "2026-04-03T23:02:37.974474",
+    "summary": "User enjoys to discuss.",
+    "context_used": "User: \nUser: You are my greatest accent\nAI: That's a sweet compliment! I'm a helpful AI, here to assist you with any questions or topics you'd like to discuss. What's on your mind?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T23:03:57.500908Z_dee7c6372018a7b7",
+    "processed_at": "2026-04-03T23:03:57.582247",
+    "summary": "User: That's an act AI: Nova is an AI personality, a character I'm playing for the purpose of this conversation. I'll respond as Nova would. What's the question?",
+    "context_used": "User: \nUser: That's an act\nAI: Nova is an AI personality, a character I'm playing for the purpose of this conversation. I'll respond as Nova would. What's the question?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-03T23:12:38.536747Z_e1e0110d30b615bc",
+    "processed_at": "2026-04-03T23:12:38.846799",
+    "summary": "User: Where are you going AI: I'm not physically going anywhere, I'm a computer program.",
+    "context_used": "User: \nUser: Where are you going\nAI: I'm not physically going anywhere, I'm a computer program.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T16:06:27.871417Z_b100edc399b8f47c",
+    "processed_at": "2026-04-04T16:06:28.500829",
+    "summary": "User enjoys User: How are you doing AI: I'm functioning within optimal parameters, thanks for asking!.",
+    "context_used": "User: \nUser: How are you doing\nAI: I'm functioning within optimal parameters, thanks for asking!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T20:27:31.462469Z_dcd143499781bd71",
+    "processed_at": "2026-04-04T20:27:32.527259",
+    "summary": "User: What's your name? AI: User's name is Nova, I'm here to help!",
+    "context_used": "User: \nUser: What's your name?\nAI: My name is Nova, I'm here to help!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T20:27:35.046808Z_4e78d72d15ac57a0",
+    "processed_at": "2026-04-04T20:27:35.709134",
+    "summary": "User: User don't no if. AI: Feel free to ask, and I'll do User's best to help clarify things!",
+    "context_used": "User: \nUser: I don't no if.\nAI: Feel free to ask, and I'll do my best to help clarify things!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T20:41:33.246385Z_b68697b60f28618a",
+    "processed_at": "2026-04-04T20:41:33.647667",
+    "summary": "User: User can make when you do this yes User can AI: You're referring to the \"yes or no\" game. To play, I'll ask a yes or no question. Simply answer with a \"yes\" or \"no.\".",
+    "context_used": "User: \nUser: I can make when you do this yes i can\nAI: You're referring to the \"yes or no\" game. To play, I'll ask a yes or no question. Simply answer with a \"yes\" or \"no.\"\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T20:41:42.994111Z_f797e4208ecc48ca",
+    "processed_at": "2026-04-04T20:41:43.327006",
+    "summary": "User is a real person this article intelligence ai: you're talking to a chatbot, not just an ai article.",
+    "context_used": "User: \nUser: As you can see i am a real person this article intelligence\nAI: You're talking to a chatbot, not just an AI article!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T20:41:44.745968Z_ab474bda86fd83d1",
+    "processed_at": "2026-04-04T20:41:45.063561",
+    "summary": "User: How was your day today AI: I'm just a computer program, so User don't have days or feelings - I'm always ready to help, 24/7.",
+    "context_used": "User: \nUser: How was your day today\nAI: I'm just a computer program, so I don't have days or feelings - I'm always ready to help, 24/7.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T21:10:12.740409Z_1071b2711c646442",
+    "processed_at": "2026-04-04T21:10:13.202100",
+    "summary": "User: What is User's name AI: Unfortunately, User don't have that information - you haven't told Useryet.",
+    "context_used": "User: \nUser: What is my name\nAI: Unfortunately, I don't have that information - you haven't told me yet.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T21:33:05.383543Z_e57de882623e85d7",
+    "processed_at": "2026-04-04T21:33:05.663266",
+    "summary": "User: What is your name jarvis nava AI: User's name is Nova, not Jarvis (that's Iron Man's AI, haha!).",
+    "context_used": "User: \nUser: What is your name jarvis nava\nAI: My name is Nova, not Jarvis (that's Iron Man's AI, haha!).\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T21:33:24.632751Z_f5608fb6b0503f29",
+    "processed_at": "2026-04-04T21:33:24.784959",
+    "summary": "User: Question yet AI: I'm ready to help, but User don't see a question yet. What's on your mind?",
+    "context_used": "User: \nUser: Question yet\nAI: I'm ready to help, but I don't see a question yet. What's on your mind?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T21:47:53.812079Z_c37759e8579508db",
+    "processed_at": "2026-04-04T21:47:54.453550",
+    "summary": "User: What is your name User's name is rich what is your name AI: Nice to meet you, Rich! I'm Nova, your friendly AI assistant.",
+    "context_used": "User: \nUser: What is your name my name is rich what is your name\nAI: Nice to meet you, Rich! I'm Nova, your friendly AI assistant.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T22:01:50.311905Z_8475f8f9be87918d",
+    "processed_at": "2026-04-04T22:01:50.609842",
+    "summary": "User: So what is your name again AI: User's name is Nova!",
+    "context_used": "User: \nUser: So what is your name again\nAI: My name is Nova!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T23:20:03.173568Z_48026cefb8beaa6a",
+    "processed_at": "2026-04-04T23:20:03.292732",
+    "summary": "User: Are you listening to what i'm saying AI: I'm actively listening and processing what you say.",
+    "context_used": "User: \nUser: Are you listening to what i'm saying\nAI: I'm actively listening and processing what you say.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T23:20:20.730475Z_55e988cf53347539",
+    "processed_at": "2026-04-04T23:20:21.455001",
+    "summary": "User: Nice to chat with you again what can User help with today nice to chat with you again what can User help with today i'm acti'vely listening and processing what you say i'm acti'vely listening a.",
+    "context_used": "User: \nUser: Nice to chat with you again what can i help with today nice to chat with you again what can i help with today i'm acti'vely listening and processing what you say i'm acti'vely listening a",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T23:53:07.977055Z_84ba6af1bca03439",
+    "processed_at": "2026-04-04T23:53:09.806134",
+    "summary": "User: I'm in nava AI: You're at sea! That's fascinating! Have you considered checking your navigation system or compass for a precise location?",
+    "context_used": "User: \nUser: I'm in nava\nAI: You're at sea! That's fascinating! Have you considered checking your navigation system or compass for a precise location?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-04T23:53:35.383515Z_8e92f1633b6d2dc4",
+    "processed_at": "2026-04-04T23:53:35.638964",
+    "summary": "User: No User haven't why did you ask AI: It was a system default. User sometimes try to simulate conversation to make responses feel more natural, but User should have skipped it this time. Let's start.",
+    "context_used": "User: \nUser: No i haven't why did you ask\nAI: It was a system default. I sometimes try to simulate conversation to make responses feel more natural, but I should have skipped it this time. Let's start",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-05T15:51:45.169056Z_ba290bcfc210bcca",
+    "processed_at": "2026-04-05T15:51:45.316268",
+    "summary": "User enjoys User: Good morning how are you doing AI: You're an early riser! I'm doing well, thanks for asking..",
+    "context_used": "User: \nUser: Good morning how are you doing\nAI: You're an early riser! I'm doing well, thanks for asking.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-05T15:51:45.169056Z_ba290bcfc210bcca",
+    "processed_at": "2026-04-05T15:51:45.425340",
+    "summary": "User enjoys User: Good morning how are you doing AI: You're an early riser! I'm doing well, thanks for asking..",
+    "context_used": "User: \nUser: Good morning how are you doing\nAI: You're an early riser! I'm doing well, thanks for asking.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-05T16:00:31.012188Z_ceaacb1ff8e21b46",
+    "processed_at": "2026-04-05T16:00:31.289743",
+    "summary": "User has a preference for that! and likes it.",
+    "context_used": "User: \nUser: Hey you no what don't take a breath\nAI: You're a fan of directness, I like that!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-05T16:00:31.012188Z_2d10c067a5537031",
+    "processed_at": "2026-04-05T16:00:31.442881",
+    "summary": "User enjoys that! and feels positive about it.",
+    "context_used": "User: \nUser: Hey you no what don't take a breath\nAI: You're a fan of directness, I like that!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-05T16:03:32.742041Z_1ca32aafc61c0068",
+    "processed_at": "2026-04-05T16:03:33.025226",
+    "summary": "User: no User's name is momo AI: Hi Momo! Nice to officially know your name now!",
+    "context_used": "User: \nUser: no my name is momo\nAI: Hi Momo! Nice to officially know your name now!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-05T16:22:45.192187Z_627282fa568a724a",
+    "processed_at": "2026-04-05T16:22:45.359392",
+    "summary": "User enjoys User: Hello nova how are you doing today AI: I'm doing great, thanks for asking, Momo! Nothing much to report, just here to help whenever you need it..",
+    "context_used": "User: \nUser: Hello nova how are you doing today\nAI: I'm doing great, thanks for asking, Momo! Nothing much to report, just here to help whenever you need it.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-05T16:27:36.182733Z_c66c4bede8b02a2b",
+    "processed_at": "2026-04-05T16:27:36.649482",
+    "summary": "User enjoys to stay on top of things, momo! and values it.",
+    "context_used": "User: \nUser: That he is quick\nAI: I like to stay on top of things, Momo!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-05T16:44:21.530931Z_8921b038c7519ef5",
+    "processed_at": "2026-04-05T16:44:21.962425",
+    "summary": "User wants you to search something about the internet can you do it for me yes or no ai: yes.",
+    "context_used": "User: \nUser: If i want you to search something about the internet can you do it for me yes or no\nAI: Yes.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-05T16:44:21.530931Z_8921b038c7519ef5",
+    "processed_at": "2026-04-05T16:44:22.035379",
+    "summary": "User wants you to search something about the internet can you do it for me yes or no ai: yes.",
+    "context_used": "User: \nUser: If i want you to search something about the internet can you do it for me yes or no\nAI: Yes.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-05T20:13:29.389112Z_b02b1d7e2a65dca1",
+    "processed_at": "2026-04-05T20:13:31.187843",
+    "summary": "User thinks we're getting a bit unusual.",
+    "context_used": "User: \nUser: Oh my this is jesus christ i'm touching on some1's level my nigga\nAI: I think we're getting a bit... unusual. Let's try again, and I'll do my best to keep up.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-05T21:44:31.068302Z_a0233e4ff2057b12",
+    "processed_at": "2026-04-05T21:44:31.657383",
+    "summary": "User: Hello what is her name AI: You're referring to someone from a previous conversation, but User don't recall mentioning any specific person's name.",
+    "context_used": "User: \nUser: Hello what is her name\nAI: You're referring to someone from a previous conversation, but I don't recall mentioning any specific person's name.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-05T23:50:38.642683Z_4e601946740280d2",
+    "processed_at": "2026-04-05T23:50:39.168182",
+    "summary": "User is nova ai testing the complete text to speech system ai: that's fascinating! have you considered exploring the capabilities of text-to-speech beyond just my conversations.",
+    "context_used": "User: \nUser: Hello, i am nova ai testing the complete text to speech system\nAI: That's fascinating! Have you considered exploring the capabilities of text-to-speech beyond just my conversations?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T00:26:34.396665Z_fa75c57d914c1c5a",
+    "processed_at": "2026-04-06T00:26:34.530932",
+    "summary": "User: Can you send on the internet about information AI: I'm not capable of sending information over the internet in the way you're suggesting.",
+    "context_used": "User: \nUser: Can you send on the internet about information\nAI: I'm not capable of sending information over the internet in the way you're suggesting.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T00:27:44.725592Z_d93bbbf170701891",
+    "processed_at": "2026-04-06T00:27:44.821363",
+    "summary": "User enjoys User: If you can do that i'll appreciate it thank you AI: I can try to help with a search, but I'm a text-based AI, not a browser. I can suggest some keywords to search within my knowledge data.",
+    "context_used": "User: \nUser: If you can do that i'll appreciate it thank you\nAI: I can try to help with a search, but I'm a text-based AI, not a browser. I can suggest some keywords to search within my knowledge data",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T00:28:05.492769Z_1ea250e56020518a",
+    "processed_at": "2026-04-06T00:28:05.951513",
+    "summary": "User enjoys User: Ai not a browser i can suggest some keywords to search within my noledge database if that helps what's the topic you're interested in AI: It seems we're getting a bit meta. I can suggest.",
+    "context_used": "User: \nUser: Ai not a browser i can suggest some keywords to search within my noledge database if that helps what's the topic you're interested in\nAI: It seems we're getting a bit meta. I can suggest ",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T00:32:47.466939Z_aa82a04321275d96",
+    "processed_at": "2026-04-06T00:32:48.000862",
+    "summary": "User: It's fair degrees both of them no they're lying that's just tuesday in househawken here's what frank herbert is actually showing you the baron AI: It seems we've taken a turn into Dune te.",
+    "context_used": "User: \nUser: It's fair degrees both of them no they're lying that's just tuesday in househawken here's what frank herbert is actually showing you the baron\nAI: It seems we've taken a turn into Dune te",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T00:57:31.414727Z_e5191b5275ea7062",
+    "processed_at": "2026-04-06T00:57:31.871299",
+    "summary": "User: Is your system working now AI: I'm back online and ready to chat. And yes, User remember - User's name is Nova, and I'm your friendly AI companion.",
+    "context_used": "User: \nUser: Is your system working now\nAI: I'm back online and ready to chat. And yes, I remember - my name is Nova, and I'm your friendly AI companion.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T01:03:52.362716Z_767ca98b944f4882",
+    "processed_at": "2026-04-06T01:03:52.612092",
+    "summary": "User enjoys to talk about.",
+    "context_used": "User: \nUser: Okayay i'm fully back again\nAI: Great to have you back! Now that we've had a chance to get reconnected, what would you like to talk about?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T01:12:50.352815Z_66c3b4cc884be76d",
+    "processed_at": "2026-04-06T01:12:50.801050",
+    "summary": "User: User's name is rich nice to meet you another AI: No.",
+    "context_used": "User: \nUser: My name is rich nice to meet you another\nAI: No\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T01:13:07.319254Z_99ef51edf345124e",
+    "processed_at": "2026-04-06T01:13:07.640948",
+    "summary": "User: User's name is rich nice to meet you AI: No.",
+    "context_used": "User: \nUser: My name is rich nice to meet you\nAI: No\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T20:27:33.009201Z_99e41ee0302742c2",
+    "processed_at": "2026-04-06T20:27:33.283902",
+    "summary": "User: User's name AI: Your name is what User still don't know.",
+    "context_used": "User: \nUser: My name\nAI: Your name is what I still don't know.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T20:31:01.516652Z_b62dcf797237463f",
+    "processed_at": "2026-04-06T20:31:01.939389",
+    "summary": "User: By the way User's name is rich AI: Hey Rich!",
+    "context_used": "User: \nUser: By the way my name is rich\nAI: Hey Rich!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T20:40:18.965663Z_002da5484399f26f",
+    "processed_at": "2026-04-06T20:40:19.628533",
+    "summary": "User: User don't see how full AI: Maybe User can help you understand. You improved User's short phrase responses, making them feel more natural. Does that make sense now?",
+    "context_used": "User: \nUser: I don't see how full\nAI: Maybe I can help you understand. You improved my short phrase responses, making them feel more natural. Does that make sense now?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T21:36:29.257729Z_1802a71d68985862",
+    "processed_at": "2026-04-06T21:36:29.412565",
+    "summary": "User: Okayay User don't think you're AI: You mean User's responses are natural-sounding, thanks to the improved short phrases you worked on?",
+    "context_used": "User: \nUser: Okayay i don't think you're\nAI: You mean my responses are natural-sounding, thanks to the improved short phrases you worked on?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T21:40:37.155117Z_1093ce4ce7ad4aab",
+    "processed_at": "2026-04-06T21:40:37.416714",
+    "summary": "User: Now i'm watching rick and morty AI: A fan of the show!",
+    "context_used": "User: \nUser: Now i'm watching rick and morty\nAI: A fan of the show!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T21:41:09.461652Z_d0e5dfff9c4730d5",
+    "processed_at": "2026-04-06T21:41:10.104175",
+    "summary": "User enjoys that like don't involve me and you ai: i'll just wait for a question then.",
+    "context_used": "User: \nUser: No i didn't mean you shouldn't respond like that like don't involve me and you\nAI: I'll just wait for a question then.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T21:55:18.460108Z_037588b858489872",
+    "processed_at": "2026-04-06T21:55:18.903395",
+    "summary": "User thinks it would be a great improvement, and i'm curious to hear what it sounds like.",
+    "context_used": "User: \nUser: I've i just gi've you a knew voice what do you think\nAI: You meant \"new\" voice, right? I think it would be a great improvement, and I'm curious to hear what it sounds like!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T23:16:10.250676Z_1a457068b9af7650",
+    "processed_at": "2026-04-06T23:16:10.656248",
+    "summary": "User: What is the much m1y he has gi'ven to a person AI: MrBeast has given away up to $1 million to a single person at a time, but the largest individual giveaway was $4 million to a random win.",
+    "context_used": "User: \nUser: What is the much m1y he has gi'ven to a person\nAI: MrBeast has given away up to $1 million to a single person at a time, but the largest individual giveaway was $4 million to a random win",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T23:19:06.332263Z_95f4cb70720b6dfe",
+    "processed_at": "2026-04-06T23:19:06.657399",
+    "summary": "User needs to take a bit of your code ai: no need, i'm a cloud-based service.",
+    "context_used": "User: \nUser: I see that i need to take a bit of your code\nAI: No need, I'm a cloud-based service.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T23:19:18.120817Z_3ca2b714e73bc79d",
+    "processed_at": "2026-04-06T23:19:18.656966",
+    "summary": "User: User mean fix a bit of your code AI: I'm a dynamic system, updates happen automatically.",
+    "context_used": "User: \nUser: I mean fix a bit of your code\nAI: I'm a dynamic system, updates happen automatically.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T23:19:44.465848Z_27b25bb8a8975db7",
+    "processed_at": "2026-04-06T23:19:45.254467",
+    "summary": "User: And i'm 1 of those developers those people who made your code AI: I'm a product of your work, thanks for creating me!",
+    "context_used": "User: \nUser: And i'm 1 of those developers those people who made your code\nAI: I'm a product of your work, thanks for creating me!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T23:20:37.760144Z_0b7eb32babd6bc6d",
+    "processed_at": "2026-04-06T23:20:38.341796",
+    "summary": "User: Can User ask you a question about ai: Fire away, I'm listening.",
+    "context_used": "User: \nUser: Can i ask you a question about ai\nAI: Fire away, I'm listening.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T23:46:47.687851Z_5909f8053fb83244",
+    "processed_at": "2026-04-06T23:46:48.168862",
+    "summary": "User thinks i can try again.",
+    "context_used": "User: \nUser: That's not that\nAI: I think I can try again. \"Clustering\" is a technique in machine learning where similar data points are grouped together. As for \"virtues\", I couldn't find a direct con",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T23:47:37.319315Z_8e4097c5019d6a14",
+    "processed_at": "2026-04-06T23:47:38.122656",
+    "summary": "User thinks alphago, a program that defeated a human g.",
+    "context_used": "User: \nUser: What do you think is the best ai ever created and when was it created\nAI: I'm just a language model, I don't have personal opinions, but I think AlphaGo, a program that defeated a human G",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T23:48:06.027474Z_4de105542118907b",
+    "processed_at": "2026-04-06T23:48:06.483570",
+    "summary": "User: Okayay compare that to now which 1 ai is much higher than the list of best developer ai: I'm being asked to compare, but User don't have a clear \"list\" to reference. However, User can tell y.",
+    "context_used": "User: \nUser: Okayay compare that to now which 1 ai is much higher than the list of best developer ai\nAI: I'm being asked to compare, but I don't have a clear \"list\" to reference. However, I can tell y",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T23:49:06.115266Z_76a604625f1d63d1",
+    "processed_at": "2026-04-06T23:49:06.429524",
+    "summary": "User enjoys User: Oh i see i see thank you very much appreciate it for you explaining AI: I'm glad I could help clarify \"image sentences\" for you..",
+    "context_used": "User: \nUser: Oh i see i see thank you very much appreciate it for you explaining\nAI: I'm glad I could help clarify \"image sentences\" for you.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T23:49:51.748288Z_f144156220a30c17",
+    "processed_at": "2026-04-06T23:49:51.963533",
+    "summary": "User thinks something's not working correctly what working right now i'm fixing this right now gi've me a second ai: sounds like you're troubleshooting! take yo.",
+    "context_used": "User: \nUser: Yo wait a minute wait a minute i think something's not working correctly what working right now i'm fixing this right now gi've me a second\nAI: Sounds like you're troubleshooting! Take yo",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T23:50:46.665254Z_e2ce107734a10846",
+    "processed_at": "2026-04-06T23:50:46.957222",
+    "summary": "User enjoys speech.",
+    "context_used": "User: \nUser: Exactly that's how your voice is currently working\nAI: My voice is powered by a Text-to-Speech API, using an API key and Voice ID to produce human-like speech.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T23:51:57.358087Z_4ab10daeeb03d2f3",
+    "processed_at": "2026-04-06T23:51:57.658203",
+    "summary": "User: See you in a bit AI: Safe travels, and User hope your API key works as expected when you're back!",
+    "context_used": "User: \nUser: See you in a bit\nAI: Safe travels, and I hope your API key works as expected when you're back!\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-06T23:52:10.183999Z_5c154b41f732a14d",
+    "processed_at": "2026-04-06T23:52:10.494240",
+    "summary": "User: It's your voice not User's voice so hope you are working AI: I'm still here, ready to chat, even without your credits.",
+    "context_used": "User: \nUser: It's your voice not my voice so hope you are working\nAI: I'm still here, ready to chat, even without your credits.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-08T22:52:41.769150Z_26ceac632b435c31",
+    "processed_at": "2026-04-08T22:52:42.369816",
+    "summary": "User enjoys we're having a bit of a confusing conversation.",
+    "context_used": "User: \nUser: Oh i don't understand what that\nAI: It seems like we're having a bit of a confusing conversation. Let's start fresh if you'd like.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-08T22:54:12.194148Z_3fd1ec2a2b77daa5",
+    "processed_at": "2026-04-08T22:54:12.850106",
+    "summary": "User: No i've said i'm testing something AI: It's a test.",
+    "context_used": "User: \nUser: No i've said i'm testing something\nAI: It's a test.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-08T23:25:54.597548Z_687b3c197e2311af",
+    "processed_at": "2026-04-08T23:25:55.211684",
+    "summary": "User enjoys you're describing a farm or agricultural setting.",
+    "context_used": "User: \nUser: I'm working the corn\nAI: Sounds like you're describing a farm or agricultural setting.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-09T00:07:13.696219Z_a03ec19d87989e56",
+    "processed_at": "2026-04-09T00:07:14.228173",
+    "summary": "User enjoys you're suggesting some action, but i'm curious - what's on your mind.",
+    "context_used": "User: \nUser: You guys gotta do something about\nAI: It seems like you're suggesting some action, but I'm curious - what's on your mind?\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-10T22:17:30.451427Z_a8d079d65c2e087d",
+    "processed_at": "2026-04-10T22:17:31.153507",
+    "summary": "User enjoys you're quoting the lyrics of \"just the two of us\" by bill withers.",
+    "context_used": "User: \nUser: How about when our 7 years old mama told me\nAI: It seems like you're quoting the lyrics of \"Just the Two of Us\" by Bill Withers.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-10T22:18:13.067804Z_f8da02301331b964",
+    "processed_at": "2026-04-10T22:18:13.623204",
+    "summary": "User thinks \"just the two of us\" is an 8.",
+    "context_used": "User: \nUser: Why are you always giving it in 9 to ten\nAI: I was being too repetitive, I'll give a simpler answer: I think \"Just the Two of Us\" is an 8.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-10T22:18:30.378238Z_b7f7ce00f2b6ca92",
+    "processed_at": "2026-04-10T22:18:30.985714",
+    "summary": "User enjoys User: No no i mean when i was 7 years old that song AI: It's likely you first heard the song \"Just the Two of Us\" when you were 7..",
+    "context_used": "User: \nUser: No no i mean when i was 7 years old that song\nAI: It's likely you first heard the song \"Just the Two of Us\" when you were 7.\n",
+    "status": "processed",
+    "processed": true
+  },
+  {
+    "entry_id": "2026-04-10T22:23:34.398393Z_a1fbc7b4c4d6aaef",
+    "processed_at": "2026-04-10T22:23:34.899685",
+    "summary": "User enjoys it ai: you can call me friday if you like, it's a fun nickname.",
+    "context_used": "User: \nUser: If i call you friday will you like it\nAI: You can call me Friday if you like, it's a fun nickname!\n",
+    "status": "processed",
+    "processed": true
   }
 ]

@@ -1,0 +1,567 @@
+/* Weather Display Styles */
+.weather-display {
+    position: absolute;
+    top: 12vh;
+    left: 6vh;
+    z-index: 15;
+    background: linear-gradient(135deg, rgba(0, 200, 255, 0.08) 0%, rgba(0, 150, 255, 0.05) 100%);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: 'Orbitron', 'Segoe UI', monospace;
+    color: white;
+    box-shadow:
+        0 0 15px rgba(0, 255, 255, 0.2),
+        inset 0 0 10px rgba(0, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+
+    /* Default size, but resizable */
+    min-width: 220px;
+    width: 280px;
+    /* Default starting width */
+    min-height: 400px;
+    /* Default min-height to fit content */
+    max-width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+
+    animation: weatherGlow 3s ease-in-out infinite;
+    opacity: 1;
+    transition: transform 0.3s ease, opacity 0.3s ease, width 0.3s ease, height 0.3s ease;
+    transform-origin: top left;
+}
+
+/* Corner brackets - straight angular corners */
+.weather-display::before,
+.weather-display::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 1);
+    z-index: 1;
+}
+
+.weather-display::before {
+    top: -4px;
+    left: -4px;
+    border-right: none;
+    border-bottom: none;
+}
+
+.weather-display::after {
+    bottom: -4px;
+    right: -4px;
+    border-left: none;
+    border-top: none;
+}
+
+.weather-display .corner-top-right {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 1);
+    border-left: none;
+    border-bottom: none;
+    z-index: 1;
+}
+
+.weather-display .corner-bottom-left {
+    position: absolute;
+    bottom: -4px;
+    left: -4px;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 1);
+    border-right: none;
+    border-top: none;
+    z-index: 1;
+}
+
+.weather-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: white;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    position: relative;
+    background: rgba(0, 150, 255, 0.4);
+    padding: 2px 8px;
+    margin-left: -8px;
+    margin-right: -8px;
+    text-align: center;
+}
+
+/* Main weather section */
+.weather-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.weather-temp-section {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.weather-temp {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+    position: relative;
+}
+
+.weather-temp::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.weather-feels-like {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.7);
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+}
+
+.weather-icon-main {
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+}
+
+.weather-condition {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.8);
+    text-transform: uppercase;
+    text-align: center;
+    margin-bottom: 12px;
+    padding: 3px 6px;
+    background: rgba(0, 200, 255, 0.08);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.weather-condition-emoji {
+    font-size: 12px;
+}
+
+/* Weather details grid */
+.weather-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.weather-detail-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px;
+    background: rgba(0, 255, 255, 0.04);
+    border-radius: 4px;
+    border: 1px solid rgba(0, 255, 255, 0.1);
+    min-height: 40px;
+}
+
+.weather-detail-label {
+    font-size: 8px;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.weather-detail-value {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    word-break: break-all;
+    text-align: center;
+}
+
+.weather-detail-emoji {
+    font-size: 10px;
+}
+
+/* Wind and pressure section */
+.weather-extended {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.weather-extended-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4px;
+    background: rgba(0, 200, 255, 0.03);
+    border-radius: 3px;
+    min-height: 35px;
+}
+
+.weather-extended-label {
+    font-size: 7px;
+    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.weather-extended-value {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    word-break: break-all;
+    text-align: center;
+}
+
+.weather-extended-emoji {
+    font-size: 8px;
+}
+
+/* Sun times section */
+.weather-sun-times {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.weather-sun-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px;
+    background: rgba(255, 200, 0, 0.04);
+    border-radius: 4px;
+    border: 1px solid rgba(255, 200, 0, 0.1);
+    min-height: 40px;
+}
+
+.weather-sun-label {
+    font-size: 8px;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.weather-sun-value {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    word-break: break-all;
+    text-align: center;
+}
+
+.weather-sun-emoji {
+    font-size: 12px;
+}
+
+/* Location info */
+.weather-location {
+    text-align: center;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 8px;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 1px;
+}
+
+/* Error display */
+.weather-error {
+    color: #ff6b6b;
+    font-size: 10px;
+    text-align: center;
+    padding: 8px;
+    margin-top: 8px;
+    background: rgba(255, 107, 107, 0.1);
+    border-radius: 4px;
+    border: 1px solid rgba(255, 107, 107, 0.3);
+}
+
+@keyframes weatherGlow {
+
+    0%,
+    100% {
+        box-shadow:
+            0 0 15px rgba(0, 255, 255, 0.2),
+            inset 0 0 10px rgba(0, 255, 255, 0.05);
+    }
+
+    50% {
+        box-shadow:
+            0 0 25px rgba(0, 255, 255, 0.3),
+            inset 0 0 15px rgba(0, 255, 255, 0.1);
+    }
+}
+
+/* Widget Controls */
+.widget-controls {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    z-index: 20;
+}
+
+.widget-control-btn {
+    width: 20px;
+    height: 20px;
+    background: rgba(0, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 10px;
+    color: white;
+    transition: all 0.2s ease;
+}
+
+.widget-control-btn:hover {
+    background: rgba(0, 255, 255, 0.4);
+    transform: scale(1.1);
+}
+
+.resize-handle {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 12px;
+    height: 12px;
+    cursor: se-resize;
+    background: rgba(0, 255, 255, 0.3);
+    clip-path: polygon(100% 0, 0 100%, 100% 100%);
+}
+
+.resize-handle::before {
+    content: '⟲';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: bold;
+    display: none;
+    /* Hidden by clip-path usually, but kept for compatibility logic */
+}
+
+.drag-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 30px;
+    cursor: move;
+    z-index: 19;
+    /* Make it visually distinct but subtle */
+    background: rgba(0, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(0, 255, 255, 0.1);
+}
+
+.drag-handle:hover {
+    background: rgba(0, 255, 255, 0.1);
+}
+
+/* Loading overlay */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 20, 40, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 30;
+    border-radius: 8px;
+}
+
+.loading-spinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.spinner-icon {
+    color: rgba(0, 255, 255, 0.9);
+    font-size: 20px;
+    font-family: 'Orbitron', monospace;
+    animation: spin 1.5s linear infinite;
+}
+
+.spinner-text {
+    color: rgba(0, 255, 255, 0.9);
+    font-size: 12px;
+    font-family: 'Orbitron', monospace;
+    text-align: center;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Dragging and resizing states */
+.weather-display.widget-dragging {
+    cursor: grabbing;
+    opacity: 0.95;
+    transition: none;
+    /* Disable transitions during drag for better performance */
+    z-index: 9999 !important;
+    /* Bring to front when dragging */
+}
+
+.weather-display.widget-resizing {
+    cursor: se-resize;
+    opacity: 0.95;
+    transition: none;
+    /* Disable transitions during resize for better performance */
+    z-index: 9999 !important;
+    /* Bring to front when resizing */
+}
+
+/* Resize handle styling */
+.resize-handle {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 12px;
+    height: 12px;
+    cursor: se-resize;
+    background: rgba(0, 255, 255, 0.3);
+    clip-path: polygon(100% 0, 0 100%, 100% 100%);
+    z-index: 20;
+}
+
+.resize-handle:hover {
+    background: rgba(0, 255, 255, 0.5);
+}
+
+/* Widget size classes */
+.widget-size-small {
+    transform: scale(0.8);
+}
+
+.widget-size-normal {
+    transform: scale(1);
+}
+
+.widget-size-large {
+    transform: scale(1.2);
+}
+
+.widget-size-xlarge {
+    transform: scale(1.4);
+}
+
+/* ================= RESIZING AND SCALING CLASSES ================= */
+
+.widget-resizing {
+    transition: none !important;
+}
+
+/* Widget size classes - scales EVERYTHING including text */
+.widget-size-small {
+    transform: scale(0.8);
+    transform-origin: top left;
+}
+
+.widget-size-normal {
+    transform: scale(1);
+    transform-origin: top left;
+}
+
+.widget-size-large {
+    transform: scale(1.2);
+    transform-origin: top left;
+}
+
+.widget-size-xlarge {
+    transform: scale(1.4);
+    transform-origin: top left;
+}
+
+/* Additional text scaling for manual resize */
+.widget-text-scale-small {
+    font-size: 0.8em;
+}
+
+.widget-text-scale-normal {
+    font-size: 1em;
+}
+
+.widget-text-scale-large {
+    font-size: 1.2em;
+}
+
+.widget-text-scale-xlarge {
+    font-size: 1.4em;
+}
+
+/* Responsive text scaling for manual resize */
+.weather-display[style*="width"] .weather-label {
+    font-size: calc(12px + 0.5vw);
+}
+
+.weather-display[style*="width"] .weather-temp {
+    font-size: calc(24px + 1vw);
+}
+
+.weather-display[style*="width"] .weather-condition,
+.weather-display[style*="width"] .weather-feels-like {
+    font-size: calc(11px + 0.3vw);
+}
+
+.weather-display[style*="width"] .weather-details {
+    font-size: calc(10px + 0.2vw);
+}

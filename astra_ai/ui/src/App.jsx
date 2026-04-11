@@ -61,11 +61,12 @@ function App() {
       setTimeWidgetLocation(data.location);
     }
 
-    if (widgetName === 'search' && data.query) {
-      console.log(`[DEBUG] Setting searchData with query length: ${data.query.length}`);
+    if (widgetName === 'search' && data.results) {
+      console.log(`[DEBUG] Setting searchData with results length: ${data.results.length}`);
       // Create a new object with timestamp to ensure React detects the change
       setSearchData({
-        content: data.query,
+        content: data.results,
+        queryText: data.query,
         timestamp: Date.now()
       });
     }
@@ -103,7 +104,7 @@ function App() {
 
               // Only auto-trigger if we already had a lastSearchId (prevents popping up old searches on refresh)
               if (lastSearchId !== null) {
-                handleWidgetTrigger('search', { query: latestSearch.results });
+                handleWidgetTrigger('search', { results: latestSearch.results, query: latestSearch.query });
               }
 
               setLastSearchId(latestSearch.search_id);

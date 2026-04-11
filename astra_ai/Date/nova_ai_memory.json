@@ -2,47 +2,114 @@
   "user": {
     "user_id": "default_user",
     "name": null,
-    "created_at": "2026-03-26T08:43:49.282972",
+    "created_at": "2026-04-10T23:32:08.222463",
     "status": "active",
-    "total_sessions": 0,
-    "last_seen": null,
-    "relationship_established": false
+    "total_sessions": 4,
+    "last_seen": "2026-04-11T00:33:01.149455",
+    "relationship_established": true
   },
   "memory_engine": {
     "metadata": {
       "version": "1.0",
-      "generated_at": "2026-03-26T08:56:07.998252",
+      "generated_at": "2026-04-10T23:32:12.328108",
       "description": "Mem0 AI Memory Engine - Event-based user memory management system"
     },
-    "memory_events": [],
-    "vector_index": {},
-    "clusters": {},
+    "memory_events": [
+      {
+        "event_id": "evt_c421e82b",
+        "type": "ADD",
+        "summary": "User general going",
+        "timestamp": "2026-04-11T00:33:01.223769Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "normal",
+          "confidence": 0.7
+        },
+        "semantic_context": "Inferred from input: 'Another i'm going to sleep see you tomorrow'",
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "going",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2026-04-11T00:33:01.223769Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: Another i'm going to sleep see you tomorrow",
+            "event_index": 0
+          },
+          "source_conversation_timestamp": "2026-04-11T00:33:01.223769Z"
+        },
+        "Added_preference": "User general going",
+        "session_id": "session_2026_04_11_1"
+      }
+    ],
+    "vector_index": {
+      "evt_c421e82b": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00]
+    },
+    "clusters": {
+      "cluster_000": {
+        "topic": "general_activity_cluster",
+        "label": "Identity Information",
+        "centroid_vector": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+        "event_ids": [
+          "evt_c421e82b"
+        ],
+        "coherence_score": 1.0,
+        "last_updated": "2026-04-11T00:33:01.223769Z",
+        "metadata": {
+          "dominant_tags": [
+            "user_identity"
+          ],
+          "cluster_type": "user_identity",
+          "member_count": 1,
+          "average_confidence": 0.8,
+          "temporal_span": "0 days",
+          "creation_timestamp": "2026-04-11T00:33:01.223769Z"
+        },
+        "insights": {
+          "primary_pattern": "new_pattern",
+          "consistency": 1.0,
+          "emotional_tone": "neutral_tone",
+          "frequency": "single_event"
+        }
+      }
+    },
     "update_log": []
   },
   "conversation": [
     {
       "role": "user",
-      "content": "Hello",
-      "timestamp": "2026-03-26T08:43:49.287440",
-      "session_id": "test_session"
+      "content": "Another i'm going to sleep see you tomorrow",
+      "timestamp": "2026-04-11T00:33:00.835183",
+      "session_id": "session_2026_04_11_1",
+      "sent_to_organizer": true
     },
     {
       "role": "assistant",
-      "content": "Hi there! How can I help you?",
-      "timestamp": "2026-03-26T08:43:49.287440",
-      "session_id": "test_session"
+      "content": "Sweet dreams, see you tomorrow!",
+      "timestamp": "2026-04-11T00:33:00.835183",
+      "session_id": "session_2026_04_11_1",
+      "sent_to_organizer": true
     },
     {
       "role": "user",
-      "content": "what up nova",
-      "timestamp": "2026-03-26T08:55:27.558794",
-      "session_id": "test_session"
+      "content": "Bye bye",
+      "timestamp": "2026-04-11T00:33:13.696532",
+      "session_id": "session_2026_04_11_1",
+      "sent_to_organizer": true
     },
     {
       "role": "assistant",
-      "content": "Not much, Dennis! Still here to help with anything football or anything else you'd like to chat about!",
-      "timestamp": "2026-03-26T08:55:27.558794",
-      "session_id": "test_session"
+      "content": "Goodnight!",
+      "timestamp": "2026-04-11T00:33:13.696532",
+      "session_id": "session_2026_04_11_1",
+      "sent_to_organizer": true
     }
   ],
   "fact_history": {
@@ -65,51 +132,97 @@
       "preferences": [],
       "Added_preference_preferences": []
     },
-    "activity_behavior": {
-      "morning_routine": {
-        "items": [],
-        "frequency": "daily",
-        "consistency": 0.0,
-        "event_references": []
-      },
-      "evening_routine": {
-        "items": [],
-        "frequency": "daily",
-        "consistency": 0.0,
-        "event_references": []
-      },
-      "weekly_patterns": {
-        "consistency": 0.0,
-        "event_references": []
-      }
-    },
-    "personal_development": {
-      "learning_goals": []
-    },
-    "name": [],
-    "user_profile": {
-      "personality": "",
-      "interests": [],
-      "consistency_score": 0.0,
-      "engagement_level": "low"
+    "evt_c421e82b": {
+      "item": "going",
+      "added": "2026-04-11",
+      "score": 0.85
     }
   },
-  "sessions": {},
-  "current_session": "test_session",
+  "sessions": {
+    "session_2026_04_10": {
+      "session_id": "session_2026_04_10",
+      "start_time": "2026-04-10T23:32:08.264789",
+      "date": "2026-04-10",
+      "end_time": "2026-04-10T23:32:09.586463",
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": "1 seconds",
+      "last_activity": "2026-04-10T23:32:08.264789",
+      "organizer_status": {
+        "sent_to_organizer": false,
+        "organizer_summary_ready": false,
+        "organizer_file": null,
+        "last_processed": null
+      }
+    },
+    "session_1775857737": {
+      "session_id": "session_1775857737",
+      "start_time": "2026-04-10T23:48:57.476692",
+      "end_time": null,
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2026-04-10T23:48:57.476692"
+    },
+    "session_2026_04_11": {
+      "session_id": "session_2026_04_11",
+      "start_time": "2026-04-11T00:02:35.008033",
+      "date": "2026-04-11",
+      "end_time": "2026-04-11T00:33:01.021912",
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": "30 minutes",
+      "last_activity": "2026-04-11T00:02:35.008033",
+      "organizer_status": {
+        "sent_to_organizer": false,
+        "organizer_summary_ready": false,
+        "organizer_file": null,
+        "last_processed": null
+      },
+      "past_context": "=== User Context Summary ===\n\nTotal sessions: 3\nLast session: less than an hour ago\n\nRecent session:\n----------------------------------------\nSession: session_2026_04_10\nDuration: 1 seconds, Messages: 0\n"
+    },
+    "session_2026_04_11_1": {
+      "session_id": "session_2026_04_11_1",
+      "start_time": "2026-04-11T00:33:01.149455",
+      "date": "2026-04-11",
+      "end_time": null,
+      "message_count": 4,
+      "topics_discussed": [
+        "bye"
+      ],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2026-04-11T00:33:13.696532",
+      "organizer_status": {
+        "sent_to_organizer": false,
+        "organizer_summary_ready": false,
+        "organizer_file": null,
+        "last_processed": null
+      },
+      "past_context": "=== User Context Summary ===\n\nTotal sessions: 4\nLast session: 1 hour ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_04_10\nDuration: 1 seconds, Messages: 0\n\n----------------------------------------\nSession: session_2026_04_11\nDuration: 30 minutes, Messages: 0\n",
+      "current_duration": "12 seconds"
+    }
+  },
+  "current_session": "session_2026_04_11_1",
   "conversation_state": {
-    "greeting_completed": false,
-    "introduction_phase": true,
-    "established_user": false
+    "greeting_completed": true,
+    "introduction_phase": false,
+    "established_user": true
   },
   "memory_categories": {
     "user_identity": {
-      "description": "Names, pronouns, identity evolution",
+      "description": "User's name is Going.",
       "enhancement_focus": "Personalization, identity consistency, name variations",
       "contextual_considerations": [
         "previous_names",
         "identity_evolution",
         "pronoun_preferences"
-      ]
+      ],
+      "name": "Going",
+      "last_updated": "2026-04-11T00:33:00.989523"
     },
     "personal_preferences": {
       "description": "Response style, formality, explanation rules",

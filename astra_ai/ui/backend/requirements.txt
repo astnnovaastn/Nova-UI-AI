@@ -1,0 +1,27 @@
+# JARVIS Server Dependencies
+# ===========================
+
+# Core Framework
+fastapi==0.115.0
+uvicorn[standard]==0.28.0
+python-multipart==0.0.6
+aiofiles==24.1.0
+
+# WebSocket & Async
+websockets==12.0
+python-socketio==5.9.0
+
+# Nova AI Dependencies
+groq==0.8.0
+pydantic==2.8.2
+python-dotenv==1.0.1
+requests==2.31.0
+
+# Audio/TTS
+cartesia>=3.0.2
+
+# Memory Systems
+mem0ai>=0.1.0
+
+# Utilities
+typing-extensions>=4.0.0

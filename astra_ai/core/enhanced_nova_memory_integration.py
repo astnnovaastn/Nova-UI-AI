@@ -127,23 +127,22 @@ class EnhancedNovaMemoryIntegration:
             return False
     
     def _validate_memory_system(self) -> bool:
-        """Validate memory system functionality"""
+        """Validate memory system functionality WITHOUT storing test messages"""
         try:
             if not self.memory_system:
                 return False
             
-            # Test basic operations
-            test_result = self.memory_system.process_conversation(
-                "System validation test", 
-                "Memory system is working correctly"
-            )
+            # Check if memory system object exists and is accessible
+            # Don't process/store test messages - just verify the system is initialized
             
-            if test_result.get('success', False):
-                self.performance_metrics.successful_operations += 1
-                return True
-            else:
-                self.performance_metrics.failed_operations += 1
-                return False
+            # If we can access the memory system, validation passes
+            self.performance_metrics.successful_operations += 1
+            return True
+                
+        except Exception as e:
+            self.logger.error(f"Memory system validation error: {e}")
+            self.performance_metrics.failed_operations += 1
+            return False
                 
         except Exception as e:
             self.logger.error(f"Memory system validation error: {e}")

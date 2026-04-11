@@ -438,11 +438,22 @@ class NovaAIBackendServer:
         def search_history():
             """Get search history from JSON file"""
             try:
-                search_history_file = Path(__file__).parent / "search_history.json"
+                # Read from root content_analysis.json
+                search_history_file = self.project_root / "content_analysis.json"
                 if search_history_file.exists():
                     with open(search_history_file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
-                        return jsonify(data)
+                        
+                        analyses = data.get('analyses', [])
+                        searches = []
+                        for a in analyses:
+                            searches.append({
+                                'search_id': a.get('content_id'),
+                                'query': a.get('query'),
+                                'results': a.get('raw_content')
+                            })
+                            
+                        return jsonify({"searches": searches})
                 return jsonify({"searches": []})
             except Exception as e:
                 logger.error(f"❌ Search history error: {e}")

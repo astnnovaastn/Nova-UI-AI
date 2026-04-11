@@ -4,11 +4,13 @@ Provides functions to append conversation messages to the project's
 memory JSON (`astra_ai/Date/nova_ai_memory.json`) with configurable backups and provenance.
 """
 from __future__ import annotations
-import json
+import logging
 import os
+import json
 import shutil
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional
+from dataclasses import dataclass
 from enum import Enum
 
 # Default memory file path - using absolute path resolution
@@ -194,9 +196,11 @@ def initialize_persistence(memory_file_path: str = None) -> None:
     load_backup_config()
     load_backup_state()
     
-    print(f"[PERSISTENCE] Initialized with memory file: {DEFAULT_MEMORY_PATH}")
-    print(f"[PERSISTENCE] Backup directory: {BACKUP_DIR}")
-    print(f"[PERSISTENCE] Backup strategy: {_backup_config.strategy.value}")
+    # Set up logger for persistence
+    persistence_logger = logging.getLogger("NovaAI.Persistence")
+    persistence_logger.info(f"[PERSISTENCE] Initialized with memory file: {DEFAULT_MEMORY_PATH}")
+    persistence_logger.info(f"[PERSISTENCE] Backup directory: {BACKUP_DIR}")
+    persistence_logger.info(f"[PERSISTENCE] Backup strategy: {_backup_config.strategy.value}")
 
 
 def start_session() -> None:

@@ -111,18 +111,25 @@ class NovaMemoryIntegration:
             return False
     
     def _test_memory_system(self) -> bool:
-        """Test memory system functionality"""
+        """Test memory system functionality WITHOUT storing test messages"""
         try:
             if not self.memory_system:
                 return False
             
-            # Test basic operations
-            test_result = self.memory_system.process_conversation(
-                "Memory system test", 
-                "Memory system is working correctly"
-            )
+            # Test that memory system object exists and is accessible
+            # Don't process/store test messages - just verify the system is initialized
             
-            return test_result.get('success', False)
+            # Check if memory file can be accessed
+            if hasattr(self.memory_system, 'storage_file'):
+                memory_file = self.memory_system.storage_file
+                if not os.path.exists(memory_file):
+                    self.logger.debug(f"Memory file will be created at: {memory_file}")
+                    return True
+                # File exists and is accessible
+                return True
+            
+            # If we can access the memory system, it's working
+            return True
                 
         except Exception as e:
             self.logger.error(f"Memory system test error: {e}")

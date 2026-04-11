@@ -1,410 +1,599 @@
 import os
-import time
 import json
-import io
-import wave
-import threading
+import time
 import queue
+import threading
+import base64
 import re
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List, Set
 
-import numpy as np
 import sounddevice as sd
-
-try:
-    import requests
-except Exception:
-    requests = None
+import numpy as np
 
 try:
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
     WATCHDOG_AVAILABLE = True
-except Exception:
+except ImportError:
     WATCHDOG_AVAILABLE = False
+    Observer = None
+    FileSystemEventHandler = None
 
 
 @dataclass
-class FishConfig:
-    api_key: Optional[str] = None
-    voice_id: Optional[str] = None
-    sample_rate: int = 44100
+class CartesiaConfig:
+    """Configuration for Cartesia TTS service"""
+    api_key: str
+    voice_id: str
+    model_id: str = "sonic-english"
+    sample_rate: int = 48000
     volume_multiplier: float = 1.0
+    output_format: Dict = None
+    fish_api_key: str = None
+    fish_voice_id: str = None
+    
+    def __post_init__(self):
+        if self.output_format is None:
+            self.output_format = {
+                "container": "raw",
+                "encoding": "pcm_f32le",
+                "sample_rate": self.sample_rate
+            }
 
 
-class FileChangeHandler(FileSystemEventHandler):
-    def __init__(self, service):
-        self.service = service
-        self._last = 0
+class TextProcessor:
+    """Process text for better TTS output"""
+    
+    def clean_text(self, text: str) -> str:
+        """Clean text for speech synthesis"""
+        if not text:
+            return ""
+        
+        # Remove URLs
+        text = re.sub(r'https?://\S+', '', text)
+        # Remove extra whitespace
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
+    
+    def chunk_text(self, text: str, chunk_size: int = 500) -> List[str]:
+        """Split text into chunks for processing"""
+        if not text:
+            return []
+        
+        # Split on sentence boundaries if possible
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        chunks = []
+        current_chunk = ""
+        
+        for sentence in sentences:
+            if len(current_chunk) + len(sentence) < chunk_size:
+                current_chunk += (" " if current_chunk else "") + sentence
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk)
+                current_chunk = sentence
+        
+        if current_chunk:
+            chunks.append(current_chunk)
+        
+        return chunks if chunks else [text]
 
+
+class AudioEnhancer:
+    """Enhance audio quality"""
+    
+    def normalize_audio(self, buffer: bytes) -> bytes:
+        """Normalize audio levels"""
+        try:
+            audio_data = np.frombuffer(buffer, dtype=np.float32)
+            # Normalize to prevent clipping
+            max_val = np.max(np.abs(audio_data))
+            if max_val > 0:
+                audio_data = audio_data / max_val * 0.9
+            return audio_data.astype(np.float32).tobytes()
+        except Exception as e:
+            print(f"Error normalizing audio: {e}")
+            return buffer
+    
+    def amplify_audio(self, buffer: bytes, volume_multiplier: float) -> bytes:
+        """Amplify audio with smart clipping prevention"""
+        audio_data = np.frombuffer(buffer, dtype=np.float32).copy()
+        
+        # Apply volume multiplier
+        audio_data = audio_data * volume_multiplier
+        
+        # Soft clipping to prevent distortion
+        audio_data = np.clip(audio_data, -0.95, 0.95)
+        
+        return audio_data.astype(np.float32).tobytes()
+
+
+class AIResponseFileHandler(FileSystemEventHandler if WATCHDOG_AVAILABLE else object):
+    """Handle file system events for AI response file"""
+    
+    def __init__(self, tts):
+        self.tts = tts
+    
     def on_modified(self, event):
+        """Handle file modification events"""
         if event.is_directory:
             return
-        if event.src_path.endswith(self.service.ai_file):
-            now = time.time()
-            if now - self._last < 0.2:
-                return
-            self._last = now
-            self.service.check_for_new_messages()
+        
+        if event.src_path.endswith('speech_input.json'):
+            self.tts.check_for_new_messages()
 
 
-class TTSService:
-    def __init__(self, fish_config: FishConfig, ai_file: str = 'speech_input.json'):
-        self.config = fish_config
-        self.ai_file = os.path.abspath(ai_file)
-        self.processed_file = 'processed_messages.json'
-        self.processed: Set[str] = self._load_processed()
-        self.audio_q: queue.Queue = queue.Queue()
+class TextToSpeech:
+    def __init__(self, cartesia_config: CartesiaConfig, service_mode: bool = False, ai_responses_file: str = None):
+        self.cartesia_config = cartesia_config
+        self.processed_messages_file = 'processed_messages.json'
+        self.processed_messages = self.load_processed_messages()
+        self.text_processor = TextProcessor()
+        self.audio_enhancer = AudioEnhancer()
+        self.audio_queue = queue.Queue()
         self.is_speaking = False
-        self.stop_event = threading.Event()
+        self.current_message_chunks = []
+        self.cartesia_client = None
         self.observer = None
+        self.service_mode = service_mode
+        self.voice_thread = None
+        self.is_running = False
+        self.stop_event = threading.Event()
 
-    def _load_processed(self) -> Set[str]:
+        # Set the speech_input.json file path
+        self.ai_responses_file = ai_responses_file or "speech_input.json"
+
+        # Voice deduplication and synchronization
+        self.processing_lock = threading.Lock()
+        self.currently_processing = set()
+        self.speaking_lock = threading.Lock()
+        self.current_speaking_id = None
+
+        # Web voice integration
+        self.web_voice_enabled = False
+        self.web_audio_queue = queue.Queue()
+        self.last_web_audio_data = None
+
+    def load_processed_messages(self) -> Set[str]:
+        """Load processed message IDs from a file"""
         try:
-            with open(self.processed_file, 'r', encoding='utf-8') as f:
+            with open(self.processed_messages_file, 'r', encoding='utf-8') as f:
                 return set(json.load(f))
-        except Exception:
+        except (FileNotFoundError, json.JSONDecodeError):
             return set()
 
-    def _save_processed(self):
+    def save_processed_messages(self):
+        """Save processed message IDs to a file"""
         try:
-            with open(self.processed_file, 'w', encoding='utf-8') as f:
-                json.dump(list(self.processed), f)
+            with open(self.processed_messages_file, 'w', encoding='utf-8') as f:
+                json.dump(list(self.processed_messages), f)
         except Exception as e:
-            print('Error saving processed messages:', e)
+            print(f"Error saving processed messages: {e}")
 
-    def read_output_json(self) -> (Optional[str], Optional[str]):
-        if not os.path.exists(self.ai_file):
-            return None, None
+    def read_output_json(self, output_file=None) -> tuple:
+        """Read AI output from JSON file with comprehensive filtering"""
         try:
-            with open(self.ai_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            if isinstance(data, list) and data:
-                last = data[-1]
-                if isinstance(last, dict):
-                    msg_id = last.get('id', f"msg_{len(data)}")
-                    text = last.get('text') or last.get('message') or last.get('response') or ''
-                elif isinstance(last, str):
-                    msg_id = f"msg_{len(data)}"
-                    text = last
-                else:
+            if output_file is None:
+                output_file = self.ai_responses_file
+
+            if not os.path.exists(output_file):
+                return None, None
+
+            with open(output_file, 'r', encoding='utf-8-sig') as f:  # Use utf-8-sig to handle BOM
+                content = f.read().strip()
+                if not content:
                     return None, None
 
-                text = self._clean_text(text)
-                if not text or len(text.strip()) < 3:
-                    return None, None
-                return text, msg_id
-        except json.JSONDecodeError:
+                data = json.loads(content)
+                if isinstance(data, list) and data:
+                    latest_entry = data[-1]
+                    
+                    if isinstance(latest_entry, dict):
+                        if "conversation_data" in latest_entry:
+                            message_id = latest_entry.get("conversation_data", {}).get("message_id", "unknown")
+                            ai_response = latest_entry.get("conversation_data", {}).get("ai_response", "")
+                        elif "text" in latest_entry:
+                            message_id = latest_entry.get("id", f"msg_{len(data)}")
+                            ai_response = latest_entry.get("text", "")
+                        else:
+                            message_id = latest_entry.get("id", "unknown")
+                            ai_response = latest_entry.get("message", latest_entry.get("response", ""))
+                    elif isinstance(latest_entry, str):
+                        message_id = f"msg_{len(data)}"
+                        ai_response = latest_entry
+                    else:
+                        return None, None
+
+                    if self.should_skip_response(ai_response):
+                        return None, None
+
+                    cleaned_response = self.clean_response_for_speech(ai_response)
+
+                    if not cleaned_response or len(cleaned_response.strip()) < 3:
+                        return None, None
+
+                    return cleaned_response, message_id
+                return None, None
+        except FileNotFoundError:
+            print(f"File {output_file} not found.")
+            return None, None
+        except json.JSONDecodeError as e:
+            print(f"Invalid JSON in {output_file}: {e}")
             return None, None
         except Exception as e:
-            print('Error reading JSON:', e)
+            print(f"Error reading output file: {e}")
             return None, None
 
-    def _clean_text(self, text: str) -> str:
-        if not text:
-            return ''
-        text = re.sub(r'https?://\S+', 'link', text)
-        text = re.sub(r'```[\s\S]*?```', '', text)
-        text = re.sub(r'<[^>]*>', '', text)
-        text = re.sub(r'\s+', ' ', text).strip()
-        return text
+    def should_skip_response(self, response: str) -> bool:
+        """Check if response should be skipped (UI-specific responses)"""
+        if not response or len(response.strip()) < 3:
+            return True
+
+        skip_patterns = [
+            "TIME_DISPLAY_SHOW:",
+            "WEATHER_DISPLAY_SHOW:",
+            "SEARCH_RESULT:",
+            "NEWS_RESULT:",
+            "WEATHER_DATA:",
+            "WIDGET_TIME:",
+        ]
+
+        response_upper = response.upper()
+        for pattern in skip_patterns:
+            if pattern.upper() in response_upper:
+                return True
+
+        if response.strip().startswith('{') and response.strip().endswith('}'):
+            return True
+
+        if '"temperature":' in response or '"humidity":' in response:
+            return True
+
+        return False
+
+    def clean_response_for_speech(self, response: str) -> str:
+        """Clean response text for better speech synthesis"""
+        if not response:
+            return ""
+
+        response = re.sub(r'```[\s\S]*?```', '', response)
+        response = re.sub(r'`[^`]*`', '', response)
+        response = re.sub(r'<[^>]*>', '', response)
+        response = re.sub(r'\s+', ' ', response)
+        response = response.strip()
+
+        return response
 
     def check_for_new_messages(self):
-        text, msg_id = self.read_output_json()
-        if not msg_id:
-            return
-        if msg_id in self.processed:
-            return
-        # process
-        self.processed.add(msg_id)
-        self._save_processed()
-        print(f"Processing message {msg_id}")
-        t = threading.Thread(target=self._handle_message, args=(text, msg_id), daemon=True)
-        t.start()
+        """Check for new messages and process them immediately"""
+        try:
+            ai_response, message_id = self.read_output_json()
 
-    def _handle_message(self, text: str, msg_id: str):
-        self.is_speaking = True
-        chunks = self._chunk_text(text)
-        for chunk in chunks:
-            self._generate_and_queue(chunk)
-        self.is_speaking = False
-
-    def _chunk_text(self, text: str, max_len: int = 400) -> List[str]:
-        parts = re.split(r'(?<=[.!?])\s+', text)
-        chunks = []
-        cur = ''
-        for p in parts:
-            if len(cur) + len(p) + 1 <= max_len:
-                cur = (cur + ' ' + p).strip() if cur else p
-            else:
-                if cur:
-                    chunks.append(cur)
-                cur = p
-        if cur:
-            chunks.append(cur)
-        return chunks
-
-    def _generate_and_queue(self, text: str):
-        # Try Fish.Audio first
-        if self.config.api_key and requests:
-            audio = self._fish_tts_wav_to_array(text)
-            if audio is not None:
-                self.audio_q.put(audio.astype(np.float32).tobytes())
-                print('Queued Fish.Audio audio')
+            if not message_id:
                 return
 
-        # Fallback: demo tone
-        self._queue_demo_tone(text)
+            with self.processing_lock:
+                if (message_id in self.processed_messages or
+                    message_id in self.currently_processing or
+                    message_id == self.current_speaking_id):
+                    return
 
-    def _fish_tts_wav_to_array(self, text: str) -> Optional[np.ndarray]:
+                if ai_response and message_id:
+                    self.currently_processing.add(message_id)
+                    print(f"🎤 Processing message: {message_id}")
+
+                    process_thread = threading.Thread(
+                        target=self._process_message_with_cleanup,
+                        args=(ai_response, message_id)
+                    )
+                    process_thread.start()
+
+                elif message_id:
+                    self.processed_messages.add(message_id)
+                    self.save_processed_messages()
+
+        except Exception as e:
+            print(f"Error checking for new messages: {e}")
+
+    def _process_message_with_cleanup(self, ai_response: str, message_id: str):
+        """Process message with cleanup"""
         try:
-            headers = {"Authorization": f"Bearer {self.config.api_key}", "Content-Type": "application/json"}
-            payload = {"modelId": self.config.voice_id or '', "input": text, "format": "wav"}
-            resp = requests.post('https://api.fish.audio/v1/text-to-speech', headers=headers, json=payload, timeout=30)
-            resp.raise_for_status()
-            data = resp.json()
-            url = data.get('audioUrl') or data.get('url')
-            if not url:
-                return None
-            r = requests.get(url, timeout=30)
-            r.raise_for_status()
-            buf = io.BytesIO(r.content)
-            with wave.open(buf, 'rb') as wf:
-                n_channels = wf.getnchannels()
-                sampwidth = wf.getsampwidth()
-                framerate = wf.getframerate()
-                frames = wf.readframes(wf.getnframes())
+            with self.speaking_lock:
+                if message_id in self.processed_messages:
+                    return
 
-            if sampwidth == 2:
-                arr = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
-            elif sampwidth == 4:
-                arr = np.frombuffer(frames, dtype=np.int32).astype(np.float32) / 2147483648.0
-            elif sampwidth == 1:
-                arr = (np.frombuffer(frames, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
+                self.current_speaking_id = message_id
+                self.process_message(ai_response)
+
+        except Exception as e:
+            print(f"Error processing message: {e}")
+        finally:
+            with self.processing_lock:
+                self.currently_processing.discard(message_id)
+                self.processed_messages.add(message_id)
+                self.save_processed_messages()
+                self.current_speaking_id = None
+
+    def initialize_cartesia_client(self):
+        """Initialize the Cartesia client"""
+        try:
+            from cartesia import Cartesia
+            self.cartesia_client = Cartesia(api_key=self.cartesia_config.api_key)
+            test_embedding = self.get_voice_embedding()
+            if test_embedding:
+                print("✅ Cartesia client initialized successfully")
+                return True
             else:
-                return None
+                print("❌ Failed to retrieve voice embedding")
+                return False
 
-            if n_channels > 1:
-                arr = arr.reshape(-1, n_channels).mean(axis=1)
-
-            # Resample if needed
-            if framerate != self.config.sample_rate:
-                import math
-                ratio = self.config.sample_rate / float(framerate)
-                new_len = int(math.ceil(len(arr) * ratio))
-                idx = (np.arange(new_len) / ratio).astype(np.int32)
-                idx[idx >= len(arr)] = len(arr) - 1
-                arr = arr[idx]
-
-            return arr
+        except ImportError:
+            print("❌ Error: Cartesia SDK not installed. Install with: pip install cartesia")
+            return False
         except Exception as e:
-            print('Fish.Audio TTS error:', e)
-            return None
+            print(f"❌ Error initializing Cartesia client: {e}")
+            return False
 
-    def _queue_demo_tone(self, text: str):
-        # Produce a short tone as a proof-of-playback and a spoken label via system TTS if available
+    def get_voice_embedding(self):
+        """Get voice embedding"""
+        if not hasattr(self, '_voice_embedding'):
+            try:
+                voice = self.cartesia_client.voices.get(id=self.cartesia_config.voice_id)
+
+                if hasattr(voice, 'embedding'):
+                    self._voice_embedding = voice.embedding
+                elif isinstance(voice, dict) and "embedding" in voice:
+                    self._voice_embedding = voice["embedding"]
+                elif hasattr(voice, '__dict__') and 'embedding' in voice.__dict__:
+                    self._voice_embedding = voice.__dict__['embedding']
+                else:
+                    print(f"Unknown voice response format")
+                    self._voice_embedding = None
+
+            except Exception as e:
+                print(f"Error getting voice embedding: {e}")
+                self._voice_embedding = None
+        return self._voice_embedding
+
+    def generate_speech_for_chunk(self, text_chunk: str):
+        """Generate speech for a single chunk of text"""
+        if not self.cartesia_client:
+            if not self.initialize_cartesia_client():
+                print("Failed to initialize Cartesia client")
+                return
+
+        voice_embedding = self.get_voice_embedding()
+        if not voice_embedding:
+            print("❌ Failed to get voice embedding")
+            return
+
         try:
-            # tone
-            sr = self.config.sample_rate
-            dur = 1.2
-            t = np.linspace(0, dur, int(sr * dur), False)
-            tone = (np.sin(2 * np.pi * 440 * t) * 0.25).astype(np.float32)
-            self.audio_q.put(tone.tobytes())
+            processed_text = self.text_processor.clean_text(text_chunk)
+
+            for output in self.cartesia_client.tts.generate_sse(
+                model_id=self.cartesia_config.model_id,
+                transcript=processed_text,
+                voice={"mode": "embedding", "embedding": voice_embedding},
+                output_format=self.cartesia_config.output_format
+            ):
+                if hasattr(output, 'data'):
+                    raw_data = output.data
+                elif isinstance(output, dict) and 'data' in output:
+                    raw_data = output['data']
+                elif isinstance(output, dict) and 'audio' in output:
+                    raw_data = output['audio']
+                else:
+                    continue
+
+                if isinstance(raw_data, str):
+                    try:
+                        buffer = base64.b64decode(raw_data)
+                    except Exception as e:
+                        print(f"Error decoding base64: {e}")
+                        continue
+                else:
+                    buffer = raw_data
+
+                normalized_buffer = self.audio_enhancer.normalize_audio(buffer)
+                amplified_buffer = self.audio_enhancer.amplify_audio(
+                    normalized_buffer,
+                    self.cartesia_config.volume_multiplier
+                )
+                print(f"📢 Queuing audio buffer: {len(amplified_buffer)} bytes")
+                self.audio_queue.put(amplified_buffer)
         except Exception as e:
-            print('Demo tone error:', e)
+            print(f"❌ Error generating speech: {e}")
+
+    def process_message(self, text: str):
+        """Process a new message for speech synthesis"""
+        self.is_speaking = True
+        
+        chunks = self.text_processor.chunk_text(text)
+        
+        threads = []
+        for chunk in chunks:
+            thread = threading.Thread(target=self.generate_speech_for_chunk, args=(chunk,))
+            thread.start()
+            threads.append(thread)
+            
+        for thread in threads:
+            thread.join()
+            
+        self.is_speaking = False
 
     def audio_playback_thread(self):
-        while not self.stop_event.is_set():
-            try:
-                buf = self.audio_q.get(timeout=0.5)
-            except queue.Empty:
-                continue
-            try:
-                audio = np.frombuffer(buf, dtype=np.float32)
-                sd.play(audio, samplerate=self.config.sample_rate)
-                sd.wait()
-            except Exception as e:
-                print('Playback error:', e)
-            finally:
-                try:
-                    self.audio_q.task_done()
-                except Exception:
-                    pass
-
-    def start_service(self):
-        # Start playback thread
-        t = threading.Thread(target=self.audio_playback_thread, daemon=True)
-        t.start()
-
-        # Start file monitoring
-        if WATCHDOG_AVAILABLE:
-            handler = FileChangeHandler(self)
-            self.observer = Observer()
-            self.observer.schedule(handler, os.path.dirname(self.ai_file) or '.', recursive=False)
-            self.observer.start()
-            print('Using watchdog file monitoring')
-        else:
-            print('Watchdog not available; using polling')
-
+        """Thread for playing back audio from the queue"""
+        print("🎵 Audio playback thread started")
+        
+        # Try to find the best audio device
+        device = self._find_best_audio_device()
+        print(f"Using audio device: {device}")
+        
         try:
             while True:
+                try:
+                    buffer = self.audio_queue.get(timeout=0.5)
+                    print(f"🔊 Playing audio buffer: {len(buffer)} bytes")
+                    
+                    audio_data = np.frombuffer(buffer, dtype=np.float32)
+                    
+                    try:
+                        # Try to play with selected device
+                        sd.play(audio_data, samplerate=self.cartesia_config.sample_rate, device=device)
+                        sd.wait()
+                        print("✅ Audio playback completed")
+                    except Exception as device_error:
+                        print(f"⚠️ Device {device} failed: {device_error}")
+                        print("🔄 Trying default device...")
+                        sd.play(audio_data, samplerate=self.cartesia_config.sample_rate)
+                        sd.wait()
+                        print("✅ Audio playback completed (default device)")
+                    
+                    self.audio_queue.task_done()
+                except queue.Empty:
+                    if not self.is_speaking and self.audio_queue.empty():
+                        time.sleep(0.1)
+                    continue
+                except Exception as e:
+                    print(f"❌ Error in audio playback: {e}")
+                    time.sleep(0.5)
+        except Exception as e:
+            print(f"Audio playback thread error: {e}")
+    
+    def _find_best_audio_device(self):
+        """Find the best available audio output device"""
+        try:
+            devices = sd.query_devices()
+            
+            # Prefer devices in this order
+            device_names = [
+                'Speaker',
+                'Headphones', 
+                'Speakers',
+                'Primary Sound',
+                'WASAPI',
+            ]
+            
+            for pref_name in device_names:
+                for i, device in enumerate(devices):
+                    if isinstance(device, dict):
+                        name = device.get('name', '')
+                    else:
+                        name = str(device)
+                    
+                    # Check if this is an output device and contains preferred name
+                    if pref_name.lower() in name.lower():
+                        if isinstance(device, dict) and device.get('max_output_channels', 0) > 0:
+                            print(f"✅ Found preferred device {i}: {name}")
+                            return i
+                        elif not isinstance(device, dict):
+                            return i
+            
+            # Fallback to default output device
+            print("Using default output device")
+            return None
+        except Exception as e:
+            print(f"Error finding audio device: {e}")
+            return None
+
+    def start_service(self):
+        """Start the AI voice service"""
+        if self.is_running:
+            print("🎤 AI Voice service is already running")
+            return True
+
+        try:
+            if not self.initialize_cartesia_client():
+                print("❌ Failed to initialize voice service")
+                return False
+
+            playback_thread = threading.Thread(target=self.audio_playback_thread, daemon=True)
+            playback_thread.start()
+
+            self.voice_thread = threading.Thread(target=self._service_loop, daemon=True)
+            self.voice_thread.start()
+
+            self.is_running = True
+            print("✅ AI Voice service started")
+            return True
+
+        except Exception as e:
+            print(f"❌ Failed to start AI Voice service: {e}")
+            return False
+
+    def stop_service(self):
+        """Stop the AI voice service"""
+        if not self.is_running:
+            return
+
+        self.is_running = False
+        self.stop_event.set()
+        print("🛑 AI Voice service stopped")
+
+    def _service_loop(self):
+        """Main service loop for background voice processing"""
+        try:
+            while not self.stop_event.is_set():
+                try:
+                    self.check_for_new_messages()
+                    if self.stop_event.wait(0.5):
+                        break
+                except Exception as e:
+                    print(f"Error in service loop: {e}")
+                    time.sleep(1)
+        except Exception as e:
+            print(f"❌ Service loop error: {e}")
+        finally:
+            self.is_running = False
+
+    def text_to_speech_loop(self):
+        """Main loop checking for new messages"""
+        if self.service_mode:
+            return self.start_service()
+
+        print("Starting text-to-speech service...")
+
+        if not self.initialize_cartesia_client():
+            print("Failed to initialize Cartesia client. Exiting.")
+            return
+
+        playback_thread = threading.Thread(target=self.audio_playback_thread, daemon=True)
+        playback_thread.start()
+
+        print("🎤 Waiting for new messages...")
+        print("📁 Reading from:", os.path.abspath(self.ai_responses_file))
+
+        while True:
+            try:
                 self.check_for_new_messages()
                 time.sleep(0.5)
-        except KeyboardInterrupt:
-            self.stop()
+            except KeyboardInterrupt:
+                print("\n🛑 Stopping AI voice system...")
+                break
+            except Exception as e:
+                print(f"Error in main loop: {e}")
+                time.sleep(1)
 
-    def stop(self):
-        self.stop_event.set()
-        if self.observer:
-            try:
-                self.observer.stop()
-                self.observer.join(timeout=2)
-            except Exception:
-                pass
-
-
-if __name__ == '__main__':
-    cfg = FishConfig(api_key=None, voice_id=None)
-    svc = TTSService(cfg, ai_file='speech_input.json')
-    svc.start_service()
-#!/usr/bin/env python3
-"""
-Direct Text-to-Speech System
-Simple: Read JSON -> Use Cartesia API -> Play Audio
-to run this sript: PS D:\Astra_ai> python "d:/Astra_ai/astra_ai/speech/direct_voice.py"
-"""
-
-import os
-import json
-import time
-import base64
-import numpy as np
-import sounddevice as sd
-from cartesia import Cartesia
-
-def text_to_speech(text, api_key, voice_id):
-    """Convert text to speech using Cartesia API"""
-    try:
-        # Initialize Cartesia client
-        client = Cartesia(api_key=api_key)
-        
-        print(f"🎤 Converting to speech: {text}")
-        
-        # Generate speech
-        response = client.tts.generate_sse(
-            model_id="sonic-english",
-            transcript=text,
-            voice={"mode": "id", "id": voice_id},
-            output_format={
-                "container": "raw",
-                "encoding": "pcm_f32le", 
-                "sample_rate": 48000
-            }
-        )
-        
-        # Collect audio data from streaming response
-        audio_data = b""
-        for chunk in response:
-            if hasattr(chunk, 'data'):
-                chunk_data = chunk.data
-            elif isinstance(chunk, dict) and "data" in chunk:
-                chunk_data = chunk["data"]
-            else:
-                continue
-                
-            # Convert to bytes if needed
-            if isinstance(chunk_data, str):
-                chunk_data = base64.b64decode(chunk_data)
-            elif isinstance(chunk_data, bytes):
-                pass  # Already bytes
-            else:
-                continue
-                
-            audio_data += chunk_data
-            
-        print(f"✅ Generated {len(audio_data)} bytes of audio")
-        return audio_data
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        return None
-
-def play_audio(audio_data, sample_rate=48000):
-    """Play audio data"""
-    try:
-        # Convert to numpy array
-        audio_array = np.frombuffer(audio_data, dtype=np.float32)
-        print(f"🔊 Playing audio...")
-        
-        # Play the sound
-        sd.play(audio_array, samplerate=sample_rate)
-        sd.wait()  # Wait for it to finish
-        print("✅ Playback complete")
-        
-    except Exception as e:
-        print(f"❌ Playback error: {e}")
-
-def read_json_file(filename):
-    """Read text from JSON file"""
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            
-        # Get the last message
-        if isinstance(data, list) and data:
-            last_message = data[-1]
-            return last_message.get("text", "")
-        return ""
-        
-    except Exception as e:
-        print(f"❌ Error reading file: {e}")
-        return ""
-
-def main():
-    """Main function"""
-    # Configuration
-    API_KEY = 'sk_car_VqWy79RSCgcBda6TtbJW1A'
-    VOICE_ID = "5ee9feff-1265-424a-9d7f-8e4d431a12c7"
-    JSON_FILE = "speech_input.json"
-    
-    print("🚀 Direct Voice System Started")
-    print(f"📁 Reading from: {JSON_FILE}")
-    print(f"🎤 Using Voice ID: {VOICE_ID}")
-    
-    while True:
-        try:
-            # Read text from JSON
-            text = read_json_file(JSON_FILE)
-            
-            if text and len(text.strip()) > 0:
-                print(f"\n📝 Text found: {text[:100]}...")
-                
-                # Convert to speech
-                audio_data = text_to_speech(text, API_KEY, VOICE_ID)
-                
-                if audio_data:
-                    # Play the audio
-                    play_audio(audio_data)
-                    
-                    # Clear the JSON file after processing
-                    try:
-                        with open(JSON_FILE, 'w', encoding='utf-8') as f:
-                            json.dump([], f)
-                        print("🗑️ Cleared JSON file")
-                    except:
-                        pass
-                
-            # Wait before next check
-            time.sleep(2)
-            
-        except KeyboardInterrupt:
-            print("\n👋 Goodbye!")
-            break
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            time.sleep(2)
-        
 
 if __name__ == "__main__":
-    main()
+    try:
+        print("🎤 AI Voice System Starting...")
+        print("=" * 50)
+        
+        cartesia_config = CartesiaConfig(
+            api_key='sk_car_VqWy79RSCgcBda6TtbJW1A',
+            voice_id="5ee9feff-1265-424a-9d7f-8e4d431a12c7",
+            model_id="sonic-english",
+            sample_rate=48000,
+            volume_multiplier=2.0
+        )
+        
+        tts = TextToSpeech(cartesia_config=cartesia_config)
+        tts.text_to_speech_loop()
+        
+    except KeyboardInterrupt:
+        print("\n✅ Text-to-speech service stopped")
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")

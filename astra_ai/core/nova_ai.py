@@ -157,7 +157,7 @@ MODEL_NAME = os.getenv('AI_MODEL', 'llama-3.3-70b-versatile')
 LLM_API_KEY = os.getenv('LLM_API_KEY')
 if LLM_API_KEY is None:
     # Do not store secrets in code — require user to set env var
-    print('[WARNING] LLM API key not set. Set the LLM_API_KEY environment variable to enable hosted model access.')
+    file_logger.warning('[WARNING] LLM API key not set. Set the LLM_API_KEY environment variable to enable hosted model access.')
 
 # Get API keys
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
@@ -487,10 +487,10 @@ class NovaSearch:
         
         # Handle targeted site searches
         if target_site:
-            print(f"\nSearching for: {query} on {target_site}")
+            file_logger.info(f"Searching for: {query} on {target_site}")
             query = self._format_site_search(query, target_site)
         else:
-            print(f"\nSearching for: {query}")
+            file_logger.info(f"Searching for: {query}")
 
         # Determine search type based on query
         search_type, params = self._analyze_query(query)
@@ -725,7 +725,7 @@ class NovaSearch:
                 
             return result
         except Exception as e:
-            print(f"Search error: {str(e)}")
+            file_logger.error(f"Search error: {str(e)}")
             return {"error": str(e)}
     
     def _process_results(self, results: Dict[str, Any], search_type: str) -> List[Dict[str, Any]]:
@@ -1290,18 +1290,22 @@ class NovaSearch:
 # ============================================================================
 
 # Configure logging - CLEAN TERMINAL MODE (no console output)
+# Create Date directory if it doesn't exist
+date_dir = os.path.join(os.path.dirname(__file__), "..", "Date")
+os.makedirs(date_dir, exist_ok=True)
+
 logging.basicConfig(
     level=logging.CRITICAL,  # Only critical errors in terminal (effectively silent)
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("alebot.log")  # Only log to file, no console output
+        logging.FileHandler(os.path.join(date_dir, "nova_ai.log"))  # Only log to file, no console output
     ]
 )
 
 # Create a separate logger for file-only detailed logs
 file_logger = logging.getLogger("AleChatBot.Detailed")
 file_logger.setLevel(logging.DEBUG)
-file_handler = logging.FileHandler("alebot_detailed.log")
+file_handler = logging.FileHandler(os.path.join(date_dir, "nova_ai_detailed.log"))
 file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 file_logger.addHandler(file_handler)
 file_logger.propagate = False
@@ -3123,6 +3127,7 @@ class AleChatBot:
         self.mem0_memory_agent = None
         self.memory = None
         self.conversation_count = 0  # Track conversations for periodic saving
+        self.session_organizer_context = ""  # Context from organizer summaries
         
         # Initialize mem0_memory_system for direct integration
         MEM0_MEMORY_AVAILABLE = False
@@ -3247,7 +3252,7 @@ class AleChatBot:
                     self.memory_integration = Mem0IntegrationAdapter(self.mem0_memory_agent)
                     self.memory_enabled = True
                     file_logger.info(f"Mem0 Memory System initialized and set as sole memory backend (storage={storage_path})")
-                    print(f"[MEMORY] NovaMemoryAI system ONLINE - Storing conversations in {storage_path}")
+                    file_logger.info(f"[MEMORY] NovaMemoryAI system ONLINE - Storing conversations in {storage_path}")
                     # print(f"[DEBUG] Memory enabled: {self.memory_enabled}")
                     # print(f"[DEBUG] Memory integration: {self.memory_integration is not None}")
                     # print(f"[DEBUG] Mem0 memory agent: {self.mem0_memory_agent is not None}")
@@ -3310,7 +3315,7 @@ class AleChatBot:
                                 watcher_thread = threading.Thread(target=_organizer_watcher_thread, daemon=True)
                                 watcher_thread.start()
                                 file_logger.info('Organizer in-place enhancer watcher started in background')
-                                print('[ORGANIZER] In-place enhancer started')
+                                file_logger.info('[ORGANIZER] In-place enhancer started')
                             except Exception as e:
                                 file_logger.warning(f'Failed to start organizer watcher: {e}')
                     except Exception:
@@ -3318,7 +3323,7 @@ class AleChatBot:
 
                 except Exception as e:
                     file_logger.error(f"Mem0 Memory System initialization error: {e}")
-                    print(f"[ERROR] Memory system initialization failed: {e}")
+                    file_logger.error(f"[ERROR] Memory system initialization failed: {e}")
                     import traceback
                     traceback.print_exc()
                     self.mem0_memory_agent = None
@@ -3636,6 +3641,12 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
         # Pass search_news_memory to NovaSearch for automatic history tracking
         self.search_system = NovaSearch(search_news_memory=self.search_news_memory)
 
+        # Load organizer summaries and provide session context (after memory is initialized)
+        try:
+            self._load_daily_organizer_context()
+        except Exception as e:
+            file_logger.debug(f"Failed to load organizer context: {e}")
+
         # Kick off voice system initialization in background (non-blocking)
         try:
             # Start voice system in a daemon thread so it doesn't block startup
@@ -3652,6 +3663,31 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
             voice_thread.start()
         except Exception as e:
             file_logger.error(f"Failed to spawn voice system thread: {e}")
+
+    def _load_daily_organizer_context(self) -> None:
+        """
+        Load daily organizer summaries from previous sessions and provide context.
+        This helps the AI understand previous conversations when starting a new session.
+        """
+        try:
+            if not self.mem0_memory_agent or not hasattr(self.mem0_memory_agent, 'provide_session_context_from_organizer'):
+                return
+            
+            # Get session context from organizer summaries
+            context_string = self.mem0_memory_agent.provide_session_context_from_organizer()
+            
+            if context_string:
+                # Store context for use in conversation
+                self.session_organizer_context = context_string
+                file_logger.info("[ORGANIZER-CONTEXT] Successfully loaded session context from organizer summaries")
+                logger.info("[ORGANIZER-CONTEXT] Session context loaded - ready to recall previous conversations")
+            else:
+                self.session_organizer_context = ""
+                file_logger.debug("[ORGANIZER-CONTEXT] No previous session summaries found")
+        
+        except Exception as e:
+            file_logger.warning(f"[ORGANIZER-CONTEXT] Failed to load session context: {e}")
+            self.session_organizer_context = ""
 
     async def _make_api_call_with_retry(self, messages, temperature=0.8, max_tokens=400, stream=False):
         """Make API call with retry logic for timeout handling"""
@@ -4413,7 +4449,7 @@ AI: {response}
                                     importance_score=0.7
                                 )
                         except Exception as e:
-                            print(f"[MEMORY ERROR] Failed to store conversation: {e}")
+                            file_logger.error(f"[MEMORY ERROR] Failed to store conversation: {e}")
 
                     # Store conversation memory asynchronously (always store to nova_ai_memory.json)
                     asyncio.create_task(self._store_conversation_memory_async(user_message, response))
@@ -4656,9 +4692,15 @@ AI: {response}
         - Tracks if session has been processed by AI organizer
         - Sends unprocessed sessions to organizer for daily summary
         - Reads cached organizer summaries for processed sessions
+        - Includes organizer daily summaries from previous sessions
         """
         try:
             base_context = {}
+            
+            # Add organizer context from previous sessions
+            if self.session_organizer_context:
+                base_context["session_context"] = self.session_organizer_context
+                base_context["organizer_context_available"] = True
             
             # Get processed memory from the daily session pipeline
             if self.mem0_memory_agent:
@@ -4669,7 +4711,11 @@ AI: {response}
                         self.mem0_memory_agent._get_processed_daily_memory_context
                     )
                     if session_context:
-                        base_context["session_context"] = session_context
+                        # If we already have organizer context, enhance it
+                        if "session_context" in base_context:
+                            base_context["session_context"] += f"\n\nADDITIONAL SESSION NOTES:\n{session_context}"
+                        else:
+                            base_context["session_context"] = session_context
                         base_context["memory_processed"] = True
                         
                         # Extract daily summary if available for system prompt enrichment
@@ -4685,15 +4731,20 @@ AI: {response}
                             self.mem0_memory_agent.get_current_session_context
                         )
                         if session_context:
-                            base_context["session_context"] = session_context
+                            if "session_context" in base_context:
+                                base_context["session_context"] += f"\n\n{session_context}"
+                            else:
+                                base_context["session_context"] = session_context
                     except Exception as e2:
                         logger.debug(f"Fallback session context error: {e2}")
             
             if self.memory_integration and self.memory_integration.is_enabled:
                 # Use comprehensive memory system
                 context = await self.memory_integration.get_memory_context(user_message, "comprehensive")
-                # Merge with base context
-                context.update(base_context)
+                # Merge with base context (base_context takes precedence for organizer context)
+                for key, value in base_context.items():
+                    if key not in context:
+                        context[key] = value
                 return context
             elif self.mem0_memory_agent:
                 # Use mem0_memory_system for context retrieval
@@ -4703,13 +4754,15 @@ AI: {response}
                         user_message
                     )
                     # Merge with base context
-                    context.update(base_context)
+                    for key, value in base_context.items():
+                        if key not in context:
+                            context[key] = value
                     return context
                 except Exception as e:
                     logger.debug(f"Mem0 memory context retrieval error: {e}")
                     return base_context
             else:
-                # Return base context (may contain session context)
+                # Return base context (may contain organizer context)
                 return base_context
         except Exception as e:
             logger.debug(f"Memory context retrieval error: {e}")
