@@ -929,7 +929,7 @@ def main():
     
     # Initialize Nova AI first
     if not initialize_nova_ai():
-        print("❌ Failed to start Nova AI. Please check your GROQ_API_KEY environment variable.")
+        print("❌ Failed to start Nova AI. Please check your xxxxxKEY environment variable.")
         return
     
     # Get the path to the UI directory containing splash_screen.html

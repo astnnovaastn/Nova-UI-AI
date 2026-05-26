@@ -51,18 +51,18 @@ logs/
 config/config.json
 voice_recordings/
 transcriptions/
-New folder/
-New folder/*
-
-# Large backup files and memory data
-Date/backups/*.json
-*.db
-nova_memory_db/
-*.bin
-
-# Node modules cache
-node_modules/.cache/
-*.pack
+ai_responses.json
+search_history.json
+processed_messages.json
+content_analysis.json
+weather_data.json
+temp_*.json
+*.log
+memory_auto_optimizer.log
+alebot*.log
+gitkey.pub
+acli.exe
+astra_ai/Date/backups/
 
 # OS-specific
 .DS_Store
@@ -128,3 +128,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/ 
+node_modules
+node_modules

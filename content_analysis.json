@@ -1695,7 +1695,100 @@
       "user_context": {
         "timestamp": "2026-01-10T22:50:39.408423"
       }
+    },
+    {
+      "content_id": "search_20260114_144427",
+      "content_type": "search",
+      "query": "search about OpenAI 5 ",
+      "raw_content": "SEARCH_RESULT: SEARCH RESULT\n\nDirect Answer\nGPT‑5 is a significant leap in intelligence over all our previous models, featuring state-of-the-art performance across coding, math, writing, health, visual ...\n\nAdditional Information\nGPT‑5 is a significant leap in intelligence over all our previous models, featuring state-of-the-art performance across coding, math, writing, health, visual ...\n\nWe designed GPT‑5.2 to unlock even more economic value for people; it's better at creating spreadsheets, building presentations, writing code, perceiving images ...\n\nThe company is making GPT-5 available to everyone, including its free users. OpenAI said the model is smarter, faster and \"a lot more useful,\" particularly ...\n\nGPT-5 is OpenAI's most advanced model—transforming enterprise AI, automation, and workforce productivity in the new era of intelligent work.\n\nBackground and Origins\nThe concept of artificial intelligence has roots dating back to ancient mythology and philosophy, but modern AI dev",
+      "analyzed_content": {
+        "word_count": 452,
+        "sections": [
+          "SEARCH_RESULT: SEARCH RESULT",
+          "Direct Answer",
+          "Additional Information",
+          "Background and Origins",
+          "Current Relevance",
+          "Key Facts and Statistics",
+          "Comparisons and Related Information",
+          "Applications and Use Cases",
+          "Challenges, Criticisms, or Controversies",
+          "Future Developments or Trends"
+        ],
+        "entities": [
+          "Web Analysis",
+          "Sources\nGoogle Search",
+          "Controversies\nKey",
+          "Related Information",
+          "John",
+          "Real",
+          "We",
+          "Comparisons",
+          "Current Relevance",
+          "Related",
+          "Conclusion\nArtificial Intelligence",
+          "Key Facts",
+          "Regulatory",
+          "Data Aggregation",
+          "Additional Information",
+          "Origins\nThe",
+          "Statistics",
+          "Direct Answer",
+          "Experts",
+          "Applications"
+        ],
+        "facts": [],
+        "opinions": [],
+        "statistics": [],
+        "sources": [
+          "Google Search, Web Analysis, Real-time Data Aggregation"
+        ],
+        "main_themes": [
+          "technology",
+          "economy",
+          "health",
+          "science",
+          "education"
+        ],
+        "content_structure": {
+          "has_sections": true,
+          "section_count": 13,
+          "paragraph_count": 15,
+          "line_count": 41,
+          "content_type": "search",
+          "is_structured": true
+        }
+      },
+      "key_points": [
+        "2 to unlock even more economic value for people; it's better at creating spreadsheets, building presentations, writing code, perceiving images ...",
+        "Additional Information\nGPT‑5 is a significant leap in intelligence over all our previous models, featuring state-of-the-art performance across coding, math, writing, health, visual",
+        "Current Relevance\nGPT‑5 is a significant leap in intelligence over all our previous models, featuring state-of-the-art performance across coding, math, writing, health, visual",
+        "Key Facts and Statistics\n- GPT‑5 is a significant leap in intelligence over all our previous models, featuring state-of-the-art performance across coding, math, writing, health, visual"
+      ],
+      "topics": [
+        "search",
+        "about",
+        "openai",
+        "direct answer",
+        "additional information",
+        "background",
+        "origins\nthe",
+        "alan turing",
+        "john",
+        "current relevance",
+        "key facts",
+        "statistics",
+        "comparisons",
+        "related information",
+        "unlike"
+      ],
+      "sentiment": "neutral",
+      "complexity_level": "medium",
+      "timestamp": "2026-01-14T14:44:27.185832",
+      "user_context": {
+        "timestamp": "2026-01-14T14:44:27.181834"
+      }
     }
   ],
-  "last_updated": "2026-01-10T22:50:39.414912"
+  "last_updated": "2026-01-14T14:44:27.185832"
 }

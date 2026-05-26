@@ -32,8 +32,8 @@ class AIResponseFileHandler(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        # OLD SYSTEM DISABLED - Check if it's the unified_messages.json file
-        if event.src_path.endswith('unified_messages.json'):
+        # Check if it's the speech_input.json file
+        if event.src_path.endswith('speech_input.json'):
             # Avoid duplicate processing of rapid file changes
             current_time = time.time()
             if current_time - self.last_modified < 0.2:  # 200ms debounce (increased)
@@ -51,8 +51,8 @@ class AIResponseFileHandler(FileSystemEventHandler):
 
 @dataclass
 class CartesiaConfig:
-    api_key: str = os.getenv('CARTESIA_API_KEY', '')
-    voice_id: str = "f114a467-c40a-4db8-964d-aaba89cd08fa"
+    api_key: str = 'sk_car_VqWy79RSCgcBda6TtbJW1A'
+    voice_id: str = "5ee9feff-1265-424a-9d7f-8e4d431a12c7"
     model_id: str = "sonic-english"
     sample_rate: int = 48000  # Increased sample rate for better quality
     volume_multiplier: float = 1.2  # Adjusted to prevent distortion
@@ -157,8 +157,8 @@ class TextToSpeech:
         self.is_running = False  # Service running state
         self.stop_event = threading.Event()  # Event to stop the service
 
-        # OLD SYSTEM DISABLED - Set the unified_messages.json file path
-        self.ai_responses_file = ai_responses_file or "unified_messages.json"
+        # Set the speech_input.json file path
+        self.ai_responses_file = ai_responses_file or "speech_input.json"
 
         # Voice deduplication and synchronization
         self.processing_lock = threading.Lock()  # Lock for critical sections
@@ -205,10 +205,24 @@ class TextToSpeech:
                 data = json.loads(content)
                 if isinstance(data, list) and data:
                     latest_entry = data[-1]
-                    message_id = latest_entry.get("conversation_data", {}).get("message_id", "unknown")
-
-                    # Extract only the AI response text
-                    ai_response = latest_entry.get("conversation_data", {}).get("ai_response", "")
+                    
+                    # Handle both old format (with conversation_data) and new format (simple text)
+                    if "conversation_data" in latest_entry:
+                        # Old format
+                        message_id = latest_entry.get("conversation_data", {}).get("message_id", "unknown")
+                        ai_response = latest_entry.get("conversation_data", {}).get("ai_response", "")
+                    elif "text" in latest_entry:
+                        # New simple format
+                        message_id = latest_entry.get("id", f"msg_{len(data)}")
+                        ai_response = latest_entry.get("text", "")
+                    elif isinstance(latest_entry, str):
+                        # Simplest format - just a string in the array
+                        message_id = f"msg_{len(data)}"
+                        ai_response = latest_entry
+                    else:
+                        # Fallback - try to get any text field
+                        message_id = latest_entry.get("id", "unknown")
+                        ai_response = latest_entry.get("message", latest_entry.get("response", ""))
 
                     # Filter out UI-specific responses that shouldn't be spoken
                     if self.should_skip_response(ai_response):
@@ -615,7 +629,7 @@ class TextToSpeech:
         voice_embedding = self.get_voice_embedding()
         if not voice_embedding:
             print("❌ Failed to get voice embedding, trying alternative approach...")
-            # Try using voice ID directly instead of embedding
+            # Try using voice_id directly instead of embedding
             try:
                 processed_text = self.text_processor.clean_text(text_chunk)
 
@@ -828,8 +842,8 @@ class TextToSpeech:
                 event_handler = AIResponseFileHandler(self)
                 observer = Observer()
 
-                # OLD SYSTEM DISABLED - Monitor the directory containing unified_messages.json
-                watch_path = os.path.dirname(os.path.abspath("unified_messages.json"))
+                # Monitor the directory containing speech_input.json
+                watch_path = os.path.dirname(os.path.abspath("speech_input.json"))
                 observer.schedule(event_handler, watch_path, recursive=False)
                 observer.start()
 
@@ -886,8 +900,8 @@ class NovaVoiceService:
         try:
             # Create configuration
             cartesia_config = CartesiaConfig(
-                api_key=os.getenv('CARTESIA_API_KEY', ''),
-                voice_id="f114a467-c40a-4db8-964d-aaba89cd08fa",
+                api_key='sk_car_VqWy79RSCgcBda6TtbJW1A',
+                voice_id="5ee9feff-1265-424a-9d7f-8e4d431a12c7",
                 model_id="sonic-english",
                 sample_rate=48000,
                 volume_multiplier=1.2
@@ -929,8 +943,8 @@ if __name__ == "__main__":
     try:
         # Create configuration with optimized parameters
         cartesia_config = CartesiaConfig(
-            api_key=os.getenv('CARTESIA_API_KEY', ''),
-            voice_id="f114a467-c40a-4db8-964d-aaba89cd08fa",
+            api_key='sk_car_VqWy79RSCgcBda6TtbJW1A',
+            voice_id="5ee9feff-1265-424a-9d7f-8e4d431a12c7",
             model_id="sonic-english",
             sample_rate=48000,
             volume_multiplier=1.2

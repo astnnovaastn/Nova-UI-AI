@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
 """
-🚀 NOVA AI - ENHANCED HUMAN-LIKE AI ASSISTANT
-=============================================
+🚀 NOVA AI - OLLAMA CLOUD EDITION
+==================================
 
-A sophisticated AI chatbot with advanced features for natural conversation,
+A sophisticated AI chatbot powered by Ollama Cloud models for natural conversation,
 performance optimization, and specialized knowledge.
 
 🌟 ENHANCED FEATURES:
+  • 🤖 Ollama Cloud Models - gpt-oss:120b-cloud, qwen3.5:cloud, gemma4:31b-cloud
   • 💾 Smart Response Caching - Faster responses for common queries
   • 📊 Real-time Performance Monitoring - Track response times and optimize
   • 🧠 Enhanced Context Understanding - Intent analysis and conversation flow
   • 📚 Specialized Knowledge System - Domain expertise in tech, science, business, health
   • 📰 Integrated News System - Real-time news summaries from trusted sources
   • 🎤 Voice Input Support - Natural speech interaction with Whisper
-  • ⚡ Performance Optimization - Multiple models and intelligent fallbacks
+  • ⚡ Multi-Model Rotation - Automatic fallback between cloud models
   • 🤖 Interactive Commands - Rich command system for system control
 
 🚀 QUICK START:
-  python nova_ai.py                    # Basic chat mode
+  python nova_ai.py                    # Basic chat mode with Ollama Cloud
   python nova_ai.py --enable-all       # All enhanced features
   python nova_ai.py --voice            # Voice input mode
   python nova_ai.py --performance-mode # Performance optimized
@@ -52,56 +53,23 @@ performance optimization, and specialized knowledge.
   watch this video for me <url> - AI-powered video analysis
   review this video <url> - Professional video content review
 
-🎵 MUSIC COMMANDS:
-  play <song name> - Search and play music on YouTube
-  play <artist> - <song> - Play specific artist's song
-  search for <song/artist> - Find music without playing
-  show lyrics for <song> - Get lyrics information (copyright compliant)
-  what's playing? - Show current track information
-  music history - Show recently played songs
-
 🔧 TECHNICAL FEATURES:
+  • Ollama Cloud REST API integration
+  • Multi-model automatic rotation and fallback
   • Intelligent caching with LRU eviction
-  • Multi-model fallback (llama3-70b → llama3-8b → original)
   • Context-aware response generation
   • Memory optimization and garbage collection
   • Real-time performance metrics
   • Advanced error handling and recovery
 
 Author: Enhanced AI Development Team
-Version: 3.0 Enhanced Edition
+Version: 4.0 Ollama Cloud Edition
 License: MIT
 """
 
 import asyncio
-# import groq  # Using custom groq client instead
-try:
-    # Import our working groq client
-    import sys
-    import os
-
-    # Add the root directory to the path to find groq_client_fix.py
-    root_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    if root_dir not in sys.path:
-        sys.path.insert(0, root_dir)
-
-    from groq_client_fix import GroqClient
-
-    # Create a groq module-like object for compatibility
-    class GroqModule:
-        Client = GroqClient
-
-    groq = GroqModule()
-    # Silently using working Groq client
-except ImportError as e:
-    # Silently handle Groq client import issues
-    # Fall back to standard groq library
-    try:
-        import groq
-        # Silently using standard Groq library
-    except ImportError:
-        # Silently using mock client
-        groq = None
+import ollama
+from ollama import chat
 import json
 import logging
 import os
@@ -127,7 +95,6 @@ try:
     logging.getLogger('comtypes.client._code_cache').setLevel(logging.WARNING)
 except Exception:
     pass
-import requests
 from dotenv import load_dotenv
 try:
     import numpy as np
@@ -150,17 +117,18 @@ from enum import Enum
 # Load environment variables
 load_dotenv()
 
-# Configure default model name and LLM API key from environment
-MODEL_NAME = os.getenv('AI_MODEL', 'llama-3.3-70b-versatile')
-LLM_API_KEY = os.getenv('LLM_API_KEY')
-if LLM_API_KEY is None:
-    # Do not store secrets in code — require user to set env var
-    print('[WARNING] LLM API key not set. Set the LLM_API_KEY environment variable to enable hosted model access.')
+# Configure Ollama Cloud models - Local Gateway to Cloud
+OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+OLLAMA_CLOUD_MODELS = [
+    'gpt-oss:120b-cloud',
+    'qwen3.5:cloud', 
+    'gemma4:31b-cloud'
+]
+DEFAULT_OLLAMA_MODEL = 'qwen3.5:cloud'
 
 # Get API keys
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # Mock groq client for compatibility
 class MockMessage:
@@ -3075,51 +3043,38 @@ class AleChatBot:
     """Main chatbot class implementing a human-like assistant named Nava with enhanced memory and context understanding."""
     
     def __init__(self, api_key: Optional[str] = None):
-        """Initialize the chatbot with necessary components.
+        """Initialize the chatbot with Ollama Cloud via Local Gateway.
         
         Args:
-            api_key: GROQ API key (optional - will look for environment variable if None)
+            api_key: Not used for Ollama (optional for future use)
         """
-        # Set up API client
-        self.api_key = api_key or GROQ_API_KEY or os.getenv('GROQ_API_KEY')
-        if not self.api_key:
-            logger.warning("No GROQ API key provided. Using mock client for testing.")
-            # Use mock client for testing without API key
-            self.client = MockGroqClient()
-            # Continue initialization even without an API key so local systems (like mem0) can initialize
-            
-        # Initialize API client with timeout configuration
+        # Initialize Ollama client - connects to local gateway which proxies to cloud
+        self.ollama_host = OLLAMA_HOST
+        self.current_model = DEFAULT_OLLAMA_MODEL
+        self.model_index = 0
+        self.max_retries = 3
+        self.retry_delay = 2
+        
+        # Set Ollama client host
+        os.environ['OLLAMA_HOST'] = self.ollama_host
+        
+        print(f"\n🌐 Connecting to Ollama Cloud Gateway at {self.ollama_host}...")
+        logger.info(f"Initialized Ollama client pointing to: {self.ollama_host}")
+        logger.info(f"Cloud models available: {OLLAMA_CLOUD_MODELS}")
+        
+        # Test connection to local Ollama gateway
         try:
-            # Configure timeout settings for Groq API
-            self.api_timeout = 45  # 45 seconds timeout (increased from default 30)
-            self.max_retries = 3
-            self.retry_delay = 2
-
-            if groq is None:
-                raise ValueError("Groq client not available - please check groq_client_fix.py import")
-
-            # Initialize the Groq client
-            if self.api_key:
-                self.client = groq.Client(api_key=self.api_key)
-                logger.info(f"Initialized Groq client with API key: {self.api_key[:8]}...")
-            else:
-                # Use mock client if no API key
-                self.client = MockGroqClient()
-
-            # Test API connection with timeout (skip for mock client)
-            if self.api_key:
-                test_completion = self.client.chat.completions.create(
-                    model="llama-3.1-8b-instant",  # Using the correct model name
-                    messages=[{"role": "user", "content": "Hello"}],
-                    max_tokens=10
-                )
-                logger.info("[OK] API connection test successful")
-
+            import ollama
+            # Test the connection
+            test_response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': 'Hi'}])
+            print(f"✅ Ollama Local Gateway connected successfully!")
+            print(f"🤖 Using Cloud Model: {self.current_model}")
+            logger.info("Ollama Local Gateway connection test successful")
         except Exception as e:
-            logger.error(f"[ERROR] Failed to initialize API client: {e}")
-            # Use mock client as fallback
-            self.client = MockGroqClient()
-            self.api_key = None
+            print(f"⚠️  Warning: Could not connect to Ollama at {self.ollama_host}")
+            print(f"   Error: {e}")
+            print(f"   Make sure Ollama is running: ollama serve")
+            logger.error(f"Failed to connect to Ollama: {e}")
         
         # Initialize memory systems - prefer mem0 as the primary backend
         self.memory_integration = None
@@ -3658,44 +3613,59 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
             file_logger.error(f"Failed to spawn voice system thread: {e}")
 
     async def _make_api_call_with_retry(self, messages, temperature=0.8, max_tokens=400, stream=False):
-        """Make API call with retry logic for timeout handling"""
+        """Make API call to Ollama Cloud via Local Gateway with retry logic"""
         last_exception = None
 
         for attempt in range(self.max_retries):
             try:
-                # Make the API call with timeout
-                completion = await asyncio.to_thread(
-                    self.client.chat.completions.create,
-                    model="llama-3.1-8b-instant",
+                # Rotate through cloud models for better availability
+                if attempt > 0:
+                    self.model_index = (self.model_index + 1) % len(OLLAMA_CLOUD_MODELS)
+                    self.current_model = OLLAMA_CLOUD_MODELS[self.model_index]
+                    logger.info(f"Retrying with cloud model: {self.current_model}")
+                else:
+                    # Use default model on first attempt
+                    self.current_model = DEFAULT_OLLAMA_MODEL
+
+                logger.info(f"Calling Ollama Cloud model: {self.current_model} via {self.ollama_host}")
+
+                # Call Ollama Cloud via official library
+                response = await asyncio.to_thread(
+                    ollama.chat,
+                    model=self.current_model,
                     messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    stream=stream
+                    stream=stream,
+                    options={
+                        'temperature': temperature,
+                        'num_predict': max_tokens
+                    }
                 )
-                return completion
+
+                # Create mock completion object compatible with existing code
+                class Completion:
+                    def __init__(self, content):
+                        self.choices = [type('Choice', (), {'message': type('Message', (), {'content': content})()})()]
+
+                return Completion(response['message']['content'])
 
             except Exception as e:
                 last_exception = e
                 error_msg = str(e).lower()
 
-                # Check if it's a timeout or connection error
-                if any(keyword in error_msg for keyword in ['timeout', 'connection', 'httpsconnectionpool']):
+                if any(keyword in error_msg for keyword in ['timeout', 'connection', 'refused']):
                     if attempt < self.max_retries - 1:
-                        wait_time = self.retry_delay * (attempt + 1)  # Exponential backoff
-                        logger.warning(f"API timeout on attempt {attempt + 1}, retrying in {wait_time}s...")
+                        wait_time = self.retry_delay * (attempt + 1)
+                        logger.warning(f"Ollama Cloud Gateway timeout on attempt {attempt + 1}, retrying in {wait_time}s...")
                         await asyncio.sleep(wait_time)
                         continue
                     else:
-                        logger.error(f"API timeout after {self.max_retries} attempts")
-                        # Return a fallback response for timeout
+                        logger.error(f"Ollama Cloud Gateway timeout after {self.max_retries} attempts")
                         return self._create_timeout_fallback_response()
                 else:
-                    # For non-timeout errors, don't retry
-                    logger.error(f"API error (non-timeout): {e}")
+                    logger.error(f"Ollama Cloud API error: {e}")
                     raise e
 
-        # If we get here, all retries failed
-        logger.error(f"All API retry attempts failed. Last error: {last_exception}")
+        logger.error(f"All Ollama Cloud retry attempts failed. Last error: {last_exception}")
         return self._create_timeout_fallback_response()
 
     def _create_timeout_fallback_response(self):
@@ -8715,33 +8685,34 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
 
 
 async def main():
-    """Main function to run the enhanced chatbot."""
+    """Main function to run the Ollama Cloud chatbot via Local Gateway."""
     try:
         # Parse command line arguments
         import argparse
         parser = argparse.ArgumentParser(
-            description="Nova AI - Enhanced Human-like AI Assistant with Performance Optimization",
+            description="Nova AI - Ollama Cloud Edition (gpt-oss:120b-cloud, qwen3.5:cloud, gemma4:31b-cloud)",
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog="""
-ENHANCED FEATURES:
-  * Smart response caching for faster interactions
-  * Real-time performance monitoring and optimization
-  * Advanced context understanding with intent analysis
-  * Specialized knowledge base for technical domains
-  * Voice input support with automatic transcription
-  * Interactive command system with status reporting
-
+HOW IT WORKS:
+  1. This script connects to your LOCAL Ollama server (localhost:11434)
+  2. Ollama acts as a gateway/proxy to Cloud models
+  3. Cloud models: gpt-oss:120b-cloud, qwen3.5:cloud, gemma4:31b-cloud
+  
 EXAMPLES:
-  python nova_ai.py --mode terminal --enable-all
-  python nova_ai.py --voice --performance-mode
-  python nova_ai.py --disable-cache --enable-knowledge
+  python nova_ai.py                           # Start chatting with cloud AI
+  python nova_ai.py --mode terminal           # Terminal chat mode
+  python nova_ai.py --voice                   # Voice input mode
+  python nova_ai.py --model gpt-oss:120b-cloud  # Use specific cloud model
             """
         )
         
         # Mode and basic options
         parser.add_argument("--mode", choices=["terminal", "transcript"], default="terminal",
                             help="Chat mode: terminal for direct interaction, transcript for processing from file")
-        parser.add_argument("--api-key", help="GROQ API key (overrides environment variable)")
+        parser.add_argument("--model", choices=OLLAMA_CLOUD_MODELS, default=DEFAULT_OLLAMA_MODEL,
+                            help=f"Select Ollama Cloud model (default: {DEFAULT_OLLAMA_MODEL})")
+        parser.add_argument("--host", default=OLLAMA_HOST,
+                            help=f"Ollama host URL (default: {OLLAMA_HOST})")
         parser.add_argument("--voice", action="store_true", help="Enable voice input mode")
         
         # Enhanced feature toggles
@@ -8773,8 +8744,18 @@ EXAMPLES:
             logging.getLogger().setLevel(logging.DEBUG)
             logger.info("🔧 Debug logging enabled")
         
+        # Set Ollama host from args
+        if args.host:
+            os.environ['OLLAMA_HOST'] = args.host
+        
         # Initialize the chatbot
         chatbot = AleChatBot(api_key=args.api_key)
+        
+        # Set the cloud model from args
+        chatbot.current_model = args.model
+        print(f"\n🤖 Using Ollama Cloud Model: {colors['CYAN']}{args.model}{colors['RESET']}")
+        print(f"🌐 Gateway: {colors['CYAN']}{args.host}{colors['RESET']}")
+        print(f"\n{colors['GREEN']}✓ Ready to chat with Ollama Cloud AI!{colors['RESET']}\n")
         
         # Configure enhanced features based on arguments
         if args.enable_all:

@@ -1,13 +1,13 @@
 {
   "user": {
-    "total_sessions": 28,
-    "last_seen": "2026-01-07T10:04:39.561815",
+    "total_sessions": 30,
+    "last_seen": "2026-02-12T16:05:36.365773",
     "relationship_established": true
   },
   "memory_engine": {
     "metadata": {
       "version": "1.0",
-      "generated_at": "2026-01-07T11:07:57.448085",
+      "generated_at": "2026-02-12T17:22:17.986291",
       "description": "Memory engine integrated into user-centric structure; supports ADD/UPDATE events, clustering, semantic vector indexing, and fact history"
     },
     "memory_events": [
@@ -1855,6 +1855,42 @@
       "content": "OpenAI's recent releases include ChatGPT (a conversational AI like me) and DALL-E (a text-to-image model).",
       "timestamp": "2026-01-07T10:05:08.207562",
       "session_id": "session_3ea99c1c"
+    },
+    {
+      "role": "user",
+      "content": "hello",
+      "timestamp": "2026-02-10T22:26:03.883650",
+      "session_id": "session_98b531ee"
+    },
+    {
+      "role": "assistant",
+      "content": "It seems I'm back online. What can I help you with now?",
+      "timestamp": "2026-02-10T22:26:03.883650",
+      "session_id": "session_98b531ee"
+    },
+    {
+      "role": "user",
+      "content": "hi",
+      "timestamp": "2026-02-12T16:06:25.431058",
+      "session_id": "session_f5d3c02e"
+    },
+    {
+      "role": "assistant",
+      "content": "Current time: 10:26 PM, February 10, 2026.",
+      "timestamp": "2026-02-12T16:06:25.431058",
+      "session_id": "session_f5d3c02e"
+    },
+    {
+      "role": "user",
+      "content": "who are u",
+      "timestamp": "2026-02-12T16:06:41.481747",
+      "session_id": "session_f5d3c02e"
+    },
+    {
+      "role": "assistant",
+      "content": "My name is Nova, your AI buddy.",
+      "timestamp": "2026-02-12T16:06:41.481747",
+      "session_id": "session_f5d3c02e"
     }
   ],
   "fact_history": {
@@ -4869,6 +4905,174 @@
             "enhanced_at": "2026-01-07T11:07:57.408894"
           },
           "updated": "2026-01-07"
+        },
+        {
+          "item": "Enjoys to watch anime only on sundays",
+          "added": "2026-02-10",
+          "score": 0.9,
+          "event_references": [
+            "evt_001",
+            "evt_002"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-10T22:29:12.497993"
+          },
+          "updated": "2026-02-10"
+        },
+        {
+          "item": "Enjoys Italian cuisine",
+          "added": "2026-02-10",
+          "score": 0.8,
+          "event_references": [
+            "evt_003"
+          ],
+          "provenance": {
+            "source_event_type": "ADD",
+            "source_event_field": "",
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-10T22:29:12.497993"
+          }
+        },
+        {
+          "item": "Enjoys morning walks",
+          "added": "2026-02-10",
+          "score": 0.85,
+          "event_references": [
+            "evt_004"
+          ],
+          "provenance": {
+            "source_event_type": "ADD",
+            "source_event_field": "",
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-10T22:29:12.497993"
+          }
+        },
+        {
+          "item": "Enjoys morning coffee",
+          "added": "2026-02-10",
+          "score": 0.8,
+          "event_references": [
+            "evt_005"
+          ],
+          "provenance": {
+            "source_event_type": "ADD",
+            "source_event_field": "",
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-10T22:29:12.497993"
+          }
+        },
+        {
+          "item": "Enjoys sci-fi and fantasy novels",
+          "added": "2026-02-10",
+          "score": 0.88,
+          "event_references": [
+            "evt_006",
+            "evt_007"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-10T22:29:12.497993"
+          },
+          "updated": "2026-02-10"
+        },
+        {
+          "item": "Enjoys to watch anime only on sundays",
+          "added": "2026-02-12",
+          "score": 0.9,
+          "event_references": [
+            "evt_001",
+            "evt_002"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-12T16:07:20.085590"
+          },
+          "updated": "2026-02-12"
+        },
+        {
+          "item": "Enjoys Italian cuisine",
+          "added": "2026-02-12",
+          "score": 0.8,
+          "event_references": [
+            "evt_003"
+          ],
+          "provenance": {
+            "source_event_type": "ADD",
+            "source_event_field": "",
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-12T16:07:20.085590"
+          }
+        },
+        {
+          "item": "Enjoys morning walks",
+          "added": "2026-02-12",
+          "score": 0.85,
+          "event_references": [
+            "evt_004"
+          ],
+          "provenance": {
+            "source_event_type": "ADD",
+            "source_event_field": "",
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-12T16:07:20.085590"
+          }
+        },
+        {
+          "item": "Enjoys morning coffee",
+          "added": "2026-02-12",
+          "score": 0.8,
+          "event_references": [
+            "evt_005"
+          ],
+          "provenance": {
+            "source_event_type": "ADD",
+            "source_event_field": "",
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-12T16:07:20.085590"
+          }
+        },
+        {
+          "item": "Enjoys sci-fi and fantasy novels",
+          "added": "2026-02-12",
+          "score": 0.88,
+          "event_references": [
+            "evt_006",
+            "evt_007"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-12T16:07:20.085590"
+          },
+          "updated": "2026-02-12"
+        },
+        {
+          "item": "Enjoys to watch anime only on sundays",
+          "added": "2026-02-12",
+          "score": 0.9,
+          "event_references": [
+            "evt_001",
+            "evt_002"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-12T16:07:20.087099"
+          },
+          "updated": "2026-02-12"
+        },
+        {
+          "item": "Enjoys sci-fi and fantasy novels",
+          "added": "2026-02-12",
+          "score": 0.88,
+          "event_references": [
+            "evt_006",
+            "evt_007"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-12T16:07:20.087099"
+          },
+          "updated": "2026-02-12"
         }
       ],
       "dislikes": [],
@@ -5078,6 +5282,34 @@
             "enhanced_in_place": true,
             "enhanced_at": "2026-01-07T11:07:57.413768"
           }
+        },
+        {
+          "item": "Prefers dark roast black coffee",
+          "added": "2026-02-10",
+          "score": 0.85,
+          "event_references": [
+            "evt_009"
+          ],
+          "provenance": {
+            "source_event_type": "ADD",
+            "source_event_field": "",
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-10T22:29:12.500736"
+          }
+        },
+        {
+          "item": "Prefers dark roast black coffee",
+          "added": "2026-02-12",
+          "score": 0.85,
+          "event_references": [
+            "evt_009"
+          ],
+          "provenance": {
+            "source_event_type": "ADD",
+            "source_event_field": "",
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-12T16:07:20.095112"
+          }
         }
       ],
       "entertainment_habit": [
@@ -5233,6 +5465,34 @@
             "source_event_field": "",
             "enhanced_in_place": true,
             "enhanced_at": "2026-01-07T11:07:57.415962"
+          }
+        },
+        {
+          "item": "Watches anime Sunday evenings",
+          "added": "2026-02-10",
+          "score": 0.87,
+          "event_references": [
+            "evt_011"
+          ],
+          "provenance": {
+            "source_event_type": "ADD",
+            "source_event_field": "",
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-10T22:29:12.503560"
+          }
+        },
+        {
+          "item": "Watches anime Sunday evenings",
+          "added": "2026-02-12",
+          "score": 0.87,
+          "event_references": [
+            "evt_011"
+          ],
+          "provenance": {
+            "source_event_type": "ADD",
+            "source_event_field": "",
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-12T16:07:20.105641"
           }
         }
       ],
@@ -5390,6 +5650,34 @@
             "enhanced_in_place": true,
             "enhanced_at": "2026-01-07T11:07:57.421132"
           }
+        },
+        {
+          "item": "Loves exploring new restaurants",
+          "added": "2026-02-10",
+          "score": 0.83,
+          "event_references": [
+            "evt_012"
+          ],
+          "provenance": {
+            "source_event_type": "ADD",
+            "source_event_field": "",
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-10T22:29:12.507787"
+          }
+        },
+        {
+          "item": "Loves exploring new restaurants",
+          "added": "2026-02-12",
+          "score": 0.83,
+          "event_references": [
+            "evt_012"
+          ],
+          "provenance": {
+            "source_event_type": "ADD",
+            "source_event_field": "",
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-02-12T16:07:20.113639"
+          }
         }
       ],
       "Added_preference_likes": [
@@ -5403,7 +5691,7 @@
           ],
           "provenance": {
             "enhanced_in_place": true,
-            "enhanced_at": "2026-01-07T09:26:44.116391"
+            "enhanced_at": "2026-02-12T16:05:36.364772"
           }
         },
         {
@@ -5416,7 +5704,7 @@
           ],
           "provenance": {
             "enhanced_in_place": true,
-            "enhanced_at": "2026-01-07T09:26:44.116533"
+            "enhanced_at": "2026-02-12T16:05:36.364772"
           }
         }
       ]
@@ -5730,9 +6018,29 @@
       "user_name": null,
       "session_duration": null,
       "last_activity": "2026-01-07T10:05:08.207562"
+    },
+    "session_98b531ee": {
+      "session_id": "session_98b531ee",
+      "start_time": "2026-02-10T22:26:01.537916",
+      "end_time": null,
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2026-02-10T22:26:03.883650"
+    },
+    "session_f5d3c02e": {
+      "session_id": "session_f5d3c02e",
+      "start_time": "2026-02-12T16:05:36.365773",
+      "end_time": null,
+      "message_count": 4,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2026-02-12T16:06:41.481747"
     }
   },
-  "current_session": "session_3ea99c1c",
+  "current_session": "session_f5d3c02e",
   "conversation_state": {
     "introduction_phase": false,
     "established_user": true,

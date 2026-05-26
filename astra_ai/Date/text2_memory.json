@@ -1,0 +1,1023 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": null,
+    "created_at": "2025-12-08T15:47:14.661618",
+    "status": "active",
+    "total_sessions": 1,
+    "last_seen": "2025-12-08T15:47:14.672211",
+    "relationship_established": false
+  },
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2025-12-08T15:56:11.371167",
+      "description": "Mem0 AI Memory Engine - Event-based user memory management system"
+    },
+    "memory_events": [
+    {
+        "event_id": "evt_26ad6feb",
+        "type": "ADD",
+        "summary": "User enjoys reading sci-fi novels.",
+        "timestamp": "2025-12-08T15:47:37.294617Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [
+          "interest",
+          "reading"
+        ],
+          "emotional_intensity": 0.3,
+          "mood_context": "neutral",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from user input: User enjoys reading sci-fi novels.",
+        "importance_score": 0.86,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "preferences",
+        "previous_value": null,
+        "current_value": "User",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-12-08T15:56:11.281988",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I enjoy reading sci-fi novels",
+            "event_index": 0
+          },
+          "source_conversation_timestamp": "2025-12-08T15:56:11.281994"
+        },
+        "session_id": "session_599d6083",
+        "Added_preference_likes": "enjoys reading sci-fi novels"
+      },
+    {
+        "event_id": "evt_32a5eb13",
+        "type": "ADD",
+        "summary": "User prefer dark roast coffee, black.",
+        "timestamp": "2025-12-08T15:48:27.862440Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [
+          "food",
+          "preference",
+          "taste",
+          "drink"
+        ],
+          "emotional_intensity": 0.0,
+          "mood_context": "neutral",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from user input: User prefer dark roast coffee, black.",
+        "importance_score": 0.8099999999999999,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "preferences",
+        "previous_value": null,
+        "current_value": "User",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-12-08T15:56:11.301769",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I prefer dark roast coffee, black.",
+            "event_index": 1
+          },
+          "source_conversation_timestamp": "2025-12-08T15:56:11.301774"
+        },
+        "session_id": "session_599d6083",
+        "Added_preference_likes": "enjoys I prefer dark roast coffee, black."
+      },
+    {
+        "event_id": "evt_64d8aff3",
+        "type": "ADD",
+        "summary": "User walk for about 45 minutes every morning.",
+        "timestamp": "2025-12-08T15:48:35.385564Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [
+          "health",
+          "habit"
+        ],
+          "emotional_intensity": 0.0,
+          "mood_context": "neutral",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from user input: User walk for about 45 minutes every morning.",
+        "importance_score": 0.85,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "User",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-12-08T15:56:11.319620",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I walk for about 45 minutes every morning.",
+            "event_index": 2
+          },
+          "source_conversation_timestamp": "2025-12-08T15:56:11.319624"
+        },
+        "session_id": "session_599d6083",
+        "Added_preference_likes": "enjoys I walk for about 45 minutes every morning."
+      },
+    {
+        "event_id": "evt_77fd7665",
+        "type": "ADD",
+        "summary": "User loves trying new restaurants and cuisines.",
+        "timestamp": "2025-12-08T15:48:49.526950Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [
+          "passion",
+          "curiosity",
+          "enthusiasm",
+          "food",
+          "adventure"
+        ],
+          "emotional_intensity": 0.2,
+          "mood_context": "motivated",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from user input: User loves trying new restaurants and cuisines.",
+        "importance_score": 0.86,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "preferences",
+        "previous_value": null,
+        "current_value": "User",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-12-08T15:56:11.336635",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I love trying new restaurants and cuisines.",
+            "event_index": 3
+          },
+          "source_conversation_timestamp": "2025-12-08T15:56:11.336638"
+        },
+        "session_id": "session_599d6083",
+        "Added_preference_love": "loves trying new restaurants and cuisines"
+      },
+    {
+        "event_id": "evt_bab33c57",
+        "type": "ADD",
+        "summary": "User always read for 30 minutes before bed.",
+        "timestamp": "2025-12-08T15:48:57.408113Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [
+          "reading",
+          "sleep",
+          "habit"
+        ],
+          "emotional_intensity": 0.0,
+          "mood_context": "neutral",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from user input: User always read for 30 minutes before bed.",
+        "importance_score": 0.71,
+        "confidence": 0.85,
+        "category": "activity_behavior",
+        "subcategory": "behavior_patterns",
+        "previous_value": null,
+        "current_value": "User",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-12-08T15:56:11.352415",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: I always read for 30 minutes before bed.",
+            "event_index": 4
+          },
+          "source_conversation_timestamp": "2025-12-08T15:56:11.352418"
+        },
+        "session_id": "session_599d6083",
+        "Added_preference_continue": "continues to I always read for 30 minutes before bed."
+      }
+  ],
+    "vector_index": {
+      "evt_26ad6feb": [0.83, 0.0, 0.33, 0.33, 0.0, 0.0, 0.33, 0.0],
+      "evt_32a5eb13": [0.62, 0.0, 0.47, 0.62, 0.0, 0.0, 0.0, 0.0],
+      "evt_64d8aff3": [0.0, 0.0, 0.0, 0.0, 0.0, 0.71, 0.0, 0.71],
+      "evt_77fd7665": [0.84, 0.0, 0.33, 0.44, 0.0, 0.0, 0.0, 0.0],
+      "evt_bab33c57": [0.0, 0.0, 0.0, 0.0, 0.0, 0.59, 0.2, 0.78]
+    },
+    "clusters": {
+      "cluster_000": {
+        "topic": "food - Cluster",
+        "label": "Food Focus",
+        "centroid_vector": [0.62, 0.0, 0.47, 0.62, 0.0, 0.0, 0.0, 0.0],
+        "event_ids": ["evt_32a5eb13"],
+        "coherence_score": 1.0,
+        "last_updated": "2025-12-08T15:48:27.862440Z",
+        "metadata": {
+          "dominant_tags": ["food"],
+          "cluster_type": "auto_group",
+          "member_count": 1,
+          "average_confidence": 0.8,
+          "temporal_span": "computed",
+          "creation_timestamp": "2025-12-08T15:48:27.862440Z"
+        },
+        "insights": {
+          "primary_pattern": "food",
+          "consistency": 1.0,
+          "emotional_tone": "mixed",
+          "frequency": "auto"
+        }
+      },
+      "cluster_001": {
+        "topic": "health - Cluster",
+        "label": "Health Focus",
+        "centroid_vector": [0.0, 0.0, 0.0, 0.0, 0.0, 0.71, 0.0, 0.71],
+        "event_ids": ["evt_64d8aff3"],
+        "coherence_score": 1.0,
+        "last_updated": "2025-12-08T15:48:35.385564Z",
+        "metadata": {
+          "dominant_tags": ["health"],
+          "cluster_type": "auto_group",
+          "member_count": 1,
+          "average_confidence": 0.8,
+          "temporal_span": "computed",
+          "creation_timestamp": "2025-12-08T15:48:35.385564Z"
+        },
+        "insights": {
+          "primary_pattern": "health",
+          "consistency": 1.0,
+          "emotional_tone": "mixed",
+          "frequency": "auto"
+        }
+      },
+      "cluster_002": {
+        "topic": "interest - Cluster",
+        "label": "Interest Focus",
+        "centroid_vector": [0.83, 0.0, 0.33, 0.33, 0.0, 0.0, 0.33, 0.0],
+        "event_ids": ["evt_26ad6feb"],
+        "coherence_score": 1.0,
+        "last_updated": "2025-12-08T15:47:37.294617Z",
+        "metadata": {
+          "dominant_tags": ["interest"],
+          "cluster_type": "auto_group",
+          "member_count": 1,
+          "average_confidence": 0.8,
+          "temporal_span": "computed",
+          "creation_timestamp": "2025-12-08T15:47:37.294617Z"
+        },
+        "insights": {
+          "primary_pattern": "interest",
+          "consistency": 1.0,
+          "emotional_tone": "mixed",
+          "frequency": "auto"
+        }
+      },
+      "cluster_003": {
+        "topic": "passion - Cluster",
+        "label": "Passion Focus",
+        "centroid_vector": [0.84, 0.0, 0.33, 0.44, 0.0, 0.0, 0.0, 0.0],
+        "event_ids": ["evt_77fd7665"],
+        "coherence_score": 1.0,
+        "last_updated": "2025-12-08T15:48:49.526950Z",
+        "metadata": {
+          "dominant_tags": ["passion"],
+          "cluster_type": "auto_group",
+          "member_count": 1,
+          "average_confidence": 0.8,
+          "temporal_span": "computed",
+          "creation_timestamp": "2025-12-08T15:48:49.526950Z"
+        },
+        "insights": {
+          "primary_pattern": "passion",
+          "consistency": 1.0,
+          "emotional_tone": "mixed",
+          "frequency": "auto"
+        }
+      },
+      "cluster_004": {
+        "topic": "reading - Cluster",
+        "label": "Reading Focus",
+        "centroid_vector": [0.0, 0.0, 0.0, 0.0, 0.0, 0.59, 0.2, 0.78],
+        "event_ids": ["evt_bab33c57"],
+        "coherence_score": 1.0,
+        "last_updated": "2025-12-08T15:48:57.408113Z",
+        "metadata": {
+          "dominant_tags": ["reading"],
+          "cluster_type": "auto_group",
+          "member_count": 1,
+          "average_confidence": 0.8,
+          "temporal_span": "computed",
+          "creation_timestamp": "2025-12-08T15:48:57.408113Z"
+        },
+        "insights": {
+          "primary_pattern": "reading",
+          "consistency": 1.0,
+          "emotional_tone": "mixed",
+          "frequency": "auto"
+        }
+      }
+    },
+    "update_log": [
+    {
+        "type": "CLUSTER_UPDATE",
+        "timestamp": "2025-12-08T15:48:57.409964",
+        "operation": "create",
+        "cluster_id": "cluster_002",
+        "event_ids": ["evt_bab33c57"],
+        "reason": "Created new cluster for event evt_bab33c57",
+        "pre_metrics": {},
+        "post_metrics": {}
+      },
+    {
+        "type": "CLUSTER_UPDATE",
+        "timestamp": "2025-12-08T15:48:49.529050",
+        "operation": "assign",
+        "cluster_id": "cluster_000",
+        "event_ids": ["evt_77fd7665"],
+        "reason": "Assigned to cluster",
+        "pre_metrics": {},
+        "post_metrics": {}
+      },
+    {
+        "type": "CLUSTER_UPDATE",
+        "timestamp": "2025-12-08T15:48:35.387044",
+        "operation": "create",
+        "cluster_id": "cluster_001",
+        "event_ids": ["evt_64d8aff3"],
+        "reason": "Created new cluster for event evt_64d8aff3",
+        "pre_metrics": {},
+        "post_metrics": {}
+      },
+    {
+        "type": "CLUSTER_UPDATE",
+        "timestamp": "2025-12-08T15:47:37.297391",
+        "operation": "create",
+        "cluster_id": "cluster_000",
+        "event_ids": ["evt_26ad6feb"],
+        "reason": "Created new cluster for event evt_26ad6feb",
+        "pre_metrics": {},
+        "post_metrics": {}
+      }
+  ]
+  },
+  "conversation": [
+  {
+      "role": "user",
+      "content": "I enjoy reading sci-fi novels",
+      "timestamp": "2025-12-08T15:47:37.290475",
+      "session_id": "session_599d6083"
+    },
+  {
+      "role": "assistant",
+      "content": "Still living in a galaxy far, far away...",
+      "timestamp": "2025-12-08T15:47:37.290475",
+      "session_id": "session_599d6083"
+    },
+  {
+      "role": "user",
+      "content": "Brandon Sanderson is my favorite author!",
+      "timestamp": "2025-12-08T15:48:16.373336",
+      "session_id": "session_599d6083"
+    },
+  {
+      "role": "assistant",
+      "content": "Mistborn magic is still your thing, I see!",
+      "timestamp": "2025-12-08T15:48:16.373336",
+      "session_id": "session_599d6083"
+    },
+  {
+      "role": "user",
+      "content": "I prefer dark roast coffee, black.",
+      "timestamp": "2025-12-08T15:48:27.857838",
+      "session_id": "session_599d6083"
+    },
+  {
+      "role": "assistant",
+      "content": "Still fueling up with bold, rich dark roast!",
+      "timestamp": "2025-12-08T15:48:27.857838",
+      "session_id": "session_599d6083"
+    },
+  {
+      "role": "user",
+      "content": "I walk for about 45 minutes every morning.",
+      "timestamp": "2025-12-08T15:48:35.381281",
+      "session_id": "session_599d6083"
+    },
+  {
+      "role": "assistant",
+      "content": "Getting a great morning boost from that daily walk!",
+      "timestamp": "2025-12-08T15:48:35.381281",
+      "session_id": "session_599d6083"
+    },
+  {
+      "role": "user",
+      "content": "I love trying new restaurants and cuisines.",
+      "timestamp": "2025-12-08T15:48:49.521567",
+      "session_id": "session_599d6083"
+    },
+  {
+      "role": "assistant",
+      "content": "Adventure in every bite!",
+      "timestamp": "2025-12-08T15:48:49.521567",
+      "session_id": "session_599d6083"
+    },
+  {
+      "role": "user",
+      "content": "I always read for 30 minutes before bed.",
+      "timestamp": "2025-12-08T15:48:57.402908",
+      "session_id": "session_599d6083"
+    },
+  {
+      "role": "assistant",
+      "content": "Cozying up with a good book before bed.",
+      "timestamp": "2025-12-08T15:48:57.402908",
+      "session_id": "session_599d6083"
+    }
+],
+  "fact_history": {
+    "personal_preferences": {
+      "Added_preference_likes": [],
+      "Added_preference_dislikes": [],
+      "Added_preference_avoid": [],
+      "Added_preference_always": [],
+      "Added_preference_style": [],
+      "conditional": [],
+      "Added_preference_interests": [
+      {
+          "category": "reading",
+          "genres": [],
+          "favorite_author": "",
+          "reading_time": "",
+          "score": 0.0
+        },
+      {
+          "category": "entertainment",
+          "type": "",
+          "frequency": "",
+          "score": 0.0
+        },
+      {
+          "category": "wellness",
+          "activities": [],
+          "score": 0.0
+        },
+      {
+          "category": "culinary",
+          "behavior": "",
+          "style": "",
+          "score": 0.0
+        }
+    ],
+      "Added_preference_loves": [],
+      "Added_preference_hates": [],
+      "Added_preference_enjoys": [],
+      "Added_preference_needs": [],
+      "Added_preference_wants": [],
+      "Added_preference_continues": [],
+      "Added_preference_favorites": [],
+      "Added_preference_prefers": [],
+      "preferences": [
+      {
+          "item": "Enjoy reading sci-fi novels",
+          "added": "2025-12-08",
+          "score": 0.85,
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2025-12-08T15:48:58.010349"
+          }
+        },
+      {
+          "item": "Prefer dark roast coffee, black.",
+          "added": "2025-12-08",
+          "score": 0.85,
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2025-12-08T15:48:58.010916"
+          }
+        },
+      {
+          "item": "Love trying new restaurants and cuisines.",
+          "added": "2025-12-08",
+          "score": 0.85,
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2025-12-08T15:48:58.011233"
+          }
+        }
+    ],
+      "Added_preference_preferences": []
+    },
+    "evt_64d8aff3": {
+      "item": "walk for about 45 minutes every morning.",
+      "added": "2025-12-08",
+      "score": 0.85
+    },
+    "evt_bab33c57": {
+      "item": "always read for 30 minutes before bed.",
+      "added": "2025-12-08",
+      "score": 0.85
+    }
+  },
+  "sessions": {
+    "session_599d6083": {
+      "session_id": "session_599d6083",
+      "start_time": "2025-12-08T15:47:14.672211",
+      "end_time": null,
+      "message_count": 12,
+      "topics_discussed": [],
+      "user_name": null,
+      "session_duration": null,
+      "last_activity": "2025-12-08T15:48:57.402908"
+    }
+  },
+  "current_session": "session_599d6083",
+  "conversation_state": {
+    "greeting_completed": false,
+    "introduction_phase": true,
+    "established_user": false
+  },
+  "memory_categories": {
+    "user_identity": {
+      "description": "Names, pronouns, identity evolution",
+      "enhancement_focus": "Personalization, identity consistency, name variations",
+      "contextual_considerations": [
+      "previous_names",
+      "identity_evolution",
+      "pronoun_preferences"
+    ]
+    },
+    "personal_preferences": {
+      "description": "Response style, formality, explanation rules",
+      "enhancement_focus": "Communication adaptation, preference consistency, style evolution",
+      "contextual_considerations": [
+      "communication_style",
+      "formality_level",
+      "explanation_preferences"
+    ]
+    },
+    "task_project_tracking": {
+      "description": "Active projects, tech stacks, deadlines",
+      "enhancement_focus": "Project context, technical details, timeline awareness",
+      "contextual_considerations": [
+      "current_projects",
+      "tech_stack",
+      "deadlines",
+      "progress_tracking"
+    ],
+      "task_creation_history": [
+      {
+          "action": "task_created",
+          "task_id": "50ddb3a2-3bb4-4092-93c2-33d9ede01c78",
+          "task_title": "I usually watch anime",
+          "due_date": "2025-12-14T09:00:00+01:00",
+          "priority": "medium",
+          "user_message": "I usually watch anime on Sunday evenings.",
+          "timestamp": "2025-12-08T15:48:41.499810"
+        }
+    ]
+    },
+    "activity_behavior": {
+      "description": "Active times, conversation topics, engagement",
+      "enhancement_focus": "Behavioral patterns, temporal context, engagement metrics",
+      "contextual_considerations": [
+      "active_hours",
+      "topic_preferences",
+      "engagement_levels"
+    ]
+    },
+    "user_instructions": {
+      "description": "Permanent commands, rules, triggers",
+      "enhancement_focus": "Instruction clarity, permanence recognition, trigger identification",
+      "contextual_considerations": [
+      "permanent_rules",
+      "conditional_triggers",
+      "command_hierarchy"
+    ]
+    },
+    "current_state": {
+      "description": "Active topics, mood, recent questions",
+      "enhancement_focus": "State awareness, temporal relevance, contextual transitions",
+      "contextual_considerations": [
+      "active_topics",
+      "emotional_state",
+      "recent_interactions"
+    ]
+    },
+    "personal_development": {
+      "description": "Skills learning, progress, emotional notes",
+      "enhancement_focus": "Progress tracking, skill relationships, learning patterns",
+      "contextual_considerations": [
+      "skill_progress",
+      "learning_journey",
+      "developmental_milestones"
+    ]
+    },
+    "communication_boundaries": {
+      "description": "Sensitive topics, triggers, support level",
+      "enhancement_focus": "Boundary respect, sensitivity awareness, support adaptation",
+      "contextual_considerations": [
+      "sensitive_topics",
+      "emotional_triggers",
+      "support_boundaries"
+    ]
+    },
+    "contextual_rules": {
+      "description": "Scope, expiry, recall priority",
+      "enhancement_focus": "Rule contextualization, priority management, scope definition",
+      "contextual_considerations": [
+      "rule_scope",
+      "priority_levels",
+      "expiration_contexts"
+    ]
+    },
+    "multi_identity": {
+      "description": "Role profiles, switching triggers",
+      "enhancement_focus": "Identity context switching, role consistency, transition awareness",
+      "contextual_considerations": [
+      "role_profiles",
+      "identity_switching",
+      "contextual_triggers"
+    ]
+    },
+    "knowledge_expertise": {
+      "description": "Skill levels, known concepts",
+      "enhancement_focus": "Expertise assessment, knowledge mapping, competency progression",
+      "contextual_considerations": [
+      "skill_levels",
+      "domain_knowledge",
+      "competency_assessment"
+    ]
+    },
+    "tool_integration": {
+      "description": "Permissions, preferred languages",
+      "enhancement_focus": "Integration optimization, preference alignment, permission management",
+      "contextual_considerations": [
+      "tool_preferences",
+      "permission_levels",
+      "integration_contexts"
+    ]
+    },
+    "response_adaptation": {
+      "description": "Style corrections, tone adaptation",
+      "enhancement_focus": "Adaptive responses, tone consistency, style refinement",
+      "contextual_considerations": [
+      "style_corrections",
+      "tone_adaptation",
+      "response_refinement"
+    ]
+    },
+    "file_media": {
+      "description": "Uploads, context links, preferences",
+      "enhancement_focus": "Media context, link relevance, preference tracking",
+      "contextual_considerations": [
+      "file_references",
+      "media_preferences",
+      "link_context"
+    ]
+    },
+    "long_term_goals": {
+      "description": "Life goals, career objectives, blockers",
+      "enhancement_focus": "Goal progression, objective alignment, obstacle identification",
+      "contextual_considerations": [
+      "life_goals",
+      "career_objectives",
+      "progress_tracking"
+    ]
+    },
+    "collaborator_relationships": {
+      "description": "Team members, communication styles",
+      "enhancement_focus": "Relationship dynamics, communication adaptation, collaboration context",
+      "contextual_considerations": [
+      "team_members",
+      "communication_styles",
+      "collaboration_history"
+    ]
+    },
+    "data_privacy": {
+      "description": "Retention policies, private sessions",
+      "enhancement_focus": "Privacy compliance, retention management, session security",
+      "contextual_considerations": [
+      "privacy_policies",
+      "retention_rules",
+      "security_protocols"
+    ]
+    },
+    "multimodal_preferences": {
+      "description": "Image styles, audio modes",
+      "enhancement_focus": "Multimodal adaptation, preference consistency, format optimization",
+      "contextual_considerations": [
+      "media_formats",
+      "style_preferences",
+      "modality_choices"
+    ]
+    },
+    "system_awareness": {
+      "description": "Errors, feedback, constraints",
+      "enhancement_focus": "System understanding, constraint awareness, feedback integration",
+      "contextual_considerations": [
+      "system_constraints",
+      "error_history",
+      "feedback_loops"
+    ]
+    },
+    "session_themes": {
+      "description": "Themes, emotional arcs, continuity",
+      "enhancement_focus": "Thematic consistency, emotional tracking, narrative coherence",
+      "contextual_considerations": [
+      "session_themes",
+      "emotional_arcs",
+      "continuity_markers"
+    ]
+    },
+    "meta_memory": {
+      "description": "Browser UI, change logs, cleanup",
+      "enhancement_focus": "Meta-awareness, change tracking, system maintenance",
+      "contextual_considerations": [
+      "system_ui",
+      "change_logs",
+      "maintenance_tracking"
+    ]
+    },
+    "temporal_patterns": {
+      "description": "Time-based behaviors and preferences",
+      "enhancement_focus": "Temporal awareness, pattern recognition, schedule optimization",
+      "contextual_considerations": [
+      "time_patterns",
+      "behavioral_cycles",
+      "schedule_preferences"
+    ]
+    },
+    "search_external_info": {
+      "description": "Internet search history, preferences, trusted sources",
+      "enhancement_focus": "Information quality, source reliability, search optimization",
+      "contextual_considerations": [
+      "search_history",
+      "trusted_sources",
+      "information_preferences"
+    ]
+    },
+    "greeting_patterns": {
+      "description": "Greeting history, timing, session tracking",
+      "enhancement_focus": "Greeting personalization, timing optimization, session recognition",
+      "contextual_considerations": [
+      "greeting_history",
+      "timing_preferences",
+      "session_patterns"
+    ]
+    },
+    "conversation_analytics": {
+      "description": "Duration, session gaps, statistics",
+      "enhancement_focus": "Engagement metrics, conversation analytics, interaction patterns",
+      "contextual_considerations": [
+      "engagement_metrics",
+      "session_gaps",
+      "conversation_stats"
+    ]
+    },
+    "news_weather_history": {
+      "description": "News and weather query results and summaries",
+      "enhancement_focus": "Information retention, query context, temporal updates",
+      "contextual_considerations": [
+      "query_context",
+      "information_type",
+      "update_frequency"
+    ]
+    },
+    "timezone_preferences": {
+      "description": "Time zone queries and location preferences",
+      "enhancement_focus": "Timezone awareness, location context, scheduling preferences",
+      "contextual_considerations": [
+      "timezone_context",
+      "location_preferences",
+      "scheduling_needs"
+    ]
+    }
+  },
+  "category_relationships": {
+    "user_identity": [
+    "personal_preferences",
+    "collaborator_relationships",
+    "multi_identity"
+  ],
+    "personal_preferences": [
+    "activity_behavior",
+    "response_adaptation",
+    "communication_boundaries"
+  ],
+    "task_project_tracking": [
+    "knowledge_expertise",
+    "tool_integration",
+    "current_state"
+  ],
+    "activity_behavior": [
+    "temporal_patterns",
+    "session_themes",
+    "conversation_analytics"
+  ],
+    "user_instructions": [
+    "communication_boundaries",
+    "contextual_rules",
+    "system_awareness"
+  ],
+    "current_state": [
+    "session_themes",
+    "conversation_analytics",
+    "news_weather_history"
+  ],
+    "personal_development": [
+    "knowledge_expertise",
+    "long_term_goals",
+    "temporal_patterns"
+  ],
+    "communication_boundaries": [
+    "response_adaptation",
+    "contextual_rules",
+    "data_privacy"
+  ],
+    "contextual_rules": [
+    "system_awareness",
+    "data_privacy",
+    "meta_memory"
+  ],
+    "multi_identity": [
+    "user_identity",
+    "collaborator_relationships",
+    "session_themes"
+  ],
+    "knowledge_expertise": [
+    "tool_integration",
+    "personal_development",
+    "search_external_info"
+  ],
+    "tool_integration": [
+    "file_media",
+    "multimodal_preferences",
+    "system_awareness"
+  ],
+    "response_adaptation": [
+    "personal_preferences",
+    "communication_boundaries",
+    "session_themes"
+  ],
+    "file_media": [
+    "multimodal_preferences",
+    "search_external_info",
+    "meta_memory"
+  ],
+    "long_term_goals": [
+    "personal_development",
+    "collaborator_relationships",
+    "news_weather_history"
+  ],
+    "collaborator_relationships": [
+    "user_identity",
+    "multi_identity",
+    "communication_boundaries"
+  ],
+    "data_privacy": [
+    "contextual_rules",
+    "system_awareness",
+    "meta_memory"
+  ],
+    "multimodal_preferences": [
+    "file_media",
+    "tool_integration",
+    "response_adaptation"
+  ],
+    "system_awareness": [
+    "contextual_rules",
+    "data_privacy",
+    "meta_memory"
+  ],
+    "session_themes": [
+    "activity_behavior",
+    "response_adaptation",
+    "conversation_analytics"
+  ],
+    "meta_memory": [
+    "category_relationships",
+    "behavioral_adaptation",
+    "privacy_settings"
+  ],
+    "temporal_patterns": [
+    "activity_behavior",
+    "session_themes",
+    "conversation_analytics"
+  ],
+    "search_external_info": [
+    "knowledge_expertise",
+    "news_weather_history",
+    "timezone_preferences"
+  ],
+    "greeting_patterns": [
+    "session_themes",
+    "conversation_analytics",
+    "timezone_preferences"
+  ],
+    "conversation_analytics": [
+    "activity_behavior",
+    "session_themes",
+    "temporal_patterns"
+  ],
+    "news_weather_history": [
+    "search_external_info",
+    "current_state",
+    "timezone_preferences"
+  ],
+    "timezone_preferences": [
+    "search_external_info",
+    "news_weather_history",
+    "greeting_patterns"
+  ]
+  },
+  "behavioral_adaptation": {
+    "response_style_preferences": {
+      "preferred_response_length": "moderate",
+      "avoidance_topics": [
+      "politics",
+      "religion"
+    ],
+      "languages_used": [
+      "English"
+    ]
+    },
+    "communication_adaptations": {
+      "formality_level": "casual",
+      "explanation_preferences": "detailed_when_asked",
+      "response_tone": "friendly_helpful"
+    },
+    "learned_patterns": {
+      "user_interests": [],
+      "communication_style": "casual_inquisitive",
+      "preferred_topics": []
+    },
+    "user_feedback_integration": {
+      "last_feedback_received": null,
+      "feedback_type": "",
+      "feedback_content": "",
+      "integration_status": "pending"
+    }
+  },
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  }
+},
+  "vector_representation": 
+"evt_0d1cd579": [
+        0.41,
+        0.0,
+        0.82,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.41
+      ]
+{
+        "event_id": "evt_0d1cd579",
+        "type": "ADD",
+        "summary": "User appreciates watching anime during weekends and likes it a lot.",
+        "timestamp": "2025-12-09T18:55:52.477699Z",
+        "emotional_context": {
+          "sentiment": "positive",
+          "emotion_tags": [
+            "weekends",
+            "watching",
+            "anime"
+          ],
+          "emotional_intensity": 0.3,
+          "mood_context": "motivated",
+          "confidence": 0.8
+        },
+        "semantic_context": "User expressed enjoyment and personal interest in watching anime during weekends.",
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "personal_preferences",
+        "subcategory": "preferences",
+        "previous_value": null,
+        "current_value": "User",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2025-12-09T18:56:51.500044",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: i like to watching anime during weekends",
+            "event_index": 7
+          },
+          "source_conversation_timestamp": "2025-12-09T18:56:51.500051"
+        },
+        "session_id": "session_7bd1eaf9",
+        "Added_preference_likes": "enjoys to watching anime during weekends"
+      }
