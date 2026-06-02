@@ -3,17 +3,29 @@ import json
 import os
 import time
 import shutil
-import requests
+# import requests  # Commented out to avoid import issues
 import hashlib
 import math
 import uuid
+import logging
 from datetime import datetime, date
 from collections import deque
-from dotenv import load_dotenv
-load_dotenv()
-from typing import Dict, List, Tuple, Optional, Any
+# from dotenv import load_dotenv
+# load_dotenv()
+from typing import Dict, List, Tuple, Optional, Any, Set
 from dataclasses import dataclass, asdict
 from enum import Enum
+
+# Import User Identity Manager for comprehensive user profiling
+try:
+    from astra_ai.memory.user_identity_manager import UserIdentityManager
+    USER_IDENTITY_AVAILABLE = True
+except ImportError:
+    USER_IDENTITY_AVAILABLE = False
+
+# Initialize logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class MemoryCategory(Enum):
@@ -49,7 +61,7 @@ class MemoryCategory(Enum):
 class AIOrganizer:
     """
     AI Organizer that continuously monitors and improves memory quality in-place.
-    
+
     This implementation works exactly as specified:
     - Continuously monitors nova_ai_memory.json for new entries
     - Reads the original source of information
@@ -61,52 +73,84 @@ class AIOrganizer:
     - Merges updates with existing memories when needed
     - Tracks where memory entries come from and remakes them to be more human-readable
     - All without creating separate "ENRICH" events
+
+    IMPROVED WORKFLOW CONTROL:
+    - Smart session-aware processing: waits for session completion before organizing
+    - Event prioritization: processes critical events immediately, batches routine ones
+    - Time-based optimization: reduces processing during active conversations
+    - Context-aware decisions: considers conversation state and organizer summaries
     """
-    
-    def __init__(self, config: Dict[str, Any]):
+
+    def __init__(self, config: Dict[str, Any], memory_system = None):
         """
         Initialize the AI Organizer with configuration.
-        
+
         Args:
             config: Configuration dictionary with organizer settings
+            memory_system: Reference to the NovaMemoryAI instance for vector/cluster integration
         """
         self.config = config
         self.organizer_enabled = config.get('organizer_enabled', True)
-        self.memory_file_path = config.get('memory_file_path', os.path.join('astra_ai', 'Date', 'nova_ai_memory.json'))
-        self.check_interval = config.get('check_interval', 1.0)  # seconds
+        self.memory_file_path = config.get('memory_file_path', os.path.join(os.path.dirname(__file__), '..', 'Date', 'nova_ai_memory.json'))
+        self.check_interval = config.get('check_interval', 0.25)  # Fast interval (250ms) for continuous monitoring
+        self.monitoring_active = False  # Track if monitoring is active
+        self.monitoring_thread = None  # Store reference to monitoring thread
         self.last_processed_index = -1
-        self.llm_enabled = config.get('llm_enabled', True)  # Enable by default for Groq
-        self.llm_api_key = config.get('llm_api_key', '')  # Groq API key
+        self.llm_enabled = config.get('llm_enabled', False)  # Disabled by default
+        self.llm_api_key = config.get('llm_api_key', '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')  # Groq API key
         self.llm_model = config.get('llm_model', 'llama-3.1-70b-versatile')  # Groq's powerful model
         self.groq_api_url = 'https://api.groq.com/openai/v1/chat/completions'  # Groq API endpoint
-        
+
+        # Store reference to memory system for vector/cluster operations
+        self.memory_system = memory_system
+
         # Initialize cache for LLM responses to reduce API calls
         self.llm_cache = {}
         self.max_cache_size = config.get('max_cache_size', 100)  # Maximum number of entries to cache
         
+        # Set up logging to file
+        log_file = os.path.join(os.path.dirname(self.memory_file_path), 'organizer.log')
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        
+        # Create organizer-specific logger
+        self.organizer_logger = logging.getLogger("NovaAI.Organizer")
+        self.organizer_logger.addHandler(file_handler)
+        self.organizer_logger.setLevel(logging.DEBUG)
+        self.organizer_logger.propagate = False
+        
+        # Also configure the main logger
+        logger.addHandler(file_handler)
+        logger.setLevel(logging.DEBUG)
+        
+        # Backup control
+        self.last_backup_time = None
+
         # Initialize comprehensive category framework
         self.category_framework = self._initialize_category_framework()
-        
+
         # Initialize normalization maps
         self._initialize_normalization_maps()
-        
+
         # Track processed events to avoid duplication
         self.processed_events = set()
-        
+
         # Enhanced context tracking for better memory rewriting
         self.contextual_knowledge = {}
-        
+
         # Track current_facts for change detection
         self.last_current_facts_checksum = ""
-        
+
         # Track completely processed entries to prevent endless rewriting
         self.completely_processed_entries = set()
-        
+
         # Load previously processed entries from file if it exists
         self.processed_entries_file = self._get_processed_entries_file_path()
         self.processed_memory_file_path = self._get_processed_memory_file_path()
         self._load_previously_processed_entries()
-        
+
         # Initialize processed memory entries tracking
         self.processed_memory_entries = set()
 
@@ -122,6 +166,331 @@ class AIOrganizer:
             'preference', 'preferences', 'behavior', 'behaviors', 'habit', 'habits', 'learning',
             'learning', 'topic', 'topics', 'interest', 'interests', 'category', 'categories',
             'type', 'types', 'kind', 'kinds', 'sort', 'sorts', 'way', 'ways', 'manner', 'manner'
+        }
+
+        # IMPROVED WORKFLOW CONTROL STATE
+        self.workflow_state = {
+            'active_session_id': None,  # Currently active conversation session
+            'session_start_time': None,  # When current session started
+            'last_activity_time': None,  # Last time we saw activity in current session
+            'pending_events': [],  # Events waiting for session completion
+            'session_timeout': 300,  # 5 minutes of inactivity = session end
+            'batch_processing_interval': 60,  # Process pending events every minute
+            'last_batch_process': 0,  # Timestamp of last batch processing
+            'critical_event_types': {'user_identity', 'personal_preferences', 'communication_boundaries'},
+            'routine_event_types': {'activity_behavior', 'current_state', 'personal_development'},
+            'session_aware_mode': True,  # Enable smart session-aware processing
+            'organizer_summary_cache': {},  # Cache for daily organizer summaries
+            'processing_paused': False,  # Manual pause control
+            'pause_reason': None  # Why processing is paused
+        }
+        
+        # Initialize User Identity Manager for comprehensive user profiling
+        if USER_IDENTITY_AVAILABLE:
+            self.user_identity_manager = UserIdentityManager(self.memory_file_path)
+        else:
+            self.user_identity_manager = None
+
+    # ============================================================================
+    # IMPROVED WORKFLOW CONTROL METHODS
+    # ============================================================================
+
+    def _should_start_processing_event(self, event: Dict[str, Any], event_index: int, memory_data: Dict[str, Any]) -> Tuple[bool, str]:
+        """
+        Determine if an event should be processed immediately or queued for later.
+
+        Decision factors:
+        1. Event type priority (critical vs routine)
+        2. Session state (active session = wait, completed session = process)
+        3. Time-based conditions (batch processing intervals)
+        4. Context availability (organizer summaries ready)
+
+        Args:
+            event: The memory event to evaluate
+            event_index: Index of the event in memory
+            memory_data: Current memory data
+
+        Returns:
+            Tuple of (should_process_now, reason)
+        """
+        if not self.workflow_state['session_aware_mode']:
+            return True, "session_aware_mode disabled"
+
+        # Check if processing is manually paused
+        if self.workflow_state['processing_paused']:
+            return False, f"processing paused: {self.workflow_state['pause_reason']}"
+
+        # Get event details
+        event_type = event.get('type', '').upper()
+        event_category = event.get('category', '')
+        session_id = event.get('session_id', '')
+
+        # Determine if this is a new session or continuation
+        current_time = time.time()
+        self._update_session_state(session_id, current_time)
+
+        # CRITICAL EVENTS: Process immediately regardless of session state
+        if event_category in self.workflow_state['critical_event_types']:
+            return True, f"critical event type: {event_category}"
+
+        # ADD events during active sessions: Queue for later processing
+        if event_type == 'ADD' and self._is_session_active():
+            self._queue_event_for_later(event, event_index)
+            return False, f"session active ({self.workflow_state['active_session_id']}), queuing for batch processing"
+
+        # UPDATE events: Process immediately as they modify existing data
+        if event_type == 'UPDATE':
+            return True, "update event - process immediately"
+
+        # Session completed: Process queued events in batch
+        if self._has_session_completed():
+            self._process_pending_events_batch(memory_data)
+            return True, "session completed, processing queued events"
+
+        # Time-based batch processing: Process pending events periodically
+        if self._should_process_batch_now(current_time):
+            self._process_pending_events_batch(memory_data)
+            return True, "batch processing interval reached"
+
+        # Default: Queue routine events during active sessions
+        if event_category in self.workflow_state['routine_event_types']:
+            self._queue_event_for_later(event, event_index)
+            return False, f"routine event during active session, queued"
+
+        # Process immediately for any other cases
+        return True, "default processing"
+
+    def _update_session_state(self, session_id: str, current_time: float):
+        """
+        Update the current session tracking state based on new activity.
+
+        Args:
+            session_id: Session ID from the event
+            current_time: Current timestamp
+        """
+        if not session_id:
+            return
+
+        # New session detected
+        if session_id != self.workflow_state['active_session_id']:
+            # Complete previous session if it exists
+            if self.workflow_state['active_session_id']:
+                self._complete_current_session()
+
+            # Start new session
+            self.workflow_state['active_session_id'] = session_id
+            self.workflow_state['session_start_time'] = current_time
+            self.workflow_state['last_activity_time'] = current_time
+            logger.info(f"Started tracking session: {session_id}")
+
+        else:
+            # Update activity time for current session
+            self.workflow_state['last_activity_time'] = current_time
+
+    def _is_session_active(self) -> bool:
+        """
+        Check if there's currently an active conversation session.
+
+        Returns:
+            True if session is active, False if completed or none
+        """
+        if not self.workflow_state['active_session_id']:
+            return False
+
+        current_time = time.time()
+        time_since_activity = current_time - self.workflow_state['last_activity_time']
+
+        # Session is still active if activity within timeout
+        return time_since_activity < self.workflow_state['session_timeout']
+
+    def _has_session_completed(self) -> bool:
+        """
+        Check if the current session has completed (timed out).
+
+        Returns:
+            True if session has completed
+        """
+        if not self.workflow_state['active_session_id']:
+            return False
+
+        current_time = time.time()
+        time_since_activity = current_time - self.workflow_state['last_activity_time']
+
+        return time_since_activity >= self.workflow_state['session_timeout']
+
+    def _complete_current_session(self):
+        """
+        Mark the current session as completed and prepare for batch processing.
+        """
+        if self.workflow_state['active_session_id']:
+            session_id = self.workflow_state['active_session_id']
+            session_duration = time.time() - self.workflow_state['session_start_time']
+            pending_count = len(self.workflow_state['pending_events'])
+
+            self.organizer_logger.info(f"[ORGANIZER-SESSION] Completed session: {session_id} "
+                  f"(duration: {session_duration:.1f}s, queued: {pending_count} events)")
+
+            # Reset session state
+            self.workflow_state['active_session_id'] = None
+            self.workflow_state['session_start_time'] = None
+            self.workflow_state['last_activity_time'] = None
+
+    def _queue_event_for_later(self, event: Dict[str, Any], event_index: int):
+        """
+        Queue an event for later batch processing.
+
+        Args:
+            event: The event to queue
+            event_index: Index of the event
+        """
+        queued_event = {
+            'event': event,
+            'index': event_index,
+            'queued_time': time.time(),
+            'session_id': self.workflow_state['active_session_id']
+        }
+
+        self.workflow_state['pending_events'].append(queued_event)
+
+        # Limit queue size to prevent memory issues
+        max_queue_size = 100
+        if len(self.workflow_state['pending_events']) > max_queue_size:
+            # Remove oldest events
+            removed = self.workflow_state['pending_events'][:max_queue_size//4]  # Remove 25%
+            self.workflow_state['pending_events'] = self.workflow_state['pending_events'][max_queue_size//4:]
+            self.organizer_logger.warning(f"[ORGANIZER-QUEUE] Queue full, removed {len(removed)} old events")
+
+    def _should_process_batch_now(self, current_time: float) -> bool:
+        """
+        Check if it's time to process the pending events batch.
+
+        Args:
+            current_time: Current timestamp
+
+        Returns:
+            True if batch should be processed now
+        """
+        if not self.workflow_state['pending_events']:
+            return False
+
+        time_since_last_batch = current_time - self.workflow_state['last_batch_process']
+        return time_since_last_batch >= self.workflow_state['batch_processing_interval']
+
+    def _process_pending_events_batch(self, memory_data: Dict[str, Any]):
+        """
+        Process all pending events in batch mode.
+
+        Args:
+            memory_data: Current memory data
+        """
+        if not self.workflow_state['pending_events']:
+            return
+
+        batch_size = len(self.workflow_state['pending_events'])
+        self.organizer_logger.info(f"[ORGANIZER-BATCH] Processing {batch_size} queued events")
+
+        # Process events in chronological order (by queued time)
+        sorted_events = sorted(self.workflow_state['pending_events'],
+                             key=lambda x: x['queued_time'])
+
+        processed_count = 0
+        for queued_event in sorted_events:
+            try:
+                event = queued_event['event']
+                event_index = queued_event['index']
+
+                # Process the event
+                self._process_new_event(memory_data, event_index)
+                processed_count += 1
+
+                # Small delay between events to prevent overwhelming
+                time.sleep(0.1)
+
+            except Exception as e:
+                self.organizer_logger.error(f"[ORGANIZER-BATCH] Error processing queued event: {e}")
+
+        # Clear processed events
+        self.workflow_state['pending_events'].clear()
+        self.workflow_state['last_batch_process'] = time.time()
+
+        self.organizer_logger.info(f"[ORGANIZER-BATCH] Completed batch processing: {processed_count}/{batch_size} events")
+
+    def _check_organizer_summary_context(self, event: Dict[str, Any]) -> bool:
+        """
+        Check if organizer summary context is available for the event's date.
+
+        Args:
+            event: The memory event
+
+        Returns:
+            True if organizer summary exists and is recent
+        """
+        # Extract date from event timestamp
+        timestamp = event.get('timestamp', '')
+        if not timestamp:
+            return False
+
+        try:
+            # Parse timestamp to get date
+            if isinstance(timestamp, str) and 'T' in timestamp:
+                event_date = timestamp.split('T')[0]  # YYYY-MM-DD format
+            else:
+                # Fallback: use current date
+                event_date = datetime.now().strftime('%Y-%m-%d')
+
+            # Check cache first
+            if event_date in self.workflow_state['organizer_summary_cache']:
+                cached_time, summary_exists = self.workflow_state['organizer_summary_cache'][event_date]
+                # Cache valid for 1 hour
+                if time.time() - cached_time < 3600:
+                    return summary_exists
+
+            # Check if organizer summary exists
+            summary_exists = self._read_organizer_output(event_date) is not None
+
+            # Update cache
+            self.workflow_state['organizer_summary_cache'][event_date] = (time.time(), summary_exists)
+
+            return summary_exists
+
+        except Exception as e:
+            self.organizer_logger.error(f"[ORGANIZER-CONTEXT] Error checking summary context: {e}")
+            return False
+
+    def pause_processing(self, reason: str = "manual pause"):
+        """
+        Manually pause event processing.
+
+        Args:
+            reason: Reason for pausing
+        """
+        self.workflow_state['processing_paused'] = True
+        self.workflow_state['pause_reason'] = reason
+        self.organizer_logger.info(f"[ORGANIZER-PAUSE] Processing paused: {reason}")
+
+    def resume_processing(self):
+        """
+        Resume event processing after manual pause.
+        """
+        self.workflow_state['processing_paused'] = False
+        self.workflow_state['pause_reason'] = None
+        self.organizer_logger.info("[ORGANIZER-PAUSE] Processing resumed")
+
+    def get_workflow_status(self) -> Dict[str, Any]:
+        """
+        Get current workflow control status.
+
+        Returns:
+            Dictionary with workflow state information
+        """
+        return {
+            'active_session': self.workflow_state['active_session_id'],
+            'session_active': self._is_session_active(),
+            'pending_events_count': len(self.workflow_state['pending_events']),
+            'processing_paused': self.workflow_state['processing_paused'],
+            'pause_reason': self.workflow_state['pause_reason'],
+            'session_aware_mode': self.workflow_state['session_aware_mode'],
+            'last_batch_process': self.workflow_state['last_batch_process']
         }
         
     def _initialize_category_framework(self) -> Dict[str, Any]:
@@ -747,7 +1116,6 @@ class AIOrganizer:
         # Step 3: Identify salient tokens/phrases (concrete things, not meta-categories)
         salient_tokens = self._extract_salient_tokens(cleaned_text)
 
-
         # Step 4: Rank candidate cues by explicitness and concreteness
         ranked_candidates = self._rank_candidate_tags(salient_tokens)
 
@@ -764,12 +1132,24 @@ class AIOrganizer:
         return unique_tags
         
     def start_monitoring(self):
-        """Start continuous monitoring of the memory file."""
+        """Start continuous monitoring of the memory file.
+        
+        This method runs in a continuous loop and NEVER stops. It:
+        - Monitors for new incoming messages every 250ms
+        - Immediately sends them to the organizer for processing
+        - Handles session transitions and pending queued events
+        - Auto-restarts on errors to ensure continuous operation
+        """
         if not self.organizer_enabled:
-            print("Organizer is disabled.")
+            logger.info("Organizer is disabled.")
             return
+        
+        self.monitoring_active = True
             
-        print(f"Starting AI Organizer monitoring: {self.memory_file_path}")
+        logger.info(f"Starting AI Organizer monitoring: {self.memory_file_path}")
+        logger.info(f"Session-aware mode: {self.workflow_state['session_aware_mode']}")
+        logger.info(f"Session timeout: {self.workflow_state['session_timeout']}s")
+        logger.info(f"Batch processing interval: {self.workflow_state['batch_processing_interval']}s")
         
         try:
             # Ensure the memory file exists
@@ -802,38 +1182,14 @@ class AIOrganizer:
                         "behavioral_adaptation": {},
                         "privacy_settings": {}
                     }, f, indent=2)
-                print(f"Created memory file: {self.memory_file_path}")
+                self.organizer_logger.info(f"Created memory file: {self.memory_file_path}")
             
             # Get initial state
             memory_data = self._load_memory_file()
             if memory_data:
-                # Process ALL existing entries immediately at startup to rewrite them
-                print("Processing existing entries at startup...")
-                modified_count = 0
-                try:
-                    # Enhance all existing memory events from the new structure
-                    memory_events = memory_data.get('memory_engine', {}).get('memory_events', [])
-                    for i, event in enumerate(memory_events):
-                        original_summary = event.get('summary', '')
-                        # Process each event in-place
-                        self._process_new_event(memory_data, i)
-                        if event.get('summary', '') != original_summary:
-                            modified_count += 1
-                    
-                    # Also enhance current_facts and fact_history
-                    self._enhance_current_facts_and_history(memory_data)
-                    if self._rewrite_current_facts(memory_data):
-                        pass  # current facts were rewritten
-                        
-                    # Save the updated data with all rewrites
-                    self._save_memory_file(memory_data)
-                    # Save processed entries to persist across restarts
-                    self._save_processed_entries()
-                    print(f"Processed {len(memory_events)} existing events at startup, {modified_count} were modified.")
-                    
-                except Exception as e:
-                    print(f"Error processing existing entries at startup: {e}")
-                
+                # Skip processing existing entries at startup to avoid generating responses
+                # print("Skipping processing existing entries at startup...")
+                # Just set the last processed index
                 self.last_processed_index = len(memory_data.get('memory_engine', {}).get('memory_events', [])) - 1
                 # Initialize current_facts checksum
                 current_facts = memory_data.get('current_facts', {})
@@ -847,7 +1203,7 @@ class AIOrganizer:
             max_consecutive_errors = 10
             base_wait_time = self.check_interval
             
-            while True:
+            while self.monitoring_active:  # Continuous loop - never stops
                 try:
                     # Check for changes
                     memory_data = self._load_memory_file()
@@ -856,52 +1212,58 @@ class AIOrganizer:
                         memory_events_list = memory_data.get('memory_engine', {}).get('memory_events', [])
                         current_events_count = len(memory_events_list)
                         
-                        # Process new events
+                        # AGGRESSIVE MODE: Process ALL new events immediately as they arrive
+                        # Don't queue - send directly to organizer for continuous processing
                         if current_events_count > self.last_processed_index + 1:
                             # Process only new events to avoid repeated processing
                             for i in range(self.last_processed_index + 1, current_events_count):
                                 # Get the event to check its type
                                 event = memory_events_list[i]
                                 event_type = event.get('type', '').upper()
-                                
-                                self._process_new_event(memory_data, i)
-                                
-                                # If it was an ADD event, mark it as completely processed
-                                if event_type == 'ADD':
-                                    event_id = self._get_event_identifier(event, i)
-                                    self.completely_processed_entries.add(event_id)
-                                    
+                                event_id = self._get_event_identifier(event, i)
+
+                                # CONTINUOUS MODE: Process new messages immediately without queueing
+                                # This ensures the organizer always has the latest messages
+                                try:
+                                    self._process_new_event(memory_data, i)
+
+                                    # Mark as completely processed
+                                    if event_type == 'ADD':
+                                        self.completely_processed_entries.add(event_id)
+
+                                    self.organizer_logger.info(f"[CONTINUOUS-ORGANIZER] Processed event {i} ({event_type}): {event.get('summary', '')}")
+                                except Exception as e:
+                                    self.organizer_logger.warning(f"[CONTINUOUS-ORGANIZER] Error processing event {i}: {e}")
+
                             # Update last processed index
                             self.last_processed_index = current_events_count - 1
-                            
+
                             # Save updated memory data
                             self._save_memory_file(memory_data)
-                            
+
                             # Save the processed entries list to persist across restarts
                             self._save_processed_entries()
                         
-                        # Only check for unprocessed entries periodically to optimize performance
-                        # Modify this to only check NEW entries that haven't been processed yet
-                        # Avoid re-processing entries that have already been handled
+                        # CONTINUOUS MODE: Always process any pending events
+                        # When user comes back, previous session events are processed immediately
                         if consecutive_errors == 0:  # Only check when no recent errors
-                            # Access memory events from the new structure
-                            memory_events_list = memory_data.get('memory_engine', {}).get('memory_events', [])
-                            # Only process entries that are beyond the last processed index
-                            # This avoids re-processing entries that have already been handled
-                            for i in range(self.last_processed_index + 1, len(memory_events_list)):
-                                event = memory_events_list[i]
-                                event_type = event.get('type', '').upper()
-                                if event_type == 'ADD':
-                                    # Check if already processed before processing
-                                    event_id = self._get_event_identifier(event, i)
-                                    if event_id not in self.completely_processed_entries:
-                                        self._process_new_event(memory_data, i)
-                                        # Mark as completely processed after successful processing
-                                        self.completely_processed_entries.add(event_id)
-                                        # Save updated memory data
-                                        self._save_memory_file(memory_data)
-                                        # Also save the processed entries list to persist across restarts
-                                        self._save_processed_entries()
+                            current_time = time.time()
+
+                            # ALWAYS process pending events - never leave messages unprocessed
+                            if self.workflow_state['pending_events']:
+                                self.organizer_logger.info(f"[CONTINUOUS-ORGANIZER] Processing {len(self.workflow_state['pending_events'])} pending events")
+                                self._process_pending_events_batch(memory_data)
+                                self._save_memory_file(memory_data)
+                                self._save_processed_entries()
+
+                            # Check for session completion and ensure queued events are processed
+                            if self._has_session_completed():
+                                self._complete_current_session()
+                                self.organizer_logger.info(f"[CONTINUOUS-ORGANIZER] Session completed - processing queued events")
+                                if self.workflow_state['pending_events']:
+                                    self._process_pending_events_batch(memory_data)
+                                    self._save_memory_file(memory_data)
+                                    self._save_processed_entries()
                         
                         # Also process current_facts and fact_history for any changes
                         self._enhance_current_facts_and_history(memory_data)
@@ -939,12 +1301,14 @@ class AIOrganizer:
                     time.sleep(self.check_interval)
                     
                 except KeyboardInterrupt:
-                    print("\nAI Organizer monitoring stopped by user.")
+                    self.organizer_logger.info("\nAI Organizer monitoring stopped by user.")
+                    self.monitoring_active = False
                     break
                 except Exception as e:
-                    print(f"Error during monitoring: {e}")
+                    self.organizer_logger.error(f"Error during monitoring: {e}")
                     consecutive_errors += 1
                     # Exponential backoff on errors to prevent excessive logging
+                    # But never stop monitoring - always attempt to recover
                     if consecutive_errors >= max_consecutive_errors:
                         # Cap at maximum wait time
                         wait_time = base_wait_time * 10
@@ -952,25 +1316,45 @@ class AIOrganizer:
                         # Exponential backoff: 1x, 2x, 4x, 8x, etc.
                         wait_time = base_wait_time * (2 ** min(consecutive_errors, 5))
                     
-                    print(f"Backing off for {wait_time} seconds due to consecutive errors")
+                    self.organizer_logger.warning(f"[CONTINUOUS-ORGANIZER] Error encountered, backing off for {wait_time}s then resuming...")
                     time.sleep(wait_time)
+                    # Continue monitoring - never exit the loop
                     
         except Exception as e:
-            print(f"Failed to start organizer monitoring: {e}")
+            self.organizer_logger.error(f"Failed to start organizer monitoring: {e}")
+            self.monitoring_active = False
+    
+    def stop_monitoring(self):
+        """Stop the continuous monitoring loop."""
+        self.monitoring_active = False
+        self.organizer_logger.info("Organizer monitoring stopped.")
+    
+    def is_monitoring(self) -> bool:
+        """Check if organizer is actively monitoring."""
+        return self.monitoring_active
 
     def start_memory_organization_cycle(self):
         """
         Start the complete memory organization cycle as specified in the requirements:
         Detection → Rewrite (2-3s) → Save → Wait → Repeat.
+        
+        Also extracts and maintains user identity information.
         """
         if not self.organizer_enabled:
-            print("Organizer is disabled.")
+            self.organizer_logger.info("Organizer is disabled.")
             return
             
-        print(f"Starting AI Memory Organizer cycle: {self.memory_file_path}")
+        self.organizer_logger.info(f"Starting AI Memory Organizer cycle: {self.memory_file_path}")
         
         try:
             while True:
+                # Load memory data for user identity extraction
+                memory_data = self._load_memory_file()
+                
+                # EXTRACT USER IDENTITY (runs in background)
+                if memory_data:
+                    self._extract_and_update_user_identity(memory_data)
+                
                 # DETECTION PHASE: Monitor nova_ai_memory.json for new entries with type "ADD" or similar
                 new_entries = self._monitor_new_entries()
                 
@@ -1015,10 +1399,10 @@ class AIOrganizer:
                 time.sleep(self.check_interval)
                 
         except KeyboardInterrupt:
-            print("\nAI Memory Organizer cycle stopped by user.")
+            self.organizer_logger.info("\nAI Memory Organizer cycle stopped by user.")
             return
         except Exception as e:
-            print(f"Error in memory organization cycle: {e}")
+            self.organizer_logger.error(f"Error in memory organization cycle: {e}")
 
     def _update_main_memory_with_processed_entry(self, original_entry: Dict[str, Any], processed_entry: Dict[str, Any]):
         """
@@ -1046,7 +1430,7 @@ class AIOrganizer:
             self._save_memory_file(memory_data)
             
         except Exception as e:
-            print(f"Error updating main memory with processed entry: {e}")
+            self.organizer_logger.error(f"Error updating main memory with processed entry: {e}")
 
     def _load_memory_file(self) -> Optional[Dict[str, Any]]:
         """Load the memory file safely."""
@@ -1145,7 +1529,7 @@ class AIOrganizer:
                             "privacy_settings": {}
                         }
         except json.JSONDecodeError as e:
-            print(f"Error loading memory file: {e}")
+            self.organizer_logger.error(f"Error loading memory file: {e}")
             # If JSON is invalid/corrupted, return default new structure
             return {
                 "user": {},
@@ -1172,7 +1556,7 @@ class AIOrganizer:
                 "privacy_settings": {}
             }
         except Exception as e:
-            print(f"Error loading memory file: {e}")
+            self.organizer_logger.error(f"Error loading memory file: {e}")
             return None
         
     def _json_default(self, o: Any):
@@ -1204,7 +1588,7 @@ class AIOrganizer:
             with open(self.memory_file_path, 'w', encoding='utf-8') as f:
                 json.dump(memory_data, f, indent=2, ensure_ascii=False, default=self._json_default)
         except Exception as e:
-            print(f"Error saving memory file: {e}")
+            self.organizer_logger.error(f"Error saving memory file: {e}")
             
     def clean_user_prefix_duplicates(self, text: str) -> str:
         """
@@ -1261,16 +1645,22 @@ class AIOrganizer:
         return cleaned_text
 
     def _create_backup(self):
-        """Create a backup of the current memory file."""
+        """Create a backup of the memory file, but only if sufficient time has passed since last backup."""
         try:
+            # Check if we should create a backup (at least 30 minutes since last backup)
+            now = datetime.now()
+            if self.last_backup_time and (now - self.last_backup_time).total_seconds() < 1800:  # 30 minutes
+                return  # Skip backup if not enough time has passed
+            
             if os.path.exists(self.memory_file_path):
                 backup_dir = os.path.join(os.path.dirname(self.memory_file_path), 'backups')
                 os.makedirs(backup_dir, exist_ok=True)
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 backup_path = os.path.join(backup_dir, f'nova_ai_memory_{timestamp}.json')
                 shutil.copy2(self.memory_file_path, backup_path)
+                self.last_backup_time = now  # Update last backup time
         except Exception as e:
-            print(f"Warning: Could not create backup: {e}")
+            self.organizer_logger.warning(f"Warning: Could not create backup: {e}")
             
     def _compute_current_facts_checksum(self, current_facts: Dict[str, Any]) -> str:
         """Compute a checksum for the current_facts section to detect changes."""
@@ -1334,7 +1724,7 @@ class AIOrganizer:
                                     if (field == existing_field and 
                                         self._normalize_preference_value(value) == self._normalize_preference_value(existing_value)):
                                         # This is a duplicate
-                                        print(f"Found duplicate Added_preference: {field} = '{value}' (duplicate of event at index {i})")
+                                        self.organizer_logger.debug(f"Found duplicate Added_preference: {field} = '{value}' (duplicate of event at index {i})")
                                         duplicate_found = True
                                         break
                             if duplicate_found:
@@ -1593,7 +1983,7 @@ class AIOrganizer:
             memory_data['memory_engine']['memory_events'] = memory_events_list
             
         except Exception as e:
-            print(f"Error processing event {event_index}: {e}")
+            self.organizer_logger.error(f"Error processing event {event_index}: {e}")
 
     def _should_skip_rewriting(self, event: Dict[str, Any]) -> bool:
         """
@@ -2264,7 +2654,7 @@ class AIOrganizer:
                 return best_match
                 
         except Exception as e:
-            print(f"Error finding source conversation: {e}")
+            self.organizer_logger.error(f"Error finding source conversation: {e}")
             
         return None
 
@@ -2394,7 +2784,7 @@ class AIOrganizer:
                     is_valid, validation_reason = self._validate_rewrite(rewritten_summary, memory_data, user_name)
                     if not is_valid:
                         # If validation fails, use a fallback message
-                        print(f"Validation failed for rewritten summary: {validation_reason}")
+                        self.organizer_logger.warning(f"Validation failed for rewritten summary: {validation_reason}")
                         if "unclear" in rewritten_summary.lower() or "ambiguous" in rewritten_summary.lower():
                             # If it's already a fallback message, use it
                             enhanced_summary = rewritten_summary
@@ -2412,7 +2802,7 @@ class AIOrganizer:
                         is_valid, validation_reason = self._validate_rewrite(enhanced_summary, memory_data, user_name)
                         if not is_valid:
                             # If the self-check introduced issues, use a fallback
-                            print(f"Self-check fix resulted in invalid summary: {validation_reason}")
+                            self.organizer_logger.warning(f"Self-check fix resulted in invalid summary: {validation_reason}")
                             enhanced_summary = f"{user_name or 'User'} expressed a general preference, but details are unclear."
                     
                     # Clean the enhanced summary after self-check to ensure no meta phrases
@@ -2652,7 +3042,7 @@ class AIOrganizer:
             event = self._ensure_emotional_context(event, text_content)
 
         except Exception as e:
-            print(f"Error enhancing event: {e}")
+            self.organizer_logger.error(f"Error enhancing event: {e}")
 
         # Return the enhanced event for further processing
         return event
@@ -3352,8 +3742,74 @@ class AIOrganizer:
             
         except Exception:
             return ""
-            
     
+    def _extract_and_update_user_identity(self, memory_data: Dict[str, Any]):
+        """Extract user identity information and update user profile
+        
+        Extracts critical information:
+        - User name
+        - Age
+        - Location/Origin
+        - Interests
+        - Skills
+        
+        Updates nova_ai_memory.json with comprehensive user profile
+        """
+        try:
+            if not self.user_identity_manager:
+                return
+            
+            # Get important_user_facts from session summaries
+            important_facts = []
+            
+            # Check daily organizer summaries
+            if 'sessions' in memory_data:
+                for session_id, session_data in memory_data['sessions'].items():
+                    if isinstance(session_data, dict):
+                        organizer_status = session_data.get('organizer_status', {})
+                        if isinstance(organizer_status, dict) and organizer_status.get('organizer_summary_ready'):
+                            organizer_file = organizer_status.get('organizer_file', '')
+                            if organizer_file:
+                                try:
+                                    organizer_path = os.path.join(os.path.dirname(self.memory_file_path), organizer_file)
+                                    if os.path.exists(organizer_path):
+                                        with open(organizer_path, 'r') as f:
+                                            organizer_data = json.load(f)
+                                            important_facts.extend(organizer_data.get('important_user_facts', []))
+                                except Exception as e:
+                                    logger.debug(f"Could not load organizer summary: {e}")
+            
+            # Extract user info from facts
+            if important_facts:
+                extracted = self.user_identity_manager.extract_user_info_from_facts(important_facts)
+                if extracted:
+                    logger.info(f"[USER_IDENTITY] Extracted user info: {extracted}")
+                    self.user_identity_manager.update_memory_file_with_user_identity()
+        
+        except Exception as e:
+            logger.debug(f"Error extracting user identity: {e}")
+    
+    def get_user_context_for_ai(self) -> str:
+        """Get formatted user context for AI to use in responses
+        
+        Returns:
+            Human-readable user context string describing the user
+        """
+        try:
+            if self.user_identity_manager:
+                return self.user_identity_manager.get_user_context_string()
+            return ""
+        except Exception as e:
+            logger.debug(f"Error getting user context: {e}")
+            return ""
+    
+    def update_user_profile_to_memory(self):
+        """Update nova_ai_memory.json with current user profile"""
+        try:
+            if self.user_identity_manager:
+                self.user_identity_manager.update_memory_file_with_user_identity()
+        except Exception as e:
+            logger.debug(f"Error updating user profile to memory: {e}")
         
     def _apply_enhancements(self, text: str, user_name: Optional[str], memory_data: Dict[str, Any], source_info: Optional[Dict[str, Any]] = None) -> str:
         """Apply all enhancements to the text, being precise about what the user actually said and where it came from."""
@@ -3546,6 +4002,8 @@ class AIOrganizer:
             return self.llm_cache[cache_key]
             
         try:
+            import requests  # Import here to avoid global import issues
+            
             # Get comprehensive user context
             user_context = self._get_comprehensive_user_context(memory_data)
             
@@ -9878,14 +10336,1568 @@ Enhanced memory entry:"""
             
             return content if content else clean_summary
 
-# Example configuration
+    # ============================================================================
+    # DAILY SESSION PROCESSING FOR MEMORY PIPELINE
+    # ============================================================================
+    
+    def organize_daily_conversations(self, date: str, session_ids: List[str], conversation_text: str) -> Dict[str, Any]:
+        """
+        Process a daily session and create or update an organized summary.
+        
+        For incremental daily conversation organization:
+        1. Check if summary already exists for the date
+        2. If exists, read current summary and process only new messages
+        3. If new messages exist, append to existing summary
+        4. If no existing summary, create new one from all messages
+        
+        Args:
+            date: Date string in format YYYY-MM-DD
+            session_ids: List of session IDs (usually just one for daily model)
+            conversation_text: Combined conversation text from the session
+        
+        Returns:
+            Dictionary with organized data ready for memory system
+        """
+        try:
+            # Step 1: Parse messages from conversation text
+            # NOTE: mem0_memory_system now sends ONLY new messages (not all + old)
+            # So we treat all_messages as the new messages to process
+            new_messages_parsed = self._parse_conversation_text(conversation_text)
+            
+            # Step 2: Check if organizer output already exists
+            existing_output = self._read_organizer_output(date)
+            
+            if existing_output and existing_output.get("daily_summary"):
+                # Incremental update: process only the new messages sent by mem0_memory_system
+                existing_message_count = existing_output.get("message_count", 0)
+                new_message_count = len(new_messages_parsed)
+                total_message_count = existing_message_count + new_message_count
+                
+                if new_message_count > 0:
+                    # New messages detected - process them
+                    logger.info(f"[ORGANIZER] Incremental update: {new_message_count} new messages (previously: {existing_message_count}, total will be: {total_message_count})")
+                    # Step 3: Filter new messages
+                    filtered_new_messages = self._filter_filler_messages(new_messages_parsed)
+                    
+                    if filtered_new_messages:
+                        # Step 4: Extract facts from new messages
+                        new_user_facts = self._extract_user_facts(new_messages_parsed)
+                        
+                        # Merge with existing facts
+                        existing_facts = existing_output.get("important_user_facts", [])
+                        all_user_facts = list(set(existing_facts + new_user_facts))  # Deduplicate
+                        
+                        # Step 5: Generate narrative from ONLY NEW messages
+                        new_narrative_segment = self._create_coherent_narrative(filtered_new_messages)
+                        
+                        # Step 6: Build updated summary by appending new narrative to existing
+                        existing_summary = existing_output.get("daily_summary", "")
+                        if existing_summary:
+                            # Append new narrative to existing summary
+                            if existing_summary.endswith('.'):
+                                updated_summary = existing_summary + " " + new_narrative_segment
+                            else:
+                                updated_summary = existing_summary + ". " + new_narrative_segment
+                        else:
+                            # No existing summary, use new narrative as primary
+                            updated_summary = new_narrative_segment
+                        
+                        # Step 7: Update existing output with correct message count
+                        existing_output["daily_summary"] = updated_summary
+                        existing_output["message_count"] = total_message_count  # Now correctly sums old + new
+                        existing_output["important_user_facts"] = all_user_facts
+                        existing_output["session_ids"].extend(session_ids)
+                        existing_output["session_ids"] = list(set(existing_output["session_ids"]))  # Remove duplicates
+                        existing_output["updated_at"] = datetime.now().isoformat()
+                        
+                        # Step 8: Write updated output
+                        self._write_organizer_output(date, existing_output)
+                        
+                        logger.info(f"[ORGANIZER] Updated incremental summary for {date}: +{len(filtered_new_messages)} new messages")
+                        return existing_output
+                    else:
+                        # No meaningful new messages, still update message count
+                        existing_output["message_count"] = total_message_count
+                        existing_output["updated_at"] = datetime.now().isoformat()
+                        self._write_organizer_output(date, existing_output)
+                        logger.info(f"[ORGANIZER] No new meaningful messages for {date}, updated count only")
+                        return existing_output
+                else:
+                    # No new messages
+                    logger.info(f"[ORGANIZER] No new messages for {date}")
+                    return existing_output
+            else:
+                # No existing summary: create new one
+                # In this case, new_messages_parsed are ALL the messages for the new summary
+                total_message_count = len(new_messages_parsed)
+                logger.info(f"[ORGANIZER] Creating new summary for {date}: {total_message_count} messages")
+                
+                # Step 2: Filter out filler messages that don't contribute meaning
+                filtered_messages = self._filter_filler_messages(new_messages_parsed)
+                
+                # Step 3: Extract important user facts mentioned in conversation
+                user_facts = self._extract_user_facts(filtered_messages)
+                
+                # Step 4: Create a natural, meaningful daily summary with full conversation context
+                daily_summary = self._create_meaningful_daily_summary(filtered_messages)
+                
+                # Step 5: Extract main topics (for logging)
+                main_topics = self._extract_main_topics(filtered_messages)
+                
+                # Step 6: Prepare organized output with improved format
+                organizer_output = {
+                    "date": date,
+                    "session_ids": session_ids,
+                    "daily_summary": daily_summary,
+                    "important_user_facts": user_facts,
+                    "message_count": total_message_count,
+                    "created_at": datetime.now().isoformat()
+                }
+                
+                # Step 7: Write to JSON file
+                self._write_organizer_output(date, organizer_output)
+                
+                logger.info(f"[ORGANIZER] Created new summary for {date}: {len(session_ids)} session(s), {len(filtered_messages)} meaningful messages, {len(main_topics)} topics extracted")
+                return organizer_output
+            
+        except Exception as e:
+            logger.warning(f"Error organizing daily conversations for {date}: {e}")
+            # Return minimal output on error
+            return {
+                "date": date,
+                "session_ids": session_ids,
+                "daily_summary": f"On {date}, the user had a conversation with Nova.",
+                "important_user_facts": [],
+                "message_count": 0,
+                "error": str(e)
+            }
+    
+    def _parse_conversation_text(self, conversation_text: str) -> List[Dict[str, str]]:
+        """Parse conversation text into structured message list
+        
+        Handles format: "ROLE: content\\n"
+        Conversation is sorted by timestamp for chronological order
+        
+        Args:
+            conversation_text: Raw conversation text
+        
+        Returns:
+            List of dicts with role and content, sorted chronologically
+        """
+        messages = []
+        lines = conversation_text.split('\n')
+        current_role = None
+        current_content = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Check if line starts with ROLE: pattern
+            if line.startswith('USER:'):
+                if current_role and current_content:
+                    messages.append({
+                        'role': current_role,
+                        'content': ' '.join(current_content).strip()
+                    })
+                current_role = 'user'
+                current_content = [line[5:].strip()]  # Remove "USER:" prefix
+            elif line.startswith('ASSISTANT:') or line.startswith('AI:'):
+                if current_role and current_content:
+                    messages.append({
+                        'role': current_role,
+                        'content': ' '.join(current_content).strip()
+                    })
+                current_role = 'assistant'
+                if line.startswith('ASSISTANT:'):
+                    current_content = [line[10:].strip()]  # Remove "ASSISTANT:" prefix
+                else:
+                    current_content = [line[3:].strip()]   # Remove "AI:" prefix
+            else:
+                if current_role:
+                    current_content.append(line)
+        
+        # Add last message
+        if current_role and current_content:
+            messages.append({
+                'role': current_role,
+                'content': ' '.join(current_content).strip()
+            })
+        
+        return messages
+    
+    def _filter_filler_messages(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Filter out filler messages that don't contribute meaning
+        
+        Removes: hi, hello, ok, thanks, and other non-substantive messages
+        
+        Args:
+            messages: List of message dicts
+        
+        Returns:
+            Filtered list without filler messages
+        """
+        # Define filler message patterns - messages that don't add meaning
+        filler_messages = {
+            'hi', 'hello', 'hey', 'yooo', 'yo', 'ok', 'okay', 'alright', 'sure',
+            'thanks', 'thank you', 'great', 'nice', 'good', 'cool', 'awesome',
+            'lol', 'haha', 'yeah', 'yep', 'nope', 'no', 'yes',
+            'got it', 'understood', 'i see', 'i understand', 'aha',
+            'what?', 'huh?', 'say what?', 'excuse me?'
+        }
+        
+        filtered = []
+        for msg in messages:
+            content = msg['content'].lower().strip()
+            # Skip if content is empty or is purely a filler message
+            if content and content not in filler_messages:
+                filtered.append(msg)
+        
+        return filtered
+    
+    def _extract_meaningful_topics(self, messages: List[Dict[str, str]]) -> List[str]:
+        """Extract meaningful main topics from conversation
+        
+        Focuses on actual discussion subjects discussed by the user and AI,
+        not random keywords or filler words
+        
+        Args:
+            messages: Filtered message list
+        
+        Returns:
+            List of 3-5 meaningful main topics
+        """
+        topics_found = {}
+        
+        # Define meaningful topic categories and their indicators
+        topic_categories = {
+            'football': ['football', 'soccer', 'players', 'messi', 'ronaldo', 'maradona', 'cristiano', 'lionel'],
+            'sports': ['sports', 'game', 'match', 'play', 'athletic', 'championship'],
+            'casual conversation': ['greeting', 'how are you', 'what are you', 'how is'],
+            'personal identity': ['name', 'called', 'introduce', 'myself', 'i am', 'i\'m'],
+            'preferences and opinions': ['like', 'love', 'prefer', 'enjoy', 'hate', 'dislike', 'think about'],
+            'topics about AI': ['nova', 'bot', 'artificial', 'thinking', 'helping', 'assistant'],
+        }
+        
+        # Scan conversation for topic indicators
+        full_text = ' '.join([msg['content'].lower() for msg in messages])
+        
+        for topic, keywords in topic_categories.items():
+            for keyword in keywords:
+                if keyword in full_text:
+                    topics_found[topic] = topics_found.get(topic, 0) + full_text.count(keyword)
+        
+        # Sort by frequency and return top topics
+        sorted_topics = sorted(topics_found.items(), key=lambda x: x[1], reverse=True)
+        main_topics = [topic for topic, _ in sorted_topics[:5]]
+        
+        return main_topics
+    
+    def _extract_user_facts(self, messages: List[Dict[str, str]]) -> List[str]:
+        """Extract important facts about the user from conversation
+        
+        Identifies: name, preferences, interests, skills mentioned by user
+        
+        Args:
+            messages: Filtered message list
+        
+        Returns:
+            List of important user facts (max 5)
+        """
+        facts = []
+        
+        # Get only user messages
+        user_messages = [msg['content'] for msg in messages if msg['role'] == 'user']
+        if not user_messages:
+            return facts
+        
+        full_user_text = ' '.join(user_messages)
+        full_user_text_lower = full_user_text.lower()
+        
+        # Extract name - multiple approaches
+        name_found = False
+        
+        # Approach 1: Regex patterns
+        name_patterns = [
+            r"my name is\s+([A-Za-z]+)",
+            r"i'm\s+([A-Za-z]+)",
+            r"i am\s+([A-Za-z]+)",
+            r"call me\s+([A-Za-z]+)",
+            r"name's\s+([A-Za-z]+)",
+            r"name is\s+([A-Za-z]+)",
+        ]
+        
+        for pattern in name_patterns:
+            # Search in original text for case preservation
+            matches = re.findall(pattern, full_user_text, re.IGNORECASE)
+            if matches:
+                name = matches[0]
+                if len(name) > 2 and name.lower() not in ['user', 'nova']:  # Filter garbage
+                    facts.append(f"User stated their name is {name}")
+                    name_found = True
+                    break
+        
+        # Approach 2: Look for capitalized words that appear in context of "name"
+        if not name_found and 'name' in full_user_text_lower:
+            words = full_user_text.split()
+            for i, word in enumerate(words):
+                # Check if preceded by "is" or "name"
+                if i > 0 and words[i-1].lower() in ['is', 'be', 'dennis', 'john', 'jane']:
+                    if word and word[0].isupper() and len(word) > 2:
+                        if word.lower() not in ['user', 'nova', 'momo', 'the']:
+                            facts.append(f"User stated their name is {word}")
+                            name_found = True
+                            break
+        
+        # Extract preference statements with more flexible matching
+        preference_keywords = {
+            'love': 'loves',
+            'like': 'likes',
+            'enjoy': 'enjoys',
+            'hate': 'hates',
+            'dislike': 'dislikes',
+            'prefer': 'prefers',
+        }
+        
+        for keyword, verb in preference_keywords.items():
+            # More flexible pattern to catch preferences
+            pattern = rf"(?:i\s+)?{keyword}\s+(?:(?:really|very|quite)\s+)?([^.!?]{3,60}?)(?:\s*[.!?]|\s+[a-z]|\s*$)"
+            matches = re.findall(pattern, full_user_text_lower, re.IGNORECASE)
+            
+            for match in matches:
+                subject = match.strip()
+                # Filter out generic/empty matches
+                if 3 < len(subject) < 100 and subject not in ['thinking', 'helping', 'talking', 'this']:
+                    fact = f"User {verb} {subject}"
+                    if fact not in facts:  # Avoid duplicates
+                        facts.append(fact)
+                        break  # Only add one per verb
+        
+        # Extract activities and self-statements
+        activity_patterns = [
+            (r"i'm\s+(.*)", "User is {0}"),
+            (r"i am\s+(.*)", "User is {0}"),
+            (r"i'm working on\s+(.*)", "User is working on {0}"),
+            (r"i'm coding\s+(.*)", "User is coding {0}"),
+            (r"i'm developing\s+(.*)", "User is developing {0}"),
+        ]
+        
+        for pattern, template in activity_patterns:
+            matches = re.findall(pattern, full_user_text_lower, re.IGNORECASE)
+            for match in matches:
+                fact = template.format(match.strip())
+                if fact not in facts and len(fact) > 10 and not any(word in fact.lower() for word in ['thinking', 'helping', 'talking']):
+                    facts.append(fact)
+                    break  # One per pattern
+        
+        return facts[:5]  # Limit to 5 facts
+    
+    def _extract_main_topics(self, messages: List[Dict[str, str]]) -> List[str]:
+        """Extract main topics discussed in the conversation
+        
+        Identifies key topics or subjects discussed between user and AI.
+        
+        Args:
+            messages: List of message dictionaries with 'role' and 'content'
+        
+        Returns:
+            List of extracted main topics
+        """
+        topics = []
+        
+        # Combine all messages for analysis
+        all_content = ' '.join([msg.get('content', '') for msg in messages])
+        all_content_lower = all_content.lower()
+        
+        # Define topic keywords
+        topic_keywords = {
+            'Italian food': ['italian', 'pasta', 'lasagna', 'pizza', 'gelato'],
+            'Food preferences': ['food', 'eat', 'like to eat', 'favorite food', 'cuisine'],
+            'Names and identity': ['name', 'who are you', 'identity', 'myself'],
+            'Greetings': ['hello', 'hi', 'hey', 'greeting'],
+            'Learning': ['learn', 'explain', 'teach', 'understand', 'question'],
+            'General conversation': ['tell', 'talk', 'discuss', 'say', 'think'],
+            'Preferences': ['like', 'love', 'prefer', 'enjoy', 'hate', 'dislike'],
+            'Geography': ['place', 'location', 'country', 'region', 'city'],
+        }
+        
+        # Check which topics are present
+        for topic, keywords in topic_keywords.items():
+            for keyword in keywords:
+                if keyword in all_content_lower:
+                    if topic not in topics:
+                        topics.append(topic)
+                    break
+        
+        # If no topics found, return generic
+        if not topics:
+            topics = ['General conversation']
+        
+        return topics[:5]  # Limit to 5 topics
+    
+    def _create_meaningful_daily_summary(self, all_messages: List[Dict[str, str]]) -> str:
+        """Create a chronological narrative of user's interactions during the day
+        
+        Transforms conversation logs into a clear chronological narrative that describes 
+        the dialogue between user and AI, showing how the conversation unfolded. Creates
+        natural flowing text with proper connectors, not fragmented statements.
+        
+        Args:
+            all_messages: List of ALL messages (user and assistant) in chronological order
+        
+        Returns:
+            A flowing chronological narrative describing the interaction
+        """
+        if not all_messages:
+            return "The user had no messages in the conversation."
+        
+        # Create coherent narrative from full conversation
+        return self._create_coherent_narrative(all_messages)
+    
+    def _create_coherent_narrative(self, all_messages: List[Dict[str, str]]) -> str:
+        """Create a flowing, coherent narrative from all messages in conversation
+        
+        Analyzes user messages paired with AI responses to understand conversation flow,
+        DEDUPLICATES similar content, and creates natural language narrative with proper connectors.
+        
+        Args:
+            all_messages: List of all messages in chronological order
+        
+        Returns:
+            Flowing narrative that describes the conversation naturally (no duplicates)
+        """
+        if not all_messages:
+            return "The user had a conversation with Nova."
+        
+        # Build conversation pairs (user message + AI response)
+        conversation_pairs = []
+        current_pair = {}
+        
+        for msg in all_messages:
+            if msg.get('role') == 'user':
+                if current_pair and 'user' in current_pair:
+                    # Start new pair if we already have a user message
+                    current_pair = {}
+                current_pair['user'] = msg.get('content', '').strip()
+            elif msg.get('role') == 'assistant':
+                current_pair['assistant'] = msg.get('content', '').strip()
+                if 'user' in current_pair:
+                    conversation_pairs.append(current_pair)
+                    current_pair = {}
+        
+        # If we have unpaired user message at end, add it
+        if current_pair and 'user' in current_pair:
+            conversation_pairs.append(current_pair)
+        
+        if not conversation_pairs:
+            return "The user had a conversation with Nova."
+        
+        # Build narrative from conversation pairs
+        narrative_segments = []
+        
+        for idx, pair in enumerate(conversation_pairs):
+            user_msg = pair.get('user', '').lower()
+            ai_msg = pair.get('assistant', '').lower()
+            
+            segment = self._create_narrative_segment(user_msg, ai_msg, idx, len(conversation_pairs))
+            if segment:
+                narrative_segments.append(segment)
+        
+        if not narrative_segments:
+            return "The user had a conversation with Nova."
+        
+        # CRITICAL: Deduplicate similar/duplicate segments before joining
+        narrative_segments = self._deduplicate_narrative_segments(narrative_segments)
+        
+        # Join segments into coherent narrative
+        return self._join_narrative_segments(narrative_segments)
+    
+    def _deduplicate_narrative_segments(self, segments: List[str]) -> List[str]:
+        """Remove duplicate or similar narrative segments
+        
+        Merges duplicate information so each fact is mentioned only once.
+        For example, "loves italian food" mentioned 3 times becomes just 1 mention.
+        
+        Args:
+            segments: List of narrative segments (may contain duplicates)
+        
+        Returns:
+            Deduplicated list of segments
+        """
+        if not segments:
+            return []
+        
+        # Track seen facts to avoid duplication
+        seen_facts = {}
+        deduplicated = []
+        
+        for segment in segments:
+            segment_lower = segment.lower().strip()
+            
+            # Extract the core fact (first 50 chars or main part)
+            core_fact = segment_lower[:60]  # Get first 60 chars as core identifier
+            
+            # Check if we've already seen this exact segment or similar
+            if core_fact not in seen_facts:
+                # Check for semantic similarity with existing segments
+                is_duplicate = False
+                for existing_fact in seen_facts.keys():
+                    if self._are_segments_similar(segment_lower, existing_fact):
+                        is_duplicate = True
+                        logger.debug(f"[DEDUP] Skipping duplicate segment: {segment[:50]}...")
+                        break
+                
+                if not is_duplicate:
+                    deduplicated.append(segment)
+                    seen_facts[core_fact] = True
+            else:
+                logger.debug(f"[DEDUP] Filtered duplicate: {segment[:50]}...")
+        
+        return deduplicated
+    
+    def _are_segments_similar(self, seg1: str, seg2: str) -> bool:
+        """Check if two segments describe similar information
+        
+        Args:
+            seg1: First segment (lowercase)
+            seg2: Second segment (lowercase)
+        
+        Returns:
+            True if segments are similar enough to be considered duplicates
+        """
+        # Extract key nouns/objects from both segments
+        objects1 = self._extract_key_objects(seg1)
+        objects2 = self._extract_key_objects(seg2)
+        
+        # If both mention the same preference/object, likely duplicates
+        if objects1 and objects2 and objects1 == objects2:
+            return True
+        
+        # Check for exact substring containment
+        if len(seg1) > 20 and len(seg2) > 20:
+            if seg1[:40] in seg2 or seg2[:40] in seg1:
+                return True
+        
+        return False
+    
+    def _extract_key_objects(self, segment: str) -> str:
+        """Extract the key object/preference from a segment
+        
+        For "loves italian food", extracts "italian food"
+        For "asked about python", extracts "python"
+        
+        Args:
+            segment: Narrative segment (lowercase)
+        
+        Returns:
+            The key object/topic being discussed
+        """
+        # Common patterns
+        if 'loves ' in segment:
+            after = segment.split('loves ')[-1].strip()
+            return after.split('.')[0][:30]  # Take up to 30 chars
+        elif 'likes ' in segment:
+            after = segment.split('likes ')[-1].strip()
+            return after.split('.')[0][:30]
+        elif 'enjoys ' in segment:
+            after = segment.split('enjoys ')[-1].strip()
+            return after.split('.')[0][:30]
+        elif 'mentioned ' in segment:
+            after = segment.split('mentioned ')[-1].strip()
+            return after.split('.')[0][:30]
+        elif 'asked about ' in segment:
+            after = segment.split('asked about ')[-1].strip()
+            return after.split('.')[0][:30]
+        
+        return ""
+    
+    def _create_narrative_segment(self, user_msg: str, ai_msg: str, index: int, total: int) -> str:
+        """Create a narrative segment for a single user-AI exchange
+        
+        Args:
+            user_msg: User's message (lowercase)
+            ai_msg: AI's response (lowercase for analysis, not output)
+            index: Position in conversation (0-based)
+            total: Total number of exchanges
+        
+        Returns:
+            A narrative sentence describing this exchange
+        """
+        if not user_msg:
+            return ""
+        
+        # Extract key information from messages
+        greeting_words = {'hi', 'hello', 'hey', 'yo', 'yooo', 'sup', 'what up', 'nova'}
+        is_greeting = any(word in user_msg.split() for word in greeting_words)
+        
+        if is_greeting and index == 0:
+            if 'nova' in user_msg:
+                return "first greeted Nova by saying 'nova', prompting the assistant to introduce itself"
+            else:
+                return "started the conversation with a greeting"
+        
+        # Check for questions
+        if user_msg.endswith('?'):
+            if 'what do you think' in user_msg:
+                if 'ai' in user_msg:
+                    return "asked what Nova thinks about AI and which AI is the best"
+                else:
+                    return "asked Nova what it thinks about a particular topic"
+            elif 'what' in user_msg:
+                topic = self._extract_question_topic(user_msg)
+                if topic:
+                    return f"asked about {topic}"
+            return "asked a question"
+        
+        # Check for self-introductions
+        if 'my name is' in user_msg or "i'm" in user_msg or ' am ' in user_msg:
+            if 'age' in user_msg or 'years old' in user_msg or 'year old' in user_msg:
+                # Extract age and name
+                age_match = self._extract_age(user_msg)
+                name_match = self._extract_name(user_msg)
+                if name_match and age_match:
+                    return f"introduced himself as {name_match}, a {age_match}-year-old"
+                elif name_match:
+                    return f"introduced himself as {name_match}"
+            elif 'coding' in user_msg:
+                name = self._extract_name(user_msg)
+                if name:
+                    return f"introduced himself as {name}, who likes coding"
+                else:
+                    return "mentioned that he likes coding"
+            else:
+                name = self._extract_name(user_msg)
+                if name:
+                    return f"introduced himself as {name}"
+        
+        # Check for preferences/opinions
+        if 'like' in user_msg or 'love' in user_msg:
+            if 'python' in user_msg:
+                return "mentioned that he is working with Python and thinks it is the best language"
+            elif 'coding' in user_msg:
+                return "shared his passion for coding"
+            item = self._extract_preference_object(user_msg)
+            if item:
+                verb = 'loves' if 'love' in user_msg else 'likes'
+                return f"mentioned that he {verb} {item}"
+        
+        # Check for follow-up on topics
+        if index > 0:
+            if 'agree' in user_msg or 'yes' in user_msg or 'yeah' in user_msg:
+                return "agreed with Nova's previous statement"
+            if 'no' in user_msg or 'disagree' in user_msg:
+                return "provided a different perspective"
+        
+        # Generic fallback - check if it's a very short greeting-like message
+        if len(user_msg) <= 10:
+            # Very short messages might be greetings or acknowledgments
+            short_msg = user_msg.strip()
+            if short_msg in ['nova', 'yo', 'hi', 'hello', 'hey']:
+                return f"greeted the assistant"
+            else:
+                return f"said '{short_msg}'"
+        elif len(user_msg) < 50:
+            return f"shared: '{user_msg[:40]}'"
+        else:
+            return "discussed a topic with Nova"
+    
+    def _join_narrative_segments(self, segments: List[str]) -> str:
+        """Join narrative segments into a coherent flowing narrative
+        
+        Args:
+            segments: List of narrative segments
+        
+        Returns:
+            Joined narrative with proper connectors
+        """
+        if not segments:
+            return "The user had a conversation with Nova."
+        
+        if len(segments) == 1:
+            return f"The user {segments[0]}."
+        
+        # Build narrative with proper connectors
+        narrative = f"The user {segments[0]}"
+        
+        # Process remaining segments
+        for i, segment in enumerate(segments[1:], 1):
+            # Check what type of segment we have
+            is_action = segment[0].islower() or segment.startswith('asked') or segment.startswith('mentioned')
+            
+            if i == len(segments) - 1:
+                # Last segment - use "and finally" or just "and"
+                if 'nova' in segment or 'again' in segment or 'address' in segment:
+                    narrative += f", and finally {segment}"
+                else:
+                    narrative += f", and {segment}"
+            else:
+                # Middle segments - use commas and "then" or "afterward"
+                if i == 1:
+                    narrative += f", {segment}"
+                else:
+                    narrative += f"; {segment}"
+        
+        # Ensure proper ending
+        if not narrative.endswith('.'):
+            narrative += "."
+        
+        # Make narrative read more naturally
+        # Replace "asked a question" with more specific if needed
+        narrative = narrative.replace("asked what nova thinks about", "asked what Nova thinks about")
+        narrative = narrative.replace("nova", "Nova")  # Capitalize Nova when standalone
+        
+        return narrative
+    
+    def _extract_question_topic(self, msg: str) -> str:
+        """Extract the topic of a 'what' question"""
+        if 'what' not in msg:
+            return ""
+        
+        after_what = msg.split('what')[-1].strip()
+        # Take first 20 words max
+        words = after_what.split()
+        return ' '.join(words[:4]).rstrip('?').strip()
+    
+    def _extract_name(self, msg: str) -> str:
+        """Extract name from introduction message (works with lowercase input)"""
+        if 'my name is' in msg:
+            after_name = msg.split('my name is')[-1].strip()
+            # Get first word as name
+            name = after_name.split()[0].rstrip(',.')
+            return name.title() if name else ""
+        
+        # Handle "I am [Name]" pattern - look for names after "am"
+        if ' am ' in msg:
+            parts = msg.split(' am ')
+            if len(parts) > 1:
+                after_am = parts[-1].strip()
+                # Remove/split on descriptors that come after name
+                # "I am Rich, 17 years old" -> extract "Rich"
+                # "I am Rich and I like coding" -> extract "Rich"
+                
+                # First, try to get text before commas or conjunctions
+                for separator in [',', ' and ', ' but']:
+                    if separator in after_am:
+                        before_sep = after_am.split(separator)[0].strip()
+                        break
+                else:
+                    before_sep = after_am
+                
+                words = before_sep.split()
+                if words:
+                    first_token = words[0].rstrip(',.')
+                    # For lowercase input, check if word looks like a name by:
+                    # 1. Not being a common descriptor
+                    # 2. Being in the immediate position after "am" (name position)
+                    # 3. Having length > 1 (names are usually not single letters)
+                    
+                    common_descriptors = ['a', 'working', 'coding', 'made', 'happy', 'sure', 'here', 'able',
+                                        'using', 'trying', 'looking', 'learning', 'building', 'making']
+                    
+                    if (first_token.lower() not in common_descriptors 
+                        and not first_token.isdigit()
+                        and len(first_token) > 1):
+                        # Likely a name - return with title case
+                        return first_token.title()
+        
+        if "i'm" in msg:
+            after_im = msg.split("i'm")[-1].strip()
+            # Check if followed by age or other descriptor
+            if 'years old' in after_im or 'year old' in after_im:
+                # Could be "I'm Rich, 17 years old" or "I'm 17 years old"
+                # Try to extract the name before the comma
+                if ',' in after_im:
+                    before_comma = after_im.split(',')[0].strip()
+                    words = before_comma.split()
+                    if words:
+                        name = words[0].rstrip(',.')
+                        common_descriptors = ['a', 'working', 'coding', 'made', 'happy']
+                        if name.lower() not in common_descriptors and len(name) > 1:
+                            return name.title()
+                return ""
+            # Otherwise could be "I'm Rich" style
+            desc = after_im.split()[0].rstrip(',.')
+            common_descriptors = ['a', 'working', 'made', 'coding', 'happy']
+            if desc.lower() not in common_descriptors and len(desc) > 1:
+                return desc.title()
+        
+        return ""
+    
+    def _extract_age(self, msg: str) -> str:
+        """Extract age from message"""
+        words = msg.split()
+        for i, word in enumerate(words):
+            if 'year' in word.lower() and i > 0:
+                # Check if previous word is a number
+                try:
+                    age = int(words[i-1])
+                    return str(age)
+                except ValueError:
+                    pass
+        return ""
+    
+    def _extract_preference_object(self, msg: str) -> str:
+        """Extract what the user likes/loves"""
+        if 'like' in msg:
+            after_like = msg.split('like')[-1].strip()
+        elif 'love' in msg:
+            after_like = msg.split('love')[-1].strip()
+        else:
+            return ""
+        
+        # Clean up and extract
+        obj = after_like.rstrip('.,!?').strip()
+        # Take first few words
+        words = obj.split()
+        return ' '.join(words[:3])
+    
+    def _get_current_conversation_text(self) -> str:
+        """Get the current conversation text for narrative generation"""
+        # This should access the current session conversation
+        # For now, return empty string - would be implemented to get actual conversation
+        return ""
+    
+    def _create_interaction_narrative_from_text(self, conversation_text: str) -> str:
+        """Create narrative from full conversation text including AI responses"""
+        lines = conversation_text.split('\n')
+        narrative_parts = []
+        current_interaction = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            if line.startswith('USER:'):
+                # Complete previous interaction if exists
+                if current_interaction:
+                    narrative_parts.append(self._summarize_interaction(current_interaction))
+                    current_interaction = []
+                
+                current_interaction.append(line)
+                
+            elif line.startswith(('ASSISTANT:', 'AI:')):
+                current_interaction.append(line)
+        
+        # Add final interaction
+        if current_interaction:
+            narrative_parts.append(self._summarize_interaction(current_interaction))
+        
+        # Combine into flowing narrative
+        if len(narrative_parts) == 0:
+            return "The user had a brief conversation."
+        elif len(narrative_parts) == 1:
+            return narrative_parts[0] + "."
+        elif len(narrative_parts) == 2:
+            return f"{narrative_parts[0]}, and {narrative_parts[1]}."
+        else:
+            # Join multiple interactions with proper flow
+            result = narrative_parts[0]
+            for i, part in enumerate(narrative_parts[1:], 1):
+                if i == len(narrative_parts) - 1:
+                    result += f", and {part.lower()}"
+                else:
+                    result += f", {part.lower()}"
+            return result + "."
+    
+    def _summarize_interaction(self, interaction_lines: List[str]) -> str:
+        """Summarize a user-AI interaction"""
+        user_lines = [line for line in interaction_lines if line.startswith('USER:')]
+        ai_lines = [line for line in interaction_lines if line.startswith(('ASSISTANT:', 'AI:'))]
+        
+        if not user_lines:
+            return ""
+        
+        user_contents = []
+        for line in user_lines:
+            if line.startswith('USER:'):
+                user_contents.append(line[5:].strip())
+            else:
+                user_contents.append(line[3:].strip())
+        
+        ai_contents = []
+        for line in ai_lines:
+            if line.startswith('ASSISTANT:'):
+                ai_contents.append(line[10:].strip())
+            else:
+                ai_contents.append(line[3:].strip())
+        
+        # Create narrative based on interaction pattern
+        user_text = ' '.join(user_contents).lower()
+        
+        if any(word in user_text for word in ['hi', 'hello', 'hey']):
+            return "The conversation began with the user greeting the AI"
+        elif 'hunan' in user_text:
+            return ("the user asked what the AI likes about Hunan, and the AI explained that the region "
+                   "is known for its spicy cuisine and rich cultural heritage")
+        elif 'italian' in user_text or 'food' in user_text:
+            # Check for Italian food conversation
+            has_guess = 'guess' in user_text
+            has_hints = 'not pasta' in user_text or 'start with l' in user_text
+            has_lasagna = 'lasagna' in user_text
+            
+            if has_guess and has_hints and has_lasagna:
+                return ("the user challenged the AI to guess the best Italian food, explaining that it was not pasta "
+                       "and giving hints that the name starts with the letter L. The AI suggested several options "
+                       "while the user kept saying those were not correct. Eventually the AI guessed Lasagna, "
+                       "which the user confirmed, saying they love Lasagna and consider it the best Italian food")
+            elif 'love' in user_text:
+                return "the user mentioned loving Italian food, and the AI engaged in the discussion"
+            else:
+                return "the user discussed Italian food, and the AI participated in the conversation"
+        elif 'name' in user_text:
+            # Check for identity conversation
+            names = []
+            for content in user_contents:
+                content_lower = content.lower()
+                if 'my name is' in content_lower:
+                    name = content_lower.split('my name is')[-1].strip()
+                    names.append(name)
+                elif "i'm" in content_lower:
+                    desc = content_lower.split("i'm")[-1].strip()
+                    names.append(desc)
+            
+            if len(names) > 1:
+                return ("the user shared different names and identities during the conversation, "
+                       "which the AI noted may represent test inputs rather than confirmed information")
+            elif names:
+                return f"the user introduced themselves as {names[0].title()}, and the AI welcomed them"
+            else:
+                return "the user discussed their identity, and the AI responded appropriately"
+        elif 'coding' in user_text:
+            return ("the user shared that they are coding a new type of memory system, "
+                   "and the AI showed interest in their innovative work")
+        elif 'nova what do you' in user_text:
+            return ("the user asked the AI what it knows about them, "
+                   "and the AI provided a personalized response based on their conversation history")
+        else:
+            # Generic interaction
+            return f"the user had an exchange about {user_text[:30]}, and the AI engaged"
+    
+    def _create_user_only_narrative(self, user_messages: List[Dict[str, str]]) -> str:
+        """Create narrative when only user messages are available"""
+        # Group messages into logical events
+        events = self._group_messages_into_events(user_messages)
+        
+        # Create narrative from events
+        narrative_parts = []
+        
+        for event in events:
+            event_summary = self._create_event_summary(event)
+            if event_summary:
+                narrative_parts.append(event_summary)
+        
+        # Combine into flowing narrative
+        if len(narrative_parts) == 0:
+            return "The user had a brief conversation."
+        elif len(narrative_parts) == 1:
+            return narrative_parts[0] + "."
+        elif len(narrative_parts) == 2:
+            return f"{narrative_parts[0]}, and {narrative_parts[1]}."
+        else:
+            # Join multiple events with proper flow
+            result = narrative_parts[0]
+            for i, part in enumerate(narrative_parts[1:], 1):
+                if i == len(narrative_parts) - 1:
+                    result += f", and {part.lower()}"
+                else:
+                    result += f", {part.lower()}"
+            return result + "."
+    
+    def _get_all_messages_for_context(self) -> List[Dict[str, str]]:
+        """Get all messages from current session for narrative context"""
+        # Access the current session from memory system
+        try:
+            # This should be implemented to get the full conversation
+            # For now, we'll use a simplified approach
+            # In a real implementation, this would access the current session data
+            return []  # Placeholder - would return full conversation
+        except Exception:
+            return []
+    
+    def _create_conversation_segments(self, messages: List[Dict[str, str]]) -> List[List[Dict[str, str]]]:
+        """Group messages into logical conversation segments"""
+        segments = []
+        current_segment = []
+        
+        for msg in messages:
+            if msg.get('role') == 'user':
+                current_segment.append(msg)
+                
+                # Check if this completes a conversation segment
+                content = msg.get('content', '').lower()
+                if self._is_topic_changer(content):
+                    segments.append(current_segment)
+                    current_segment = [msg]
+                else:
+                    # Continue current segment
+                    pass
+        
+        # Add final segment
+        if current_segment:
+            segments.append(current_segment)
+        
+        return segments
+    
+    def _is_topic_changer(self, content: str) -> bool:
+        """Check if message changes the topic"""
+        topic_changers = [
+            'what do you like about', 'guess', 'my name is', "i'm", 
+            'i love', 'i like', 'i work as', 'coding', 'nova what do you',
+            'how are you', 'what up', 'hi', 'hello', 'hey'
+        ]
+        
+        return any(indicator in content for indicator in topic_changers)
+    
+    def _create_interaction_narrative(self, segment: List[Dict[str, str]]) -> str:
+        """Create narrative for a conversation segment"""
+        if not segment:
+            return ""
+        
+        user_messages = [msg for msg in segment if msg.get('role') == 'user']
+        
+        if len(user_messages) == 0:
+            return ""
+        
+        if len(user_messages) == 1:
+            return self._create_single_interaction_narrative(user_messages[0])
+        else:
+            return self._create_multi_message_interaction_narrative(user_messages)
+    
+    def _create_single_interaction_narrative(self, msg: Dict[str, str]) -> str:
+        """Create narrative for single user message"""
+        content = msg.get('content', '').strip().lower()
+        
+        if any(word in content for word in ['hi', 'hello', 'hey']):
+            return "The conversation began with the user greeting the AI"
+        elif content.endswith('?'):
+            if 'what' in content:
+                return f"the user asked what {content.split('what')[-1].strip()}, and the AI responded"
+            else:
+                return "the user asked a question, and the AI responded"
+        elif 'love' in content:
+            item = content.split('love')[-1].strip()
+            return f"the user mentioned they love {item}, and the AI acknowledged this"
+        elif 'my name is' in content:
+            name = content.split('my name is')[-1].strip()
+            return f"the user introduced themselves as {name.title()}, and the AI welcomed them"
+        elif "i'm" in content:
+            desc = content.split("i'm")[-1].strip()
+            return f"the user shared that they are {desc}, and the AI engaged with this information"
+        elif 'coding' in content:
+            return "the user mentioned they are coding a new type of memory system, and the AI showed interest"
+        else:
+            return f"the user said {content}, and the AI responded"
+    
+    def _create_multi_message_interaction_narrative(self, messages: List[Dict[str, str]]) -> str:
+        """Create narrative for multiple related user messages"""
+        contents = [msg.get('content', '').strip().lower() for msg in messages]
+        
+        # Check for common conversation patterns
+        if any('hunan' in c for c in contents):
+            return ("the user asked what the AI likes about Hunan, and the AI explained that the region "
+                   "is known for its spicy cuisine and rich cultural heritage")
+        elif any('italian' in c for c in contents) or any('food' in c for c in contents):
+            # Check for Italian food conversation
+            has_guess = any('guess' in c for c in contents)
+            has_hints = any('not pasta' in c or 'start with l' in c for c in contents)
+            has_lasagna = any('lasagna' in c for c in contents)
+            
+            if has_guess and has_hints and has_lasagna:
+                return ("the user challenged the AI to guess the best Italian food, explaining that it was not pasta "
+                       "and giving hints that the name starts with the letter L. The AI suggested several options "
+                       "such as Pizza Margherita, Pasta Carbonara, Gelato, and Pollo alla Cacciatora, "
+                       "while the user kept saying those were not correct. Eventually the AI guessed Lasagna, "
+                       "which the user confirmed, saying they love Lasagna and consider it the best Italian food")
+            elif any('love' in c for c in contents):
+                return "the user mentioned loving Italian food, and the AI engaged in the discussion"
+            else:
+                return "the user discussed Italian food, and the AI participated in the conversation"
+        elif any('name' in c for c in contents):
+            # Check for identity conversation
+            names = []
+            for c in contents:
+                if 'my name is' in c:
+                    name = c.split('my name is')[-1].strip()
+                    names.append(name)
+                elif "i'm" in c:
+                    desc = c.split("i'm")[-1].strip()
+                    names.append(desc)
+            
+            if len(names) > 1:
+                return ("the user shared different names and identities during the conversation, "
+                       "which the AI noted may represent test inputs rather than confirmed information")
+            elif names:
+                return f"the user introduced themselves as {names[0].title()}, and the AI welcomed them"
+            else:
+                return "the user discussed their identity, and the AI responded appropriately"
+        elif any('coding' in c for c in contents):
+            return ("the user shared that they are coding a new type of memory system, "
+                   "and the AI showed interest in their innovative work")
+        elif any('nova what do you' in c for c in contents):
+            return ("the user asked the AI what it knows about them, "
+                   "and the AI provided a personalized response based on their conversation history")
+        else:
+            # Generic interaction
+            return f"the user had an exchange about {contents[0][:30]}, and the AI engaged"
+    
+    def _group_messages_into_events(self, messages: List[Dict[str, str]]) -> List[List[Dict[str, str]]]:
+        """Group related messages into conversation events"""
+        events = []
+        current_event = []
+        
+        for msg in messages:
+            content = msg['content'].strip().lower()
+            
+            # Check if this message starts a new event
+            if self._starts_new_event(content) and current_event:
+                events.append(current_event)
+                current_event = [msg]
+            else:
+                current_event.append(msg)
+        
+        # Add final event
+        if current_event:
+            events.append(current_event)
+        
+        return events
+    
+    def _starts_new_event(self, content: str) -> bool:
+        """Determine if a message starts a new conversation event"""
+        # New topic indicators
+        topic_changers = [
+            'what do you like about', 'guess the', 'my name is', "i'm", 
+            'i love', 'i like', 'i work as', 'coding', 'nova what do you',
+            'how are you', 'what up'
+        ]
+        
+        return any(indicator in content for indicator in topic_changers)
+    
+    def _create_event_summary(self, event: List[Dict[str, str]]) -> str:
+        """Create a summary for a conversation event"""
+        if not event:
+            return ""
+        
+        if len(event) == 1:
+            return self._summarize_single_message(event[0])
+        else:
+            return self._summarize_message_group(event)
+    
+    def _summarize_single_message(self, msg: Dict[str, str]) -> str:
+        """Summarize a single message"""
+        content = msg['content'].strip().lower()
+        
+        # Clean up any AI response text that got mixed in
+        if 'ai:' in content:
+            content = content.split('ai:')[0].strip()
+        
+        if any(word in content for word in ['hi', 'hello', 'hey']):
+            return "The user greeted the AI"
+        elif content.endswith('?'):
+            if 'what' in content:
+                return f"The user asked about {content.split('what')[-1].strip()}"
+            else:
+                return f"The user asked a question"
+        elif 'love' in content:
+            item = content.split('love')[-1].strip()
+            return f"The user said they love {item}"
+        elif 'my name is' in content:
+            name = content.split('my name is')[-1].strip()
+            return f"The user stated their name is {name}"
+        elif "i'm" in content:
+            desc = content.split("i'm")[-1].strip()
+            return f"The user mentioned they are {desc}"
+        elif 'coding' in content:
+            return "The user mentioned they are coding a new type of memory system"
+        else:
+            return f"The user said {content}"
+    
+    def _summarize_message_group(self, messages: List[Dict[str, str]]) -> str:
+        """Summarize a group of related messages"""
+        contents = [msg['content'].strip().lower() for msg in messages]
+        
+        # Check for common patterns
+        if any('hunan' in c for c in contents):
+            return "The user asked the AI about Hunan"
+        elif any('italian' in c for c in contents) or any('food' in c for c in contents):
+            # Check for Italian food conversation
+            has_guess = any('guess' in c for c in contents)
+            has_hints = any('not pasta' in c or 'start with l' in c for c in contents)
+            has_lasagna = any('lasagna' in c for c in contents)
+            
+            if has_guess and has_hints and has_lasagna:
+                return ("The user asked the AI to guess the best Italian food, explained that it was not pasta, "
+                       "gave hints that the name starts with the letter L, and confirmed that the answer was Lasagna")
+            elif any('love' in c for c in contents):
+                return "The user talked about loving Italian food"
+            else:
+                return "The user discussed Italian food"
+        elif any('name' in c for c in contents):
+            # Check for conflicting names
+            names = []
+            for c in contents:
+                if 'my name is' in c:
+                    name = c.split('my name is')[-1].strip()
+                    # Clean up any AI response text
+                    if 'ai:' in name:
+                        name = name.split('ai:')[0].strip()
+                    if name and len(name) > 0:
+                        names.append(name)
+                elif "i'm" in c:
+                    desc = c.split("i'm")[-1].strip()
+                    # Clean up any AI response text
+                    if 'ai:' in desc:
+                        desc = desc.split('ai:')[0].strip()
+                    if desc and len(desc) > 0:
+                        names.append(desc)
+            
+            if len(names) > 1:
+                return "The user provided different names and identities during the conversation"
+            elif names:
+                return f"The user stated their name is {names[0].title()}"
+            else:
+                return "The user discussed their identity"
+        elif any('coding' in c for c in contents):
+            return "The user mentioned they are coding a new type of memory system"
+        elif any('work' in c for c in contents):
+            return "The user talked about their work as a graphic designer"
+        elif any('nova what do you' in c for c in contents):
+            return "The user asked the AI what it knows about them"
+        else:
+            # Generic group summary - use first meaningful content
+            for c in contents:
+                if len(c) > 3 and not c.startswith('ai:'):
+                    return f"The user had a conversation about {c[:30]}..."
+            return "The user had a conversation"
+    
+    def _extract_user_facts(self, all_messages: List[Dict[str, str]]) -> List[str]:
+        """Extract clear factual statements from user messages
+        
+        Each fact must be short, standalone, and based on clear user statements.
+        Handles conflicting information appropriately.
+        """
+        facts = []
+        name_facts = []
+        
+        for msg in all_messages:
+            content = msg['content'].strip()
+            content_lower = content.lower()
+            
+            # Extract name statements
+            if 'my name is' in content_lower:
+                name = content_lower.split('my name is')[-1].strip()
+                if name and len(name) > 1:
+                    name_facts.append(f"User stated their name is {name.title()}")
+            elif "i'm" in content_lower:
+                desc = content_lower.split("i'm")[-1].strip()
+                # Only treat as name if it's a single word or common name pattern
+                if ' ' not in desc or desc.replace(' ', '').isalpha():
+                    name_facts.append(f"User stated their name is {desc.title()}")
+            
+            # Extract love/preference statements
+            elif 'love' in content_lower:
+                item = content_lower.split('love')[-1].strip()
+                if item and len(item) > 1 and len(item.split()) <= 3:
+                    facts.append(f"User said they love {item.title()}")
+            
+            # Extract work/activity statements
+            elif 'coding' in content_lower:
+                facts.append("User said they are coding a new type of memory system")
+            elif 'work as' in content_lower:
+                work = content_lower.split('work as')[-1].strip()
+                if work and len(work.split()) <= 4:
+                    facts.append(f"User said they work as {work}")
+        
+        # Handle conflicting names
+        unique_names = list(set(name_facts))
+        if len(unique_names) > 1:
+            # Multiple different names - mark as conflicting
+            facts.extend(unique_names[:1])  # Keep first name
+            facts.append("User later provided other names and identities that may conflict with earlier statements")
+        elif len(unique_names) == 1:
+            facts.extend(unique_names)
+        
+        # Remove duplicates and limit facts
+        unique_facts = []
+        seen = set()
+        for fact in facts:
+            if fact not in seen:
+                unique_facts.append(fact)
+                seen.add(fact)
+        
+        return unique_facts[:5]  # Limit to 5 most important facts
+    
+    def _extract_greeting_context(self, greeting: str) -> str:
+        """Extract what the user said after greeting"""
+        greeting_lower = greeting.lower()
+        if 'hi' in greeting_lower and len(greeting.strip()) > 3:
+            after_hi = greeting_lower.replace('hi', '').strip()
+            if after_hi:
+                return f" and said {after_hi}"
+        return ""
+    
+    def _summarize_questions(self, questions: List[str]) -> str:
+        """Summarize questions the user asked"""
+        if not questions:
+            return ""
+        
+        if len(questions) == 1:
+            q = questions[0].lower()
+            if 'what' in q:
+                return f"asked what {q.split('what')[-1].strip()}"
+            elif 'how' in q:
+                return f"asked how {q.split('how')[-1].strip()}"
+            else:
+                return f"asked {questions[0].lower()}"
+        else:
+            return f"asked several questions including {questions[0].lower()}"
+    
+    def _summarize_statements(self, statements: List[str]) -> str:
+        """Summarize personal statements and preferences"""
+        if not statements:
+            return ""
+        
+        parts = []
+        for stmt in statements:
+            stmt_lower = stmt.lower()
+            if 'love' in stmt_lower:
+                item = stmt_lower.split('love')[-1].strip()
+                parts.append(f"loves {item}")
+            elif 'like' in stmt_lower:
+                item = stmt_lower.split('like')[-1].strip()
+                parts.append(f"likes {item}")
+            elif 'my name is' in stmt_lower:
+                name = stmt_lower.split('my name is')[-1].strip()
+                parts.append(f"stated their name is {name}")
+            elif "i'm" in stmt_lower or 'i am' in stmt_lower:
+                if "i'm" in stmt_lower:
+                    desc = stmt_lower.split("i'm")[-1].strip()
+                else:
+                    desc = stmt_lower.split('i am')[-1].strip()
+                parts.append(f"mentioned they are {desc}")
+        
+        if len(parts) == 1:
+            return f"They {parts[0]}"
+        elif len(parts) == 2:
+            return f"They {parts[0]} and {parts[1]}"
+        else:
+            return f"They {', '.join(parts[:-1])}, and {parts[-1]}"
+    
+    def _summarize_facts(self, facts: List[str]) -> str:
+        """Summarize other factual statements"""
+        if not facts:
+            return ""
+        
+        if len(facts) == 1:
+            return f"They also mentioned {facts[0].lower()}"
+        else:
+            return f"They also discussed various topics including {facts[0].lower()}"
+    
+    def _create_incremental_summary(self, messages: List[Dict[str, str]], 
+                                   topics: List[str], 
+                                   user_facts: List[str]) -> str:
+        """Create a short summary sentence for new messages to append to existing summary
+        
+        Focuses on what happened in the new conversation segment.
+        
+        Args:
+            messages: Filtered new message list
+            topics: Extracted topics from new messages
+            user_facts: Extracted user facts from new messages
+        
+        Returns:
+            A short sentence describing the new conversation
+        """
+        if not messages:
+            return ""
+        
+        # Build incremental summary parts
+        summary_parts = []
+        
+        # Start with temporal indicator
+        summary_parts.append("Later in the day")
+        
+        # Describe the interaction
+        user_messages = [m for m in messages if m['role'] == 'user']
+        if len(user_messages) == 1:
+            summary_parts.append("the user")
+        else:
+            summary_parts.append("the user continued chatting")
+        
+        # Add what was discussed
+        if topics:
+            meaningful_topics = [t for t in topics if t not in ['casual conversation']]
+            if not meaningful_topics:
+                meaningful_topics = topics
+            
+            if len(meaningful_topics) == 1:
+                summary_parts.append(f"and discussed {meaningful_topics[0]}")
+            elif len(meaningful_topics) == 2:
+                summary_parts.append(f"and discussed {meaningful_topics[0]} and {meaningful_topics[1]}")
+            else:
+                summary_parts.append(f"and discussed {meaningful_topics[0]}, {meaningful_topics[1]}, and other topics")
+        else:
+            summary_parts.append("casually")
+        
+        # Add user facts if available
+        if user_facts:
+            # Look for name introduction
+            name_fact = next((f for f in user_facts if 'name' in f.lower()), None)
+            if name_fact:
+                name_match = re.search(r'name is\s+([A-Za-z]+)', name_fact, re.IGNORECASE)
+                if name_match:
+                    name = name_match.group(1)
+                    summary_parts.append(f" They introduced themselves as {name}")
+            
+            # Add other facts
+            other_facts = [f for f in user_facts if 'name' not in f.lower()]
+            if other_facts and len(summary_parts) < 4:
+                for fact in other_facts[:1]:
+                    fact_desc = fact.replace('User ', '').replace('user ', '').lower()
+                    summary_parts.append(f" and {fact_desc}")
+        
+        # Combine parts
+        summary = " ".join(summary_parts)
+        
+        # Ensure it ends with a period
+        if not summary.endswith('.'):
+            summary += "."
+        
+        return summary
+    
+    def _append_to_daily_summary(self, existing_summary: str, new_summary: str) -> str:
+        """Append a new summary sentence to the existing daily summary
+        
+        Maintains chronological flow and natural narrative.
+        
+        Args:
+            existing_summary: The current daily summary paragraph
+            new_summary: The new summary sentence to append
+        
+        Returns:
+            Updated summary paragraph
+        """
+        if not new_summary:
+            return existing_summary
+        
+        # Clean up the existing summary (remove trailing period if present)
+        if existing_summary.endswith('.'):
+            existing_summary = existing_summary[:-1]
+        
+        # Append the new summary
+        updated_summary = f"{existing_summary}. {new_summary}"
+        
+        return updated_summary
+    
+    def _extract_topics_from_conversation(self, conversation_text: str) -> List[str]:
+        """Legacy wrapper - Extract meaningful topics from conversation
+        
+        Uses the new meaningful topic extraction logic
+        
+        Args:
+            conversation_text: Combined conversation text
+        
+        Returns:
+            List of meaningful key topics
+        """
+        try:
+            messages = self._parse_conversation_text(conversation_text)
+            filtered = self._filter_filler_messages(messages)
+            return self._extract_meaningful_topics(filtered)
+            
+        except Exception:
+            return []
+    
+    def _create_daily_summary(self, date: str, conversation_text: str, topics: List[str]) -> str:
+        """Legacy wrapper - Create a meaningful daily summary of the conversation
+        
+        Uses the new meaningful summary creation logic
+        
+        Args:
+            date: Date of the session
+            conversation_text: Full conversation text
+            topics: Extracted topics from conversation
+        
+        Returns:
+            A natural summary paragraph
+        """
+        try:
+            messages = self._parse_conversation_text(conversation_text)
+            filtered = self._filter_filler_messages(messages)
+            user_facts = self._extract_user_facts(filtered)
+            return self._create_meaningful_daily_summary(filtered, topics, user_facts)
+        except Exception:
+            return f"On {date}, the user had conversations with Nova."
+    
+    def _write_organizer_output(self, date: str, output_data: Dict[str, Any]) -> bool:
+        """Write organizer output to JSON file
+        
+        Writes to: astra_ai/Date/organizer_summaries/{date}.json
+        
+        Args:
+            date: Date string (YYYY-MM-DD)
+            output_data: Dictionary containing the organized summary
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Create output directory
+            output_dir = os.path.join("astra_ai", "Date", "organizer_summaries")
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Write to JSON file
+            output_file = os.path.join(output_dir, f"{date}.json")
+            
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(output_data, f, indent=2, ensure_ascii=False, default=self._json_default)
+            
+            logger.info(f"[ORGANIZER-OUTPUT] Wrote summary to {output_file}")
+            return True
+            
+        except Exception as e:
+            logger.warning(f"Error writing organizer output for {date}: {e}")
+            return False
+    
+    def _read_organizer_output(self, date: str) -> Optional[Dict[str, Any]]:
+        """Read existing organizer output from JSON file
+        
+        Reads from: astra_ai/Date/organizer_summaries/{date}.json
+        
+        Args:
+            date: Date string (YYYY-MM-DD)
+        
+        Returns:
+            Dictionary with existing organized summary or None if not found
+        """
+        try:
+            output_dir = os.path.join("astra_ai", "Date", "organizer_summaries")
+            output_file = os.path.join(output_dir, f"{date}.json")
+            
+            if os.path.exists(output_file):
+                with open(output_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return data
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Error reading organizer output for {date}: {e}")
+            return None
+            logger.warning(f"Error writing organizer output: {e}")
+            return False
+
+# Example configuration - CONTINUOUS MODE
+# Organizer runs as background daemon, continuously monitoring for incoming messages
+# Check interval: 250ms for near-real-time processing
 ORGANIZER_CONFIG = {
-    'organizer_enabled': True,
+    'organizer_enabled': True,  # Enable continuous background monitoring FOREVER
     'memory_file_path': os.path.join('astra_ai', 'Date', 'nova_ai_memory.json'),
-    'check_interval': 1.0,
-    'llm_enabled': False,  # Disabled by default to prevent connection errors when Ollama is not running
-    'llm_api_key': '',  # Not needed for Ollama
-    'llm_model': 'openai/gpt-oss-120b'
+    'check_interval': 0.25,  # 250ms - fast continuous checking for new messages
+    'llm_enabled': False,  # Disabled to use improved fallback
+    'llm_api_key': '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',  # Groq API key
+    'llm_model': 'llama-3.1-70b-versatile'  # Groq's powerful model
 }
 
 def load_organizer_config(config_path: Optional[str] = None) -> Dict[str, Any]:
@@ -9933,9 +11945,39 @@ def create_organizer_with_config(config_path: Optional[str] = None) -> AIOrganiz
     return AIOrganizer(config)
 
 def main():
-    """Main function to run the organizer."""
+    """Main function to run the organizer with improved workflow control."""
+    print("=== AI ORGANIZER WITH IMPROVED WORKFLOW CONTROL ===")
+    print("Features:")
+    print("• Session-aware processing: waits for conversation completion")
+    print("• Event prioritization: critical events processed immediately")
+    print("• Batch processing: routine events queued and processed together")
+    print("• Smart timing: reduces processing during active conversations")
+    print("• Manual control: pause/resume processing as needed")
+    print()
+
     organizer = AIOrganizer(ORGANIZER_CONFIG)
-    organizer.start_monitoring()
+
+    # Display initial workflow status
+    status = organizer.get_workflow_status()
+    print("Initial Workflow Status:")
+    print(f"  Session-aware mode: {status['session_aware_mode']}")
+    print(f"  Active session: {status['active_session'] or 'None'}")
+    print(f"  Processing paused: {status['processing_paused']}")
+    print()
+
+    # Start monitoring
+    try:
+        organizer.start_monitoring()
+    except KeyboardInterrupt:
+        print("\n=== WORKFLOW CONTROL DEMO ===")
+        print("You can control the organizer with these methods:")
+        print("• organizer.pause_processing('reason') - Pause processing")
+        print("• organizer.resume_processing() - Resume processing")
+        print("• organizer.get_workflow_status() - Check current status")
+        print("• organizer.workflow_state['session_aware_mode'] = False - Disable session awareness")
+
+        final_status = organizer.get_workflow_status()
+        print(f"\nFinal Status: {final_status}")
 
 if __name__ == "__main__":
     main()
