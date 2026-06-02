@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """
-🚀 NOVA AI - OLLAMA CLOUD EDITION
-==================================
+🚀 NOVA AI - ENHANCED HUMAN-LIKE AI ASSISTANT
+=============================================
+ & d:\\Astra_ai\\.venv-1\\Scripts\\python.exe d:/Astra_ai/astra_ai/core/nova_ai.py
 
-A sophisticated AI chatbot powered by Ollama Cloud models for natural conversation,
+A sophisticated AI chatbot with advanced features for natural conversation,
 performance optimization, and specialized knowledge.
 
 🌟 ENHANCED FEATURES:
-  • 🤖 Ollama Cloud Models - gpt-oss:120b-cloud, qwen3.5:cloud, gemma4:31b-cloud
   • 💾 Smart Response Caching - Faster responses for common queries
   • 📊 Real-time Performance Monitoring - Track response times and optimize
   • 🧠 Enhanced Context Understanding - Intent analysis and conversation flow
   • 📚 Specialized Knowledge System - Domain expertise in tech, science, business, health
   • 📰 Integrated News System - Real-time news summaries from trusted sources
   • 🎤 Voice Input Support - Natural speech interaction with Whisper
-  • ⚡ Multi-Model Rotation - Automatic fallback between cloud models
+  • ⚡ Performance Optimization - Multiple models and intelligent fallbacks
   • 🤖 Interactive Commands - Rich command system for system control
 
 🚀 QUICK START:
-  python nova_ai.py                    # Basic chat mode with Ollama Cloud
+  python nova_ai.py                    # Basic chat mode
   python nova_ai.py --enable-all       # All enhanced features
   python nova_ai.py --voice            # Voice input mode
   python nova_ai.py --performance-mode # Performance optimized
@@ -53,23 +53,57 @@ performance optimization, and specialized knowledge.
   watch this video for me <url> - AI-powered video analysis
   review this video <url> - Professional video content review
 
+🎵 MUSIC COMMANDS:
+  play <song name> - Search and play music on YouTube
+  play <artist> - <song> - Play specific artist's song
+  search for <song/artist> - Find music without playing
+  show lyrics for <song> - Get lyrics information (copyright compliant)
+  what's playing? - Show current track information
+  music history - Show recently played songs
+
+
 🔧 TECHNICAL FEATURES:
-  • Ollama Cloud REST API integration
-  • Multi-model automatic rotation and fallback
   • Intelligent caching with LRU eviction
+  • Multi-model fallback (llama3-70b → llama3-8b → original)
   • Context-aware response generation
   • Memory optimization and garbage collection
   • Real-time performance metrics
   • Advanced error handling and recovery
 
 Author: Enhanced AI Development Team
-Version: 4.0 Ollama Cloud Edition
+Version: 3.0 Enhanced Edition
 License: MIT
 """
 
 import asyncio
-import ollama
-from ollama import chat
+import os
+# import groq  # Using custom groq client instead
+try:
+    # Import our working groq client
+    import sys
+
+    # Add the root directory to the path to find groq_client_fix.py
+    root_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    if root_dir not in sys.path:
+        sys.path.insert(0, root_dir)
+
+    from groq_client_fix import GroqClient
+
+    # Create a groq module-like object for compatibility
+    class GroqModule:
+        Client = GroqClient
+
+    groq = GroqModule()
+    # Silently using working Groq client
+except ImportError as e:
+    # Silently handle Groq client import issues
+    # Fall back to standard groq library
+    try:
+        import groq
+        # Silently using standard Groq library
+    except ImportError:
+        # Silently using mock client
+        groq = None
 import json
 import logging
 import os
@@ -95,6 +129,7 @@ try:
     logging.getLogger('comtypes.client._code_cache').setLevel(logging.WARNING)
 except Exception:
     pass
+import requests
 from dotenv import load_dotenv
 try:
     import numpy as np
@@ -117,18 +152,17 @@ from enum import Enum
 # Load environment variables
 load_dotenv()
 
-# Configure Ollama Cloud models - Local Gateway to Cloud
-OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
-OLLAMA_CLOUD_MODELS = [
-    'gpt-oss:120b-cloud',
-    'qwen3.5:cloud', 
-    'gemma4:31b-cloud'
-]
-DEFAULT_OLLAMA_MODEL = 'qwen3.5:cloud'
+# Configure default model name and LLM API key from environment
+MODEL_NAME = os.getenv('AI_MODEL', 'llama-3.3-70b-versatile')
+LLM_API_KEY = os.getenv('LLM_API_KEY')
+if LLM_API_KEY is None:
+    # Do not store secrets in code — require user to set env var
+    file_logger.warning('[WARNING] LLM API key not set. Set the LLM_API_KEY environment variable to enable hosted model access.')
 
 # Get API keys
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # Mock groq client for compatibility
 class MockMessage:
@@ -453,10 +487,10 @@ class NovaSearch:
         
         # Handle targeted site searches
         if target_site:
-            print(f"\nSearching for: {query} on {target_site}")
+            file_logger.info(f"Searching for: {query} on {target_site}")
             query = self._format_site_search(query, target_site)
         else:
-            print(f"\nSearching for: {query}")
+            file_logger.info(f"Searching for: {query}")
 
         # Determine search type based on query
         search_type, params = self._analyze_query(query)
@@ -691,7 +725,7 @@ class NovaSearch:
                 
             return result
         except Exception as e:
-            print(f"Search error: {str(e)}")
+            file_logger.error(f"Search error: {str(e)}")
             return {"error": str(e)}
     
     def _process_results(self, results: Dict[str, Any], search_type: str) -> List[Dict[str, Any]]:
@@ -1256,18 +1290,22 @@ class NovaSearch:
 # ============================================================================
 
 # Configure logging - CLEAN TERMINAL MODE (no console output)
+# Create Date directory if it doesn't exist
+date_dir = os.path.join(os.path.dirname(__file__), "..", "Date")
+os.makedirs(date_dir, exist_ok=True)
+
 logging.basicConfig(
     level=logging.CRITICAL,  # Only critical errors in terminal (effectively silent)
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("alebot.log")  # Only log to file, no console output
+        logging.FileHandler(os.path.join(date_dir, "nova_ai.log"))  # Only log to file, no console output
     ]
 )
 
 # Create a separate logger for file-only detailed logs
 file_logger = logging.getLogger("AleChatBot.Detailed")
 file_logger.setLevel(logging.DEBUG)
-file_handler = logging.FileHandler("alebot_detailed.log")
+file_handler = logging.FileHandler(os.path.join(date_dir, "nova_ai_detailed.log"))
 file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 file_logger.addHandler(file_handler)
 file_logger.propagate = False
@@ -1525,17 +1563,10 @@ class Mem0AI:
             
     def _start_background_tasks(self):
         """Start background tasks for maintenance"""
-        def cleanup_task():
-            while True:
-                try:
-                    self._cleanup_cache()
-                    self._process_batch_queue()
-                    time.sleep(60)  # Run every 60 seconds (less frequent)
-                except Exception as e:
-                    logger.error(f"Background task error: {e}")
-                    time.sleep(10)  # Longer delay before retrying
+        thread = threading.Thread(target=self._cleanup_cache, daemon=True)
+        thread.start()
         
-        thread = threading.Thread(target=cleanup_task, daemon=True)
+        thread = threading.Thread(target=self._process_batch_queue, daemon=True)
         thread.start()
         logger.info("Started background maintenance tasks")
     
@@ -3043,38 +3074,52 @@ class AleChatBot:
     """Main chatbot class implementing a human-like assistant named Nava with enhanced memory and context understanding."""
     
     def __init__(self, api_key: Optional[str] = None):
-        """Initialize the chatbot with Ollama Cloud via Local Gateway.
+        """Initialize the chatbot with necessary components.
         
         Args:
-            api_key: Not used for Ollama (optional for future use)
+            api_key: GROQ API key (optional - will look for environment variable if None)
         """
-        # Initialize Ollama client - connects to local gateway which proxies to cloud
-        self.ollama_host = OLLAMA_HOST
-        self.current_model = DEFAULT_OLLAMA_MODEL
-        self.model_index = 0
-        self.max_retries = 3
-        self.retry_delay = 2
-        
-        # Set Ollama client host
-        os.environ['OLLAMA_HOST'] = self.ollama_host
-        
-        print(f"\n🌐 Connecting to Ollama Cloud Gateway at {self.ollama_host}...")
-        logger.info(f"Initialized Ollama client pointing to: {self.ollama_host}")
-        logger.info(f"Cloud models available: {OLLAMA_CLOUD_MODELS}")
-        
-        # Test connection to local Ollama gateway
+        import os
+        # Set up API client
+        self.api_key = api_key or GROQ_API_KEY or os.getenv('GROQ_API_KEY')
+        if not self.api_key:
+            logger.warning("No GROQ API key provided. Using mock client for testing.")
+            # Use mock client for testing without API key
+            self.client = MockGroqClient()
+            # Continue initialization even without an API key so local systems (like mem0) can initialize
+            
+        # Initialize API client with timeout configuration
         try:
-            import ollama
-            # Test the connection
-            test_response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': 'Hi'}])
-            print(f"✅ Ollama Local Gateway connected successfully!")
-            print(f"🤖 Using Cloud Model: {self.current_model}")
-            logger.info("Ollama Local Gateway connection test successful")
+            # Configure timeout settings for Groq API
+            self.api_timeout = 45  # 45 seconds timeout (increased from default 30)
+            self.max_retries = 3
+            self.retry_delay = 2
+
+            if groq is None:
+                raise ValueError("Groq client not available - please check groq_client_fix.py import")
+
+            # Initialize the Groq client
+            if self.api_key:
+                self.client = groq.Client(api_key=self.api_key)
+                logger.info(f"Initialized Groq client with API key: {self.api_key[:8]}...")
+            else:
+                # Use mock client if no API key
+                self.client = MockGroqClient()
+
+            # Test API connection with timeout (skip for mock client)
+            if self.api_key:
+                test_completion = self.client.chat.completions.create(
+                    model="llama-3.1-8b-instant",  # Using the correct model name
+                    messages=[{"role": "user", "content": "Hello"}],
+                    max_tokens=10
+                )
+                logger.info("[OK] API connection test successful")
+
         except Exception as e:
-            print(f"⚠️  Warning: Could not connect to Ollama at {self.ollama_host}")
-            print(f"   Error: {e}")
-            print(f"   Make sure Ollama is running: ollama serve")
-            logger.error(f"Failed to connect to Ollama: {e}")
+            logger.error(f"[ERROR] Failed to initialize API client: {e}")
+            # Use mock client as fallback
+            self.client = MockGroqClient()
+            self.api_key = None
         
         # Initialize memory systems - prefer mem0 as the primary backend
         self.memory_integration = None
@@ -3082,6 +3127,7 @@ class AleChatBot:
         self.mem0_memory_agent = None
         self.memory = None
         self.conversation_count = 0  # Track conversations for periodic saving
+        self.session_organizer_context = ""  # Context from organizer summaries
         
         # Initialize mem0_memory_system for direct integration
         MEM0_MEMORY_AVAILABLE = False
@@ -3169,7 +3215,7 @@ class AleChatBot:
                     # Use a deterministic storage path inside the repo data directory
                     # Get the absolute path to the project root based on this script's location
                     script_dir = os.path.dirname(os.path.abspath(__file__))
-                    project_root = os.path.dirname(os.path.dirname(script_dir))  # Go up two levels from core/
+                    project_root = os.path.dirname(script_dir)  # Go up one level from core/ to reach astra_ai/
                     storage_path = os.path.normpath(os.path.join(project_root, 'Date', 'nova_ai_memory.json'))
                     # print(f"[DEBUG] Storage path: {storage_path}")
                     # print(f"[DEBUG] Storage path exists: {os.path.exists(storage_path)}")
@@ -3206,7 +3252,7 @@ class AleChatBot:
                     self.memory_integration = Mem0IntegrationAdapter(self.mem0_memory_agent)
                     self.memory_enabled = True
                     file_logger.info(f"Mem0 Memory System initialized and set as sole memory backend (storage={storage_path})")
-                    print(f"[MEMORY] NovaMemoryAI system ONLINE - Storing conversations in {storage_path}")
+                    file_logger.info(f"[MEMORY] NovaMemoryAI system ONLINE - Storing conversations in {storage_path}")
                     # print(f"[DEBUG] Memory enabled: {self.memory_enabled}")
                     # print(f"[DEBUG] Memory integration: {self.memory_integration is not None}")
                     # print(f"[DEBUG] Mem0 memory agent: {self.mem0_memory_agent is not None}")
@@ -3223,7 +3269,7 @@ class AleChatBot:
                                     if memory_file_path is None:
                                         # Use the same absolute path as the main storage
                                         script_dir = os.path.dirname(os.path.abspath(__file__))
-                                        project_root = os.path.dirname(os.path.dirname(script_dir))
+                                        project_root = os.path.dirname(script_dir)  # One level up from core/ to reach astra_ai/
                                         memory_file_path = os.path.normpath(os.path.join(project_root, 'Date', 'nova_ai_memory.json'))
                                     try:
                                         organizer = AIOrganizer(ORGANIZER_CONFIG)
@@ -3269,7 +3315,7 @@ class AleChatBot:
                                 watcher_thread = threading.Thread(target=_organizer_watcher_thread, daemon=True)
                                 watcher_thread.start()
                                 file_logger.info('Organizer in-place enhancer watcher started in background')
-                                print('[ORGANIZER] In-place enhancer started')
+                                file_logger.info('[ORGANIZER] In-place enhancer started')
                             except Exception as e:
                                 file_logger.warning(f'Failed to start organizer watcher: {e}')
                     except Exception:
@@ -3277,7 +3323,7 @@ class AleChatBot:
 
                 except Exception as e:
                     file_logger.error(f"Mem0 Memory System initialization error: {e}")
-                    print(f"[ERROR] Memory system initialization failed: {e}")
+                    file_logger.error(f"[ERROR] Memory system initialization failed: {e}")
                     import traceback
                     traceback.print_exc()
                     self.mem0_memory_agent = None
@@ -3595,6 +3641,12 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
         # Pass search_news_memory to NovaSearch for automatic history tracking
         self.search_system = NovaSearch(search_news_memory=self.search_news_memory)
 
+        # Load organizer summaries and provide session context (after memory is initialized)
+        try:
+            self._load_daily_organizer_context()
+        except Exception as e:
+            file_logger.debug(f"Failed to load organizer context: {e}")
+
         # Kick off voice system initialization in background (non-blocking)
         try:
             # Start voice system in a daemon thread so it doesn't block startup
@@ -3612,60 +3664,70 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
         except Exception as e:
             file_logger.error(f"Failed to spawn voice system thread: {e}")
 
+    def _load_daily_organizer_context(self) -> None:
+        """
+        Load daily organizer summaries from previous sessions and provide context.
+        This helps the AI understand previous conversations when starting a new session.
+        """
+        try:
+            if not self.mem0_memory_agent or not hasattr(self.mem0_memory_agent, 'provide_session_context_from_organizer'):
+                return
+            
+            # Get session context from organizer summaries
+            context_string = self.mem0_memory_agent.provide_session_context_from_organizer()
+            
+            if context_string:
+                # Store context for use in conversation
+                self.session_organizer_context = context_string
+                file_logger.info("[ORGANIZER-CONTEXT] Successfully loaded session context from organizer summaries")
+                logger.info("[ORGANIZER-CONTEXT] Session context loaded - ready to recall previous conversations")
+            else:
+                self.session_organizer_context = ""
+                file_logger.debug("[ORGANIZER-CONTEXT] No previous session summaries found")
+        
+        except Exception as e:
+            file_logger.warning(f"[ORGANIZER-CONTEXT] Failed to load session context: {e}")
+            self.session_organizer_context = ""
+
     async def _make_api_call_with_retry(self, messages, temperature=0.8, max_tokens=400, stream=False):
-        """Make API call to Ollama Cloud via Local Gateway with retry logic"""
+        """Make API call with retry logic for timeout handling"""
         last_exception = None
 
         for attempt in range(self.max_retries):
             try:
-                # Rotate through cloud models for better availability
-                if attempt > 0:
-                    self.model_index = (self.model_index + 1) % len(OLLAMA_CLOUD_MODELS)
-                    self.current_model = OLLAMA_CLOUD_MODELS[self.model_index]
-                    logger.info(f"Retrying with cloud model: {self.current_model}")
-                else:
-                    # Use default model on first attempt
-                    self.current_model = DEFAULT_OLLAMA_MODEL
-
-                logger.info(f"Calling Ollama Cloud model: {self.current_model} via {self.ollama_host}")
-
-                # Call Ollama Cloud via official library
-                response = await asyncio.to_thread(
-                    ollama.chat,
-                    model=self.current_model,
+                # Make the API call with timeout
+                completion = await asyncio.to_thread(
+                    self.client.chat.completions.create,
+                    model="llama-3.1-8b-instant",
                     messages=messages,
-                    stream=stream,
-                    options={
-                        'temperature': temperature,
-                        'num_predict': max_tokens
-                    }
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=stream
                 )
-
-                # Create mock completion object compatible with existing code
-                class Completion:
-                    def __init__(self, content):
-                        self.choices = [type('Choice', (), {'message': type('Message', (), {'content': content})()})()]
-
-                return Completion(response['message']['content'])
+                return completion
 
             except Exception as e:
                 last_exception = e
                 error_msg = str(e).lower()
 
-                if any(keyword in error_msg for keyword in ['timeout', 'connection', 'refused']):
+                # Check if it's a timeout or connection error
+                if any(keyword in error_msg for keyword in ['timeout', 'connection', 'httpsconnectionpool']):
                     if attempt < self.max_retries - 1:
-                        wait_time = self.retry_delay * (attempt + 1)
-                        logger.warning(f"Ollama Cloud Gateway timeout on attempt {attempt + 1}, retrying in {wait_time}s...")
+                        wait_time = self.retry_delay * (attempt + 1)  # Exponential backoff
+                        logger.warning(f"API timeout on attempt {attempt + 1}, retrying in {wait_time}s...")
                         await asyncio.sleep(wait_time)
                         continue
                     else:
-                        logger.error(f"Ollama Cloud Gateway timeout after {self.max_retries} attempts")
+                        logger.error(f"API timeout after {self.max_retries} attempts")
+                        # Return a fallback response for timeout
                         return self._create_timeout_fallback_response()
                 else:
-                    logger.error(f"Ollama Cloud API error: {e}")
+                    # For non-timeout errors, don't retry
+                    logger.error(f"API error (non-timeout): {e}")
                     raise e
 
-        logger.error(f"All Ollama Cloud retry attempts failed. Last error: {last_exception}")
+        # If we get here, all retries failed
+        logger.error(f"All API retry attempts failed. Last error: {last_exception}")
         return self._create_timeout_fallback_response()
 
     def _create_timeout_fallback_response(self):
@@ -4052,25 +4114,35 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
 
         # Add memory context to system prompt if available
         memory_info = ""
-        if memory_context and memory_context.get("memory_available", False):
-            user_profile = memory_context.get("user_profile", {})
-            preferences = memory_context.get("preferences", {})
-            recent_topics = memory_context.get("recent_topics", [])
+        if memory_context:
+            # Add session context if available
+            session_context = memory_context.get("session_context", "")
+            if session_context:
+                memory_info = f"\n\nPAST CONVERSATION CONTEXT:\n{session_context}\nUse this context to continue the conversation naturally and remember previous interactions."
+            
+            # Add traditional memory context
+            if memory_context.get("memory_available", False):
+                user_profile = memory_context.get("user_profile", {})
+                preferences = memory_context.get("preferences", {})
+                recent_topics = memory_context.get("recent_topics", [])
 
-            memory_parts = []
-            if user_profile.get("total_memory_items", 0) > 0:
-                memory_parts.append(f"I remember {user_profile['total_memory_items']} things about this user.")
+                memory_parts = []
+                if user_profile.get("total_memory_items", 0) > 0:
+                    memory_parts.append(f"I remember {user_profile['total_memory_items']} things about this user.")
 
-            if preferences:
-                pref_list = [f"{k}: {v}" for k, v in list(preferences.items())[:3]]
-                if pref_list:
-                    memory_parts.append(f"User preferences: {', '.join(pref_list)}")
+                if preferences:
+                    pref_list = [f"{k}: {v}" for k, v in list(preferences.items())[:3]]
+                    if pref_list:
+                        memory_parts.append(f"User preferences: {', '.join(pref_list)}")
 
-            if recent_topics:
-                memory_parts.append(f"Recent topics: {', '.join(recent_topics[:3])}")
+                if recent_topics:
+                    memory_parts.append(f"Recent topics: {', '.join(recent_topics[:3])}")
 
-            if memory_parts:
-                memory_info = f"\n\nMEMORY CONTEXT:\n{chr(10).join(f'• {part}' for part in memory_parts)}\nUse this context to personalize responses appropriately."
+                if memory_parts:
+                    if memory_info:
+                        memory_info += f"\n\nADDITIONAL MEMORY CONTEXT:\n{chr(10).join(f'• {part}' for part in memory_parts)}\nUse this context to personalize responses appropriately."
+                    else:
+                        memory_info = f"\n\nMEMORY CONTEXT:\n{chr(10).join(f'• {part}' for part in memory_parts)}\nUse this context to personalize responses appropriately."
 
         # Create dynamic system prompt with emphasis on brevity
         system_prompt = f"""You are Nova, a helpful, witty, and friendly AI with a {style} personality. Keep responses VERY BRIEF and engaging.{memory_info}
@@ -4343,6 +4415,42 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                         {"role": "assistant", "content": response}
                     ])
 
+                    # Store conversation in memory if system is active
+                    if COMPREHENSIVE_MEMORY_AVAILABLE and get_memory_integration():
+                        try:
+                            # Initialize memory system if available
+                            memory_system = get_memory_integration()
+                            
+                            # Stub for MemoryType to prevent NameError
+                            class MemoryType:
+                                CONVERSATION_SUMMARY = "conversation_summary"
+                                
+                            # Create conversation summary
+                            conversation_summary = f"""
+User: {user_message}
+AI: {response}
+"""
+
+                            # Store in memory system
+                            if hasattr(memory_system, 'store_memory_async'):
+                                asyncio.create_task(
+                                    memory_system.store_memory_async(
+                                        content=conversation_summary,
+                                        memory_type=getattr(MemoryType, "CONVERSATION_SUMMARY", "conversation_summary"),
+                                        tags=["conversation", "interaction"],
+                                        importance_score=0.7
+                                    )
+                                )
+                            elif hasattr(memory_system, 'store_memory'):
+                                memory_system.store_memory(
+                                    content=conversation_summary,
+                                    memory_type=getattr(MemoryType, "CONVERSATION_SUMMARY", "conversation_summary"),
+                                    tags=["conversation", "interaction"],
+                                    importance_score=0.7
+                                )
+                        except Exception as e:
+                            file_logger.error(f"[MEMORY ERROR] Failed to store conversation: {e}")
+
                     # Store conversation memory asynchronously (always store to nova_ai_memory.json)
                     asyncio.create_task(self._store_conversation_memory_async(user_message, response))
 
@@ -4478,7 +4586,9 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
             self.session_id = f"session_{int(time.time())}"
             
             # Ensure the memory file directory exists
-            memory_file_path = os.path.join(project_root, 'Date', 'nova_ai_memory.json')
+            _script_dir = os.path.dirname(os.path.abspath(__file__))
+            _project_root = os.path.dirname(_script_dir)  # One level up from core/ to reach astra_ai/
+            memory_file_path = os.path.join(_project_root, 'Date', 'nova_ai_memory.json')
             os.makedirs(os.path.dirname(memory_file_path), exist_ok=True)
             
             # Initialize the memory file if it doesn't exist
@@ -4575,11 +4685,66 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
             self.session_id = f"session_{int(time.time())}"
 
     async def _get_memory_context_for_response(self, user_message: str) -> Dict[str, Any]:
-        """Get memory context to enhance AI responses"""
+        """Get memory context to enhance AI responses
+        
+        Uses the daily session memory pipeline that:
+        - Creates one session per calendar day
+        - Tracks if session has been processed by AI organizer
+        - Sends unprocessed sessions to organizer for daily summary
+        - Reads cached organizer summaries for processed sessions
+        - Includes organizer daily summaries from previous sessions
+        """
         try:
+            base_context = {}
+            
+            # Add organizer context from previous sessions
+            if self.session_organizer_context:
+                base_context["session_context"] = self.session_organizer_context
+                base_context["organizer_context_available"] = True
+            
+            # Get processed memory from the daily session pipeline
+            if self.mem0_memory_agent:
+                try:
+                    # Get daily memory context from pipeline
+                    # This handles organizer processing and caching automatically
+                    session_context = await asyncio.to_thread(
+                        self.mem0_memory_agent._get_processed_daily_memory_context
+                    )
+                    if session_context:
+                        # If we already have organizer context, enhance it
+                        if "session_context" in base_context:
+                            base_context["session_context"] += f"\n\nADDITIONAL SESSION NOTES:\n{session_context}"
+                        else:
+                            base_context["session_context"] = session_context
+                        base_context["memory_processed"] = True
+                        
+                        # Extract daily summary if available for system prompt enrichment
+                        if "daily_summary" in session_context:
+                            base_context["daily_summary"] = session_context["daily_summary"]
+                        if "daily_topics" in session_context:
+                            base_context["daily_topics"] = session_context["daily_topics"]
+                except Exception as e:
+                    logger.debug(f"Processed daily memory context error: {e}")
+                    # Fall back to regular context if pipeline fails
+                    try:
+                        session_context = await asyncio.to_thread(
+                            self.mem0_memory_agent.get_current_session_context
+                        )
+                        if session_context:
+                            if "session_context" in base_context:
+                                base_context["session_context"] += f"\n\n{session_context}"
+                            else:
+                                base_context["session_context"] = session_context
+                    except Exception as e2:
+                        logger.debug(f"Fallback session context error: {e2}")
+            
             if self.memory_integration and self.memory_integration.is_enabled:
                 # Use comprehensive memory system
                 context = await self.memory_integration.get_memory_context(user_message, "comprehensive")
+                # Merge with base context (base_context takes precedence for organizer context)
+                for key, value in base_context.items():
+                    if key not in context:
+                        context[key] = value
                 return context
             elif self.mem0_memory_agent:
                 # Use mem0_memory_system for context retrieval
@@ -4588,13 +4753,17 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                         self.mem0_memory_agent.get_memory_context,
                         user_message
                     )
+                    # Merge with base context
+                    for key, value in base_context.items():
+                        if key not in context:
+                            context[key] = value
                     return context
                 except Exception as e:
                     logger.debug(f"Mem0 memory context retrieval error: {e}")
-                    return {}
+                    return base_context
             else:
-                # Return empty context if no memory system
-                return {}
+                # Return base context (may contain organizer context)
+                return base_context
         except Exception as e:
             logger.debug(f"Memory context retrieval error: {e}")
             return {}
@@ -4821,6 +4990,52 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
             file_logger.error(f"Error getting comprehensive user profile: {e}")
             return ""
 
+    def _get_past_session_context_for_ai(self) -> str:
+        """Retrieve past conversation session context from the memory system
+        
+        This method gets reconstructed conversations from previous sessions
+        so the AI can remember past interactions and maintain continuity.
+        
+        Returns:
+            Formatted context string with past sessions, or empty string if no history
+        """
+        try:
+            # Check if memory system is available
+            if not self.mem0_memory_agent:
+                return ""
+            
+            # Get the memory system (handle both direct access and wrapped access)
+            memory_system = None
+            if hasattr(self.mem0_memory_agent, 'memory_system'):
+                memory_system = self.mem0_memory_agent.memory_system
+            elif hasattr(self.mem0_memory_agent, 'get_current_session_context'):
+                # AdvancedMemoryAgent might have the method directly
+                context = self.mem0_memory_agent.get_current_session_context()
+                if context:
+                    return context
+                return ""
+            else:
+                return ""
+            
+            # Get the context from the memory system
+            if memory_system and hasattr(memory_system, 'get_current_session_context'):
+                context = memory_system.get_current_session_context()
+                
+                if context:
+                    return (
+                        "PAST CONVERSATION CONTEXT:\n\n" +
+                        context +
+                        "\n\nREMEMBER: Use this context to continue conversations naturally "
+                        "without asking for information you already know. Reference previous "
+                        "discussions when relevant to show you remember the user."
+                    )
+            
+            return ""
+        
+        except Exception as e:
+            file_logger.error(f"Error retrieving past session context: {e}")
+            return ""
+
     async def _initialize_voice_system(self):
         """Initialize the AI voice system for speaking responses"""
         try:
@@ -4843,7 +5058,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
 
                     # Initialize voice service with canonical nova memory JSON in workspace `@astra_ai/Date/`
                     script_dir = os.path.dirname(os.path.abspath(__file__))
-                    project_root = os.path.dirname(os.path.dirname(script_dir))
+                    project_root = os.path.dirname(script_dir)  # One level up from core/ to reach astra_ai/
                     ai_responses_file = os.path.normpath(os.path.join(project_root, 'Date', 'nova_ai_memory.json'))
                     self.voice_system = NovaVoiceService(ai_responses_file=ai_responses_file)
 
@@ -5284,7 +5499,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                 
                 # Get storage path
                 script_dir = os.path.dirname(os.path.abspath(__file__))
-                project_root = os.path.dirname(os.path.dirname(script_dir))
+                project_root = os.path.dirname(script_dir)  # One level up from core/ to reach astra_ai/
                 storage_path = os.path.normpath(os.path.join(project_root, 'Date', 'nova_ai_memory.json'))
                 file_exists = os.path.exists(storage_path)
                 file_size = os.path.getsize(storage_path) if file_exists else 0
@@ -7220,6 +7435,14 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                     )
                 })
 
+            # Load past conversation sessions context from memory system
+            past_session_context = self._get_past_session_context_for_ai()
+            if past_session_context:
+                self.chat_history.append({
+                    "role": "system",
+                    "content": past_session_context
+                })
+
             # Anti-repetition and context awareness instructions
             self.chat_history.append({
                 "role": "system",
@@ -7284,6 +7507,15 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                         await self._store_conversation_to_memory_file(user_input, farewell)
                     except Exception:
                         pass
+                    
+                    # End the current session and finalize metadata (end_time, message_count, topics)
+                    if self.mem0_memory_agent:
+                        try:
+                            self.mem0_memory_agent.memory_system.end_session()
+                            logger.info(f"Session properly ended with all metadata recorded")
+                        except Exception as e:
+                            logger.error(f"Error ending session: {e}")
+                    
                     break
                 
                 # Handle special commands
@@ -7342,6 +7574,14 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                 
             except KeyboardInterrupt:
                 logger.info("Received keyboard interrupt, exiting terminal chat...")
+                # End the current session and finalize metadata (end_time, message_count, topics)
+                if self.mem0_memory_agent:
+                    try:
+                        self.mem0_memory_agent.memory_system.end_session()
+                        logger.info(f"Session properly ended with all metadata recorded")
+                    except Exception as e:
+                        logger.error(f"Error ending session: {e}")
+                
                 # Save memory on graceful shutdown
                 if self.mem0_memory_agent:
                     try:
@@ -8685,34 +8925,33 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
 
 
 async def main():
-    """Main function to run the Ollama Cloud chatbot via Local Gateway."""
+    """Main function to run the enhanced chatbot."""
     try:
         # Parse command line arguments
         import argparse
         parser = argparse.ArgumentParser(
-            description="Nova AI - Ollama Cloud Edition (gpt-oss:120b-cloud, qwen3.5:cloud, gemma4:31b-cloud)",
+            description="Nova AI - Enhanced Human-like AI Assistant with Performance Optimization",
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog="""
-HOW IT WORKS:
-  1. This script connects to your LOCAL Ollama server (localhost:11434)
-  2. Ollama acts as a gateway/proxy to Cloud models
-  3. Cloud models: gpt-oss:120b-cloud, qwen3.5:cloud, gemma4:31b-cloud
-  
+ENHANCED FEATURES:
+  * Smart response caching for faster interactions
+  * Real-time performance monitoring and optimization
+  * Advanced context understanding with intent analysis
+  * Specialized knowledge base for technical domains
+  * Voice input support with automatic transcription
+  * Interactive command system with status reporting
+
 EXAMPLES:
-  python nova_ai.py                           # Start chatting with cloud AI
-  python nova_ai.py --mode terminal           # Terminal chat mode
-  python nova_ai.py --voice                   # Voice input mode
-  python nova_ai.py --model gpt-oss:120b-cloud  # Use specific cloud model
+  python nova_ai.py --mode terminal --enable-all
+  python nova_ai.py --voice --performance-mode
+  python nova_ai.py --disable-cache --enable-knowledge
             """
         )
         
         # Mode and basic options
         parser.add_argument("--mode", choices=["terminal", "transcript"], default="terminal",
                             help="Chat mode: terminal for direct interaction, transcript for processing from file")
-        parser.add_argument("--model", choices=OLLAMA_CLOUD_MODELS, default=DEFAULT_OLLAMA_MODEL,
-                            help=f"Select Ollama Cloud model (default: {DEFAULT_OLLAMA_MODEL})")
-        parser.add_argument("--host", default=OLLAMA_HOST,
-                            help=f"Ollama host URL (default: {OLLAMA_HOST})")
+        parser.add_argument("--api-key", help="GROQ API key (overrides environment variable)")
         parser.add_argument("--voice", action="store_true", help="Enable voice input mode")
         
         # Enhanced feature toggles
@@ -8744,18 +8983,8 @@ EXAMPLES:
             logging.getLogger().setLevel(logging.DEBUG)
             logger.info("🔧 Debug logging enabled")
         
-        # Set Ollama host from args
-        if args.host:
-            os.environ['OLLAMA_HOST'] = args.host
-        
         # Initialize the chatbot
         chatbot = AleChatBot(api_key=args.api_key)
-        
-        # Set the cloud model from args
-        chatbot.current_model = args.model
-        print(f"\n🤖 Using Ollama Cloud Model: {colors['CYAN']}{args.model}{colors['RESET']}")
-        print(f"🌐 Gateway: {colors['CYAN']}{args.host}{colors['RESET']}")
-        print(f"\n{colors['GREEN']}✓ Ready to chat with Ollama Cloud AI!{colors['RESET']}\n")
         
         # Configure enhanced features based on arguments
         if args.enable_all:
@@ -9072,7 +9301,7 @@ def get_time_in_location(location: str) -> str:
                             if not memory_path:
                                 # Get the absolute path to the project root based on this script's location
                                 script_dir = os.path.dirname(os.path.abspath(__file__))
-                                project_root = os.path.dirname(os.path.dirname(script_dir))
+                                project_root = os.path.dirname(script_dir)  # One level up from core/ to reach astra_ai/
                                 memory_path = os.path.normpath(os.path.join(project_root, 'Date', 'nova_ai_memory.json'))
                             
                             # Ensure the directory exists

@@ -28,34 +28,257 @@ import numpy as np
 # Import AI Organizer
 from astra_ai.memory.Mem0_ai_organizer import AIOrganizer, ORGANIZER_CONFIG
 
+# Import conversation persistence for backup management
+from astra_ai.memory.conversation_persistence import initialize_persistence, start_session, end_session
+
 # Import shared data models
 from astra_ai.memory.memory_data_models import EmotionalContext, SemanticContext, MemoryEvent, Provenance, UpdateLogEntry, Cluster, FactHistoryEntry
 
+# Import memory processing pipeline
+from astra_ai.memory.memory_processing_pipeline import MemoryProcessingPipeline
+
 # Import libraries for vector operations
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    TfidfVectorizer = None
+    cosine_similarity = None
+    SKLEARN_AVAILABLE = False
+from typing import Iterable, Optional, List, Dict, Tuple
+import logging
+
+# Initialize logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+
+try:
+    import faiss
+    FAISS_AVAILABLE = True
+except ImportError:
+    FAISS_AVAILABLE = False
 
 # Ensure all required classes are properly defined and exported
 __all__ = ['NovaMemoryAI', 'MemoryEventType', 'AdvancedMemoryAgent', 'AdvancedClusterEngine', 'MemoryCategory']
 
 
-class AdvancedClusterEngine:
-    """
-    Advanced clustering engine with enhanced capabilities including:
-    - Semantic clustering using improved vector embeddings
-    - Hierarchical clustering structure (topical, temporal, categorical)
-    - Dynamic cluster management (creation, merging, splitting)
-    - Cluster quality assessment and optimization
-    """
+class VectorGenerator:
+    """Generate real vector embeddings from text for semantic memory"""
 
-    def __init__(self, memory_system_instance):
-        self.memory_system = memory_system_instance
-        self.vector_dimension = 8  # Default dimension
-        self.similarity_threshold = 0.65  # Minimum similarity to join cluster
-        self.min_cluster_size = 2  # Minimum size for a valid cluster
-        self.max_cluster_size = 10  # Maximum size before splitting consideration
-        self.cluster_quality_threshold = 0.5  # Minimum quality score to maintain cluster
+    def __init__(self, model_name: str = 'all-MiniLM-L6-v2'):
+        self.model_name = model_name
+        self.model = None
+        self.vector_dim = 384  # Default for all-MiniLM-L6-v2
+        self._initialize_model()
+
+    def _initialize_model(self):
+        """Initialize the sentence transformer model"""
+        try:
+            if SENTENCE_TRANSFORMERS_AVAILABLE:
+                self.model = SentenceTransformer(self.model_name)
+                self.vector_dim = self.model.get_sentence_embedding_dimension()
+                print(f"[VECTOR] Loaded model {self.model_name} with dimension {self.vector_dim}")
+            else:
+                logger.warning("sentence-transformers not available, using fallback")
+                self.model = None
+        except Exception as e:
+            print(f"[VECTOR] Error loading model: {e}")
+            self.model = None
+
+    def generate_vector(self, text: str) -> List[float]:
+        """Generate normalized vector embedding from text"""
+        if not text or not text.strip():
+            return [0.0] * self.vector_dim
+
+        if self.model is None:
+            # Fallback: simple hash-based vector (better than zeros)
+            return self._hash_fallback_vector(text)
+
+        try:
+            # Generate embedding
+            embedding = self.model.encode([text], normalize_embeddings=True)[0]
+            # Ensure it's a list of floats
+            vector = embedding.tolist()
+            return vector
+        except Exception as e:
+            print(f"[VECTOR] Error generating vector: {e}")
+            return self._hash_fallback_vector(text)
+
+    def _hash_fallback_vector(self, text: str) -> List[float]:
+        """Fallback vector generation using hash when model unavailable"""
+        # Create a deterministic vector from text hash
+        hash_obj = hashlib.sha256(text.encode('utf-8'))
+        hash_bytes = hash_obj.digest()
+
+        # Convert to float vector
+        vector = []
+        for i in range(0, min(len(hash_bytes), self.vector_dim * 4), 4):
+            if i + 4 <= len(hash_bytes):
+                # Convert 4 bytes to float
+                val = int.from_bytes(hash_bytes[i:i+4], byteorder='little', signed=True)
+                # Normalize to [-1, 1]
+                normalized = (val / 2147483648.0)  # 2^31
+                vector.append(normalized)
+
+        # Pad or truncate to vector_dim
+        while len(vector) < self.vector_dim:
+            vector.append(0.0)
+        vector = vector[:self.vector_dim]
+
+        # Normalize to unit vector
+        norm = math.sqrt(sum(x * x for x in vector))
+        if norm > 0:
+            vector = [x / norm for x in vector]
+        else:
+            # If all zeros, set first element to 1
+            vector[0] = 1.0
+
+        return vector
+
+
+class FastVectorIndex:
+    """FAISS-based vector index for fast similarity search"""
+
+    def __init__(self, dimension: int):
+        self.dimension = dimension
+        self.index = None
+        self.id_to_event = {}  # Maps index position to event ID
+        self.event_to_id = {}  # Maps event ID to index position
+        self.next_id = 0
+        self._initialize_index()
+
+    def _initialize_index(self):
+        """Initialize FAISS index"""
+        if FAISS_AVAILABLE:
+            # Using Inner Product (IP) which equals cosine similarity for normalized vectors
+            self.index = faiss.IndexFlatIP(self.dimension)
+            print(f"[VECTOR] Initialized FAISS index with dimension {self.dimension}")
+        else:
+            logger.warning("FAISS not available, using brute force search")
+            self.index = None
+            self.vectors = []  # Fallback storage
+            self.id_to_event = {}
+
+    def add_vector(self, event_id: str, vector: List[float]) -> bool:
+        """Add a vector to the index"""
+        if not self._is_valid_vector(vector):
+            return False
+
+        try:
+            vector_np = np.array([vector], dtype='float32')
+
+            if self.index is not None:
+                # FAISS path
+                self.index.add(vector_np)
+                self.id_to_event[self.next_id] = event_id
+                self.event_to_id[event_id] = self.next_id
+                self.next_id += 1
+            else:
+                # Brute force fallback
+                self.vectors.append(vector)
+                self.id_to_event[len(self.vectors) - 1] = event_id
+                self.event_to_id[event_id] = len(self.vectors) - 1
+
+            return True
+        except Exception as e:
+            print(f"[VECTOR] Error adding vector: {e}")
+            return False
+
+    def search_vectors(self, query_vector: List[float], k: int = 10) -> List[Tuple[str, float]]:
+        """Search for similar vectors"""
+        if not self._is_valid_vector(query_vector):
+            return []
+
+        try:
+            query_np = np.array([query_vector], dtype='float32')
+
+            if self.index is not None and self.index.ntotal > 0:
+                # FAISS search
+                k = min(k, self.index.ntotal)  # Don't search for more than we have
+                distances, indices = self.index.search(query_np, k)
+
+                results = []
+                for i in range(len(indices[0])):
+                    idx = int(indices[0][i])
+                    if idx in self.id_to_event:
+                        event_id = self.id_to_event[idx]
+                        score = float(distances[0][i])  # Inner product = cosine for normalized
+                        results.append((event_id, score))
+                return results
+            else:
+                # Brute force fallback
+                if not self.vectors:
+                    return []
+
+                similarities = []
+                for i, vector in enumerate(self.vectors):
+                    if self._is_valid_vector(vector):
+                        # Calculate cosine similarity manually (no sklearn dependency)
+                        dot_product = sum(a * b for a, b in zip(query_vector, vector))
+                        mag_query = math.sqrt(sum(a * a for a in query_vector))
+                        mag_vector = math.sqrt(sum(b * b for b in vector))
+                        if mag_query > 0 and mag_vector > 0:
+                            sim = dot_product / (mag_query * mag_vector)
+                        else:
+                            sim = 0.0
+                        if i in self.id_to_event:
+                            event_id = self.id_to_event[i]
+                            similarities.append((event_id, float(sim)))
+
+                # Sort by similarity (descending) and return top k
+                similarities.sort(key=lambda x: x[1], reverse=True)
+                return similarities[:k]
+
+        except Exception as e:
+            print(f"[VECTOR] Error searching vectors: {e}")
+            return []
+
+    def _is_valid_vector(self, vector: List[float]) -> bool:
+        """Check if vector is valid (not all zeros)"""
+        if not vector or len(vector) != self.dimension:
+            return False
+        return not all(abs(x) < 1e-10 for x in vector)
+
+    def get_vector_count(self) -> int:
+        """Get number of vectors in index"""
+        if self.index is not None:
+            return self.index.ntotal
+        else:
+            return len(self.vectors) if hasattr(self, 'vectors') else 0
+
+    def rebuild_index(self, vectors: List[List[float]], event_ids: List[str]):
+        """Rebuild the entire index from scratch"""
+        try:
+            # Reset
+            self._initialize_index()
+            self.id_to_event = {}
+            self.event_to_id = {}
+            self.next_id = 0
+
+            # Add all vectors
+            valid_pairs = [(vid, vec) for vid, vec in zip(event_ids, vectors)
+                          if self._is_valid_vector(vec)]
+
+            for event_id, vector in valid_pairs:
+                self.add_vector(event_id, vector)
+
+            print(f"[VECTOR] Rebuilt index with {self.get_vector_count()} vectors")
+        except Exception as e:
+            print(f"[VECTOR] Error rebuilding index: {e}")
+
+
+class AdvancedClusterEngine:
+
+    def __init__(self, memory_system):
+        self.memory_system = memory_system
 
     def update_clusters_on_new_vector(self, storage: Dict, event_id: str, vector: List[float],
                                     timestamp: str, confidence: float = 0.8):
@@ -63,11 +286,11 @@ class AdvancedClusterEngine:
         Enhanced method to handle new vector addition and update clusters immediately.
         Implements the new clustering strategies from CLUSTER_IMPROVEMENT_GUIDE.md with proper thresholds.
         """
-        print(f"[CLUSTER-ADV] Starting cluster update for event {event_id}")
+        logger.debug(f"Starting cluster update for event {event_id}")
 
         # Log pre-operation metrics
         pre_metrics = self.compute_clustering_metrics(storage)
-        print(f"[CLUSTER-ADV] Storage clusters before: {len(storage['memory_engine'].get('clusters', {}))}")
+        logger.debug(f"Storage clusters before: {len(storage['memory_engine'].get('clusters', {}))}")
 
         # Add the event's vector to the index
         if 'vector_index' not in storage["memory_engine"]:
@@ -3125,6 +3348,595 @@ class AdvancedClusterEngine:
 
         return validation_results
 
+
+# ============================================================================
+# USER IDENTITY EXTRACTION AND CONTEXT SYSTEM (Integrated)
+# ============================================================================
+
+class UserIdentityExtractor:
+    """Automatically extracts and maintains comprehensive user profile information"""
+    
+    def __init__(self, memory_file_path: str = None):
+        """Initialize User Identity Extractor"""
+        if memory_file_path is None:
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            memory_file_path = os.path.join(project_root, 'astra_ai', 'Date', 'nova_ai_memory.json')
+        
+        self.memory_file_path = memory_file_path
+        self.user_profile = {}
+        self._load_user_profile()
+    
+    def _load_user_profile(self):
+        """Load existing user profile from memory file"""
+        try:
+            if os.path.exists(self.memory_file_path):
+                with open(self.memory_file_path, 'r') as f:
+                    memory_data = json.load(f)
+                
+                if 'user' in memory_data:
+                    self.user_profile.update(memory_data['user'])
+                
+                if 'memory_categories' in memory_data:
+                    user_identity = memory_data['memory_categories'].get('user_identity', {})
+                    if isinstance(user_identity, dict):
+                        for key, value in user_identity.items():
+                            if key not in ['description', 'enhancement_focus', 'contextual_considerations', 'last_updated']:
+                                self.user_profile[key] = value
+        except Exception as e:
+            logger.warning(f"Error loading user profile: {e}")
+    
+    def extract_from_message(self, message: str) -> Dict[str, Any]:
+        """Extract user identity information from a message
+        
+        Args:
+            message: User message to analyze
+            
+        Returns:
+            Dictionary with extracted user information
+        """
+        extracted = {}
+        message_lower = message.lower()
+        
+        # Extract name patterns
+        if any(phrase in message_lower for phrase in ['my name is', 'i am', "i'm", 'call me', 'name is']):
+            name = self._extract_name(message)
+            if name:
+                extracted['name'] = name
+                self.user_profile['name'] = name
+        
+        # Extract age patterns
+        if any(word in message_lower for word in ['age', 'old', 'years', 'born']):
+            age = self._extract_age(message)
+            if age:
+                extracted['age'] = age
+                self.user_profile['age'] = age
+        
+        # Extract location patterns
+        if any(phrase in message_lower for phrase in ['from ', 'i live', 'i am from', 'located in', 'im from']):
+            location = self._extract_location(message)
+            if location:
+                extracted['location'] = location
+                self.user_profile['location'] = location
+        
+        
+        # Extract interests
+        if any(word in message_lower for word in ['love', 'like', 'enjoy', 'interested in', 'passionate about', 'hobby']):
+            interests = self._extract_interests(message)
+            if interests:
+                if 'interests' not in self.user_profile:
+                    self.user_profile['interests'] = []
+                self.user_profile['interests'].extend(interests)
+                extracted['interests'] = interests
+        
+        # Extract skills
+        if any(word in message_lower for word in ['coding', 'programming', 'skill', 'developer', 'expert at', 'know python', 'know javascript']):
+            skills = self._extract_skills(message)
+            if skills:
+                if 'skills' not in self.user_profile:
+                    self.user_profile['skills'] = []
+                self.user_profile['skills'].extend(skills)
+                extracted['skills'] = skills
+        
+        if extracted:
+            self.update_memory_file()
+        
+        return extracted
+    
+    def _extract_name(self, text: str) -> Optional[str]:
+        """Extract name from text"""
+        patterns = [
+            r"my name is ([A-Za-z-]+)",
+            r"i am ([A-Za-z-]+)",
+            r"i'm ([A-Za-z-]+)",
+            r"call me ([A-Za-z-]+)",
+            r"name is ([A-Za-z-]+)"
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return match.group(1).strip().capitalize()
+        
+        return None
+    
+    def _extract_age(self, text: str) -> Optional[int]:
+        """Extract age from text"""
+        match = re.search(r'(\d{1,3})\s*(?:years\s+old|years old|year old|years|year old|yo)', text, re.IGNORECASE)
+        if match:
+            age = int(match.group(1))
+            if 1 <= age <= 150:
+                return age
+        return None
+    
+    def _extract_location(self, text: str) -> Optional[str]:
+        """Extract location from text"""
+        patterns = [
+            r"from ([A-Za-z\s]+?)(?:\.|,|$)",
+            r"i live in ([A-Za-z\s]+?)(?:\.|,|$)",
+            r"i'm from ([A-Za-z\s]+?)(?:\.|,|$)",
+            r"located in ([A-Za-z\s]+?)(?:\.|,|$)"
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        
+        return None
+    
+    
+    def _extract_interests(self, text: str) -> List[str]:
+        """Extract interests/hobbies from text"""
+        interests = []
+        patterns = [
+            r"(?:love|like|enjoy|interested in|passionate about)\s+([A-Za-z\s]+?)(?:\.|,|$)",
+        ]
+        
+        for pattern in patterns:
+            matches = re.finditer(pattern, text, re.IGNORECASE)
+            for match in matches:
+                interest = match.group(1).strip()
+                if interest and len(interest) < 50:
+                    interests.append(interest)
+        
+        return interests
+    
+    def _extract_skills(self, text: str) -> List[str]:
+        """Extract skills from text"""
+        skills = []
+        skill_keywords = {
+            'coding': 'Coding',
+            'programming': 'Programming',
+            'python': 'Python',
+            'javascript': 'JavaScript',
+            'java': 'Java',
+            'system design': 'System Design',
+            'architecture': 'Architecture',
+            'web development': 'Web Development',
+            'data science': 'Data Science',
+            'machine learning': 'Machine Learning',
+        }
+        
+        for keyword, display_name in skill_keywords.items():
+            if keyword in text.lower():
+                if display_name not in skills:
+                    skills.append(display_name)
+        
+        return skills
+    
+    def get_user_profile(self) -> Dict[str, Any]:
+        """Get complete user profile"""
+        return {
+            'name': self.user_profile.get('name'),
+            'age': self.user_profile.get('age'),
+            'location': self.user_profile.get('location'),
+            'interests': self.user_profile.get('interests', []),
+            'skills': self.user_profile.get('skills', []),
+        }
+    
+    def get_context_string(self) -> str:
+        """Get formatted context string about the user"""
+        parts = []
+        
+        if self.user_profile.get('name'):
+            parts.append(f"The user's name is {self.user_profile['name']}.")
+        
+        if self.user_profile.get('age'):
+            parts.append(f"They are {self.user_profile['age']} years old.")
+        
+        if self.user_profile.get('location'):
+            parts.append(f"They are from {self.user_profile['location']}.")
+        
+        interests = self.user_profile.get('interests', [])
+        if interests:
+            interests_str = ', '.join(list(dict.fromkeys(interests))[:5])  # Remove duplicates, limit to 5
+            parts.append(f"Their interests include: {interests_str}.")
+        
+        skills = self.user_profile.get('skills', [])
+        if skills:
+            skills_str = ', '.join(list(dict.fromkeys(skills))[:5])  # Remove duplicates, limit to 5
+            parts.append(f"They have skills in: {skills_str}.")
+        
+        return ' '.join(parts) if parts else ""
+    
+    def update_memory_file(self):
+        """Update the nova_ai_memory.json with user identity info"""
+        import time
+        
+        max_retries = 3
+        retry_delay = 0.1  # 100ms between retries
+        
+        for attempt in range(max_retries):
+            try:
+                if not os.path.exists(self.memory_file_path):
+                    logger.warning(f"Memory file does not exist: {self.memory_file_path}")
+                    return
+                
+                # Check file size to ensure it's not empty
+                file_size = os.path.getsize(self.memory_file_path)
+                if file_size == 0:
+                    logger.warning(f"[USER_IDENTITY] Memory file is empty, retrying... (attempt {attempt + 1}/{max_retries})")
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        continue
+                    else:
+                        logger.error(f"[USER_IDENTITY] Memory file remains empty after {max_retries} attempts")
+                        return
+                
+                # Read fresh from disk
+                with open(self.memory_file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if not content.strip():
+                        logger.warning(f"[USER_IDENTITY] Memory file content is empty, retrying... (attempt {attempt + 1}/{max_retries})")
+                        if attempt < max_retries - 1:
+                            time.sleep(retry_delay)
+                            continue
+                        else:
+                            return
+                    memory_data = json.loads(content)
+                
+                logger.info(f"[USER_IDENTITY] Loaded memory from disk (attempt {attempt + 1})")
+                break  # Success, exit retry loop
+                
+            except json.JSONDecodeError as e:
+                logger.warning(f"[USER_IDENTITY] JSON decode error on attempt {attempt + 1}: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    logger.error(f"[USER_IDENTITY] Failed to decode JSON after {max_retries} attempts")
+                    return
+            except Exception as e:
+                logger.warning(f"[USER_IDENTITY] Error on attempt {attempt + 1}: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    import traceback
+                    traceback.print_exc()
+                    return
+        
+        try:
+            # Update user section
+            if 'user' not in memory_data:
+                memory_data['user'] = {}
+            
+            memory_data['user']['name'] = self.user_profile.get('name')
+            memory_data['user']['age'] = self.user_profile.get('age')
+            memory_data['user']['location'] = self.user_profile.get('location')
+            memory_data['user']['interests'] = list(dict.fromkeys(self.user_profile.get('interests', [])))
+            memory_data['user']['skills'] = list(dict.fromkeys(self.user_profile.get('skills', [])))
+            memory_data['user']['pronouns'] = self.user_profile.get('pronouns')
+            
+            # Build natural language description for user_identity
+            description = self._build_identity_description()
+            logger.info(f"[USER_IDENTITY] Built description: {description}")
+            
+            # Ensure memory_categories exists
+            if 'memory_categories' not in memory_data:
+                memory_data['memory_categories'] = {}
+            
+            # Initialize or get user_identity
+            if 'user_identity' not in memory_data['memory_categories']:
+                memory_data['memory_categories']['user_identity'] = {}
+            
+            user_identity_data = memory_data['memory_categories']['user_identity']
+            
+            # Preserve schema fields if they exist
+            if 'description' not in user_identity_data or not user_identity_data.get('description', '').startswith('User'):
+                # This is the first time or it's still the schema template
+                if 'enhancement_focus' not in user_identity_data:
+                    user_identity_data['enhancement_focus'] = "Personalization, identity consistency, name variations"
+                if 'contextual_considerations' not in user_identity_data:
+                    user_identity_data['contextual_considerations'] = [
+                        "previous_names",
+                        "identity_evolution",
+                        "pronoun_preferences"
+                    ]
+            
+            # Track previous values if identity is changing
+            self._track_identity_changes(user_identity_data, memory_data)
+            
+            # Now update ALL fields with current user identity
+            user_identity_data['name'] = self.user_profile.get('name')
+            user_identity_data['age'] = self.user_profile.get('age')
+            user_identity_data['location'] = self.user_profile.get('location')
+            user_identity_data['pronouns'] = self.user_profile.get('pronouns')
+            user_identity_data['interests'] = list(dict.fromkeys(self.user_profile.get('interests', [])))
+            user_identity_data['skills'] = list(dict.fromkeys(self.user_profile.get('skills', [])))
+            user_identity_data['description'] = description  # CRITICAL: Update description
+            user_identity_data['last_updated'] = datetime.now().isoformat()
+            
+            # Write back to disk - direct write (handles file locks better)
+            with open(self.memory_file_path, 'w', encoding='utf-8') as f:
+                json.dump(memory_data, f, indent=2)
+            
+            logger.info(f"[USER_IDENTITY] Successfully updated memory file")
+            logger.info(f"[USER_IDENTITY] Updated fields: name={user_identity_data.get('name')}, age={user_identity_data.get('age')}, location={user_identity_data.get('location')}, pronouns={user_identity_data.get('pronouns')}")
+        
+        except Exception as e:
+            logger.warning(f"[USER_IDENTITY] Error updating memory file: {e}")
+            import traceback
+            traceback.print_exc()
+
+    
+    def _build_identity_description(self) -> str:
+        """Build a natural language description of user identity
+        
+        Returns:
+            Natural language description for description field
+        """
+        parts = []
+        
+        # Name
+        if self.user_profile.get('name'):
+            parts.append(f"User's name is {self.user_profile['name']}")
+        
+        # Age
+        if self.user_profile.get('age'):
+            parts.append(f"{self.user_profile['age']} years old")
+        
+        # Location
+        if self.user_profile.get('location'):
+            parts.append(f"located in {self.user_profile['location']}")
+        
+        # Pronouns
+        if self.user_profile.get('pronouns'):
+            parts.append(f"pronouns: {self.user_profile['pronouns']}")
+        
+        # Base identity description
+        identity_desc = ', '.join(parts) if parts else ""
+        
+        # Build interests section
+        interests = self.user_profile.get('interests', [])
+        if interests:
+            unique_interests = list(dict.fromkeys(interests))[:5]  # Limit to 5
+            interests_str = ', '.join(unique_interests)
+            if identity_desc:
+                identity_desc += f". Interested in: {interests_str}"
+            else:
+                identity_desc = f"Interested in: {interests_str}"
+        
+        # Build skills section
+        skills = self.user_profile.get('skills', [])
+        if skills:
+            unique_skills = list(dict.fromkeys(skills))[:5]  # Limit to 5
+            skills_str = ', '.join(unique_skills)
+            if identity_desc:
+                identity_desc += f". Skills: {skills_str}"
+            else:
+                identity_desc = f"Skills: {skills_str}"
+        
+        # Add period if not empty
+        if identity_desc and not identity_desc.endswith('.'):
+            identity_desc += '.'
+        
+        return identity_desc
+    
+    def _track_identity_changes(self, user_identity_data: Dict, memory_data: Dict):
+        """Track changes to user identity over time
+        
+        Args:
+            user_identity_data: Current user_identity category data
+            memory_data: Full memory data
+        """
+        # Track name changes
+        current_name = self.user_profile.get('name')
+        previous_name = user_identity_data.get('name')
+        
+        if current_name and previous_name and current_name != previous_name:
+            # Add to previous_names tracking
+            if 'previous_names' not in user_identity_data:
+                user_identity_data['previous_names'] = []
+            
+            if isinstance(user_identity_data['previous_names'], list):
+                if previous_name not in user_identity_data['previous_names']:
+                    user_identity_data['previous_names'].append({
+                        'name': previous_name,
+                        'changed_from': user_identity_data.get('last_updated'),
+                        'changed_to': datetime.now().isoformat()
+                    })
+            
+            logger.info(f"[USER IDENTITY] Name changed from {previous_name} to {current_name}")
+        
+        # Track age changes
+        current_age = self.user_profile.get('age')
+        previous_age = user_identity_data.get('age')
+        
+        if current_age and previous_age and current_age != previous_age:
+            if 'age_history' not in user_identity_data:
+                user_identity_data['age_history'] = []
+            
+            if isinstance(user_identity_data['age_history'], list):
+                user_identity_data['age_history'].append({
+                    'previous_age': previous_age,
+                    'current_age': current_age,
+                    'updated_at': datetime.now().isoformat()
+                })
+        
+        # Track location changes
+        current_location = self.user_profile.get('location')
+        previous_location = user_identity_data.get('location')
+        
+        if current_location and previous_location and current_location != previous_location:
+            if 'location_history' not in user_identity_data:
+                user_identity_data['location_history'] = []
+            
+            if isinstance(user_identity_data['location_history'], list):
+                user_identity_data['location_history'].append({
+                    'previous_location': previous_location,
+                    'current_location': current_location,
+                    'updated_at': datetime.now().isoformat()
+                })
+
+
+class UserContextProvider:
+    """Provides user context information to Nova AI"""
+    
+    def __init__(self, memory_file_path: str = None):
+        """Initialize User Context Provider"""
+        if memory_file_path is None:
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            memory_file_path = os.path.join(project_root, 'astra_ai', 'Date', 'nova_ai_memory.json')
+        
+        self.memory_file_path = memory_file_path
+        self.memory_data = {}
+        self._load_memory()
+    
+    def _load_memory(self):
+        """Load memory file"""
+        try:
+            if os.path.exists(self.memory_file_path):
+                with open(self.memory_file_path, 'r') as f:
+                    self.memory_data = json.load(f)
+            else:
+                self.memory_data = {}
+        except Exception as e:
+            logger.warning(f"Error loading memory file: {e}")
+            self.memory_data = {}
+    
+    def get_user_name(self) -> Optional[str]:
+        """Get user's name from memory"""
+        self._load_memory()
+        
+        if 'user' in self.memory_data and self.memory_data['user'].get('name'):
+            return self.memory_data['user'].get('name')
+        
+        if 'memory_categories' in self.memory_data:
+            user_identity = self.memory_data['memory_categories'].get('user_identity', {})
+            if user_identity.get('name'):
+                return user_identity.get('name')
+        
+        return None
+    
+    def get_user_age(self) -> Optional[int]:
+        """Get user's age"""
+        self._load_memory()
+        
+        if 'user' in self.memory_data and self.memory_data['user'].get('age'):
+            return self.memory_data['user'].get('age')
+        
+        if 'memory_categories' in self.memory_data:
+            user_identity = self.memory_data['memory_categories'].get('user_identity', {})
+            if user_identity.get('age'):
+                return user_identity.get('age')
+        
+        return None
+    
+    def get_user_location(self) -> Optional[str]:
+        """Get user's location"""
+        self._load_memory()
+        
+        if 'user' in self.memory_data and self.memory_data['user'].get('location'):
+            return self.memory_data['user'].get('location')
+        
+        if 'memory_categories' in self.memory_data:
+            user_identity = self.memory_data['memory_categories'].get('user_identity', {})
+            if user_identity.get('location'):
+                return user_identity.get('location')
+        
+        return None
+    
+    def get_user_interests(self) -> List[str]:
+        """Get user's interests"""
+        self._load_memory()
+        
+        interests = []
+        
+        if 'user' in self.memory_data and self.memory_data['user'].get('interests'):
+            interests.extend(self.memory_data['user'].get('interests', []))
+        
+        if 'memory_categories' in self.memory_data:
+            user_identity = self.memory_data['memory_categories'].get('user_identity', {})
+            if user_identity.get('interests'):
+                interests.extend(user_identity.get('interests', []))
+        
+        return list(dict.fromkeys(interests))
+    
+    def get_user_skills(self) -> List[str]:
+        """Get user's skills"""
+        self._load_memory()
+        
+        skills = []
+        
+        if 'user' in self.memory_data and self.memory_data['user'].get('skills'):
+            skills.extend(self.memory_data['user'].get('skills', []))
+        
+        if 'memory_categories' in self.memory_data:
+            user_identity = self.memory_data['memory_categories'].get('user_identity', {})
+            if user_identity.get('skills'):
+                skills.extend(user_identity.get('skills', []))
+        
+        return list(dict.fromkeys(skills))
+    
+    def get_context_for_system_prompt(self) -> str:
+        """Get formatted user context for system prompt injection"""
+        context = self._build_context_string()
+        
+        if context:
+            return f"\n\n[User Context - Remember this about the user:]\n{context}"
+        
+        return ""
+    
+    def _build_context_string(self) -> str:
+        """Build context string"""
+        parts = []
+        
+        name = self.get_user_name()
+        if name:
+            parts.append(f"The user's name is {name}.")
+        
+        age = self.get_user_age()
+        if age:
+            parts.append(f"They are {age} years old.")
+        
+        location = self.get_user_location()
+        if location:
+            parts.append(f"They are from {location}.")
+        
+        interests = self.get_user_interests()
+        if interests:
+            interests_str = ', '.join(interests[:5])
+            parts.append(f"Their interests include: {interests_str}.")
+        
+        skills = self.get_user_skills()
+        if skills:
+            skills_str = ', '.join(skills[:5])
+            parts.append(f"They have skills in: {skills_str}.")
+        
+        return ' '.join(parts)
+    
+    def has_user_info(self) -> bool:
+        """Check if we have any user information"""
+        return bool(
+            self.get_user_name() or 
+            self.get_user_age() or 
+            self.get_user_location() or 
+            self.get_user_interests() or 
+            self.get_user_skills()
+        )
+
+
 class MemoryEventType(Enum):
     ADD = "ADD"
     UPDATE = "UPDATE"
@@ -3457,13 +4269,63 @@ class ComprehensiveCategoryDetector:
                     r"i (.*) during (.+)"
                 ]
             elif cat == MemoryCategory.USER_IDENTITY:
-                # Patterns for detecting user identity information
+                # Enhanced patterns for detecting user identity information
                 detection_patterns = [
+                    # Name patterns
                     r"my name is (.+)",
-                    r"i'm (.+)",
+                    r"i'm (.+?)(?:\s|$)",
                     r"call me (.+)",
                     r"i go by (.+)",
-                    r"people call me (.+)"
+                    r"people call me (.+)",
+                    r"you can call me (.+)",
+                    r"the name is (.+)",
+                    r"i am (.+?)(?:\s|$)",
+                    
+                    # Age patterns
+                    r"i am (\d+)\s*(?:years? old|yrs? old)",
+                    r"i'm (\d+)\s*(?:years? old|yrs? old)",
+                    r"i am (\d+)",
+                    r"i'm (\d+)",
+                    r"age (\d+)",
+                    r"aged (\d+)",
+                    r"(\d+)\s*(?:years? old|yrs? old)",
+                    
+                    # Location patterns
+                    r"i live in (.+?)(?:\s|$|\.)",
+                    r"i'm from (.+?)(?:\s|$|\.)",
+                    r"i am from (.+?)(?:\s|$|\.)",
+                    r"based in (.+?)(?:\s|$|\.)",
+                    r"located in (.+?)(?:\s|$|\.)",
+                    r"residing in (.+?)(?:\s|$|\.)",
+                    r"my hometown is (.+)",
+                    r"born in (.+)",
+                    r"grew up in (.+)",
+                    r"currently in (.+)",
+                    r"staying in (.+)",
+                    
+                    # Identity descriptors
+                    r"i am a (.+?)(?:\s|$|\.)",
+                    r"i'm a (.+?)(?:\s|$|\.)",
+                    r"i work as a (.+)",
+                    r"i am an? (.+?)(?:\s|$|\.)",
+                    r"profession (.+)",
+                    r"occupation (.+)",
+                    r"job (.+)",
+                    
+                    # Personal characteristics
+                    r"i identify as (.+)",
+                    r"i prefer to be called (.+)",
+                    r"my pronouns are (.+)",
+                    r"pronouns (.+)",
+                    r"gender (.+)",
+                    
+                    # Family/relationships
+                    r"i am a (.+)(?:\s+father|mother|parent|son|daughter|brother|sister)",
+                    r"i have a (.+)(?:\s+son|daughter|brother|sister)",
+                    r"married to (.+)",
+                    r"single",
+                    r"divorced",
+                    r"in a relationship"
                 ]
             
             schemas[cat.value] = CategorySchema(
@@ -3518,6 +4380,294 @@ class ComprehensiveCategoryDetector:
         ]
 
         return filtered_items
+
+    def extract_user_identity(self, message: str, context: Dict = None) -> Dict[str, Any]:
+        """
+        Enhanced user identity extraction with comprehensive pattern matching
+        
+        Args:
+            message: User message to analyze
+            context: Additional context information
+            
+        Returns:
+            Dictionary containing extracted identity information
+        """
+        identity_info = {
+            'names': [],
+            'age': None,
+            'locations': [],
+            'professions': [],
+            'characteristics': [],
+            'relationships': [],
+            'confidence': 0.0
+        }
+        
+        message_lower = message.lower()
+        
+        # Extract names
+        name_patterns = [
+            r"my name is (.+?)(?:\s|$|\.)",
+            r"i'm (.+?)(?:\s|$)",
+            r"call me (.+?)(?:\s|$|\.)",
+            r"i go by (.+?)(?:\s|$)",
+            r"people call me (.+?)(?:\s|$)",
+            r"you can call me (.+?)(?:\s|$)",
+            r"i am (.+?)(?:\s|$)",
+        ]
+        
+        for pattern in name_patterns:
+            matches = re.findall(pattern, message_lower)
+            for match in matches:
+                name = match.strip().title()
+                if len(name) > 1 and len(name) < 50 and not any(char.isdigit() for char in name):
+                    identity_info['names'].append({
+                        'value': name,
+                        'confidence': 0.9,
+                        'source': 'name_extraction'
+                    })
+        
+        # Extract age
+        age_patterns = [
+            r"i am (\d+)\s*(?:years? old|yrs? old)",
+            r"i'm (\d+)\s*(?:years? old|yrs? old)",
+            r"i am (\d+)",
+            r"i'm (\d+)",
+            r"age (\d+)",
+            r"aged (\d+)",
+            r"(\d+)\s*(?:years? old|yrs? old)",
+        ]
+        
+        for pattern in age_patterns:
+            matches = re.findall(pattern, message_lower)
+            for match in matches:
+                try:
+                    age = int(match)
+                    if 0 < age < 130:  # Reasonable age range
+                        identity_info['age'] = {
+                            'value': age,
+                            'confidence': 0.85,
+                            'source': 'age_extraction'
+                        }
+                        break
+                except ValueError:
+                    continue
+        
+        # Extract locations
+        location_patterns = [
+            r"i live in (.+?)(?:\s|$|\.)",
+            r"i'm from (.+?)(?:\s|$|\.)",
+            r"i am from (.+?)(?:\s|$|\.)",
+            r"based in (.+?)(?:\s|$|\.)",
+            r"located in (.+?)(?:\s|$|\.)",
+            r"residing in (.+?)(?:\s|$|\.)",
+            r"my hometown is (.+)",
+            r"born in (.+)",
+            r"grew up in (.+)",
+            r"currently in (.+)",
+            r"staying in (.+)",
+        ]
+        
+        for pattern in location_patterns:
+            matches = re.findall(pattern, message_lower)
+            for match in matches:
+                location = match.strip().title()
+                if len(location) > 1 and len(location) < 100:
+                    identity_info['locations'].append({
+                        'value': location,
+                        'confidence': 0.8,
+                        'source': 'location_extraction'
+                    })
+        
+        # Extract professions
+        profession_patterns = [
+            r"i am a (.+?)(?:\s|$|\.)",
+            r"i'm a (.+?)(?:\s|$|\.)",
+            r"i work as a (.+)",
+            r"i am an? (.+?)(?:\s|$|\.)",
+            r"profession (.+)",
+            r"occupation (.+)",
+            r"job (.+)",
+        ]
+        
+        for pattern in profession_patterns:
+            matches = re.findall(pattern, message_lower)
+            for match in matches:
+                profession = match.strip().title()
+                if len(profession) > 2 and len(profession) < 50:
+                    identity_info['professions'].append({
+                        'value': profession,
+                        'confidence': 0.75,
+                        'source': 'profession_extraction'
+                    })
+        
+        # Extract personal characteristics
+        characteristic_patterns = [
+            r"i identify as (.+)",
+            r"i prefer to be called (.+)",
+            r"my pronouns are (.+)",
+            r"pronouns (.+)",
+            r"gender (.+)",
+        ]
+        
+        for pattern in characteristic_patterns:
+            matches = re.findall(pattern, message_lower)
+            for match in matches:
+                characteristic = match.strip()
+                if len(characteristic) > 1 and len(characteristic) < 50:
+                    identity_info['characteristics'].append({
+                        'value': characteristic,
+                        'confidence': 0.8,
+                        'source': 'characteristic_extraction'
+                    })
+        
+        # Extract relationships
+        relationship_patterns = [
+            r"i am a (.+)(?:\s+father|mother|parent|son|daughter|brother|sister)",
+            r"i have a (.+)(?:\s+son|daughter|brother|sister)",
+            r"married to (.+)",
+            r"single",
+            r"divorced",
+            r"in a relationship"
+        ]
+        
+        for pattern in relationship_patterns:
+            matches = re.findall(pattern, message_lower)
+            for match in matches:
+                if isinstance(match, tuple):
+                    match = ' '.join(match).strip()
+                relationship = match.strip().title()
+                if len(relationship) > 1 and len(relationship) < 50:
+                    identity_info['relationships'].append({
+                        'value': relationship,
+                        'confidence': 0.7,
+                        'source': 'relationship_extraction'
+                    })
+        
+        # Calculate overall confidence
+        total_items = (len(identity_info['names']) + 
+                      (1 if identity_info['age'] else 0) + 
+                      len(identity_info['locations']) + 
+                      len(identity_info['professions']) + 
+                      len(identity_info['characteristics']) + 
+                      len(identity_info['relationships']))
+        
+        if total_items > 0:
+            identity_info['confidence'] = min(0.95, 0.5 + (total_items * 0.1))
+        
+        return identity_info
+
+    def store_user_identity(self, identity_info: Dict[str, Any], session_id: str = None) -> bool:
+        """
+        Store extracted user identity information in the memory system
+        
+        Args:
+            identity_info: Dictionary containing identity information
+            session_id: Current session ID
+            
+        Returns:
+            True if successfully stored, False otherwise
+        """
+        try:
+            if not identity_info or identity_info.get('confidence', 0) < 0.5:
+                return False
+            
+            stored_count = 0
+            
+            # Store names
+            for name_info in identity_info.get('names', []):
+                if self._store_identity_item('name', name_info, session_id):
+                    stored_count += 1
+            
+            # Store age
+            if identity_info.get('age'):
+                if self._store_identity_item('age', identity_info['age'], session_id):
+                    stored_count += 1
+            
+            # Store locations
+            for location_info in identity_info.get('locations', []):
+                if self._store_identity_item('location', location_info, session_id):
+                    stored_count += 1
+            
+            # Store professions
+            for profession_info in identity_info.get('professions', []):
+                if self._store_identity_item('profession', profession_info, session_id):
+                    stored_count += 1
+            
+            # Store characteristics
+            for characteristic_info in identity_info.get('characteristics', []):
+                if self._store_identity_item('characteristic', characteristic_info, session_id):
+                    stored_count += 1
+            
+            # Store relationships
+            for relationship_info in identity_info.get('relationships', []):
+                if self._store_identity_item('relationship', relationship_info, session_id):
+                    stored_count += 1
+            
+            logger.info(f"[IDENTITY] Stored {stored_count} identity items")
+            return stored_count > 0
+            
+        except Exception as e:
+            logger.error(f"[IDENTITY] Error storing identity information: {e}")
+            return False
+    
+    def _store_identity_item(self, item_type: str, item_info: Dict[str, Any], session_id: str = None) -> bool:
+        """
+        Store a single identity item in the memory system
+        
+        Args:
+            item_type: Type of identity item (name, age, location, etc.)
+            item_info: Dictionary containing item information
+            session_id: Current session ID
+            
+        Returns:
+            True if successfully stored, False otherwise
+        """
+        try:
+            # Create memory event
+            memory_event = {
+                'event_id': f"identity_{item_type}_{uuid.uuid4().hex[:8]}",
+                'type': 'ADD',
+                'summary': f"User {item_type}: {item_info['value']}",
+                'timestamp': datetime.now().isoformat(),
+                'category': MemoryCategory.USER_IDENTITY.value,
+                'subcategory': item_type,
+                'confidence': item_info.get('confidence', 0.8),
+                'session_id': session_id,
+                'provenance': {
+                    'source_type': 'identity_extraction',
+                    'source_details': item_info.get('source', 'unknown'),
+                    'context': f"Extracted {item_type} from user message"
+                }
+            }
+            
+            # Add to memory events
+            if 'memory_engine' not in self.data:
+                self.data['memory_engine'] = {'memory_events': []}
+            
+            self.data['memory_engine']['memory_events'].append(memory_event)
+            
+            # Store in memory_categories
+            if 'memory_categories' not in self.data:
+                self.data['memory_categories'] = {}
+            
+            if MemoryCategory.USER_IDENTITY.value not in self.data['memory_categories']:
+                self.data['memory_categories'][MemoryCategory.USER_IDENTITY.value] = {}
+            
+            key = f"{item_type}_{item_info['value'].lower().replace(' ', '_')}"
+            self.data['memory_categories'][MemoryCategory.USER_IDENTITY.value][key] = {
+                'value': item_info['value'],
+                'type': item_type,
+                'confidence': item_info.get('confidence', 0.8),
+                'timestamp': datetime.now().isoformat(),
+                'session_id': session_id,
+                'source': item_info.get('source', 'unknown')
+            }
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"[IDENTITY] Error storing {item_type} item: {e}")
+            return False
 
     def _detect_category_specific(self, message: str, message_lower: str, category: str, schema: CategorySchema, context: Dict = None) -> List[Dict]:
         """Detect information specific to a single category"""
@@ -4898,6 +6048,7 @@ class ConversationSession:
     """Represents a conversation session with metadata"""
     session_id: str
     start_time: str
+    date: Optional[str] = None
     end_time: Optional[str] = None
     message_count: int = 0
     topics_discussed: List[str] = field(default_factory=list)
@@ -5243,6 +6394,7 @@ class ConversationSession:
     """Represents a conversation session with metadata"""
     session_id: str
     start_time: str
+    date: Optional[str] = None
     end_time: Optional[str] = None
     message_count: int = 0
     topics_discussed: List[str] = field(default_factory=list)
@@ -6457,8 +7609,17 @@ class NovaMemoryAI:
     - Feeds missing info back automatically - Transparent to the user
     """
 
-    def __init__(self, storage_file: str = "astra_ai/Date/nova_ai_memory.json"):
+    def __init__(self, storage_file: str = os.path.join(os.path.dirname(__file__), '..', 'Date', 'nova_ai_memory.json')):
         """Initialize the Nova Memory AI System"""
+        # Set up logging to file
+        log_file = os.path.join(os.path.dirname(storage_file), 'memory_system.log')
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        logger.setLevel(logging.DEBUG)
+        
         # Storage configuration
         self.storage_file = storage_file
         self.session_timeout_minutes = 30  # Default 30 minutes
@@ -6466,8 +7627,11 @@ class NovaMemoryAI:
         # Initialize user_id
         self.user_id = "default_user"
         
-        # Initialize TF-IDF vectorizer for text embeddings
-        self.vectorizer = TfidfVectorizer(max_features=100, stop_words='english')
+        # Initialize TF-IDF vectorizer for text embeddings (if sklearn available)
+        if SKLEARN_AVAILABLE:
+            self.vectorizer = TfidfVectorizer(max_features=100, stop_words='english')
+        else:
+            self.vectorizer = None
 
         # First, create the base data structure with empty values
         self.data = {
@@ -6502,32 +7666,7 @@ class NovaMemoryAI:
                     "Added_preference_always": [],
                     "Added_preference_style": [],
                     "conditional": [],  # This one doesn't get the prefix based on the example
-                    "Added_preference_interests": [
-                        {
-                            "category": "reading",
-                            "genres": [],
-                            "favorite_author": "",
-                            "reading_time": "",
-                            "score": 0.0
-                        },
-                        {
-                            "category": "entertainment",
-                            "type": "",
-                            "frequency": "",
-                            "score": 0.0
-                        },
-                        {
-                            "category": "wellness",
-                            "activities": [],
-                            "score": 0.0
-                        },
-                        {
-                            "category": "culinary",
-                            "behavior": "",
-                            "style": "",
-                            "score": 0.0
-                        }
-                    ],
+                    "Added_preference_interests": [],        
                     "Added_preference_loves": [],
                     "Added_preference_hates": [],
                     "Added_preference_enjoys": [],
@@ -6917,13 +8056,38 @@ class NovaMemoryAI:
         self.organizer = AIOrganizer(organizer_config)
         self.organizer.organizer_enabled = organizer_config.get('organizer_enabled', True)
         
+        # Initialize User Identity System (Integrated)
+        self.user_identity_extractor = UserIdentityExtractor(storage_file)
+        self.user_context_provider = UserContextProvider(storage_file)
+        
+        # Initialize Memory Processing Pipeline for 15-minute processing
+        self.memory_pipeline = MemoryProcessingPipeline(memory_system=self)
+        
         # Initialize vector index for semantic similarity and clustering
         self.vector_index = {}  # Maps event_id to embedding vector
         self.clusters = {}      # Maps cluster_id to cluster information
         self.update_log = []    # Logs of updates for tracking preference evolution
 
+        # Initialize vector generator for embedding creation
+        self.vector_generator = VectorGenerator()
+
+        # Initialize vector index for fast similarity search
+        self.vector_index_search = FastVectorIndex(self.vector_generator.vector_dim)
+
+        # Initialize persistence layer for backup management with correct memory file path
+        try:
+            initialize_persistence(storage_file)
+            start_session()
+            print("[PERSISTENCE] Conversation persistence layer initialized successfully")
+        except Exception as e:
+            print(f"[PERSISTENCE] Warning: Could not initialize persistence layer: {e}")
+
         # Start AI Organizer monitoring to process ADD events
         self.start_organizer_monitoring()
+        
+        # Start Memory Processing Pipeline for 15-minute processing
+        self.memory_pipeline.start_processing()
+        print("[MEMORY-PIPELINE] Started 15-minute memory processing pipeline")
     
     def start_organizer_monitoring(self):
         """
@@ -6941,6 +8105,197 @@ class NovaMemoryAI:
                 print(f"Failed to start AI Organizer monitoring: {e}")
         else:
             print("AI Organizer is disabled or not initialized.")
+
+    def ensure_organizer_processes_all_messages(self):
+        """Ensure organizer immediately processes any pending messages."""
+        if hasattr(self, 'organizer') and self.organizer and self.organizer.organizer_enabled:
+            try:
+                self._process_current_session_with_organizer()
+                logger.info("[ENSURE-PROCESSED] Organizer processed all pending messages")
+            except Exception as e:
+                logger.warning(f"[ENSURE-PROCESSED] Error: {e}")
+
+    def send_new_conversations_to_organizer(self) -> Dict[str, Any]:
+        """
+        Send all unsent conversations to the organizer and mark them as sent.
+        This ensures the organizer always has the latest conversations.
+        
+        Returns:
+            Dict containing summary of conversations sent
+        """
+        try:
+            unsent_conversations = [
+                conv for conv in self.data.get("conversation", []) 
+                if not conv.get("sent_to_organizer", False)
+            ]
+            
+            if not unsent_conversations:
+                return {"status": "no_unsent_conversations", "count": 0}
+            
+            logger.info(f"[SEND-CONVERSATIONS] Found {len(unsent_conversations)} unsent conversations")
+            
+            # Process through the organizer
+            if hasattr(self, 'organizer') and self.organizer and self.organizer.organizer_enabled:
+                # Trigger organizer to process all pending events
+                self._process_current_session_with_organizer()
+            
+            # Mark all conversations as sent to organizer
+            for conv in self.data.get("conversation", []):
+                if not conv.get("sent_to_organizer", False):
+                    conv["sent_to_organizer"] = True
+            
+            self.save_memory()
+            
+            logger.info(f"[SEND-CONVERSATIONS] Successfully sent {len(unsent_conversations)} conversations to organizer")
+            return {
+                "status": "success",
+                "count": len(unsent_conversations),
+                "last_sent_timestamp": datetime.now().isoformat()
+            }
+        
+        except Exception as e:
+            logger.error(f"[SEND-CONVERSATIONS] Error: {e}")
+            return {"status": "error", "error": str(e)}
+
+    def load_daily_organizer_summaries(self, target_date: str = None) -> Dict[str, Any]:
+        """
+        Load organizer summaries for a specific date or default to today/yesterday.
+        
+        Args:
+            target_date: Specific date in format YYYY-MM-DD (optional)
+            
+        Returns:
+            Dict containing summaries from organizer
+        """
+        try:
+            from datetime import date, timedelta
+            
+            if not target_date:
+                # Default to yesterday's summary for when a new day starts
+                yesterday = (date.today() - timedelta(days=1)).isoformat()
+                target_date = yesterday
+            
+            # Build path to organizer_summaries
+            organizer_dir = os.path.join(
+                os.path.dirname(self.storage_file),
+                'organizer_summaries'
+            )
+            
+            summary_file = os.path.join(organizer_dir, f"{target_date}.json")
+            
+            if not os.path.exists(summary_file):
+                logger.warning(f"[LOAD-SUMMARIES] No organizer summary found for {target_date}")
+                return {
+                    "status": "not_found",
+                    "date": target_date,
+                    "summaries": None
+                }
+            
+            # Load the summary file
+            with open(summary_file, 'r') as f:
+                summary_data = json.load(f)
+            
+            logger.info(f"[LOAD-SUMMARIES] Successfully loaded organizer summary for {target_date}")
+            
+            return {
+                "status": "success",
+                "date": target_date,
+                "summaries": summary_data
+            }
+        
+        except Exception as e:
+            logger.error(f"[LOAD-SUMMARIES] Error loading summaries: {e}")
+            return {"status": "error", "error": str(e)}
+
+    def get_organizer_summaries_for_context(self, days_back: int = 3) -> Dict[str, Any]:
+        """
+        Get organizer summaries from previous days to provide context.
+        This is useful for when a user returns on a new day.
+        
+        Args:
+            days_back: Number of previous days to retrieve summaries for (default: 3)
+            
+        Returns:
+            Dict containing summaries from previous sessions
+        """
+        try:
+            from datetime import date, timedelta
+            
+            organizer_dir = os.path.join(
+                os.path.dirname(self.storage_file),
+                'organizer_summaries'
+            )
+            
+            summaries = {}
+            
+            for i in range(1, days_back + 1):
+                target_date = (date.today() - timedelta(days=i)).isoformat()
+                summary_file = os.path.join(organizer_dir, f"{target_date}.json")
+                
+                if os.path.exists(summary_file):
+                    try:
+                        with open(summary_file, 'r') as f:
+                            summary_data = json.load(f)
+                            summaries[target_date] = summary_data
+                            logger.info(f"[GET-CONTEXT] Loaded organizer summary for {target_date}")
+                    except Exception as e:
+                        logger.warning(f"[GET-CONTEXT] Failed to load summary for {target_date}: {e}")
+            
+            if summaries:
+                return {
+                    "status": "success",
+                    "summaries": summaries,
+                    "dates_covered": list(summaries.keys())
+                }
+            else:
+                return {
+                    "status": "no_summaries_found",
+                    "summaries": {}
+                }
+        
+        except Exception as e:
+            logger.error(f"[GET-CONTEXT] Error retrieving context summaries: {e}")
+            return {"status": "error", "error": str(e)}
+
+    def provide_session_context_from_organizer(self) -> str:
+        """
+        Build a context string from organizer summaries to provide to Nova AI.
+        This helps the AI understand previous conversations when starting a new session.
+        
+        Returns:
+            Formatted string with session context
+        """
+        try:
+            summaries_result = self.get_organizer_summaries_for_context(days_back=3)
+            
+            if summaries_result["status"] != "success" or not summaries_result.get("summaries"):
+                return ""
+            
+            context_parts = ["📋 Previous Session Context from Memory Organizer:\n"]
+            
+            for date_str, summary in summaries_result["summaries"].items():
+                if isinstance(summary, dict):
+                    context_parts.append(f"\n📅 {date_str}:")
+                    
+                    # Add daily summary
+                    if "daily_summary" in summary:
+                        context_parts.append(f"Summary: {summary['daily_summary'][:300]}...")
+                    
+                    # Add important user facts
+                    if "important_user_facts" in summary and summary["important_user_facts"]:
+                        context_parts.append("Key Facts: " + ", ".join(summary["important_user_facts"][:3]))
+                    
+                    # Add message count
+                    if "message_count" in summary:
+                        context_parts.append(f"Messages from that day: {summary['message_count']}")
+            
+            context_string = "\n".join(context_parts)
+            logger.info("[PROVIDE-CONTEXT] Generated context from organizer summaries")
+            return context_string
+        
+        except Exception as e:
+            logger.error(f"[PROVIDE-CONTEXT] Error building context: {e}")
+            return ""
 
     def _process_structured_metadata(self, metadata: Dict) -> Dict:
         """Process and validate structured metadata for JSON serialization"""
@@ -8348,46 +9703,127 @@ class NovaMemoryAI:
         self.data["memory_engine"]["memory_events"].append(update_event)
 
     def _initialize_session(self):
-        """Initialize a new conversation session with proper state management"""
+        """Initialize or reuse a daily conversation session
+        
+        Creates one session per calendar day. If an active session for today already exists,
+        reuses it; otherwise, creates a new daily session (with suffix if needed).
+        """
         current_time = datetime.now().isoformat()
-        session_id = f"session_{uuid.uuid4().hex[:8]}"
+        today_date = current_time.split('T')[0]  # YYYY-MM-DD format
+        
+        # Check if there is an active session for today (ignore completed ones)
+        existing_session_id = self._get_today_session_id()
 
-        # Determine if this is an established user
-        has_previous_sessions = len(self.data.get("sessions", {})) > 0
-        has_user_facts = len(self.data.get("fact_history", {})) > 0
-        user_name = self.data["user"].get("name")
+        if existing_session_id:
+            session = self.data["sessions"].get(existing_session_id, {})
+            if session.get("end_time"):
+                existing_session_id = None
 
-        # Create new session
-        new_session = ConversationSession(
-            session_id=session_id,
-            start_time=current_time,
-            user_name=user_name,
-            last_activity=current_time
-        )
-
-        # Store session
-        self.data["sessions"][session_id] = asdict(new_session)
-        self.data["current_session"] = session_id
-
-        # Update conversation state based on user history
-        if has_previous_sessions or (has_user_facts and user_name):
-            # This is a returning user - skip introduction phase
-            self.data["conversation_state"]["introduction_phase"] = False
-            self.data["conversation_state"]["established_user"] = True
-            self.data["conversation_state"]["greeting_completed"] = True  # Startup greeting counts
-            self.data["user"]["relationship_established"] = True
+        if existing_session_id:
+            # Reuse today's active session
+            self.data["current_session"] = existing_session_id
+            session = self.data["sessions"][existing_session_id]
+            session["last_activity"] = current_time
+            session["current_duration"] = self._calculate_current_duration(session["start_time"])
+            print(f"[SESSION] Reusing today's active session: {existing_session_id}")
         else:
-            # This is a new user - needs introduction
-            self.data["conversation_state"]["introduction_phase"] = True
-            self.data["conversation_state"]["established_user"] = False
-            self.data["conversation_state"]["greeting_completed"] = False
+            # Create new daily session ID and avoid collisions if multiple sessions occur today
+            base_session_id = f"session_{today_date.replace('-', '_')}"
+            session_id = base_session_id
+            suffix = 1
+            while session_id in self.data.get("sessions", {}):
+                session_id = f"{base_session_id}_{suffix}"
+                suffix += 1
 
-        # Update user metadata
-        self.data["user"]["total_sessions"] = len(self.data["sessions"])
+            # Determine if this is an established user
+            has_previous_sessions = len(self.data.get("sessions", {})) > 0
+            has_user_facts = len(self.data.get("fact_history", {})) > 0
+            user_name = self.data["user"].get("name")
+            
+            # Create new session with daily session structure
+            new_session = ConversationSession(
+                session_id=session_id,
+                start_time=current_time,
+                date=today_date,
+                user_name=user_name,
+                last_activity=current_time
+            )
+            
+            # Store session
+            session_dict = asdict(new_session)
+            # Ensure organizer_status is properly initialized
+            if "organizer_status" not in session_dict:
+                session_dict["organizer_status"] = {
+                    "sent_to_organizer": False,
+                    "organizer_summary_ready": False,
+                    "organizer_file": None,
+                    "last_processed": None
+                }
+            
+            self.data["sessions"][session_id] = session_dict
+            self.data["current_session"] = session_id
+            print(f"[SESSION] Created new daily session: {session_id}")
+            
+            # Retrieve context from past sessions for AI memory
+            past_session_context = ""
+            if has_previous_sessions:
+                past_session_context = self.get_past_session_context(limit=3, hours_back=72)
+            
+            # Store context in session for AI access
+            if past_session_context:
+                self.data["sessions"][session_id]["past_context"] = past_session_context
+                print("[MEMORY] Context from past sessions prepared for AI")
+            
+            # Update conversation state based on user history
+            if has_previous_sessions or (has_user_facts and user_name):
+                # This is a returning user - skip introduction phase
+                self.data["conversation_state"]["introduction_phase"] = False
+                self.data["conversation_state"]["established_user"] = True
+                self.data["conversation_state"]["greeting_completed"] = True
+                self.data["user"]["relationship_established"] = True
+            else:
+                # This is a new user - needs introduction
+                self.data["conversation_state"]["introduction_phase"] = True
+                self.data["conversation_state"]["established_user"] = False
+                self.data["conversation_state"]["greeting_completed"] = False
+            
+            # Update user metadata
+            self.data["user"]["total_sessions"] = len(self.data["sessions"])
+        
         self.data["user"]["last_seen"] = current_time
+    
+    def _get_today_session_id(self) -> Optional[str]:
+        """Get the active session ID for today if it exists"""
+        today_date = datetime.now().isoformat().split('T')[0]
+
+        for session_id, session in self.data.get("sessions", {}).items():
+            session_date = session.get("date", session.get("start_time", "").split('T')[0])
+            session_end = session.get("end_time")
+            if session_date == today_date and not session_end:
+                return session_id
+
+        return None
+    
+    def _calculate_current_duration(self, start_time: str) -> str:
+        """Calculate duration from start_time to now"""
+        try:
+            start = datetime.fromisoformat(start_time)
+            now = datetime.now()
+            delta = now - start
+            
+            minutes = int(delta.total_seconds() / 60)
+            hours = minutes // 60
+            remaining_mins = minutes % 60
+            
+            if hours > 0:
+                return f"{hours} hours, {remaining_mins} minutes"
+            else:
+                return f"{remaining_mins} minutes"
+        except:
+            return "unknown"
 
     def _end_current_session(self):
-        """End the current conversation session"""
+        """End the current conversation session and finalize all metadata"""
         if self.data["current_session"]:
             session_id = self.data["current_session"]
             session = self.data["sessions"].get(session_id)
@@ -8398,17 +9834,21 @@ class NovaMemoryAI:
                 end_time = datetime.now()
                 duration = end_time - start_time
 
-                # Update session data
+                # Update session data with all required fields
                 session["end_time"] = end_time.isoformat()
                 session["session_duration"] = self._format_duration(duration)
                 session["message_count"] = len([msg for msg in self.data["conversation"]
                                               if msg.get("session_id") == session_id])
 
-                # Extract topics discussed
-                session["topics_discussed"] = self._extract_session_topics(session_id)
+            
 
-                # Save updated session
-                self.data["sessions"][session_id] = session
+                # Save updated session back to the main data structure
+                # Using both direct assignment and ensuring it's a dict for JSON serialization
+                self.data["sessions"][session_id] = dict(session)
+                
+                # Log session completion
+                print(f"[SESSION-END] Session {session_id} ended at {session['end_time']}")
+                print(f"[SESSION-END] Duration: {session['session_duration']}, Messages: {session['message_count']}, Topics: {session['topics_discussed']}")
 
             # Clear current session
             self.data["current_session"] = None
@@ -8438,11 +9878,26 @@ class NovaMemoryAI:
         session_messages = [msg for msg in self.data["conversation"]
                           if msg.get("session_id") == session_id and msg.get("role") == "user"]
 
-        # Extract topics from user messages
+        # Extract topics from user messages using keyword analysis
+        all_words = []
         for message in session_messages:
             content = message.get("content", "").lower()
+            # Split into words and filter out common stop words
+            words = [word.strip('.,!?()[]{}') for word in content.split() if len(word.strip('.,!?()[]{}')) > 2]
+            stop_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'an', 'a', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'its', 'our', 'their', 'what', 'how', 'why', 'when', 'where', 'who'}
+            words = [word for word in words if word not in stop_words]
+            all_words.extend(words)
 
-            # Check for common topics
+        # Count word frequencies
+        from collections import Counter
+        word_counts = Counter(all_words)
+        
+        # Get top 5 most common words as topics
+        top_words = [word for word, count in word_counts.most_common(5) if count > 1]  # Only if mentioned more than once
+        
+        # Also check for predefined topics
+        for message in session_messages:
+            content = message.get("content", "").lower()
             if any(word in content for word in ['work', 'job', 'career', 'occupation']):
                 topics.add("career")
             if any(word in content for word in ['learn', 'study', 'course', 'education']):
@@ -8454,7 +9909,267 @@ class NovaMemoryAI:
             if any(word in content for word in ['machine learning', 'ai', 'data science']):
                 topics.add("AI/ML")
 
+        # Combine predefined and extracted topics
+        topics.update(top_words)
+        
         return list(topics)
+
+    def _get_relevant_sessions(self, limit: int = 3, hours_back: int = 72) -> List[Dict[str, Any]]:
+        """Retrieve relevant past sessions prioritized by recency and importance
+        
+        Args:
+            limit: Maximum number of sessions to return
+            hours_back: Only consider sessions from the last N hours (default 72 hours = 3 days)
+        
+        Returns:
+            List of relevant sessions sorted by importance
+        """
+        sessions = self.data.get("sessions", {})
+        if not sessions:
+            return []
+
+        # Calculate cutoff time
+        cutoff_time = datetime.now() - timedelta(hours=hours_back)
+        
+        # Filter sessions that are in the time window and have ended
+        relevant_sessions = []
+        for session_id, session in sessions.items():
+            # Skip current session
+            if session_id == self.data.get("current_session"):
+                continue
+            
+            # Only consider completed sessions with end_time
+            if not session.get("end_time"):
+                continue
+            
+            try:
+                session_start = datetime.fromisoformat(session.get("start_time", ""))
+                if session_start > cutoff_time:
+                    # Score the session for relevance
+                    importance_score = self._score_session_importance(session)
+                    relevant_sessions.append({
+                        "session": session,
+                        "importance_score": importance_score
+                    })
+            except Exception:
+                continue
+        
+        # Sort by importance score (descending) and then by start_time (most recent first)
+        relevant_sessions.sort(key=lambda x: (-x["importance_score"], x["session"].get("start_time", "")), reverse=True)
+        
+        # Return top sessions
+        return [item["session"] for item in relevant_sessions[:limit]]
+
+    def _score_session_importance(self, session: Dict[str, Any]) -> float:
+        """Score a session's importance based on multiple factors
+        
+        Importance factors:
+        - Contains user identity information (high importance)
+        - Contains user preferences (high importance)
+        - Has meaningful conversation (message count)
+        - Covers multiple topics (breadth)
+        - Recent sessions get slight boost
+        
+        Returns:
+            Importance score (0.0 - 10.0)
+        """
+        score = 1.0
+        
+        # Factor 1: Message count (engagement indicator)
+        message_count = session.get("message_count", 0)
+        if message_count > 0:
+            score += min(message_count / 10, 2.0)  # Max 2.0 points
+        
+        # Factor 2: Number of topics discussed (breadth indicator)
+        topics = session.get("topics_discussed", [])
+        score += len(topics) * 0.5  # 0.5 points per topic
+        
+        # Factor 3: Contains user identity (highest importance)
+        user_name = session.get("user_name")
+        if user_name and self.data["user"].get("name"):
+            score += 2.0  # High importance
+        
+        # Factor 4: Session duration (meaningful engagement)
+        try:
+            duration_str = session.get("session_duration", "")
+            if duration_str:
+                # Longer sessions indicate more engagement
+                if "hour" in duration_str:
+                    score += 1.5
+                elif "minute" in duration_str:
+                    minutes = int(duration_str.split()[0])
+                    score += min(minutes / 20, 1.0)
+        except Exception:
+            pass
+        
+        # Factor 5: Recency boost (slight)
+        try:
+            session_time = datetime.fromisoformat(session.get("start_time", ""))
+            hours_ago = (datetime.now() - session_time).total_seconds() / 3600
+            
+            if hours_ago < 24:
+                score += 1.0  # Very recent
+            elif hours_ago < 72:
+                score += 0.5  # Recent
+        except Exception:
+            pass
+        
+        return min(score, 10.0)  # Cap at 10.0
+
+    def _reconstruct_session_conversation(self, session_id: str) -> List[Dict[str, str]]:
+        """Reconstruct full conversation from session by matching messages with session_id
+        
+        Args:
+            session_id: The session ID to reconstruct
+        
+        Returns:
+            List of conversation messages in chronological order
+        """
+        # Get all messages for this session
+        session_messages = [
+            msg for msg in self.data.get("conversation", [])
+            if msg.get("session_id") == session_id
+        ]
+        
+        # Sort by timestamp
+        session_messages.sort(key=lambda x: x.get("timestamp", ""))
+        
+        # Return simplified conversation format for readability
+        return session_messages
+
+    def _summarize_session_for_context(self, session: Dict[str, Any], message_limit: int = 6) -> str:
+        """Summarize a session into a concise context string for the AI
+        
+        Args:
+            session: The session to summarize
+            message_limit: Maximum number of messages to include (pairs of user/assistant)
+        
+        Returns:
+            Formatted context string
+        """
+        session_id = session.get("session_id", "unknown")
+        user_name = session.get("user_name", "User")
+        topics = session.get("topics_discussed", [])
+        message_count = session.get("message_count", 0)
+        duration = session.get("session_duration", "unknown")
+        
+        # Start with session header
+        summary = f"Session: {session_id}\n"
+        
+        if user_name:
+            summary += f"User: {user_name}\n"
+        
+        summary += f"Duration: {duration}, Messages: {message_count}\n"
+        
+        if topics:
+            summary += f"Topics: {', '.join(topics)}\n"
+        
+        # Add key messages from conversation
+        session_messages = self._reconstruct_session_conversation(session_id)
+        
+        if session_messages:
+            summary += "\nConversation Highlights:\n"
+            # Take first few and last few messages to show context
+            displayed_messages = session_messages[:message_limit//2] + session_messages[-(message_limit//2):]
+            
+            for msg in displayed_messages:
+                role = "User" if msg.get("role") == "user" else "Assistant"
+                content = msg.get("content", "").strip()
+                
+                # Truncate long messages
+                if len(content) > 100:
+                    content = content[:97] + "..."
+                
+                summary += f"{role}: {content}\n"
+        
+        return summary
+
+    def get_past_session_context(self, limit: int = 3, hours_back: int = 72) -> str:
+        """Get synthesized context from past sessions for the AI to use
+        
+        This method retrieves relevant past conversation sessions and creates
+        a concise context summary that the AI can use to remember user information.
+        
+        Args:
+            limit: Number of sessions to include (default 3)
+            hours_back: Time window in hours (default 72 = 3 days)
+        
+        Returns:
+            Context string ready to send to AI, or empty string if no past sessions
+        """
+        relevant_sessions = self._get_relevant_sessions(limit=limit, hours_back=hours_back)
+        
+        if not relevant_sessions:
+            return ""
+        
+        # Create context header
+        context = "=== User Context Summary ===\n\n"
+        
+        # Add user information
+        user_info = self.data.get("user", {})
+        user_name = user_info.get("name")
+        total_sessions = len(self.data.get("sessions", {}))
+        
+        if user_name:
+            context += f"User name: {user_name}\n"
+        
+        context += f"Total sessions: {total_sessions}\n"
+        
+        if relevant_sessions:
+            try:
+                last_session_time = datetime.fromisoformat(relevant_sessions[0].get("start_time", ""))
+                hours_ago = (datetime.now() - last_session_time).total_seconds() / 3600
+                
+                if hours_ago < 1:
+                    time_desc = "less than an hour ago"
+                elif hours_ago < 24:
+                    hours = int(hours_ago)
+                    time_desc = f"{hours} hour{'s' if hours != 1 else ''} ago"
+                elif hours_ago < 72:
+                    days = int(hours_ago / 24)
+                    time_desc = f"{days} day{'s' if days != 1 else ''} ago"
+                else:
+                    time_desc = "several days ago"
+                
+                context += f"Last session: {time_desc}\n"
+            except Exception:
+                pass
+        
+        # Add summaries of recent sessions
+        context += f"\nRecent session{'s' if len(relevant_sessions) != 1 else ''}:\n"
+        context += "-" * 40 + "\n"
+        
+        for i, session in enumerate(relevant_sessions, 1):
+            session_summary = self._summarize_session_for_context(session)
+            context += session_summary
+            
+            if i < len(relevant_sessions):
+                context += "\n" + "-" * 40 + "\n"
+        
+        return context
+
+    def get_current_session_context(self) -> str:
+        """Get the past session context for the current session
+        
+        Returns the synthesized context from past sessions that was generated
+        when the current session was initialized. This is intended to be sent
+        to the AI to provide memory of previous interactions.
+        
+        Returns:
+            Context string for the AI, or empty string if no context available
+        """
+        current_session_id = self.data.get("current_session")
+        
+        if not current_session_id:
+            return ""
+        
+        session = self.data.get("sessions", {}).get(current_session_id)
+        
+        if not session:
+            return ""
+        
+        # Return the past context that was generated at session initialization
+        return session.get("past_context", "")
 
     def get_session_info(self) -> Dict[str, Any]:
         """Get information about conversation sessions"""
@@ -8566,6 +10281,7 @@ class NovaMemoryAI:
                         if time_since_activity > timeout_duration:
                             print(f"Ending inactive session {session_id} due to timeout ({self.session_timeout_minutes} minutes)")
                             self._end_current_session()
+                            self.save_memory()  # Ensure data is saved when session ends automatically
                     except Exception as e:
                         print(f"Error checking session timeout: {e}")
 
@@ -8616,6 +10332,53 @@ class NovaMemoryAI:
         """Enhanced conversation processing with advanced memory features"""
         timestamp = datetime.now().isoformat()
         memory_events = []
+        
+        # AUTOMATIC USER IDENTITY EXTRACTION
+        # Extract any user identity information mentioned in the message
+        extracted_identity = self.user_identity_extractor.extract_from_message(user_message)
+        if extracted_identity:
+            logger.info(f"[USER IDENTITY] Extracted from message: {extracted_identity}")
+            
+            # CRITICAL: Update self.data with extracted identity so save_memory() doesn't overwrite it
+            if 'memory_categories' not in self.data:
+                self.data['memory_categories'] = {}
+            if 'user_identity' not in self.data['memory_categories']:
+                self.data['memory_categories']['user_identity'] = {}
+            
+            # Get the updated user_identity data from the extractor
+            user_id_data = self.data['memory_categories']['user_identity']
+            user_profile = self.user_identity_extractor.user_profile
+            
+            # Update all fields in self.data
+            if user_profile.get('name'):
+                user_id_data['name'] = user_profile['name']
+            if user_profile.get('age'):
+                user_id_data['age'] = user_profile['age']
+            if user_profile.get('location'):
+                user_id_data['location'] = user_profile['location']
+            if user_profile.get('pronouns'):
+                user_id_data['pronouns'] = user_profile['pronouns']
+            if user_profile.get('interests'):
+                user_id_data['interests'] = list(dict.fromkeys(user_profile['interests']))
+            if user_profile.get('skills'):
+                user_id_data['skills'] = list(dict.fromkeys(user_profile['skills']))
+            
+            # Build and update description in self.data
+            description = self.user_identity_extractor._build_identity_description()
+            user_id_data['description'] = description
+            user_id_data['last_updated'] = datetime.now().isoformat()
+            
+            # Preserve schema fields
+            if 'enhancement_focus' not in user_id_data:
+                user_id_data['enhancement_focus'] = "Personalization, identity consistency, name variations"
+            if 'contextual_considerations' not in user_id_data:
+                user_id_data['contextual_considerations'] = [
+                    "previous_names",
+                    "identity_evolution",
+                    "pronoun_preferences"
+                ]
+            
+            logger.info(f"[USER IDENTITY] Updated self.data with description: {description}")
 
         # 1. Session Management
         self._check_and_end_inactive_sessions()
@@ -8628,21 +10391,49 @@ class NovaMemoryAI:
         if session_id and session_id != self.data.get("current_session"):
             self.data["current_session"] = session_id
 
-        # 2. Log conversation
+        # 2. Log conversation with sent_to_organizer tracking
         actual_session_id = session_id or self.data.get("current_session", "session_unknown")
         self.data["conversation"].extend([
-            {"role": "user", "content": user_message, "timestamp": timestamp, "session_id": actual_session_id},
-            {"role": "assistant", "content": ai_response, "timestamp": timestamp, "session_id": actual_session_id}
+            {"role": "user", "content": user_message, "timestamp": timestamp, "session_id": actual_session_id, "sent_to_organizer": False},
+            {"role": "assistant", "content": ai_response, "timestamp": timestamp, "session_id": actual_session_id, "sent_to_organizer": False}
         ])
 
-        # 3. Update session activity
+        # 3. Extract and store user identity information
+        try:
+            identity_info = self.extract_user_identity(user_message)
+            if identity_info and identity_info.get('confidence', 0) > 0.5:
+                self.store_user_identity(identity_info, actual_session_id)
+                logger.info(f"[IDENTITY] Extracted identity info with confidence {identity_info.get('confidence', 0):.2f}")
+        except Exception as e:
+            logger.error(f"[IDENTITY] Error extracting identity: {e}")
+
+        # 4. Update session activity
         if session_id and session_id in self.data["sessions"]:
             self.data["sessions"][session_id]["last_activity"] = timestamp
             self.data["sessions"][session_id]["message_count"] = len([
                 msg for msg in self.data["conversation"] if msg.get("session_id") == session_id
             ])
+            # Update topics discussed in real-time (not waiting for session end)
+            self.data["sessions"][session_id]["topics_discussed"] = self._extract_session_topics(session_id)
+            # Calculate and update current session duration
+            try:
+                start_time = datetime.fromisoformat(self.data["sessions"][session_id]["start_time"])
+                current_time = datetime.now()
+                duration = current_time - start_time
+                self.data["sessions"][session_id]["current_duration"] = self._format_duration(duration)
+            except Exception as e:
+                pass  # Silently fail if duration calculation fails
 
-        # 4. Process user message to create ADD/UPDATE memory events
+        # 4. Check for user name extraction and update session
+        if user_message and user_message.strip():
+            self._check_and_update_user_name(user_message)
+            # Update session user_name if user name is known
+            if session_id and session_id in self.data["sessions"]:
+                user_name = self.data["user"].get("name")
+                if user_name and not self.data["sessions"][session_id].get("user_name"):
+                    self.data["sessions"][session_id]["user_name"] = user_name
+
+        # 5. Process user message to create ADD/UPDATE memory events
         try:
             if user_message and user_message.strip() and self._is_meaningful_message(user_message):
                 # Use the fact extractor to analyze the user message and extract operations
@@ -8896,7 +10687,7 @@ class NovaMemoryAI:
                 
 
         except Exception as e:
-            print(f"Error processing user input for memory events: {e}")
+            logger.error(f"Error processing user input for memory events: {e}")
 
         # 5. Remove duplicate events and merge similar ones
         self._remove_duplicate_events()
@@ -8904,6 +10695,32 @@ class NovaMemoryAI:
 
         # 6. Save memory
         self.save_memory()
+
+        # 6.5. Send new conversations to organizer
+        self.send_new_conversations_to_organizer()
+
+        # 7. Trigger organizer processing for current session (if has meaningful messages)
+        try:
+            if actual_session_id and actual_session_id in self.data.get("sessions", {}):
+                session = self.data["sessions"][actual_session_id]
+                if session.get("message_count", 0) >= 2:  # Only process if at least 2 messages
+                    organizer_status = session.get("organizer_status", {})
+                    last_processed_count = organizer_status.get("last_processed_message_count", 0)
+                    current_message_count = session.get("message_count", 0)
+                    
+                    # Trigger organizer if:
+                    # 1. Never processed before, OR
+                    # 2. New messages have been added since last processing
+                    if (not organizer_status.get("sent_to_organizer", False) or 
+                        current_message_count > last_processed_count):
+                        # Automatically trigger organizer processing
+                        # CONTINUOUS MODE: Send to organizer immediately
+                        self.ensure_organizer_processes_all_messages()
+                        self._process_current_session_with_organizer()
+                        logger.info(f"[AUTO-ORGANIZER] Automatically processed session {actual_session_id} "
+                                  f"(messages: {last_processed_count} -> {current_message_count})")
+        except Exception as e:
+            logger.warning(f"[AUTO-ORGANIZER] Failed to auto-process session: {e}")
 
         return {
             'memory_operations': len(memory_events),
@@ -9007,13 +10824,20 @@ class NovaMemoryAI:
             self.data["user"]["name"] = new_name
             self.data["user"]["relationship_established"] = True
             
-            print(f"User introduced themselves as {new_name}")
+            logger.info(f"User introduced themselves as {new_name}")
             
             # Update any existing conversation references from "user" to actual name
             self._update_conversation_references(new_name)
             
             # Update any existing facts that reference "user"
             self._update_fact_references(new_name)
+        
+        # Also update current session's user_name if we have a name
+        elif new_name or self.data["user"].get("name"):
+            current_name = new_name if new_name else self.data["user"].get("name")
+            current_session_id = self.data.get("current_session")
+            if current_session_id and current_session_id in self.data["sessions"]:
+                self.data["sessions"][current_session_id]["user_name"] = current_name
 
     def _update_conversation_references(self, user_name: str):
         """
@@ -9671,9 +11495,16 @@ class NovaMemoryAI:
         return emotional_events
 
     def end_session(self):
-        """End the current conversation session"""
+        """End the current conversation session and notify persistence layer"""
         self._end_current_session()
         self.save_memory()
+        
+        # Notify persistence layer that session has ended
+        try:
+            end_session()
+        except Exception as e:
+            # Silently fail if persistence layer not available
+            pass
 
     def _add_to_history(self, fact_type: str, value: Any, timestamp: str, status: str):
         """Add a value to the historical tracking"""
@@ -10216,6 +12047,33 @@ class NovaMemoryAI:
 
         return context
 
+    def get_user_context_for_nova(self) -> str:
+        """Get formatted user context to inject into Nova's system prompt
+        
+        Returns:
+            String formatted for system prompt injection
+        """
+        return self.user_context_provider.get_context_for_system_prompt()
+    
+    def get_user_awareness_statement(self) -> str:
+        """Get a statement about what Nova remembers/knows about the user
+        
+        Returns:
+            User awareness statement for Nova's awareness
+        """
+        context = self.user_context_provider._build_context_string()
+        if context:
+            return f"Remember: {context}"
+        return ""
+    
+    def has_sufficient_user_context(self) -> bool:
+        """Check if we have enough user information to mention in responses
+        
+        Returns:
+            True if we have meaningful user context
+        """
+        return self.user_context_provider.has_user_info()
+
     def query_memory(self, question: str) -> Dict[str, Any]:
         """Query memory for specific information - When Nova needs help"""
         question_lower = question.lower()
@@ -10269,15 +12127,264 @@ class NovaMemoryAI:
         print(f"🧹 Memory optimized: Removed {len(old_dates)} old logs and {len(rarely_accessed)} unused facts")
         self.save_all_data()
 
+    # ============================================================================
+    # MEMORY PROCESSING PIPELINE
+    # ============================================================================
+    
+    def _process_current_session_with_organizer(self) -> bool:
+        """Process current session with organizer if not yet processed
+        
+        Collects all messages for the current day and sends to organizer for incremental updates.
+        
+        Returns:
+            True if processing was attempted, False if already processed
+        """
+        try:
+            current_session_id = self.data.get("current_session")
+            if not current_session_id:
+                return False
+            
+            session = self.data["sessions"].get(current_session_id)
+            if not session:
+                return False
+            
+            date = session.get("date", session.get("start_time", "").split('T')[0])
+            
+            # Check if organizer output already exists for this date
+            organizer_output_dir = os.path.join("astra_ai", "Date", "organizer_summaries")
+            output_file = os.path.join(organizer_output_dir, f"{date}.json")
+            
+            last_processed_count = 0
+            if os.path.exists(output_file):
+                try:
+                    with open(output_file, 'r', encoding='utf-8') as f:
+                        existing_data = json.load(f)
+                        last_processed_count = existing_data.get("message_count", 0)
+                except Exception:
+                    last_processed_count = 0
+            
+            # CRITICAL FIX: Only process messages marked with sent_to_organizer: false
+            # This ensures we NEVER send old messages again, only truly NEW ones
+            unprocessed_messages = []
+            session_ids_for_day = []
+            
+            for sess_id, sess_data in self.data.get("sessions", {}).items():
+                sess_date = sess_data.get("date", sess_data.get("start_time", "").split('T')[0])
+                if sess_date == date:
+                    session_ids_for_day.append(sess_id)
+                    # Get ONLY unprocessed messages for this session
+                    for msg_idx, msg in enumerate(self.data.get("conversation", [])):
+                        if msg.get("session_id") == sess_id and msg.get("sent_to_organizer") != True:
+                            unprocessed_messages.append({
+                                "role": msg.get("role", "user"),
+                                "content": msg.get("content", ""),
+                                "timestamp": msg.get("timestamp", ""),
+                                "msg_idx": msg_idx  # Store index to mark as processed
+                            })
+            
+            # Check if there are unprocessed messages
+            if not unprocessed_messages:
+                logger.info(f"[ORGANIZER] No unprocessed messages for {date}")
+                return False
+            
+            # Sort by timestamp for chronological order
+            unprocessed_messages.sort(key=lambda x: x.get("timestamp", ""))
+            
+            logger.info(f"[ORGANIZER-FIX] Processing {len(unprocessed_messages)} UNPROCESSED messages only")
+            
+            # Build conversation text from ONLY unprocessed messages
+            # This is the critical fix: organizer NEVER sees old messages
+            conversation_text = ""
+            msg_indices_sent = []
+            for conv in unprocessed_messages:
+                role = conv.get("role", "user").upper()
+                content = conv.get("content", "")
+                conversation_text += f"{role}: {content}\n"
+                msg_indices_sent.append(conv.get("msg_idx"))
+            
+            # Send to organizer
+            try:
+                from astra_ai.memory.Mem0_ai_organizer import AIOrganizer, ORGANIZER_CONFIG
+                
+                organizer = AIOrganizer(ORGANIZER_CONFIG, memory_system=self)
+                organizer_output = organizer.organize_daily_conversations(date, session_ids_for_day, conversation_text)
+                
+                # CRITICAL: Mark the messages we just sent as processed
+                # This prevents them from being sent again in future organizer runs
+                for msg_idx in msg_indices_sent:
+                    if msg_idx < len(self.data.get("conversation", [])):
+                        self.data["conversation"][msg_idx]["sent_to_organizer"] = True
+                        logger.debug(f"[ORGANIZER] Marked message {msg_idx} as sent_to_organizer")
+                
+                # Update session organizer status
+                for sess_id in session_ids_for_day:
+                    if sess_id in self.data["sessions"]:
+                        sess = self.data["sessions"][sess_id]
+                        if "organizer_status" not in sess:
+                            sess["organizer_status"] = {}
+                        
+                        sess["organizer_status"]["sent_to_organizer"] = True
+                        sess["organizer_status"]["organizer_summary_ready"] = True
+                        sess["organizer_status"]["organizer_file"] = f"organizer_summaries/{date}.json"
+                        sess["organizer_status"]["last_processed"] = datetime.now().isoformat()
+                        sess["organizer_status"]["last_processed_message_count"] = len(unprocessed_messages)
+
+                # Persist changes to memory state
+                try:
+                    self.save_memory()
+                except Exception as e:
+                    logger.warning(f"[ORGANIZER] Could not save memory after organizer processing: {e}")
+
+                logger.info(f"[ORGANIZER] Processed {len(session_ids_for_day)} sessions for {date} ({len(unprocessed_messages)} new messages)")
+                return True
+                
+            except Exception as e:
+                logger.warning(f"Error sending session to organizer: {e}")
+                return False
+                
+        except Exception as e:
+            logger.warning(f"Error in organizer processing: {e}")
+            return False
+    
+    def _get_session_organized_summary(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Read the organized summary for a session from organizer output
+        
+        Args:
+            session_id: The session ID to get summary for
+        
+        Returns:
+            Dictionary with organized summary or None if not found
+        """
+        try:
+            session = self.data["sessions"].get(session_id)
+            if not session:
+                return None
+            
+            date = session.get("date", session.get("start_time", "").split('T')[0])
+            
+            organizer_output_dir = os.path.join("astra_ai", "Date", "organizer_summaries")
+            output_file = os.path.join(organizer_output_dir, f"{date}.json")
+            
+            if os.path.exists(output_file):
+                with open(output_file, 'r', encoding='utf-8') as f:
+                    organizer_data = json.load(f)
+                    return organizer_data
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Error reading organizer summary: {e}")
+            return None
+    
+    def _get_processed_daily_memory_context(self) -> Dict[str, Any]:
+        """Build memory context for current daily session
+        
+        For the current session (today):
+        1. Ensure session is initialized
+        2. Process unprocessed daily session with organizer
+        3. Read cached summary (if exists)
+        4. Return organized context
+        
+        Returns:
+            Dictionary with processed memory context ready for nova_ai
+        """
+        try:
+            current_session_id = self.data.get("current_session")
+            if not current_session_id:
+                self._initialize_session()
+                current_session_id = self.data.get("current_session")
+
+            if not current_session_id:
+                return self.get_memory_context("")
+
+            session = self.data["sessions"].get(current_session_id)
+            if not session:
+                return self.get_memory_context("")
+
+            # CONTINUOUS PROCESSING: Ensure organizer has processed all pending messages
+            # Guarantees no messages left unprocessed when user returns
+            self.ensure_organizer_processes_all_messages()
+            self._process_current_session_with_organizer()
+
+            # Get organized summary if available
+            organizer_summary = self._get_session_organized_summary(current_session_id)
+
+            # Build the context
+            context = {
+                'user_info': self.data.get("user", {}),
+                'today_session': session,
+                'current_facts': self.data.get("fact_history", {}),
+                'recent_events': self.data.get("memory_engine", {}).get("memory_events", [])[-5:],
+                'conversation_history': self.data.get("conversation", [])[-10:],
+                'processed': True
+            }
+            
+            # Add organizer summary if available
+            if organizer_summary:
+                context['daily_summary'] = organizer_summary.get('daily_summary', '')
+                context['daily_topics'] = organizer_summary.get('topics', [])
+            
+            return context
+            
+        except Exception as e:
+            logger.warning(f"Error building processed memory context: {e}")
+            return self.get_memory_context("")
+
+    def get_user_identity_description(self) -> str:
+        """Get the user identity description from memory_categories"""
+        try:
+            memory_categories = self.data.get("memory_categories", {})
+            user_identity = memory_categories.get("user_identity", {})
+            description = user_identity.get("description", "")
+            return description
+        except Exception as e:
+            logger.debug(f"Error getting user identity description: {e}")
+            return ""
+
+    def get_today_organizer_summary(self) -> Dict[str, Any]:
+        """Get the organizer daily summary for today"""
+        try:
+            from datetime import datetime
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            # Try to load from organizer_summaries directory
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(script_dir)  # Go up one level from memory/ to astra_ai/
+            organizer_summaries_dir = os.path.normpath(os.path.join(project_root, 'Date', 'organizer_summaries'))
+            summary_file = os.path.join(organizer_summaries_dir, f"{today}.json")
+            
+            if os.path.exists(summary_file):
+                with open(summary_file, 'r', encoding='utf-8') as f:
+                    summary = json.load(f)
+                    return summary
+            else:
+                return {}
+        except Exception as e:
+            logger.debug(f"Error getting organizer summary: {e}")
+            return {}
 
     def get_memory_context(self, query: str = "") -> Dict[str, Any]:
-        """Get memory context for AI response generation"""
-        return {
+        """Get memory context for AI response generation including user identity and organizer summary"""
+        context = {
             'user_info': self.data["user"],
             'current_facts': self.data["fact_history"],
             'recent_events': self.data["memory_engine"]["memory_events"][-5:],
             'conversation_history': self.data["conversation"][-10:]
         }
+        
+        # Add user identity description
+        user_identity_desc = self.get_user_identity_description()
+        if user_identity_desc:
+            context['user_identity'] = user_identity_desc
+        
+        # Add organizer summary for today
+        organizer_summary = self.get_today_organizer_summary()
+        if organizer_summary:
+            context['organizer_summary'] = organizer_summary
+            if 'daily_summary' in organizer_summary:
+                context['daily_summary'] = organizer_summary['daily_summary']
+        
+        return context
 
     def get_full_memory_json(self) -> Dict[str, Any]:
         """Get the complete memory in enhanced JSON format with historical data"""
@@ -11699,10 +13806,10 @@ class NovaMemoryAI:
             if orphaned_key in fact_history:  # Double check existence before deletion
                 del fact_history[orphaned_key]
                 fixed_count += 1
-                print(f"[SYNC] Removed orphaned fact_history entry: {orphaned_key}")
+                logger.debug(f"Removed orphaned fact_history entry: {orphaned_key}")
         
         if fixed_count > 0:
-            print(f"[SYNC] Fixed {fixed_count} synchronization issues between memory_events and fact_history")
+            logger.info(f"Fixed {fixed_count} synchronization issues between memory_events and fact_history")
             
         return fixed_count
 
@@ -11735,11 +13842,11 @@ class NovaMemoryAI:
         missing_in_memory_events = fact_history_event_ids - memory_event_ids
         
         if missing_in_fact_history or missing_in_memory_events:
-            print(f"[VALIDATION] Inconsistency detected:")
+            logger.warning("Inconsistency detected:")
             if missing_in_fact_history:
-                print(f"  Missing in fact_history: {missing_in_fact_history}")
+                logger.warning(f"  Missing in fact_history: {missing_in_fact_history}")
             if missing_in_memory_events:
-                print(f"  Missing in memory_events: {missing_in_memory_events}")
+                logger.warning(f"  Missing in memory_events: {missing_in_memory_events}")
             return False
         
         return True
@@ -11794,7 +13901,7 @@ class NovaMemoryAI:
         self.data["fact_history"] = cleaned_fact_history
         
         if duplicates_removed > 0:
-            print(f"[INFO] Removed {duplicates_removed} duplicate memory events")
+            logger.info(f"Removed {duplicates_removed} duplicate memory events")
             
         return duplicates_removed
 
@@ -11838,14 +13945,14 @@ class NovaMemoryAI:
             # Add a check for vectors during the save process as well
             vectors_in_engine = len(self.data["memory_engine"].get("vector_index", {}))
 
-            print(f"[DEBUG-SAVE] Memory Events: {len(memory_events)}, Vectors: {vectors_in_engine}, Engine Clusters: {len(memory_engine_clusters)}")
+            logger.debug(f"Memory Events: {len(memory_events)}, Vectors: {vectors_in_engine}, Engine Clusters: {len(memory_engine_clusters)}")
 
             # If we have events but no clusters, force rebuild
             if memory_events and len(memory_engine_clusters) == 0:
-                print(f"[DEBUG-SAVE] No clusters found but {len(memory_events)} events exist, rebuilding clusters...")
+                logger.debug(f"No clusters found but {len(memory_events)} events exist, rebuilding clusters...")
                 # Before rebuilding, validate that vectors exist
                 available_vectors = len(self.data["memory_engine"].get("vector_index", {}))
-                print(f"[DEBUG-SAVE] About to rebuild with {available_vectors} available vectors")
+                logger.debug(f"About to rebuild with {available_vectors} available vectors")
 
                 self.rebuild_clusters_from_events()
                 # Resynchronize after rebuild
@@ -11853,10 +13960,10 @@ class NovaMemoryAI:
 
             # Add debug info before saving
             final_clusters = len(self.data['memory_engine'].get('clusters', {}))
-            print(f"[DEBUG-SAVE] Memory Engine Clusters: {final_clusters}")
-            print(f"[DEBUG-SAVE] Root Clusters: {len(self.data.get('clusters', {}))}")
+            logger.debug(f"Memory Engine Clusters: {final_clusters}")
+            logger.debug(f"Root Clusters: {len(self.data.get('clusters', {}))}")
             if hasattr(self, 'clusters'):
-                print(f"[DEBUG-SAVE] Instance Clusters: {len(self.clusters)}")
+                logger.debug(f"Instance Clusters: {len(self.clusters)}")
 
             # First, remove any duplicate memory events before saving
             duplicates_removed = self.remove_duplicate_memory_events()
@@ -11866,11 +13973,11 @@ class NovaMemoryAI:
             # Synchronize memory_events and fact_history to ensure consistency
             sync_fixed = self.synchronize_memory_events_and_fact_history()
             if sync_fixed > 0:
-                print(f"[INFO] Fixed {sync_fixed} synchronization issues between memory_events and fact_history")
+                logger.info(f"Fixed {sync_fixed} synchronization issues between memory_events and fact_history")
 
             # Validate memory consistency before saving
             if not self.validate_memory_consistency():
-                print("[WARNING] Memory consistency issues detected")
+                logger.warning("Memory consistency issues detected")
 
             # Write atomically to avoid corruption - COMPLETE REBUILD WITH SINGLE-LINE VECTOR FORMATTING
             tmpfile = f"{self.storage_file}.tmp"
@@ -15559,7 +17666,7 @@ class NovaMemoryAI:
             return
 
         event_id = event_data['event_id']
-        print(f"[DEBUG] Processing cluster update for event: {event_id}")
+        logger.debug(f"Processing cluster update for event: {event_id}")
 
         # Ensure vector_index exists in the memory engine
         if 'vector_index' not in self.data["memory_engine"]:
@@ -15567,7 +17674,7 @@ class NovaMemoryAI:
 
         # Check if vector exists for the event, if not create it
         if event_id not in self.data["memory_engine"]["vector_index"]:
-            print(f"[DEBUG] Vector not found for event {event_id} in vector_index, creating one...")
+            logger.debug(f"Vector not found for event {event_id} in vector_index, creating one...")
 
             # Create vector from the event text/content
             text_content = event_data.get('current_value', '') or event_data.get('summary', '') or event_data.get('context', '') or event_data.get('Added_preference', '')
@@ -15576,7 +17683,7 @@ class NovaMemoryAI:
                 # Create embedding vector for the text content
                 text_vector = self._create_embedding_vector(text_content)
                 self.data["memory_engine"]["vector_index"][event_id] = text_vector
-                print(f"[DEBUG] Created vector for event {event_id}, dimensions: {len(text_vector)}")
+                logger.debug(f"Created vector for event {event_id}, dimensions: {len(text_vector)}")
             else:
                 # Create a default vector if no text content available
                 text_vector = [0.1] * 8  # Default 8-dimensional vector
@@ -18191,7 +20298,7 @@ class AdvancedMemoryAgent:
     - Maintains conversation logs for context
     """
 
-    def __init__(self, storage_file: str = "astra_ai/Date/nova_ai_memory.json"):
+    def __init__(self, storage_file: str = os.path.join(os.path.dirname(__file__), '..', 'Date', 'nova_ai_memory.json')):
         self.memory_system = NovaMemoryAI(storage_file)
         # Silently initialized Nova Memory AI Agent
 
@@ -18202,6 +20309,14 @@ class AdvancedMemoryAgent:
     def get_memory_context(self, query: str = "") -> Dict[str, Any]:
         """Get memory context for AI response generation"""
         return self.memory_system.get_memory_context(query)
+
+    def get_user_identity_description(self) -> str:
+        """Get the user identity description from memory_categories"""
+        return self.memory_system.get_user_identity_description()
+
+    def get_today_organizer_summary(self) -> Dict[str, Any]:
+        """Get the organizer daily summary for today"""
+        return self.memory_system.get_today_organizer_summary()
 
     def get_user_profile(self) -> Dict[str, Any]:
         """
@@ -18880,6 +20995,6 @@ class AdvancedMemoryAgent:
 
 
 # Factory function for backward compatibility
-def create_memory_agent(storage_file: str = "astra_ai/Date/nova_ai_memory.json") -> AdvancedMemoryAgent:
+def create_memory_agent(storage_file: str = os.path.join(os.path.dirname(__file__), '..', 'Date', 'nova_ai_memory.json')) -> AdvancedMemoryAgent:
     """Factory function to create a memory agent with default configuration"""
     return AdvancedMemoryAgent(storage_file)
