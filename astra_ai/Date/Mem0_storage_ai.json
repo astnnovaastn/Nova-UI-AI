@@ -1,0 +1,3930 @@
+{
+  "user": {
+    "user_id": "default_user",
+    "name": "Testing",
+    "created_at": "2026-05-14T19:42:36.730333",
+    "status": "active",
+    "total_sessions": 27,
+    "last_seen": "2026-06-01T09:49:39.439839",
+    "relationship_established": true,
+    "age": null,
+    "location": null,
+    "interests": [],
+    "skills": [],
+    "pronouns": null
+  },
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2026-06-01T10:07:15.871761",
+      "description": "Mem0 AI Memory Engine - Event-based user memory management system"
+    },
+    "memory_events": [
+      {
+        "event_id": "evt_233f46c7",
+        "type": "ADD",
+        "summary": "Hello, I'm testing the new centralized storage system.",
+        "timestamp": "2026-05-14T19:42:36.851907Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [
+            "testing",
+            "storage",
+            "centralized",
+            "general"
+          ],
+          "emotional_intensity": 0.0,
+          "mood_context": "neutral",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from user input: Hello, I'm testing the new centralized storage system.",
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "User, Testing",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2026-05-15T23:02:56.166004",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: Hello, I'm testing the new centralized storage system.",
+            "event_index": 0
+          },
+          "source_conversation_timestamp": "2026-05-15T23:02:56.166014"
+        },
+        "session_id": "session_2026_05_14",
+        "Added_preference_likes": "enjoys Hello, I'm"
+      },
+      {
+        "event_id": "evt_c514a7bf",
+        "type": "ADD",
+        "summary": "Hello, I'm testing the new centralized storage system.",
+        "timestamp": "2026-05-15T23:08:09.053225Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [
+            "storage",
+            "testing",
+            "centralized",
+            "general"
+          ],
+          "emotional_intensity": 0.0,
+          "mood_context": "neutral",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from user input: Hello, I'm testing the new centralized storage system.",
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "Testing, User",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2026-05-15T23:18:10.626976",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: Hello, I'm testing the new centralized storage system.",
+            "event_index": 1
+          },
+          "source_conversation_timestamp": "2026-05-15T23:18:10.626989"
+        },
+        "session_id": "session_2026_05_15_4",
+        "Added_preference_likes": "enjoys Hello, I'm"
+      },
+      {
+        "event_id": "evt_29b63e87",
+        "type": "ADD",
+        "summary": "User general testing",
+        "timestamp": "2026-06-01T10:07:20.898368Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [],
+          "emotional_intensity": 0.5,
+          "mood_context": "learning",
+          "confidence": 0.7
+        },
+        "semantic_context": "Inferred from input: 'Hello, I'm testing the new centralized storage system.'",
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "testing",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2026-06-01T10:07:20.898368Z",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: Hello, I'm testing the new centralized storage system.",
+            "event_index": 3
+          },
+          "source_conversation_timestamp": "2026-06-01T10:07:20.898368Z"
+        },
+        "Added_preference": "User general testing",
+        "session_id": "session_2026_06_01"
+      }
+    ],
+    "vector_index": {
+      "evt_233f46c7": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+      "evt_c514a7bf": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+      "evt_29b63e87": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00]
+    },
+    "clusters": {
+      "cluster_000": {
+        "topic": "general_activity_cluster",
+        "label": "Identity Information",
+        "centroid_vector": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+        "event_ids": [
+          "evt_233f46c7"
+        ],
+        "coherence_score": 1.0,
+        "last_updated": "2026-05-14T19:42:36.851907Z",
+        "metadata": {
+          "dominant_tags": [
+            "user_identity"
+          ],
+          "cluster_type": "user_identity",
+          "member_count": 1,
+          "average_confidence": 0.8,
+          "temporal_span": "0 days",
+          "creation_timestamp": "2026-05-14T19:42:36.851907Z"
+        },
+        "insights": {
+          "primary_pattern": "new_pattern",
+          "consistency": 1.0,
+          "emotional_tone": "neutral_tone",
+          "frequency": "single_event"
+        }
+      }
+    },
+    "update_log": []
+  },
+  "conversation": [
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-14T19:42:36.835205",
+      "session_id": "session_2026_05_14",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-14T19:42:36.835205",
+      "session_id": "session_2026_05_14",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-14T20:24:20.823291",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-14T20:24:20.823291",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-14T20:29:00.672319",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-14T20:29:00.672319",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-14T20:29:00.833576",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-14T20:29:00.833576",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-14T20:48:01.786486",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-14T20:48:01.786486",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-14T20:54:08.423356",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-14T20:54:08.423356",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-14T20:54:08.680527",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-14T20:54:08.680527",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-14T22:08:29.770373",
+      "session_id": "session_2026_05_14_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-14T22:08:29.770373",
+      "session_id": "session_2026_05_14_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-14T23:11:43.477638",
+      "session_id": "session_2026_05_14_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-14T23:11:43.477638",
+      "session_id": "session_2026_05_14_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-14T23:13:21.718236",
+      "session_id": "session_2026_05_14_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-14T23:13:21.718236",
+      "session_id": "session_2026_05_14_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T08:30:28.572548",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T08:30:28.572548",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T08:30:29.822583",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T08:30:29.822583",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T08:30:41.918276",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T08:30:41.918276",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T08:31:10.013525",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T08:31:10.013525",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T08:45:00.692303",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T08:45:00.692303",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T09:24:53.250372",
+      "session_id": "session_2026_05_15_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T09:24:53.250372",
+      "session_id": "session_2026_05_15_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T09:27:33.641845",
+      "session_id": "session_2026_05_15_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T09:27:33.641845",
+      "session_id": "session_2026_05_15_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T09:29:02.684721",
+      "session_id": "session_2026_05_15_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T09:29:02.684721",
+      "session_id": "session_2026_05_15_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T09:42:37.947445",
+      "session_id": "session_2026_05_15_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T09:42:37.947445",
+      "session_id": "session_2026_05_15_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T09:52:38.392728",
+      "session_id": "session_2026_05_15_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T09:52:38.392728",
+      "session_id": "session_2026_05_15_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T10:43:52.180346",
+      "session_id": "session_2026_05_15_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T10:43:52.180346",
+      "session_id": "session_2026_05_15_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T11:20:48.386256",
+      "session_id": "session_2026_05_15_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T11:20:48.386256",
+      "session_id": "session_2026_05_15_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:00:49.261954",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:00:49.261954",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:01:15.429415",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:01:15.429415",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:01:19.842171",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:01:19.842171",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:01:26.607814",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:01:26.607814",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:01:32.580126",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:01:32.580126",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:03:02.982581",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:03:02.982581",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:08:09.041634",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:08:09.041634",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:08:20.178895",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:08:20.178895",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:08:46.678446",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:08:46.678446",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:09:34.208579",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:09:34.208579",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:13:12.507352",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:13:12.507352",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:13:19.677543",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:13:19.677543",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:13:29.497923",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:13:29.497923",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:14:38.535428",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:14:38.535428",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:20:04.215240",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:20:04.215240",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:24:40.170748",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:24:40.170748",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:24:46.226178",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:24:46.226178",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:25:04.491501",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:25:04.491501",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:26:17.509801",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:26:17.509801",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:27:09.674762",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:27:09.674762",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:27:21.034857",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:27:21.034857",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:28:23.452637",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:28:23.452637",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:28:44.093846",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:28:44.093846",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:32:58.624241",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:32:58.624241",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:32:59.503808",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:32:59.503808",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:37:02.272090",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:37:02.272090",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:41:51.260585",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:41:51.260585",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:41:54.268355",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-15T23:41:54.268355",
+      "session_id": "session_2026_05_15_4",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T22:49:47.301590",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T22:49:47.301590",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T22:50:00.421552",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T22:50:00.421552",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T22:50:34.200861",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T22:50:34.200861",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:12:48.820935",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:12:48.820935",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:13:09.852527",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:13:09.852527",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:13:31.735766",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:13:31.735766",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:14:05.533760",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:14:05.533760",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:23:51.067378",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:23:51.067378",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:24:06.151377",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:24:06.151377",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:24:19.807617",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:24:19.807617",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:24:25.299699",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:24:25.299699",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:24:55.882296",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:24:55.882296",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:29:50.287885",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:29:50.287885",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:29:50.937109",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-17T23:29:50.937109",
+      "session_id": "session_2026_05_17",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T18:36:39.498855",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T18:36:39.498855",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T18:36:55.467446",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T18:36:55.467446",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T18:37:06.775738",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T18:37:06.775738",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T18:37:12.139392",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T18:37:12.139392",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T18:37:36.948599",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T18:37:36.948599",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T18:58:59.462663",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T18:58:59.462663",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:01:48.223395",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:01:48.223395",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:08:37.739713",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:08:37.739713",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:10:13.060566",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:10:13.060566",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:10:18.191862",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:10:18.191862",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:10:49.168736",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:10:49.168736",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:11:22.456796",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:11:22.456796",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:20:49.646856",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:20:49.646856",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:22:40.463115",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:22:40.463115",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:22:53.910257",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:22:53.910257",
+      "session_id": "session_2026_05_18",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:54:07.524646",
+      "session_id": "session_2026_05_18_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:54:07.524646",
+      "session_id": "session_2026_05_18_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:54:31.502287",
+      "session_id": "session_2026_05_18_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T19:54:31.502287",
+      "session_id": "session_2026_05_18_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T20:43:35.898787",
+      "session_id": "session_2026_05_18_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T20:43:35.898787",
+      "session_id": "session_2026_05_18_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T20:44:44.137937",
+      "session_id": "session_2026_05_18_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T20:44:44.137937",
+      "session_id": "session_2026_05_18_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T20:44:53.784281",
+      "session_id": "session_2026_05_18_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T20:44:53.784281",
+      "session_id": "session_2026_05_18_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T20:45:55.204327",
+      "session_id": "session_2026_05_18_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T20:45:55.204327",
+      "session_id": "session_2026_05_18_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T20:45:58.413303",
+      "session_id": "session_2026_05_18_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T20:45:58.413303",
+      "session_id": "session_2026_05_18_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T21:03:03.681752",
+      "session_id": "session_2026_05_18_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T21:03:03.681752",
+      "session_id": "session_2026_05_18_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:47:46.347036",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:47:46.347036",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:48:28.528223",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:48:28.528223",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:48:41.365745",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:48:41.365745",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:48:45.432786",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:48:45.432786",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:49:10.205434",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:49:10.205434",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:49:56.765473",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:49:56.765473",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:50:17.285516",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:50:17.285516",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:50:36.875998",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:50:36.875998",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:51:32.307243",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:51:32.307243",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:51:56.550141",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:51:56.550141",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:53:26.789982",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:53:26.789982",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:53:55.674357",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:53:55.674357",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:54:03.563371",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:54:03.563371",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:54:05.156118",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:54:05.156118",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:54:07.226536",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:54:07.226536",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:55:19.658527",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:55:19.658527",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:55:46.349649",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:55:46.349649",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:57:36.396790",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:57:36.396790",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:58:27.346803",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T22:58:27.346803",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:01:09.134392",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:01:09.134392",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:19:58.963907",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:19:58.963907",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:30:13.978319",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:30:13.978319",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:30:22.810871",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:30:22.810871",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:32:47.652897",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:32:47.652897",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:33:26.771048",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:33:26.771048",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:34:10.261124",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:34:10.261124",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:38:07.005380",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:38:07.005380",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:39:45.494566",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:39:45.494566",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:39:57.803599",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:39:57.803599",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:40:52.777531",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:40:52.777531",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:44:25.958918",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:44:25.958918",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:44:33.261831",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:44:33.261831",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:44:48.790926",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-18T23:44:48.790926",
+      "session_id": "session_2026_05_18_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T08:42:12.166547",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T08:42:12.166547",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T08:52:03.448736",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T08:52:03.448736",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:20:17.969658",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:20:17.969658",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:30:08.481109",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:30:08.481109",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:46:41.864468",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:46:41.864468",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:55:46.212049",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:55:46.212049",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:56:28.551503",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:56:28.551503",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:58:06.038550",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:58:06.038550",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:58:55.403448",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T09:58:55.403448",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T10:05:58.837578",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T10:05:58.837578",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T10:06:49.490587",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T10:06:49.490587",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T10:17:39.083022",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T10:17:39.083022",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T10:18:18.094333",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T10:18:18.094333",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T10:25:55.383123",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T10:25:55.383123",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-19T10:35:30.845670",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-19T10:35:30.845670",
+      "session_id": "session_2026_05_19",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-21T22:37:37.589943",
+      "session_id": "session_2026_05_21",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-21T22:37:37.589943",
+      "session_id": "session_2026_05_21",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-21T22:38:56.022761",
+      "session_id": "session_2026_05_21",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-21T22:38:56.022761",
+      "session_id": "session_2026_05_21",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-21T22:39:00.100239",
+      "session_id": "session_2026_05_21",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-21T22:39:00.100239",
+      "session_id": "session_2026_05_21",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-22T10:14:26.073789",
+      "session_id": "session_2026_05_22",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-22T10:14:26.073789",
+      "session_id": "session_2026_05_22",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-25T17:16:23.862687",
+      "session_id": "session_2026_05_25",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-25T17:16:23.862687",
+      "session_id": "session_2026_05_25",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-25T17:17:18.711450",
+      "session_id": "session_2026_05_25",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-25T17:17:18.711450",
+      "session_id": "session_2026_05_25",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-25T17:17:25.850904",
+      "session_id": "session_2026_05_25",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-25T17:17:25.850904",
+      "session_id": "session_2026_05_25",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-25T17:18:37.312161",
+      "session_id": "session_2026_05_25",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-25T17:18:37.312161",
+      "session_id": "session_2026_05_25",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-25T17:18:39.261849",
+      "session_id": "session_2026_05_25",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-25T17:18:39.261849",
+      "session_id": "session_2026_05_25",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-25T17:23:01.021319",
+      "session_id": "session_2026_05_25",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-25T17:23:01.021319",
+      "session_id": "session_2026_05_25",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-25T19:17:23.640098",
+      "session_id": "session_2026_05_25_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-25T19:17:23.640098",
+      "session_id": "session_2026_05_25_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-25T19:18:32.666574",
+      "session_id": "session_2026_05_25_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-25T19:18:32.666574",
+      "session_id": "session_2026_05_25_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-25T19:19:14.306348",
+      "session_id": "session_2026_05_25_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-25T19:19:14.306348",
+      "session_id": "session_2026_05_25_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-25T19:25:57.294861",
+      "session_id": "session_2026_05_25_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-25T19:25:57.294861",
+      "session_id": "session_2026_05_25_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-25T22:03:53.556618",
+      "session_id": "session_2026_05_25_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-25T22:03:53.556618",
+      "session_id": "session_2026_05_25_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-25T22:08:05.448068",
+      "session_id": "session_2026_05_25_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-25T22:08:05.448068",
+      "session_id": "session_2026_05_25_2",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-25T22:50:31.974317",
+      "session_id": "session_2026_05_25_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-25T22:50:31.974317",
+      "session_id": "session_2026_05_25_3",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-26T14:56:00.142038",
+      "session_id": "session_2026_05_26",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-26T14:56:00.142038",
+      "session_id": "session_2026_05_26",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-26T14:56:17.157307",
+      "session_id": "session_2026_05_26",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-26T14:56:17.157307",
+      "session_id": "session_2026_05_26",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-26T14:59:50.641171",
+      "session_id": "session_2026_05_26",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-26T14:59:50.641171",
+      "session_id": "session_2026_05_26",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-26T15:00:46.284028",
+      "session_id": "session_2026_05_26",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-26T15:00:46.284028",
+      "session_id": "session_2026_05_26",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-26T15:01:12.036108",
+      "session_id": "session_2026_05_26",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-26T15:01:12.036108",
+      "session_id": "session_2026_05_26",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-26T15:07:38.525640",
+      "session_id": "session_2026_05_26",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-26T15:07:38.525640",
+      "session_id": "session_2026_05_26",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-26T17:20:58.652816",
+      "session_id": "session_2026_05_26_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-26T17:20:58.652816",
+      "session_id": "session_2026_05_26_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-29T22:33:14.288889",
+      "session_id": "session_2026_05_29",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-29T22:33:14.288889",
+      "session_id": "session_2026_05_29",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-29T22:40:31.588042",
+      "session_id": "session_2026_05_29",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-29T22:40:31.588042",
+      "session_id": "session_2026_05_29",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-29T23:20:25.827272",
+      "session_id": "session_2026_05_29_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-29T23:20:25.827272",
+      "session_id": "session_2026_05_29_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-05-31T16:30:56.556382",
+      "session_id": "session_2026_05_31",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-05-31T16:30:56.556382",
+      "session_id": "session_2026_05_31",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T09:49:39.336630",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T09:49:39.336630",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T09:49:58.613092",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T09:49:58.613092",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:07:20.886920",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:07:20.886920",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:07:21.841248",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:07:21.841248",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:07:26.706940",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:07:26.706940",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:07:29.074312",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:07:29.074312",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:07:31.147036",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:07:31.147036",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:31:06.450696",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:31:06.450696",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:38:55.642118",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:38:55.642118",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:23.662680",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:23.662680",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:29.448816",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:29.448816",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:32.332868",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:32.332868",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:40.925791",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:40.925791",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:44.852415",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:44.852415",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:49.321922",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:49.321922",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:51.817339",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:51.817339",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:53.122705",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:45:53.122705",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:46:29.664166",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:46:29.664166",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:46:32.286215",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:46:32.286215",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:53:48.014900",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:53:48.014900",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:55:15.234525",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:55:15.234525",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:55:30.146707",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T10:55:30.146707",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "Hello, I'm testing the new centralized storage system.",
+      "timestamp": "2026-06-01T11:09:13.263078",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Great! I'm glad you're testing the new centralized storage system.",
+      "timestamp": "2026-06-01T11:09:13.263078",
+      "session_id": "session_2026_06_01",
+      "sent_to_organizer": true
+    }
+  ],
+  "fact_history": {
+    "personal_preferences": {
+      "Added_preference_likes": [
+        {
+          "item": "Enjoys Hello, I'm",
+          "score": 0.85,
+          "added": "2026-05-14",
+          "updated": "2026-05-15",
+          "event_references": [
+            "evt_d3a02b5a",
+            "evt_27fd5b92",
+            "evt_233f46c7",
+            "evt_b26618f0",
+            "evt_5a535ff7",
+            "evt_cbe0d34f",
+            "evt_c514a7bf"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-06-01T11:09:13.242208"
+          }
+        },
+        {
+          "item": "Enjoys I'm, Hello",
+          "score": 0.85,
+          "added": "2026-05-17",
+          "updated": "2026-06-01",
+          "event_references": [
+            "evt_ce01bdf8",
+            "evt_c210bf25",
+            "evt_d88d5657",
+            "evt_1b9b68eb",
+            "evt_2412d18c"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-06-01T10:07:20.882301"
+          }
+        }
+      ],
+      "Added_preference_dislikes": [],
+      "Added_preference_avoid": [],
+      "Added_preference_always": [],
+      "Added_preference_style": [],
+      "conditional": [],
+      "Added_preference_interests": [],
+      "Added_preference_loves": [],
+      "Added_preference_hates": [],
+      "Added_preference_enjoys": [],
+      "Added_preference_needs": [],
+      "Added_preference_wants": [],
+      "Added_preference_continues": [],
+      "Added_preference_favorites": [],
+      "Added_preference_prefers": [],
+      "preferences": [],
+      "Added_preference_preferences": []
+    },
+    "evt_233f46c7": {
+      "item": "User, Testing",
+      "added": "2026-05-14",
+      "score": 0.85,
+      "updated": "2026-05-15"
+    },
+    "evt_c514a7bf": {
+      "item": "Testing, User",
+      "added": "2026-05-15",
+      "score": 0.85,
+      "updated": "2026-05-15"
+    },
+    "evt_29b63e87": {
+      "item": "testing",
+      "added": "2026-06-01",
+      "score": 0.85
+    }
+  },
+  "sessions": {
+    "session_2026_05_14": {
+      "session_id": "session_2026_05_14",
+      "start_time": "2026-05-14T19:42:36.836753",
+      "date": "2026-05-14",
+      "end_time": "2026-05-14T20:24:20.827527",
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "Testing",
+      "session_duration": "41 minutes",
+      "last_activity": "2026-05-14T19:42:36.835205",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-14.json",
+        "last_processed": "2026-05-14T23:13:21.817981",
+        "last_processed_message_count": 2
+      },
+      "current_duration": "0 seconds"
+    },
+    "session_2026_05_14_1": {
+      "session_id": "session_2026_05_14_1",
+      "start_time": "2026-05-14T20:24:20.923726",
+      "date": "2026-05-14",
+      "end_time": "2026-05-14T22:08:29.790098",
+      "message_count": 12,
+      "topics_discussed": [
+        "i'm",
+        "centralized",
+        "testing",
+        "hello",
+        "new"
+      ],
+      "user_name": "Testing",
+      "session_duration": "1 hours 44 minutes",
+      "last_activity": "2026-05-14T20:54:08.680527",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-14.json",
+        "last_processed": "2026-05-14T23:13:21.817991",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 2\nLast session: less than an hour ago\n\nRecent session:\n----------------------------------------\nSession: session_2026_05_14\nUser: Testing\nDuration: 41 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "29 minutes"
+    },
+    "session_2026_05_14_2": {
+      "session_id": "session_2026_05_14_2",
+      "start_time": "2026-05-14T22:08:29.852938",
+      "date": "2026-05-14",
+      "end_time": "2026-05-14T23:11:43.482678",
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "Testing",
+      "session_duration": "1 hours 3 minutes",
+      "last_activity": "2026-05-14T22:08:29.770373",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-14.json",
+        "last_processed": "2026-05-14T23:13:21.817995",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 3\nLast session: 2 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_14\nUser: Testing\nDuration: 41 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_14_1\nUser: Testing\nDuration: 1 hours 44 minutes, Messages: 12\nTopics: i'm, centralized, testing, hello, new\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "0 seconds"
+    },
+    "session_2026_05_14_3": {
+      "session_id": "session_2026_05_14_3",
+      "start_time": "2026-05-14T23:11:43.547027",
+      "date": "2026-05-14",
+      "end_time": "2026-05-15T08:30:28.581018",
+      "message_count": 4,
+      "topics_discussed": [
+        "testing",
+        "new",
+        "hello",
+        "i'm",
+        "centralized"
+      ],
+      "user_name": "Testing",
+      "session_duration": "9 hours 18 minutes",
+      "last_activity": "2026-05-14T23:13:21.718236",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-14.json",
+        "last_processed": "2026-05-14T23:13:21.817999",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 4\nLast session: 3 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_14\nUser: Testing\nDuration: 41 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_14_2\nUser: Testing\nDuration: 1 hours 3 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_14_1\nUser: Testing\nDuration: 1 hours 44 minutes, Messages: 12\nTopics: i'm, centralized, testing, hello, new\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "1 minutes"
+    },
+    "session_2026_05_15": {
+      "session_id": "session_2026_05_15",
+      "start_time": "2026-05-15T08:30:28.672460",
+      "date": "2026-05-15",
+      "end_time": "2026-05-15T09:24:53.285301",
+      "message_count": 10,
+      "topics_discussed": [
+        "hello",
+        "i'm",
+        "centralized",
+        "testing",
+        "new"
+      ],
+      "user_name": "Testing",
+      "session_duration": "54 minutes",
+      "last_activity": "2026-05-15T08:45:00.692303",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T23:41:54.343642",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 5\nLast session: 12 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_14\nUser: Testing\nDuration: 41 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_14_2\nUser: Testing\nDuration: 1 hours 3 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_14_3\nUser: Testing\nDuration: 9 hours 18 minutes, Messages: 4\nTopics: testing, new, hello, i'm, centralized\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "14 minutes"
+    },
+    "session_2026_05_15_1": {
+      "session_id": "session_2026_05_15_1",
+      "start_time": "2026-05-15T09:24:53.302483",
+      "date": "2026-05-15",
+      "end_time": "2026-05-15T10:43:52.202730",
+      "message_count": 10,
+      "topics_discussed": [
+        "hello",
+        "new",
+        "testing",
+        "i'm",
+        "centralized"
+      ],
+      "user_name": "Testing",
+      "session_duration": "1 hours 18 minutes",
+      "last_activity": "2026-05-15T09:52:38.392728",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T23:41:54.343648",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 6\nLast session: 13 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_14\nUser: Testing\nDuration: 41 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_14_2\nUser: Testing\nDuration: 1 hours 3 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_14_3\nUser: Testing\nDuration: 9 hours 18 minutes, Messages: 4\nTopics: testing, new, hello, i'm, centralized\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "27 minutes"
+    },
+    "session_2026_05_15_2": {
+      "session_id": "session_2026_05_15_2",
+      "start_time": "2026-05-15T10:43:52.302387",
+      "date": "2026-05-15",
+      "end_time": "2026-05-15T11:20:48.415919",
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "Testing",
+      "session_duration": "36 minutes",
+      "last_activity": "2026-05-15T10:43:52.180346",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T23:41:54.343650",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 7\nLast session: 15 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_14\nUser: Testing\nDuration: 41 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_14_2\nUser: Testing\nDuration: 1 hours 3 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_14_3\nUser: Testing\nDuration: 9 hours 18 minutes, Messages: 4\nTopics: testing, new, hello, i'm, centralized\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "0 seconds"
+    },
+    "session_2026_05_15_3": {
+      "session_id": "session_2026_05_15_3",
+      "start_time": "2026-05-15T11:20:48.485482",
+      "date": "2026-05-15",
+      "end_time": "2026-05-15T23:00:49.293400",
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "Testing",
+      "session_duration": "11 hours 40 minutes",
+      "last_activity": "2026-05-15T11:20:48.386256",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T23:41:54.343652",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 8\nLast session: less than an hour ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_15_2\nUser: Testing\nDuration: 36 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_14\nUser: Testing\nDuration: 41 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_14_2\nUser: Testing\nDuration: 1 hours 3 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "0 seconds"
+    },
+    "session_2026_05_15_4": {
+      "session_id": "session_2026_05_15_4",
+      "start_time": "2026-05-15T23:00:49.343003",
+      "date": "2026-05-15",
+      "end_time": "2026-05-17T22:49:47.332958",
+      "message_count": 56,
+      "topics_discussed": [
+        "new",
+        "hello",
+        "centralized",
+        "i'm",
+        "testing"
+      ],
+      "user_name": "Testing",
+      "session_duration": "47 hours 48 minutes",
+      "last_activity": "2026-05-15T23:41:54.268355",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T23:41:54.343654",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 9\nLast session: 1 day ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_14\nUser: Testing\nDuration: 41 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_15_2\nUser: Testing\nDuration: 36 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_14_2\nUser: Testing\nDuration: 1 hours 3 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "41 minutes"
+    },
+    "session_2026_05_17": {
+      "session_id": "session_2026_05_17",
+      "start_time": "2026-05-17T22:49:47.345188",
+      "date": "2026-05-17",
+      "end_time": "2026-05-18T18:36:39.535265",
+      "message_count": 28,
+      "topics_discussed": [
+        "testing",
+        "centralized",
+        "i'm",
+        "new",
+        "hello"
+      ],
+      "user_name": "Testing",
+      "session_duration": "19 hours 46 minutes",
+      "last_activity": "2026-05-17T23:29:50.937109",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-17.json",
+        "last_processed": "2026-05-17T23:29:50.967344",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 10\nLast session: 2 days ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_15_2\nUser: Testing\nDuration: 36 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_15_3\nUser: Testing\nDuration: 11 hours 40 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_14_3\nUser: Testing\nDuration: 9 hours 18 minutes, Messages: 4\nTopics: testing, new, hello, i'm, centralized\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "40 minutes"
+    },
+    "session_2026_05_18": {
+      "session_id": "session_2026_05_18",
+      "start_time": "2026-05-18T18:36:39.585770",
+      "date": "2026-05-18",
+      "end_time": "2026-05-18T19:54:07.599182",
+      "message_count": 30,
+      "topics_discussed": [
+        "hello",
+        "testing",
+        "centralized",
+        "new",
+        "i'm"
+      ],
+      "user_name": "Testing",
+      "session_duration": "1 hours 17 minutes",
+      "last_activity": "2026-05-18T19:22:53.910257",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-18.json",
+        "last_processed": "2026-05-18T23:44:48.822734",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 11\nLast session: 2 days ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_15_4\nUser: Testing\nDuration: 47 hours 48 minutes, Messages: 56\nTopics: new, hello, centralized, i'm, testing\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_17\nUser: Testing\nDuration: 19 hours 46 minutes, Messages: 28\nTopics: testing, centralized, i'm, new, hello\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "46 minutes"
+    },
+    "session_2026_05_18_1": {
+      "session_id": "session_2026_05_18_1",
+      "start_time": "2026-05-18T19:54:07.635267",
+      "date": "2026-05-18",
+      "end_time": "2026-05-18T20:43:36.002422",
+      "message_count": 4,
+      "topics_discussed": [
+        "hello",
+        "new",
+        "centralized",
+        "testing",
+        "i'm"
+      ],
+      "user_name": "Testing",
+      "session_duration": "49 minutes",
+      "last_activity": "2026-05-18T19:54:31.502287",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-18.json",
+        "last_processed": "2026-05-18T23:44:48.822746",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 12\nLast session: 2 days ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_15_4\nUser: Testing\nDuration: 47 hours 48 minutes, Messages: 56\nTopics: new, hello, centralized, i'm, testing\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_18\nUser: Testing\nDuration: 1 hours 17 minutes, Messages: 30\nTopics: hello, testing, centralized, new, i'm\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_17\nUser: Testing\nDuration: 19 hours 46 minutes, Messages: 28\nTopics: testing, centralized, i'm, new, hello\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "23 seconds"
+    },
+    "session_2026_05_18_2": {
+      "session_id": "session_2026_05_18_2",
+      "start_time": "2026-05-18T20:43:36.031553",
+      "date": "2026-05-18",
+      "end_time": "2026-05-18T22:47:46.353950",
+      "message_count": 12,
+      "topics_discussed": [
+        "new",
+        "testing",
+        "i'm",
+        "centralized",
+        "hello"
+      ],
+      "user_name": "Testing",
+      "session_duration": "2 hours 4 minutes",
+      "last_activity": "2026-05-18T21:03:03.681752",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-18.json",
+        "last_processed": "2026-05-18T23:44:48.822751",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 13\nLast session: less than an hour ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_18_1\nUser: Testing\nDuration: 49 minutes, Messages: 4\nTopics: hello, new, centralized, testing, i'm\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_15_4\nUser: Testing\nDuration: 47 hours 48 minutes, Messages: 56\nTopics: new, hello, centralized, i'm, testing\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_18\nUser: Testing\nDuration: 1 hours 17 minutes, Messages: 30\nTopics: hello, testing, centralized, new, i'm\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "19 minutes"
+    },
+    "session_2026_05_18_3": {
+      "session_id": "session_2026_05_18_3",
+      "start_time": "2026-05-18T22:47:46.359185",
+      "date": "2026-05-18",
+      "end_time": "2026-05-19T08:42:12.196714",
+      "message_count": 66,
+      "topics_discussed": [
+        "centralized",
+        "testing",
+        "new",
+        "i'm",
+        "hello"
+      ],
+      "user_name": "Testing",
+      "session_duration": "9 hours 54 minutes",
+      "last_activity": "2026-05-18T23:44:48.790926",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-18.json",
+        "last_processed": "2026-05-18T23:44:48.822754",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 14\nLast session: 2 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_18_1\nUser: Testing\nDuration: 49 minutes, Messages: 4\nTopics: hello, new, centralized, testing, i'm\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_18_2\nUser: Testing\nDuration: 2 hours 4 minutes, Messages: 12\nTopics: new, testing, i'm, centralized, hello\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_15_4\nUser: Testing\nDuration: 47 hours 48 minutes, Messages: 56\nTopics: new, hello, centralized, i'm, testing\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "57 minutes"
+    },
+    "session_2026_05_19": {
+      "session_id": "session_2026_05_19",
+      "start_time": "2026-05-19T08:42:12.202871",
+      "date": "2026-05-19",
+      "end_time": "2026-05-21T22:37:37.600288",
+      "message_count": 30,
+      "topics_discussed": [
+        "hello",
+        "new",
+        "centralized",
+        "testing",
+        "i'm"
+      ],
+      "user_name": "Testing",
+      "session_duration": "61 hours 55 minutes",
+      "last_activity": "2026-05-19T10:35:30.845670",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-19.json",
+        "last_processed": "2026-05-19T10:35:30.918899",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 15\nLast session: 12 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_18_1\nUser: Testing\nDuration: 49 minutes, Messages: 4\nTopics: hello, new, centralized, testing, i'm\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_18_2\nUser: Testing\nDuration: 2 hours 4 minutes, Messages: 12\nTopics: new, testing, i'm, centralized, hello\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_17\nUser: Testing\nDuration: 19 hours 46 minutes, Messages: 28\nTopics: testing, centralized, i'm, new, hello\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "1 hours 53 minutes"
+    },
+    "session_2026_05_21": {
+      "session_id": "session_2026_05_21",
+      "start_time": "2026-05-21T22:37:37.618511",
+      "date": "2026-05-21",
+      "end_time": "2026-05-22T10:14:26.133884",
+      "message_count": 6,
+      "topics_discussed": [
+        "hello",
+        "centralized",
+        "testing",
+        "i'm",
+        "new"
+      ],
+      "user_name": "Testing",
+      "session_duration": "11 hours 36 minutes",
+      "last_activity": "2026-05-21T22:39:00.100239",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-21.json",
+        "last_processed": "2026-05-21T22:39:00.139422",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 16\nLast session: 2 days ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_19\nUser: Testing\nDuration: 61 hours 55 minutes, Messages: 30\nTopics: hello, new, centralized, testing, i'm\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_18_3\nUser: Testing\nDuration: 9 hours 54 minutes, Messages: 66\nTopics: centralized, testing, new, i'm, hello\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "1 minutes"
+    },
+    "session_2026_05_22": {
+      "session_id": "session_2026_05_22",
+      "start_time": "2026-05-22T10:14:26.157876",
+      "date": "2026-05-22",
+      "end_time": "2026-05-25T17:16:23.878864",
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "Testing",
+      "session_duration": "79 hours 1 minutes",
+      "last_activity": "2026-05-22T10:14:26.073789",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-22.json",
+        "last_processed": "2026-05-22T10:14:26.187753",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 17\nLast session: 11 hours ago\n\nRecent session:\n----------------------------------------\nSession: session_2026_05_21\nUser: Testing\nDuration: 11 hours 36 minutes, Messages: 6\nTopics: hello, centralized, testing, i'm, new\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "0 seconds"
+    },
+    "session_2026_05_25": {
+      "session_id": "session_2026_05_25",
+      "start_time": "2026-05-25T17:16:23.901846",
+      "date": "2026-05-25",
+      "end_time": "2026-05-25T19:17:23.675765",
+      "message_count": 12,
+      "topics_discussed": [
+        "centralized",
+        "new",
+        "i'm",
+        "testing",
+        "hello"
+      ],
+      "user_name": "Testing",
+      "session_duration": "2 hours",
+      "last_activity": "2026-05-25T17:23:01.021319",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-25.json",
+        "last_processed": "2026-05-25T22:50:32.132525",
+        "last_processed_message_count": 2
+      },
+      "current_duration": "6 minutes"
+    },
+    "session_2026_05_25_1": {
+      "session_id": "session_2026_05_25_1",
+      "start_time": "2026-05-25T19:17:23.706097",
+      "date": "2026-05-25",
+      "end_time": "2026-05-25T22:03:53.589638",
+      "message_count": 8,
+      "topics_discussed": [
+        "new",
+        "centralized",
+        "testing",
+        "hello",
+        "i'm"
+      ],
+      "user_name": "Testing",
+      "session_duration": "2 hours 46 minutes",
+      "last_activity": "2026-05-25T19:25:57.294861",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-25.json",
+        "last_processed": "2026-05-25T22:50:32.132539",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 19\nLast session: 2 hours ago\n\nRecent session:\n----------------------------------------\nSession: session_2026_05_25\nUser: Testing\nDuration: 2 hours, Messages: 12\nTopics: centralized, new, i'm, testing, hello\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "8 minutes"
+    },
+    "session_2026_05_25_2": {
+      "session_id": "session_2026_05_25_2",
+      "start_time": "2026-05-25T22:03:53.691987",
+      "date": "2026-05-25",
+      "end_time": "2026-05-25T22:50:32.004295",
+      "message_count": 4,
+      "topics_discussed": [
+        "i'm",
+        "hello",
+        "centralized",
+        "testing",
+        "new"
+      ],
+      "user_name": "Testing",
+      "session_duration": "46 minutes",
+      "last_activity": "2026-05-25T22:08:05.448068",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-25.json",
+        "last_processed": "2026-05-25T22:50:32.132542",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 20\nLast session: 2 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_25_1\nUser: Testing\nDuration: 2 hours 46 minutes, Messages: 8\nTopics: new, centralized, testing, hello, i'm\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_25\nUser: Testing\nDuration: 2 hours, Messages: 12\nTopics: centralized, new, i'm, testing, hello\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "4 minutes"
+    },
+    "session_2026_05_25_3": {
+      "session_id": "session_2026_05_25_3",
+      "start_time": "2026-05-25T22:50:32.058618",
+      "date": "2026-05-25",
+      "end_time": "2026-05-26T14:56:00.166274",
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "Testing",
+      "session_duration": "16 hours 5 minutes",
+      "last_activity": "2026-05-25T22:50:31.974317",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-25.json",
+        "last_processed": "2026-05-25T22:50:32.132546",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 21\nLast session: less than an hour ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_25_2\nUser: Testing\nDuration: 46 minutes, Messages: 4\nTopics: i'm, hello, centralized, testing, new\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_25_1\nUser: Testing\nDuration: 2 hours 46 minutes, Messages: 8\nTopics: new, centralized, testing, hello, i'm\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_25\nUser: Testing\nDuration: 2 hours, Messages: 12\nTopics: centralized, new, i'm, testing, hello\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "0 seconds"
+    },
+    "session_2026_05_26": {
+      "session_id": "session_2026_05_26",
+      "start_time": "2026-05-26T14:56:00.192874",
+      "date": "2026-05-26",
+      "end_time": "2026-05-26T17:20:58.665832",
+      "message_count": 12,
+      "topics_discussed": [
+        "testing",
+        "centralized",
+        "new",
+        "hello",
+        "i'm"
+      ],
+      "user_name": "Testing",
+      "session_duration": "2 hours 24 minutes",
+      "last_activity": "2026-05-26T15:07:38.525640",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-26.json",
+        "last_processed": "2026-05-26T17:20:58.688486",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 22\nLast session: 16 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_25_3\nUser: Testing\nDuration: 16 hours 5 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_25_2\nUser: Testing\nDuration: 46 minutes, Messages: 4\nTopics: i'm, hello, centralized, testing, new\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_25_1\nUser: Testing\nDuration: 2 hours 46 minutes, Messages: 8\nTopics: new, centralized, testing, hello, i'm\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "11 minutes"
+    },
+    "session_2026_05_26_1": {
+      "session_id": "session_2026_05_26_1",
+      "start_time": "2026-05-26T17:20:58.675380",
+      "date": "2026-05-26",
+      "end_time": "2026-05-29T22:33:14.297738",
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "Testing",
+      "session_duration": "77 hours 12 minutes",
+      "last_activity": "2026-05-26T17:20:58.652816",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-26.json",
+        "last_processed": "2026-05-26T17:20:58.688495",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 23\nLast session: 18 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_25_3\nUser: Testing\nDuration: 16 hours 5 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_25_2\nUser: Testing\nDuration: 46 minutes, Messages: 4\nTopics: i'm, hello, centralized, testing, new\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_25\nUser: Testing\nDuration: 2 hours, Messages: 12\nTopics: centralized, new, i'm, testing, hello\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "0 seconds"
+    },
+    "session_2026_05_29": {
+      "session_id": "session_2026_05_29",
+      "start_time": "2026-05-29T22:33:14.321128",
+      "date": "2026-05-29",
+      "end_time": "2026-05-29T23:20:25.867957",
+      "message_count": 4,
+      "topics_discussed": [
+        "new",
+        "testing",
+        "i'm",
+        "centralized",
+        "hello"
+      ],
+      "user_name": "Testing",
+      "session_duration": "47 minutes",
+      "last_activity": "2026-05-29T22:40:31.588042",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-29.json",
+        "last_processed": "2026-05-29T23:20:25.897528",
+        "last_processed_message_count": 2
+      },
+      "current_duration": "7 minutes"
+    },
+    "session_2026_05_29_1": {
+      "session_id": "session_2026_05_29_1",
+      "start_time": "2026-05-29T23:20:25.876143",
+      "date": "2026-05-29",
+      "end_time": "2026-05-31T16:30:56.576498",
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "Testing",
+      "session_duration": "41 hours 10 minutes",
+      "last_activity": "2026-05-29T23:20:25.827272",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-29.json",
+        "last_processed": "2026-05-29T23:20:25.897538",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 25\nLast session: less than an hour ago\n\nRecent session:\n----------------------------------------\nSession: session_2026_05_29\nUser: Testing\nDuration: 47 minutes, Messages: 4\nTopics: new, testing, i'm, centralized, hello\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "0 seconds"
+    },
+    "session_2026_05_31": {
+      "session_id": "session_2026_05_31",
+      "start_time": "2026-05-31T16:30:56.681767",
+      "date": "2026-05-31",
+      "end_time": "2026-06-01T09:49:39.345562",
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "Testing",
+      "session_duration": "17 hours 18 minutes",
+      "last_activity": "2026-05-31T16:30:56.556382",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-31.json",
+        "last_processed": "2026-05-31T16:30:56.712544",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 26\nLast session: 1 day ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_29_1\nUser: Testing\nDuration: 41 hours 10 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_29\nUser: Testing\nDuration: 47 minutes, Messages: 4\nTopics: new, testing, i'm, centralized, hello\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "0 seconds"
+    },
+    "session_2026_06_01": {
+      "session_id": "session_2026_06_01",
+      "start_time": "2026-06-01T09:49:39.439839",
+      "date": "2026-06-01",
+      "end_time": null,
+      "message_count": 46,
+      "topics_discussed": [
+        "testing",
+        "hello",
+        "i'm",
+        "centralized",
+        "new"
+      ],
+      "user_name": "Testing",
+      "session_duration": null,
+      "last_activity": "2026-06-01T11:09:13.263078",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-06-01.json",
+        "last_processed": "2026-06-01T11:09:13.309347",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: Testing\nTotal sessions: 27\nLast session: 2 days ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_29_1\nUser: Testing\nDuration: 41 hours 10 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_31\nUser: Testing\nDuration: 17 hours 18 minutes, Messages: 2\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n\n----------------------------------------\nSession: session_2026_05_29\nUser: Testing\nDuration: 47 minutes, Messages: 4\nTopics: new, testing, i'm, centralized, hello\n\nConversation Highlights:\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\nUser: Hello, I'm testing the new centralized storage system.\nAssistant: Great! I'm glad you're testing the new centralized storage system.\n",
+      "current_duration": "1 hours 19 minutes"
+    }
+  },
+  "current_session": "session_2026_06_01",
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": false,
+    "established_user": true
+  },
+  "memory_categories": {
+    "user_identity": {
+      "description": "User's name is Testing.",
+      "enhancement_focus": "Personalization, identity consistency, name variations",
+      "contextual_considerations": [
+        "previous_names",
+        "identity_evolution",
+        "pronoun_preferences"
+      ],
+      "name": "Testing",
+      "last_updated": "2026-06-01T11:09:13.279998",
+      "age": null,
+      "location": null,
+      "pronouns": null,
+      "interests": [],
+      "skills": []
+    },
+    "personal_preferences": {
+      "description": "Response style, formality, explanation rules",
+      "enhancement_focus": "Communication adaptation, preference consistency, style evolution",
+      "contextual_considerations": [
+        "communication_style",
+        "formality_level",
+        "explanation_preferences"
+      ]
+    },
+    "task_project_tracking": {
+      "description": "Active projects, tech stacks, deadlines",
+      "enhancement_focus": "Project context, technical details, timeline awareness",
+      "contextual_considerations": [
+        "current_projects",
+        "tech_stack",
+        "deadlines",
+        "progress_tracking"
+      ]
+    },
+    "activity_behavior": {
+      "description": "Active times, conversation topics, engagement",
+      "enhancement_focus": "Behavioral patterns, temporal context, engagement metrics",
+      "contextual_considerations": [
+        "active_hours",
+        "topic_preferences",
+        "engagement_levels"
+      ]
+    },
+    "user_instructions": {
+      "description": "Permanent commands, rules, triggers",
+      "enhancement_focus": "Instruction clarity, permanence recognition, trigger identification",
+      "contextual_considerations": [
+        "permanent_rules",
+        "conditional_triggers",
+        "command_hierarchy"
+      ]
+    },
+    "current_state": {
+      "description": "Active topics, mood, recent questions",
+      "enhancement_focus": "State awareness, temporal relevance, contextual transitions",
+      "contextual_considerations": [
+        "active_topics",
+        "emotional_state",
+        "recent_interactions"
+      ]
+    },
+    "personal_development": {
+      "description": "Skills learning, progress, emotional notes",
+      "enhancement_focus": "Progress tracking, skill relationships, learning patterns",
+      "contextual_considerations": [
+        "skill_progress",
+        "learning_journey",
+        "developmental_milestones"
+      ]
+    },
+    "communication_boundaries": {
+      "description": "Sensitive topics, triggers, support level",
+      "enhancement_focus": "Boundary respect, sensitivity awareness, support adaptation",
+      "contextual_considerations": [
+        "sensitive_topics",
+        "emotional_triggers",
+        "support_boundaries"
+      ]
+    },
+    "contextual_rules": {
+      "description": "Scope, expiry, recall priority",
+      "enhancement_focus": "Rule contextualization, priority management, scope definition",
+      "contextual_considerations": [
+        "rule_scope",
+        "priority_levels",
+        "expiration_contexts"
+      ]
+    },
+    "multi_identity": {
+      "description": "Role profiles, switching triggers",
+      "enhancement_focus": "Identity context switching, role consistency, transition awareness",
+      "contextual_considerations": [
+        "role_profiles",
+        "identity_switching",
+        "contextual_triggers"
+      ]
+    },
+    "knowledge_expertise": {
+      "description": "Skill levels, known concepts",
+      "enhancement_focus": "Expertise assessment, knowledge mapping, competency progression",
+      "contextual_considerations": [
+        "skill_levels",
+        "domain_knowledge",
+        "competency_assessment"
+      ]
+    },
+    "tool_integration": {
+      "description": "Permissions, preferred languages",
+      "enhancement_focus": "Integration optimization, preference alignment, permission management",
+      "contextual_considerations": [
+        "tool_preferences",
+        "permission_levels",
+        "integration_contexts"
+      ]
+    },
+    "response_adaptation": {
+      "description": "Style corrections, tone adaptation",
+      "enhancement_focus": "Adaptive responses, tone consistency, style refinement",
+      "contextual_considerations": [
+        "style_corrections",
+        "tone_adaptation",
+        "response_refinement"
+      ]
+    },
+    "file_media": {
+      "description": "Uploads, context links, preferences",
+      "enhancement_focus": "Media context, link relevance, preference tracking",
+      "contextual_considerations": [
+        "file_references",
+        "media_preferences",
+        "link_context"
+      ]
+    },
+    "long_term_goals": {
+      "description": "Life goals, career objectives, blockers",
+      "enhancement_focus": "Goal progression, objective alignment, obstacle identification",
+      "contextual_considerations": [
+        "life_goals",
+        "career_objectives",
+        "progress_tracking"
+      ]
+    },
+    "collaborator_relationships": {
+      "description": "Team members, communication styles",
+      "enhancement_focus": "Relationship dynamics, communication adaptation, collaboration context",
+      "contextual_considerations": [
+        "team_members",
+        "communication_styles",
+        "collaboration_history"
+      ]
+    },
+    "data_privacy": {
+      "description": "Retention policies, private sessions",
+      "enhancement_focus": "Privacy compliance, retention management, session security",
+      "contextual_considerations": [
+        "privacy_policies",
+        "retention_rules",
+        "security_protocols"
+      ]
+    },
+    "multimodal_preferences": {
+      "description": "Image styles, audio modes",
+      "enhancement_focus": "Multimodal adaptation, preference consistency, format optimization",
+      "contextual_considerations": [
+        "media_formats",
+        "style_preferences",
+        "modality_choices"
+      ]
+    },
+    "system_awareness": {
+      "description": "Errors, feedback, constraints",
+      "enhancement_focus": "System understanding, constraint awareness, feedback integration",
+      "contextual_considerations": [
+        "system_constraints",
+        "error_history",
+        "feedback_loops"
+      ]
+    },
+    "session_themes": {
+      "description": "Themes, emotional arcs, continuity",
+      "enhancement_focus": "Thematic consistency, emotional tracking, narrative coherence",
+      "contextual_considerations": [
+        "session_themes",
+        "emotional_arcs",
+        "continuity_markers"
+      ]
+    },
+    "meta_memory": {
+      "description": "Browser UI, change logs, cleanup",
+      "enhancement_focus": "Meta-awareness, change tracking, system maintenance",
+      "contextual_considerations": [
+        "system_ui",
+        "change_logs",
+        "maintenance_tracking"
+      ]
+    },
+    "temporal_patterns": {
+      "description": "Time-based behaviors and preferences",
+      "enhancement_focus": "Temporal awareness, pattern recognition, schedule optimization",
+      "contextual_considerations": [
+        "time_patterns",
+        "behavioral_cycles",
+        "schedule_preferences"
+      ]
+    },
+    "search_external_info": {
+      "description": "Internet search history, preferences, trusted sources",
+      "enhancement_focus": "Information quality, source reliability, search optimization",
+      "contextual_considerations": [
+        "search_history",
+        "trusted_sources",
+        "information_preferences"
+      ]
+    },
+    "greeting_patterns": {
+      "description": "Greeting history, timing, session tracking",
+      "enhancement_focus": "Greeting personalization, timing optimization, session recognition",
+      "contextual_considerations": [
+        "greeting_history",
+        "timing_preferences",
+        "session_patterns"
+      ]
+    },
+    "conversation_analytics": {
+      "description": "Duration, session gaps, statistics",
+      "enhancement_focus": "Engagement metrics, conversation analytics, interaction patterns",
+      "contextual_considerations": [
+        "engagement_metrics",
+        "session_gaps",
+        "conversation_stats"
+      ]
+    },
+    "news_weather_history": {
+      "description": "News and weather query results and summaries",
+      "enhancement_focus": "Information retention, query context, temporal updates",
+      "contextual_considerations": [
+        "query_context",
+        "information_type",
+        "update_frequency"
+      ]
+    },
+    "timezone_preferences": {
+      "description": "Time zone queries and location preferences",
+      "enhancement_focus": "Timezone awareness, location context, scheduling preferences",
+      "contextual_considerations": [
+        "timezone_context",
+        "location_preferences",
+        "scheduling_needs"
+      ]
+    }
+  },
+  "category_relationships": {
+    "user_identity": [
+      "personal_preferences",
+      "collaborator_relationships",
+      "multi_identity"
+    ],
+    "personal_preferences": [
+      "activity_behavior",
+      "response_adaptation",
+      "communication_boundaries"
+    ],
+    "task_project_tracking": [
+      "knowledge_expertise",
+      "tool_integration",
+      "current_state"
+    ],
+    "activity_behavior": [
+      "temporal_patterns",
+      "session_themes",
+      "conversation_analytics"
+    ],
+    "user_instructions": [
+      "communication_boundaries",
+      "contextual_rules",
+      "system_awareness"
+    ],
+    "current_state": [
+      "session_themes",
+      "conversation_analytics",
+      "news_weather_history"
+    ],
+    "personal_development": [
+      "knowledge_expertise",
+      "long_term_goals",
+      "temporal_patterns"
+    ],
+    "communication_boundaries": [
+      "response_adaptation",
+      "contextual_rules",
+      "data_privacy"
+    ],
+    "contextual_rules": [
+      "system_awareness",
+      "data_privacy",
+      "meta_memory"
+    ],
+    "multi_identity": [
+      "user_identity",
+      "collaborator_relationships",
+      "session_themes"
+    ],
+    "knowledge_expertise": [
+      "tool_integration",
+      "personal_development",
+      "search_external_info"
+    ],
+    "tool_integration": [
+      "file_media",
+      "multimodal_preferences",
+      "system_awareness"
+    ],
+    "response_adaptation": [
+      "personal_preferences",
+      "communication_boundaries",
+      "session_themes"
+    ],
+    "file_media": [
+      "multimodal_preferences",
+      "search_external_info",
+      "meta_memory"
+    ],
+    "long_term_goals": [
+      "personal_development",
+      "collaborator_relationships",
+      "news_weather_history"
+    ],
+    "collaborator_relationships": [
+      "user_identity",
+      "multi_identity",
+      "communication_boundaries"
+    ],
+    "data_privacy": [
+      "contextual_rules",
+      "system_awareness",
+      "meta_memory"
+    ],
+    "multimodal_preferences": [
+      "file_media",
+      "tool_integration",
+      "response_adaptation"
+    ],
+    "system_awareness": [
+      "contextual_rules",
+      "data_privacy",
+      "meta_memory"
+    ],
+    "session_themes": [
+      "activity_behavior",
+      "response_adaptation",
+      "conversation_analytics"
+    ],
+    "meta_memory": [
+      "category_relationships",
+      "behavioral_adaptation",
+      "privacy_settings"
+    ],
+    "temporal_patterns": [
+      "activity_behavior",
+      "session_themes",
+      "conversation_analytics"
+    ],
+    "search_external_info": [
+      "knowledge_expertise",
+      "news_weather_history",
+      "timezone_preferences"
+    ],
+    "greeting_patterns": [
+      "session_themes",
+      "conversation_analytics",
+      "timezone_preferences"
+    ],
+    "conversation_analytics": [
+      "activity_behavior",
+      "session_themes",
+      "temporal_patterns"
+    ],
+    "news_weather_history": [
+      "search_external_info",
+      "current_state",
+      "timezone_preferences"
+    ],
+    "timezone_preferences": [
+      "search_external_info",
+      "news_weather_history",
+      "greeting_patterns"
+    ]
+  },
+  "behavioral_adaptation": {
+    "response_style_preferences": {
+      "preferred_response_length": "moderate",
+      "avoidance_topics": [
+        "politics",
+        "religion"
+      ],
+      "languages_used": [
+        "English"
+      ]
+    },
+    "communication_adaptations": {
+      "formality_level": "casual",
+      "explanation_preferences": "detailed_when_asked",
+      "response_tone": "friendly_helpful"
+    },
+    "learned_patterns": {
+      "user_interests": [],
+      "communication_style": "casual_inquisitive",
+      "preferred_topics": []
+    },
+    "user_feedback_integration": {
+      "last_feedback_received": null,
+      "feedback_type": "",
+      "feedback_content": "",
+      "integration_status": "pending"
+    }
+  },
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  }
+}

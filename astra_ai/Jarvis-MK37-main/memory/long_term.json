@@ -1,0 +1,32 @@
+{
+  "identity": {
+    "name": {
+      "value": "Rich",
+      "updated": "2026-05-01"
+    }
+  },
+  "preferences": {
+    "favorite_singer": {
+      "value": "Michael Jackson",
+      "updated": "2026-05-01"
+    }
+  },
+  "projects": {},
+  "relationships": {
+    "brother_name": {
+      "value": "Prince",
+      "updated": "2026-05-01"
+    },
+    "sister_name": {
+      "value": "Rachel",
+      "updated": "2026-05-01"
+    }
+  },
+  "wishes": {
+    "create_ai_goal": {
+      "value": "Create personalized CGI-like AI assistant (Jarvis style)",
+      "updated": "2026-05-01"
+    }
+  },
+  "notes": {}
+}

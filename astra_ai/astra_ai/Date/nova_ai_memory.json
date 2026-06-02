@@ -1,0 +1,1364 @@
+{
+  "user": {
+    "user_id": "user_a358b1d2",
+    "name": "User",
+    "created_at": "2026-03-24T08:58:35.848016",
+    "status": "active",
+    "last_seen": "2026-05-15T11:06:43.627906",
+    "total_sessions": 15,
+    "relationship_established": true
+  },
+  "memory_engine": {
+    "metadata": {
+      "version": "1.0",
+      "generated_at": "2026-05-15T22:33:42.621816",
+      "description": "Mem0 AI Memory Engine - Event-based user memory management system"
+    },
+    "memory_events": [
+      {
+        "event_id": "evt_e45b1aea",
+        "type": "ADD",
+        "summary": "User's favorite coding language is py.",
+        "timestamp": "2026-05-14T19:42:36.928195Z",
+        "emotional_context": {
+          "sentiment": "neutral",
+          "emotion_tags": [
+            "favorite",
+            "coding",
+            "language",
+            "general"
+          ],
+          "emotional_intensity": 0.0,
+          "mood_context": "neutral",
+          "confidence": 0.8
+        },
+        "semantic_context": "Inferred from user input: User's favorite coding language is py.",
+        "importance_score": 0.7999999999999999,
+        "confidence": 0.85,
+        "category": "user_identity",
+        "subcategory": "general",
+        "previous_value": null,
+        "current_value": "User",
+        "provenance": {
+          "enhanced_in_place": true,
+          "enhanced_at": "2026-05-14T19:42:40.867523",
+          "source_info": {
+            "source_type": "conversation",
+            "source_details": "chat input",
+            "context": "User: My favorite coding language is py",
+            "event_index": 0
+          },
+          "source_conversation_timestamp": "2026-05-14T19:42:40.867523"
+        },
+        "session_id": "session_1778778896",
+        "Added_preference_likes": "enjoys My favorite coding language is py"
+      }
+    ],
+    "vector_index": {
+      "evt_e45b1aea": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_090bcb52": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_3b1420aa": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_24840c8e": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_43803cf6": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_730d4e1a": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_a3521254": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_db7fa57f": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_a180db8d": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_a18f7bc2": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_7350a87f": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_0edff39a": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_083cc0b6": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_4088a254": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_f1dfd073": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "evt_77e528db": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "clusters": {
+      "cluster_000": {
+        "topic": "general_activity_cluster",
+        "label": "Identity Information",
+        "centroid_vector": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "event_ids": [
+          "evt_e45b1aea"
+        ],
+        "coherence_score": 1.0,
+        "last_updated": "2026-05-14T19:42:36.928195Z",
+        "metadata": {
+          "dominant_tags": [
+            "user_identity"
+          ],
+          "cluster_type": "user_identity",
+          "member_count": 1,
+          "average_confidence": 0.8,
+          "temporal_span": "0 days",
+          "creation_timestamp": "2026-05-14T19:42:36.928195Z"
+        },
+        "insights": {
+          "primary_pattern": "new_pattern",
+          "consistency": 1.0,
+          "emotional_tone": "neutral_tone",
+          "frequency": "single_event"
+        }
+      }
+    },
+    "update_log": []
+  },
+  "conversation": [
+    {
+      "role": "assistant",
+      "content": "Now using improved voice listening with silence detection. System will listen only when you're speaking and stop when you finish talking for 1.5 seconds. Using ElevenLabs for text to speech.",
+      "timestamp": "2026-04-04T20:30:00Z",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-14T19:42:36.924306",
+      "session_id": "session_1778778896",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-14T19:42:36.924306",
+      "session_id": "session_1778778896",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-14T20:24:21.022977",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-14T20:24:21.022977",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-14T20:29:00.767971",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-14T20:29:00.767971",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-14T20:29:00.909339",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-14T20:29:00.909339",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "hi",
+      "timestamp": "2026-05-14T20:38:27.889932",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Let's dive back into the conversation. What aspect of OpenAI, Anthropic, or Google Gemini models would you like to explore next?",
+      "timestamp": "2026-05-14T20:38:27.889932",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-14T20:48:01.955851",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-14T20:48:01.955851",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-14T20:54:08.541137",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-14T20:54:08.541137",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-14T20:54:08.840883",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-14T20:54:08.840883",
+      "session_id": "session_1778777481",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-14T22:08:29.875543",
+      "session_id": "session_2026_05_14",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-14T22:08:29.875543",
+      "session_id": "session_2026_05_14",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-14T23:11:43.603279",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-14T23:11:43.603279",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-14T23:13:21.847089",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-14T23:13:21.847089",
+      "session_id": "session_2026_05_14_1",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-15T08:30:28.746407",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-15T08:30:28.746407",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-15T08:30:28.954974",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-15T08:30:28.954974",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-15T08:30:29.939541",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-15T08:30:29.939541",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-15T08:30:41.962328",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-15T08:30:41.962328",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-15T08:31:10.056632",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-15T08:31:10.056632",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-15T08:45:00.872751",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-15T08:45:00.872751",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-15T09:24:53.512605",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-15T09:24:53.512605",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-15T09:27:33.725599",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-15T09:27:33.725599",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-15T09:29:02.797480",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-15T09:29:02.797480",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-15T09:42:38.184587",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-15T09:42:38.184587",
+      "session_id": "session_2026_05_15",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-15T09:52:38.507669",
+      "session_id": "session_1778831044",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-15T09:52:38.507669",
+      "session_id": "session_1778831044",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-15T10:43:52.849621",
+      "session_id": "session_1778833189",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-15T10:43:52.849621",
+      "session_id": "session_1778833189",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "user",
+      "content": "My favorite coding language is py",
+      "timestamp": "2026-05-15T11:20:48.686373",
+      "session_id": "session_1778836003",
+      "sent_to_organizer": true
+    },
+    {
+      "role": "assistant",
+      "content": "Nice choice!",
+      "timestamp": "2026-05-15T11:20:48.686373",
+      "session_id": "session_1778836003",
+      "sent_to_organizer": true
+    }
+  ],
+  "fact_history": {
+    "personal_preferences": {
+      "Added_preference_likes": [
+        {
+          "item": "Enjoys My favorite coding language is py",
+          "score": 0.85,
+          "added": "2026-05-14",
+          "updated": "2026-05-14",
+          "event_references": [
+            "evt_e45b1aea"
+          ],
+          "provenance": {
+            "enhanced_in_place": true,
+            "enhanced_at": "2026-05-15T11:20:48.681931"
+          }
+        }
+      ],
+      "Added_preference_dislikes": [],
+      "Added_preference_avoid": [],
+      "Added_preference_always": [],
+      "Added_preference_style": [],
+      "conditional": [],
+      "Added_preference_interests": [],
+      "Added_preference_loves": [],
+      "Added_preference_hates": [],
+      "Added_preference_enjoys": [],
+      "Added_preference_needs": [],
+      "Added_preference_wants": [],
+      "Added_preference_continues": [],
+      "Added_preference_favorites": [],
+      "Added_preference_prefers": [],
+      "preferences": [],
+      "Added_preference_preferences": []
+    },
+    "evt_e45b1aea": {
+      "item": "User",
+      "added": "2026-05-14",
+      "score": 0.85,
+      "updated": "2026-05-14"
+    },
+    "evt_77e528db": {
+      "item": "coding language py",
+      "added": "2026-05-15",
+      "score": 0.85
+    }
+  },
+  "sessions": {
+    "session_1778777481": {
+      "session_id": "session_1778777481",
+      "start_time": "2026-05-14T18:51:21.796425",
+      "end_time": "2026-05-14T22:08:29.879980",
+      "message_count": 14,
+      "topics_discussed": [
+        "language",
+        "coding",
+        "favorite"
+      ],
+      "user_name": "User",
+      "session_duration": "3 hours 17 minutes",
+      "last_activity": "2026-05-14T20:54:08.840883",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-14.json",
+        "last_processed": "2026-05-14T23:13:21.890584",
+        "last_processed_message_count": 2
+      },
+      "current_duration": "2 hours 2 minutes"
+    },
+    "session_1778778896": {
+      "session_id": "session_1778778896",
+      "start_time": "2026-05-14T19:14:56.004899",
+      "end_time": "2026-05-14T20:24:21.027013",
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "User",
+      "session_duration": "1 hours 9 minutes",
+      "last_activity": "2026-05-14T19:42:36.924306",
+      "current_duration": "27 minutes",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-14.json",
+        "last_processed": "2026-05-14T23:13:21.890596",
+        "last_processed_message_count": 2
+      }
+    },
+    "session_2026_05_14": {
+      "session_id": "session_2026_05_14",
+      "start_time": "2026-05-14T22:08:29.992497",
+      "date": "2026-05-14",
+      "end_time": "2026-05-14T23:11:43.609119",
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "User",
+      "session_duration": "1 hours 3 minutes",
+      "last_activity": "2026-05-14T22:08:29.875543",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-14.json",
+        "last_processed": "2026-05-14T23:13:21.890601",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: User\nTotal sessions: 3\nLast session: 2 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_1778778896\nUser: User\nDuration: 1 hours 9 minutes, Messages: 2\n\nConversation Highlights:\nUser: My favorite coding language is py\nAssistant: Nice choice!\nUser: My favorite coding language is py\nAssistant: Nice choice!\n\n----------------------------------------\nSession: session_1778777481\nUser: User\nDuration: 3 hours 17 minutes, Messages: 14\nTopics: language, coding, favorite\n\nConversation Highlights:\nUser: My favorite coding language is py\nAssistant: Nice choice!\nUser: My favorite coding language is py\nAssistant: Nice choice!\nUser: My favorite coding language is py\nAssistant: Nice choice!\n",
+      "current_duration": "0 seconds"
+    },
+    "session_2026_05_14_1": {
+      "session_id": "session_2026_05_14_1",
+      "start_time": "2026-05-14T23:11:43.654196",
+      "date": "2026-05-14",
+      "end_time": "2026-05-15T08:30:28.751030",
+      "message_count": 4,
+      "topics_discussed": [
+        "language",
+        "favorite",
+        "coding"
+      ],
+      "user_name": "User",
+      "session_duration": "9 hours 18 minutes",
+      "last_activity": "2026-05-14T23:13:21.847089",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-14.json",
+        "last_processed": "2026-05-14T23:13:21.890605",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: User\nTotal sessions: 4\nLast session: 1 hour ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_14\nUser: User\nDuration: 1 hours 3 minutes, Messages: 2\n\nConversation Highlights:\nUser: My favorite coding language is py\nAssistant: Nice choice!\nUser: My favorite coding language is py\nAssistant: Nice choice!\n\n----------------------------------------\nSession: session_1778778896\nUser: User\nDuration: 1 hours 9 minutes, Messages: 2\n\nConversation Highlights:\nUser: My favorite coding language is py\nAssistant: Nice choice!\nUser: My favorite coding language is py\nAssistant: Nice choice!\n\n----------------------------------------\nSession: session_1778777481\nUser: User\nDuration: 3 hours 17 minutes, Messages: 14\nTopics: language, coding, favorite\n\nConversation Highlights:\nUser: My favorite coding language is py\nAssistant: Nice choice!\nUser: My favorite coding language is py\nAssistant: Nice choice!\nUser: My favorite coding language is py\nAssistant: Nice choice!\n",
+      "current_duration": "1 minutes"
+    },
+    "session_2026_05_15": {
+      "session_id": "session_2026_05_15",
+      "start_time": "2026-05-15T08:30:28.833181",
+      "date": "2026-05-15",
+      "end_time": null,
+      "message_count": 20,
+      "topics_discussed": [
+        "favorite",
+        "language",
+        "coding"
+      ],
+      "user_name": "User",
+      "session_duration": null,
+      "last_activity": "2026-05-15T09:42:38.184587",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T11:20:48.760836",
+        "last_processed_message_count": 2
+      },
+      "past_context": "=== User Context Summary ===\n\nUser name: User\nTotal sessions: 5\nLast session: 10 hours ago\n\nRecent sessions:\n----------------------------------------\nSession: session_2026_05_14\nUser: User\nDuration: 1 hours 3 minutes, Messages: 2\n\nConversation Highlights:\nUser: My favorite coding language is py\nAssistant: Nice choice!\nUser: My favorite coding language is py\nAssistant: Nice choice!\n\n----------------------------------------\nSession: session_1778778896\nUser: User\nDuration: 1 hours 9 minutes, Messages: 2\n\nConversation Highlights:\nUser: My favorite coding language is py\nAssistant: Nice choice!\nUser: My favorite coding language is py\nAssistant: Nice choice!\n\n----------------------------------------\nSession: session_2026_05_14_1\nUser: User\nDuration: 9 hours 18 minutes, Messages: 4\nTopics: language, favorite, coding\n\nConversation Highlights:\nUser: My favorite coding language is py\nAssistant: Nice choice!\nUser: My favorite coding language is py\nAssistant: Nice choice!\nUser: My favorite coding language is py\nAssistant: Nice choice!\n",
+      "current_duration": "1 hours 12 minutes"
+    },
+    "session_1778827534": {
+      "session_id": "session_1778827534",
+      "start_time": "2026-05-15T08:45:34.621101",
+      "end_time": null,
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": "User",
+      "session_duration": null,
+      "last_activity": "2026-05-15T08:45:34.621103",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T11:20:48.760842",
+        "last_processed_message_count": 2
+      }
+    },
+    "session_1778827663": {
+      "session_id": "session_1778827663",
+      "start_time": "2026-05-15T08:47:43.146944",
+      "end_time": "2026-05-15T09:24:53.551522",
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": "User",
+      "session_duration": "37 minutes",
+      "last_activity": "2026-05-15T08:47:43.146949",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T11:20:48.760844",
+        "last_processed_message_count": 2
+      }
+    },
+    "session_1778831044": {
+      "session_id": "session_1778831044",
+      "start_time": "2026-05-15T09:44:04.241235",
+      "end_time": null,
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "User",
+      "session_duration": null,
+      "last_activity": "2026-05-15T09:52:38.507669",
+      "current_duration": "8 minutes",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T11:20:48.760847",
+        "last_processed_message_count": 2
+      }
+    },
+    "session_1778831619": {
+      "session_id": "session_1778831619",
+      "start_time": "2026-05-15T09:53:39.502447",
+      "end_time": null,
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": "User",
+      "session_duration": null,
+      "last_activity": "2026-05-15T09:53:39.502449",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T11:20:48.760849",
+        "last_processed_message_count": 2
+      }
+    },
+    "session_1778831950": {
+      "session_id": "session_1778831950",
+      "start_time": "2026-05-15T09:59:10.277479",
+      "end_time": null,
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": "User",
+      "session_duration": null,
+      "last_activity": "2026-05-15T09:59:10.277481",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T11:20:48.760850",
+        "last_processed_message_count": 2
+      }
+    },
+    "session_1778833189": {
+      "session_id": "session_1778833189",
+      "start_time": "2026-05-15T10:19:49.261118",
+      "end_time": null,
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "User",
+      "session_duration": null,
+      "last_activity": "2026-05-15T10:43:52.849621",
+      "current_duration": "24 minutes",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T11:20:48.760852",
+        "last_processed_message_count": 2
+      }
+    },
+    "session_1778834635": {
+      "session_id": "session_1778834635",
+      "start_time": "2026-05-15T10:43:55.540236",
+      "end_time": null,
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": "User",
+      "session_duration": null,
+      "last_activity": "2026-05-15T10:43:55.540238",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T11:20:48.760854",
+        "last_processed_message_count": 2
+      }
+    },
+    "session_1778834766": {
+      "session_id": "session_1778834766",
+      "start_time": "2026-05-15T10:46:06.884230",
+      "end_time": null,
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": "User",
+      "session_duration": null,
+      "last_activity": "2026-05-15T10:46:06.884232",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T11:20:48.760856",
+        "last_processed_message_count": 2
+      }
+    },
+    "session_1778834832": {
+      "session_id": "session_1778834832",
+      "start_time": "2026-05-15T10:47:12.354758",
+      "end_time": null,
+      "message_count": 0,
+      "topics_discussed": [],
+      "user_name": "User",
+      "session_duration": null,
+      "last_activity": "2026-05-15T10:47:12.354761",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T11:20:48.760858",
+        "last_processed_message_count": 2
+      }
+    },
+    "session_1778836003": {
+      "session_id": "session_1778836003",
+      "start_time": "2026-05-15T11:06:43.627929",
+      "end_time": null,
+      "message_count": 2,
+      "topics_discussed": [],
+      "user_name": "User",
+      "session_duration": null,
+      "last_activity": "2026-05-15T11:20:48.686373",
+      "current_duration": "14 minutes",
+      "organizer_status": {
+        "sent_to_organizer": true,
+        "organizer_summary_ready": true,
+        "organizer_file": "organizer_summaries/2026-05-15.json",
+        "last_processed": "2026-05-15T11:20:48.760860",
+        "last_processed_message_count": 2
+      }
+    }
+  },
+  "current_session": "session_1778836003",
+  "conversation_state": {
+    "greeting_completed": true,
+    "introduction_phase": false,
+    "established_user": true
+  },
+  "memory_categories": {
+    "user_identity": {
+      "description": "User's name is User. Skills: Coding.",
+      "enhancement_focus": "Personalization, identity consistency, name variations",
+      "contextual_considerations": [
+        "previous_names",
+        "identity_evolution",
+        "pronoun_preferences"
+      ],
+      "name": "User",
+      "skills": [
+        "Coding"
+      ],
+      "last_updated": "2026-05-15T11:20:48.690790"
+    },
+    "personal_preferences": {
+      "description": "Response style, formality, explanation rules",
+      "enhancement_focus": "Communication adaptation, preference consistency, style evolution",
+      "contextual_considerations": [
+        "communication_style",
+        "formality_level",
+        "explanation_preferences"
+      ]
+    },
+    "task_project_tracking": {
+      "description": "Active projects, tech stacks, deadlines",
+      "enhancement_focus": "Project context, technical details, timeline awareness",
+      "contextual_considerations": [
+        "current_projects",
+        "tech_stack",
+        "deadlines",
+        "progress_tracking"
+      ]
+    },
+    "activity_behavior": {
+      "description": "Active times, conversation topics, engagement",
+      "enhancement_focus": "Behavioral patterns, temporal context, engagement metrics",
+      "contextual_considerations": [
+        "active_hours",
+        "topic_preferences",
+        "engagement_levels"
+      ]
+    },
+    "user_instructions": {
+      "description": "Permanent commands, rules, triggers",
+      "enhancement_focus": "Instruction clarity, permanence recognition, trigger identification",
+      "contextual_considerations": [
+        "permanent_rules",
+        "conditional_triggers",
+        "command_hierarchy"
+      ]
+    },
+    "current_state": {
+      "description": "Active topics, mood, recent questions",
+      "enhancement_focus": "State awareness, temporal relevance, contextual transitions",
+      "contextual_considerations": [
+        "active_topics",
+        "emotional_state",
+        "recent_interactions"
+      ]
+    },
+    "personal_development": {
+      "description": "Skills learning, progress, emotional notes",
+      "enhancement_focus": "Progress tracking, skill relationships, learning patterns",
+      "contextual_considerations": [
+        "skill_progress",
+        "learning_journey",
+        "developmental_milestones"
+      ]
+    },
+    "communication_boundaries": {
+      "description": "Sensitive topics, triggers, support level",
+      "enhancement_focus": "Boundary respect, sensitivity awareness, support adaptation",
+      "contextual_considerations": [
+        "sensitive_topics",
+        "emotional_triggers",
+        "support_boundaries"
+      ]
+    },
+    "contextual_rules": {
+      "description": "Scope, expiry, recall priority",
+      "enhancement_focus": "Rule contextualization, priority management, scope definition",
+      "contextual_considerations": [
+        "rule_scope",
+        "priority_levels",
+        "expiration_contexts"
+      ]
+    },
+    "multi_identity": {
+      "description": "Role profiles, switching triggers",
+      "enhancement_focus": "Identity context switching, role consistency, transition awareness",
+      "contextual_considerations": [
+        "role_profiles",
+        "identity_switching",
+        "contextual_triggers"
+      ]
+    },
+    "knowledge_expertise": {
+      "description": "Skill levels, known concepts",
+      "enhancement_focus": "Expertise assessment, knowledge mapping, competency progression",
+      "contextual_considerations": [
+        "skill_levels",
+        "domain_knowledge",
+        "competency_assessment"
+      ]
+    },
+    "tool_integration": {
+      "description": "Permissions, preferred languages",
+      "enhancement_focus": "Integration optimization, preference alignment, permission management",
+      "contextual_considerations": [
+        "tool_preferences",
+        "permission_levels",
+        "integration_contexts"
+      ]
+    },
+    "response_adaptation": {
+      "description": "Style corrections, tone adaptation",
+      "enhancement_focus": "Adaptive responses, tone consistency, style refinement",
+      "contextual_considerations": [
+        "style_corrections",
+        "tone_adaptation",
+        "response_refinement"
+      ]
+    },
+    "file_media": {
+      "description": "Uploads, context links, preferences",
+      "enhancement_focus": "Media context, link relevance, preference tracking",
+      "contextual_considerations": [
+        "file_references",
+        "media_preferences",
+        "link_context"
+      ]
+    },
+    "long_term_goals": {
+      "description": "Life goals, career objectives, blockers",
+      "enhancement_focus": "Goal progression, objective alignment, obstacle identification",
+      "contextual_considerations": [
+        "life_goals",
+        "career_objectives",
+        "progress_tracking"
+      ]
+    },
+    "collaborator_relationships": {
+      "description": "Team members, communication styles",
+      "enhancement_focus": "Relationship dynamics, communication adaptation, collaboration context",
+      "contextual_considerations": [
+        "team_members",
+        "communication_styles",
+        "collaboration_history"
+      ]
+    },
+    "data_privacy": {
+      "description": "Retention policies, private sessions",
+      "enhancement_focus": "Privacy compliance, retention management, session security",
+      "contextual_considerations": [
+        "privacy_policies",
+        "retention_rules",
+        "security_protocols"
+      ]
+    },
+    "multimodal_preferences": {
+      "description": "Image styles, audio modes",
+      "enhancement_focus": "Multimodal adaptation, preference consistency, format optimization",
+      "contextual_considerations": [
+        "media_formats",
+        "style_preferences",
+        "modality_choices"
+      ]
+    },
+    "system_awareness": {
+      "description": "Errors, feedback, constraints",
+      "enhancement_focus": "System understanding, constraint awareness, feedback integration",
+      "contextual_considerations": [
+        "system_constraints",
+        "error_history",
+        "feedback_loops"
+      ]
+    },
+    "session_themes": {
+      "description": "Themes, emotional arcs, continuity",
+      "enhancement_focus": "Thematic consistency, emotional tracking, narrative coherence",
+      "contextual_considerations": [
+        "session_themes",
+        "emotional_arcs",
+        "continuity_markers"
+      ]
+    },
+    "meta_memory": {
+      "description": "Browser UI, change logs, cleanup",
+      "enhancement_focus": "Meta-awareness, change tracking, system maintenance",
+      "contextual_considerations": [
+        "system_ui",
+        "change_logs",
+        "maintenance_tracking"
+      ]
+    },
+    "temporal_patterns": {
+      "description": "Time-based behaviors and preferences",
+      "enhancement_focus": "Temporal awareness, pattern recognition, schedule optimization",
+      "contextual_considerations": [
+        "time_patterns",
+        "behavioral_cycles",
+        "schedule_preferences"
+      ]
+    },
+    "search_external_info": {
+      "description": "Internet search history, preferences, trusted sources",
+      "enhancement_focus": "Information quality, source reliability, search optimization",
+      "contextual_considerations": [
+        "search_history",
+        "trusted_sources",
+        "information_preferences"
+      ]
+    },
+    "greeting_patterns": {
+      "description": "Greeting history, timing, session tracking",
+      "enhancement_focus": "Greeting personalization, timing optimization, session recognition",
+      "contextual_considerations": [
+        "greeting_history",
+        "timing_preferences",
+        "session_patterns"
+      ]
+    },
+    "conversation_analytics": {
+      "description": "Duration, session gaps, statistics",
+      "enhancement_focus": "Engagement metrics, conversation analytics, interaction patterns",
+      "contextual_considerations": [
+        "engagement_metrics",
+        "session_gaps",
+        "conversation_stats"
+      ]
+    },
+    "news_weather_history": {
+      "description": "News and weather query results and summaries",
+      "enhancement_focus": "Information retention, query context, temporal updates",
+      "contextual_considerations": [
+        "query_context",
+        "information_type",
+        "update_frequency"
+      ]
+    },
+    "timezone_preferences": {
+      "description": "Time zone queries and location preferences",
+      "enhancement_focus": "Timezone awareness, location context, scheduling preferences",
+      "contextual_considerations": [
+        "timezone_context",
+        "location_preferences",
+        "scheduling_needs"
+      ]
+    }
+  },
+  "category_relationships": {
+    "user_identity": [
+      "personal_preferences",
+      "collaborator_relationships",
+      "multi_identity"
+    ],
+    "personal_preferences": [
+      "activity_behavior",
+      "response_adaptation",
+      "communication_boundaries"
+    ],
+    "task_project_tracking": [
+      "knowledge_expertise",
+      "tool_integration",
+      "current_state"
+    ],
+    "activity_behavior": [
+      "temporal_patterns",
+      "session_themes",
+      "conversation_analytics"
+    ],
+    "user_instructions": [
+      "communication_boundaries",
+      "contextual_rules",
+      "system_awareness"
+    ],
+    "current_state": [
+      "session_themes",
+      "conversation_analytics",
+      "news_weather_history"
+    ],
+    "personal_development": [
+      "knowledge_expertise",
+      "long_term_goals",
+      "temporal_patterns"
+    ],
+    "communication_boundaries": [
+      "response_adaptation",
+      "contextual_rules",
+      "data_privacy"
+    ],
+    "contextual_rules": [
+      "system_awareness",
+      "data_privacy",
+      "meta_memory"
+    ],
+    "multi_identity": [
+      "user_identity",
+      "collaborator_relationships",
+      "session_themes"
+    ],
+    "knowledge_expertise": [
+      "tool_integration",
+      "personal_development",
+      "search_external_info"
+    ],
+    "tool_integration": [
+      "file_media",
+      "multimodal_preferences",
+      "system_awareness"
+    ],
+    "response_adaptation": [
+      "personal_preferences",
+      "communication_boundaries",
+      "session_themes"
+    ],
+    "file_media": [
+      "multimodal_preferences",
+      "search_external_info",
+      "meta_memory"
+    ],
+    "long_term_goals": [
+      "personal_development",
+      "collaborator_relationships",
+      "news_weather_history"
+    ],
+    "collaborator_relationships": [
+      "user_identity",
+      "multi_identity",
+      "communication_boundaries"
+    ],
+    "data_privacy": [
+      "contextual_rules",
+      "system_awareness",
+      "meta_memory"
+    ],
+    "multimodal_preferences": [
+      "file_media",
+      "tool_integration",
+      "response_adaptation"
+    ],
+    "system_awareness": [
+      "contextual_rules",
+      "data_privacy",
+      "meta_memory"
+    ],
+    "session_themes": [
+      "activity_behavior",
+      "response_adaptation",
+      "conversation_analytics"
+    ],
+    "meta_memory": [
+      "category_relationships",
+      "behavioral_adaptation",
+      "privacy_settings"
+    ],
+    "temporal_patterns": [
+      "activity_behavior",
+      "session_themes",
+      "conversation_analytics"
+    ],
+    "search_external_info": [
+      "knowledge_expertise",
+      "news_weather_history",
+      "timezone_preferences"
+    ],
+    "greeting_patterns": [
+      "session_themes",
+      "conversation_analytics",
+      "timezone_preferences"
+    ],
+    "conversation_analytics": [
+      "activity_behavior",
+      "session_themes",
+      "temporal_patterns"
+    ],
+    "news_weather_history": [
+      "search_external_info",
+      "current_state",
+      "timezone_preferences"
+    ],
+    "timezone_preferences": [
+      "search_external_info",
+      "news_weather_history",
+      "greeting_patterns"
+    ]
+  },
+  "behavioral_adaptation": {
+    "response_style_preferences": {
+      "preferred_response_length": "moderate",
+      "avoidance_topics": [
+        "politics",
+        "religion"
+      ],
+      "languages_used": [
+        "English"
+      ]
+    },
+    "communication_adaptations": {
+      "formality_level": "casual",
+      "explanation_preferences": "detailed_when_asked",
+      "response_tone": "friendly_helpful"
+    },
+    "learned_patterns": {
+      "user_interests": [],
+      "communication_style": "casual_inquisitive",
+      "preferred_topics": []
+    },
+    "user_feedback_integration": {
+      "last_feedback_received": null,
+      "feedback_type": "",
+      "feedback_content": "",
+      "integration_status": "pending"
+    }
+  },
+  "privacy_settings": {
+    "default_retention": "permanent",
+    "sensitive_data_handling": "encrypted",
+    "auto_cleanup_enabled": false,
+    "privacy_level_defaults": {
+      "normal": "store_and_recall",
+      "sensitive": "store_encrypted",
+      "private": "session_only"
+    }
+  },
+  "memory_events": []
+}

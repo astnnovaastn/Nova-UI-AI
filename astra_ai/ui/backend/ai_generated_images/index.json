@@ -1,0 +1,106 @@
+{
+  "total_images": 10,
+  "last_updated": "2026-06-01T21:44:17.047778Z",
+  "images": [
+    {
+      "id": "20260525_193337_6939713d.jpg",
+      "timestamp": "2026-05-25T19:33:37.915917Z",
+      "prompt": "create an image of an home",
+      "provider": "google",
+      "mime_type": "image/jpeg",
+      "file_size": 97082,
+      "status": "saved"
+    },
+    {
+      "id": "20260526_155244_c2fbe99d.jpg",
+      "timestamp": "2026-05-26T15:52:44.817977Z",
+      "prompt": "A cinematic, wide-angle scene of a man standing inside a grand medieval castle hall, surrounded by a group of soldiers in ornate historical uniforms, accompanied by many dogs of various breeds, dramatic lighting, epic atmosphere.",
+      "provider": "google",
+      "mime_type": "image/jpeg",
+      "file_size": 98302,
+      "status": "saved"
+    },
+    {
+      "id": "20260526_160322_6c4e4135.jpg",
+      "timestamp": "2026-05-26T16:03:22.385239Z",
+      "prompt": "A wide-angle, full-view shot of a grand, majestic castle featuring a fusion of Spanish and Italian architectural styles, ornate facades, terracotta roof tiles, intricate archways, and elaborate gothic and renaissance details, set against a stunning landscape, cinematic lighting, high detail, architectural photography style.",
+      "provider": "google",
+      "mime_type": "image/jpeg",
+      "file_size": 143654,
+      "status": "saved"
+    },
+    {
+      "id": "20260526_175339_a30712ab.jpg",
+      "timestamp": "2026-05-26T17:53:39.192509Z",
+      "prompt": "An immersive interior view of a grand castle, featuring a fusion of Spanish and Italian architectural styles, vaulted ceilings, intricate stonework, ornate wooden furniture, arched doorways, soft ambient lighting, high detail, architectural photography style.",
+      "provider": "google",
+      "mime_type": "image/jpeg",
+      "file_size": 140407,
+      "status": "saved"
+    },
+    {
+      "id": "20260526_185555_a30712ab.jpg",
+      "timestamp": "2026-05-26T18:55:55.186413Z",
+      "prompt": "An immersive interior view of a grand castle, featuring a fusion of Spanish and Italian architectural styles, vaulted ceilings, intricate stonework, ornate wooden furniture, arched doorways, soft ambient lighting, high detail, architectural photography style.",
+      "provider": "google",
+      "mime_type": "image/jpeg",
+      "file_size": 138871,
+      "status": "saved"
+    },
+    {
+      "id": "20260531_173548_e2bd2fa5.jpg",
+      "timestamp": "2026-05-31T17:35:48.928710Z",
+      "prompt": "A futuristic quantum computer design 15 years in the future, featuring sleek minimalist aesthetics, glowing cryogenic cooling components, complex geometric structures, holographic data streams, and advanced AI interfaces in a clean, high-tech laboratory environment.",
+      "provider": "google",
+      "kind": "generated",
+      "source_image_id": null,
+      "mime_type": "image/jpeg",
+      "file_size": 103361,
+      "status": "saved"
+    },
+    {
+      "id": "20260531_175526_e2bd2fa5.jpg",
+      "timestamp": "2026-05-31T17:55:26.459364Z",
+      "prompt": "A futuristic quantum computer design 15 years in the future, featuring sleek minimalist aesthetics, glowing cryogenic cooling components, complex geometric structures, holographic data streams, and advanced AI interfaces in a clean, high-tech laboratory environment.",
+      "provider": "google",
+      "kind": "generated",
+      "source_image_id": null,
+      "mime_type": "image/jpeg",
+      "file_size": 103908,
+      "status": "saved"
+    },
+    {
+      "id": "20260531_230237_4104b536.jpg",
+      "timestamp": "2026-05-31T23:02:37.838966Z",
+      "prompt": "create an image of how italy look like in 1000 years ago with all the people that you can see",
+      "provider": "google",
+      "kind": "generated",
+      "source_image_id": null,
+      "mime_type": "image/jpeg",
+      "file_size": 105430,
+      "status": "saved"
+    },
+    {
+      "id": "20260601_203144_daf88876.jpg",
+      "timestamp": "2026-06-01T20:31:44.460278Z",
+      "prompt": "A breathtaking, high-detail oil painting in the style of Van Gogh's 'Starry Night', featuring a swirling, vibrant night sky over a quiet, quaint French village with glowing windows.",
+      "provider": "google",
+      "kind": "generated",
+      "source_image_id": null,
+      "mime_type": "image/jpeg",
+      "file_size": 166098,
+      "status": "saved"
+    },
+    {
+      "id": "20260601_214417_ddf7536e.jpg",
+      "timestamp": "2026-06-01T21:44:17.023099Z",
+      "prompt": "An expansive, detailed historical reconstruction of ancient Rome 3000 years ago, showcasing grand classical architecture, bustling city streets with citizens in period attire, vibrant market squares, and a lively atmosphere under a clear sky, cinematic lighting, highly detailed.",
+      "provider": "google",
+      "kind": "generated",
+      "source_image_id": null,
+      "mime_type": "image/jpeg",
+      "file_size": 119913,
+      "status": "saved"
+    }
+  ]
+}

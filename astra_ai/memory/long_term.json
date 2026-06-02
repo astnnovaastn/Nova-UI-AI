@@ -1,0 +1,87 @@
+{
+  "identity": {},
+  "demographics": {
+    "location": {
+      "value": "Como, Italy",
+      "updated": "2026-06-01",
+      "confidence": 1.0,
+      "source": "user"
+    },
+    "nationality": {
+      "value": "Italian",
+      "updated": "2026-06-01",
+      "confidence": 1.0,
+      "source": "user"
+    }
+  },
+  "preferences": {
+    "food": {
+      "favorite_cuisines": {
+        "value": [
+          "Italian"
+        ],
+        "updated": "2026-06-01",
+        "confidence": 1.0,
+        "source": "user"
+      }
+    },
+    "music": {
+      "favorite_artists": {
+        "value": [
+          "Michael Jackson"
+        ],
+        "updated": "2026-06-01",
+        "confidence": 1.0,
+        "source": "user"
+      }
+    }
+  },
+  "milestones": {},
+  "goals": {
+    "projects": {
+      "nova_ai": {
+        "value": "Build and improve an AI assistant named Nova",
+        "updated": "2026-06-01",
+        "confidence": 1.0,
+        "source": "user"
+      },
+      "jarvis_style_ai": {
+        "value": "Build a Jarvis-style AI",
+        "updated": "2026-06-01",
+        "confidence": 1.0,
+        "source": "user"
+      }
+    },
+    "career": {
+      "value": "Work for Google in the USA",
+      "updated": "2026-06-01",
+      "confidence": 1.0,
+      "source": "user"
+    }
+  },
+  "relationships": {
+    "family": {
+      "mother": {
+        "value": "Johnson",
+        "updated": "2026-06-01",
+        "confidence": 1.0,
+        "source": "user"
+      },
+      "sister": {
+        "value": "Reachel",
+        "updated": "2026-06-01",
+        "confidence": 1.0,
+        "source": "user"
+      },
+      "father": {
+        "value": "Prince",
+        "updated": "2026-06-01",
+        "confidence": 1.0,
+        "source": "user"
+      }
+    }
+  },
+  "projects": {},
+  "wishes": {},
+  "notes": {}
+}

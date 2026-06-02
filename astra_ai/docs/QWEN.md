@@ -1,0 +1,2 @@
+## Qwen Added Memories
+- I attempted to add resize handle and close button functionality to the Notepad.html file by incorporating code from the splash screen. The file became corrupted with mixed content, likely due to duplicate content being appended, causing structure issues. The intended functionality included draggable/resizable widgets with control buttons was implemented but the file structure was compromised in the process.

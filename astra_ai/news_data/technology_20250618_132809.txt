@@ -1,0 +1,18 @@
+NEWS SUMMARY: TECHNOLOGY
+============================================================
+
+Query: technology news
+Date: May 21, 2025 to June 17, 2025
+Format: Brief
+
+SUMMARY
+------------------------------------------------------------
+>> Apple Releases Safari Technology Preview 220 With Bug Fixes and Performance Improvements. Apple today released a new update for Safari Technology Preview, the experimental browser that was f...
+
+SOURCES
+------------------------------------------------------------
+Android Central, BBC News, Business Insider, Gizmodo.com, Hackaday, Harvard Business Review, MacRumors, Seths.blog, The Verge, VentureBeat
+
+RELATED TOPICS
+------------------------------------------------------------
+with, apple, safari, preview, releases

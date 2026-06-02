@@ -1,0 +1,85 @@
+NEWS SUMMARY: ARTIFICIAL INTELLIGENCE
+============================================================
+
+Query: artificial intelligence
+Date: May 20, 2025 to June 17, 2025
+Format: Detailed
+
+SUMMARY
+------------------------------------------------------------
+COMPREHENSIVE NEWS SUMMARY: Artificial Intelligence
+
+
+[BUSINESS] Business
+-------------------
+
+>> 2 Millionaire-Maker Artificial Intelligence (AI) Stocks
+   Source: Yahoo Entertainment
+   Date: June 10, 2025
+   Sentiment: [NEUTRAL] Neutral
+   Summary: If you click 'Accept all', we and our partners, including 240 who are part of the IAB Transparency &amp; Consent Framework, will also store and/or acc...
+   Keywords: millionaire, maker, artificial
+
+
+>> 1 No-Brainer Artificial Intelligence (AI) ETF to Buy With $50 During the S&P 500 Bull Market
+   Source: Yahoo Entertainment
+   Date: June 01, 2025
+   Sentiment: [NEUTRAL] Neutral
+   Summary: If you click 'Accept all', we and our partners, including 241 who are part of the IAB Transparency &amp; Consent Framework, will also store and/or acc...
+   Keywords: brainer, artificial, intelligence
+
+
+>> Facing a Changing Industry, AI Activists Rethink Their Strategy
+   Source: Wired
+   Date: June 04, 2025
+   Sentiment: [NEGATIVE] Negative
+   Summary: In the spring of 2018, thousands of Google employees pressured the company into dropping a major artificial intelligence contract with the Pentagon.
+   Keywords: facing, changing, industry
+
+
+[TECH] Technology
+-----------------
+
+>> Artificial Intelligence Is Not Intelligent
+   Source: The Atlantic
+   Date: June 06, 2025
+   Sentiment: [NEGATIVE] Negative
+   Summary: On June 13, 1863, a curious letter to the editor appeared in The Press, a then-fledgling New Zealand newspaper.
+   Keywords: artificial, intelligence, intelligent
+
+
+>> Artificial Intelligence Influencers To Get D.C.’s Acclaim At The AI Honors Ceremony
+   Source: Yahoo Entertainment
+   Date: May 30, 2025
+   Sentiment: [NEUTRAL] Neutral
+   Summary: If you click 'Accept all', we and our partners, including 241 who are part of the IAB Transparency &amp; Consent Framework, will also store and/or acc...
+   Keywords: artificial, intelligence, influencers
+
+
+>> AI leaders have a new term for the fact that their models are not always so intelligent
+   Source: Business Insider
+   Date: June 07, 2025
+   Sentiment: [NEUTRAL] Neutral
+   Summary: Google CEO Sundar Pichai says there is a new term for the phase of AI the world is now in: "artificial jagged intelligence." Justin Sullivan/Getty
+<u...
+   Keywords: term, google, sundar
+
+
+[ENTERTAINMENT] Entertainment
+-----------------------------
+
+>> Could the MCU Recast Kang the Conqueror for a Final Sendoff?
+   Source: Gizmodo.com
+   Date: June 05, 2025
+   Sentiment: [NEGATIVE] Negative
+   Summary: Don’t expect Mike Flanagan’s Exorcist movie any time soon. The Saw franchise has gotten a behind-the-scenes shakeup.
+   Keywords: predator, could, recast
+
+
+SOURCES
+------------------------------------------------------------
+Android Central, Business Insider, Gizmodo.com, Slashdot.org, The Atlantic, The Verge, Wired, Yahoo Entertainment
+
+RELATED TOPICS
+------------------------------------------------------------
+artificial, intelligence, google, could, millionaire
