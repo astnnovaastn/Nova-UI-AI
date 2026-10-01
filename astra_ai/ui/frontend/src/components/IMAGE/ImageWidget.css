@@ -1,0 +1,845 @@
+/* 
+   ==========================================================================
+   IMAGE GENERATOR WIDGET STYLES
+   ========================================================================== 
+*/
+
+/* Main Widget Container */
+.image-widget {
+  position: fixed !important;
+  z-index: 1000 !important;
+  background: #121212 !important; /* Deep charcoal background */
+  border: 1px solid #2a2a2a !important; /* Subtle border for definition */
+  border-radius: 12px !important; /* Slightly rounded corners */
+  color: #ffffff !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8) !important; /* Deep shadow for depth */
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  min-width: 440px !important; /* Increased width */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+/* Astra theme-aware surface overrides. Keep the established footprint while
+   allowing the global theme to drive every image-widget surface. */
+.image-widget {
+  background: var(--widget-surface, var(--panel, #111)) !important;
+  border-color: var(--widget-border, var(--border, #355a66)) !important;
+  color: var(--fg, var(--text-primary, #f5f7fa)) !important;
+  box-shadow: 0 20px 50px color-mix(in srgb, var(--bg, #000) 62%, transparent) !important;
+}
+.image-header,
+.image-input-section,
+.gallery-view { background: var(--panel-overlay, var(--widget-surface, var(--panel, #111))); }
+.image-header { border-bottom-color: var(--border-soft, var(--border, #355a66)); }
+.image-header-brand .brand-text,
+.pill-input-bar textarea,
+.pill-icon-btn,
+.image-header .close-btn,
+.image-header .gallery-toggle-btn { color: var(--fg, var(--text-primary, #f5f7fa)); }
+.image-header .close-btn,
+.image-header .gallery-toggle-btn,
+.pill-input-bar,
+.gallery-card,
+.gallery-count,
+.gallery-status-error button,
+.gallery-back-btn { background: var(--button-bg, var(--panel-elevated, var(--panel, #111))); border-color: var(--border-soft, var(--border, #355a66)); }
+.image-results-area { background: var(--panel-muted, var(--bg, #080b10)); border-color: var(--border-soft, var(--border, #355a66)); }
+.final-img { background: var(--bg, #080b10); }
+.visual-prompt-label,
+.gallery-eyebrow,
+.loading-message,
+.placeholder-summary,
+.image-empty-void,
+.gallery-status { color: var(--text-muted, var(--fg, #aab4c0)); }
+.pill-input-bar textarea::placeholder { color: var(--text-faint, var(--fg, #8893a0)); }
+.generate-circle-btn { background: var(--accent-strong, var(--red, #4da3ff)); color: var(--bg, #080b10); }
+.generate-circle-btn:disabled { background: var(--panel-muted, #263140); color: var(--text-faint, #687789); }
+.gallery-card:hover,
+.image-header .gallery-toggle-btn:hover,
+.image-header .gallery-toggle-btn.active { border-color: var(--accent-strong, var(--red, #4da3ff)); }
+.gallery-card span { background: linear-gradient(to top, color-mix(in srgb, var(--bg, #080b10) 88%, transparent), transparent); }
+.gallery-scroll-area { scrollbar-color: var(--scrollbar-thumb, var(--border, #355a66)) transparent; }
+.gallery-delete-btn {
+  margin-top: 10px;
+  align-self: flex-start;
+  border: 1px solid color-mix(in srgb, var(--accent-strong, #4da3ff) 42%, var(--border, #355a66));
+  border-radius: 7px;
+  background: var(--button-bg, var(--panel, #111));
+  color: var(--fg, #f5f7fa);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.gallery-delete-btn:hover { border-color: var(--accent-strong, #4da3ff); }
+
+@media (max-width: 560px) {
+  .image-widget { min-width: 320px !important; }
+  .gallery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .image-input-section { padding: 14px; }
+  .prompt-summary-bar { padding: 14px 16px; }
+  .image-results-area { margin: 0 16px; }
+}
+
+/* Top Navigation Bar */
+.image-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  background: #121212;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* Very faint divider */
+  cursor: grab; /* Indicates the widget can be moved */
+}
+
+/* Branding Section in Header */
+.image-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.image-header-brand .brand-text {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+}
+
+.image-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Header Buttons */
+.image-header .close-btn,
+.image-header .gallery-toggle-btn {
+  background: linear-gradient(145deg, #2a2a2a, #1a1a1a); /* Subtle metallic gradient */
+  color: #ffffff;
+  border: 1px solid #333;
+  border-radius: 8px; /* Square with slight rounding */
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  pointer-events: auto !important; /* Ensures it can be clicked over drag layers */
+  z-index: 10;
+  transition: all 0.2s ease;
+}
+
+.image-header .close-btn:hover,
+.image-header .gallery-toggle-btn:hover,
+.image-header .gallery-toggle-btn.active {
+  transform: scale(1.05);
+  background: linear-gradient(145deg, #333, #222);
+}
+
+.image-header .gallery-toggle-btn.active {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Main Content Area Wrapper */
+.image-content-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Prompt Info Bar (Visual Prompt Label) */
+.prompt-summary-bar {
+  padding: 20px 24px;
+}
+
+.visual-prompt-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #888;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Text that shows current prompt or placeholder */
+.placeholder-summary {
+  font-family: 'Fira Code', 'Courier New', monospace; /* Monospace for code-like feel */
+  font-size: 14px;
+  color: #999;
+  line-height: 1.6;
+}
+
+/* Central Generation Results Area (The Black Void) */
+.image-results-area {
+  flex: 1;
+  background: #000000;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 24px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
+}
+
+/* Smooth "Moving Light" Shimmer Effect */
+.image-results-area::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -150%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(59, 130, 246, 0.05) 45%,
+    rgba(139, 92, 246, 0.08) 50%,
+    rgba(59, 130, 246, 0.05) 55%,
+    transparent 100%
+  );
+  z-index: 0;
+  animation: smoothSweep 10s ease-in-out infinite;
+}
+
+@keyframes smoothSweep {
+  0% { transform: translateX(-150%) skewX(-20deg); }
+  50% { transform: translateX(150%) skewX(-20deg); }
+  100% { transform: translateX(150%) skewX(-20deg); }
+}
+
+.image-display-frame {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Final Generated Image Styling with Animation */
+.final-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+  animation: imageReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes imageReveal {
+  0% { 
+    opacity: 0;
+    transform: scale(0.98);
+    filter: blur(10px);
+  }
+  100% { 
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+/* Bottom Input Interaction Section */
+.image-input-section {
+  padding: 24px;
+  background: #121212;
+  display: flex;
+  justify-content: center; /* Center the pill bar */
+  align-items: center;
+}
+
+/* Premium Pill Input Bar (Capsule Shape) */
+.pill-input-bar {
+  display: flex;
+  align-items: center;
+  background: #0f0f0f; /* Very dark background */
+  border-radius: 40px; /* High rounding for capsule shape */
+  padding: 8px 12px 8px 16px;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 
+    inset 0 1px 3px rgba(0, 0, 0, 0.5), 
+    0 4px 15px rgba(0, 0, 0, 0.3);
+  gap: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto !important;
+}
+
+.pill-input-bar:focus-within {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    inset 0 1px 3px rgba(0, 0, 0, 0.5), 
+    0 0 10px rgba(255, 255, 255, 0.02);
+}
+
+/* General Pill Icon Buttons (+ and Mic) */
+.pill-icon-btn {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  opacity: 0.8;
+}
+
+.pill-icon-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.attachment-btn svg {
+  stroke: #ffffff;
+}
+
+/* The Main Textarea inside the Pill */
+.pill-input-bar textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 15px;
+  resize: none;
+  height: 24px;
+  line-height: 24px;
+  outline: none;
+  padding: 0;
+  overflow: hidden;
+  scrollbar-width: none;
+}
+
+.pill-input-bar textarea::placeholder {
+  color: #888;
+  font-weight: 400;
+}
+
+/* Right Side Actions Group */
+.pill-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The Circular Generate/Waveform Button */
+.generate-circle-btn {
+  width: 40px;
+  height: 40px;
+  background: #ffffff; /* White circle as per image */
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #000000; /* Black icon on white */
+  box-shadow: 0 4px 10px rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.generate-circle-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  background: #f0f0f0;
+}
+
+.generate-circle-btn:disabled {
+  background: #333;
+  color: #666;
+  cursor: not-allowed;
+}
+
+/* Mini Spinner for loading state inside circle */
+.mini-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-top-color: #000;
+  border-radius: 50%;
+  animation: mini-spin 0.8s linear infinite;
+}
+
+@keyframes mini-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Loading Spinner Overlay */
+.image-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+}
+
+.loading-message {
+  font-size: 11px;
+  color: #888;
+  margin-top: 16px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Error Message Styling */
+.image-error {
+  color: #ff5555;
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+  z-index: 2;
+}
+
+.image-empty-void {
+  color: #9ca3af;
+  font-size: 14px;
+  text-align: center;
+  padding: 24px;
+  line-height: 1.6;
+}
+
+/* Stored image gallery */
+.gallery-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 22px 20px 20px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.05), transparent 34%),
+    #121212;
+}
+
+.gallery-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  flex-shrink: 0;
+}
+
+.gallery-eyebrow {
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 10px;
+  margin-bottom: 5px;
+}
+
+.gallery-heading h2 {
+  font-size: 20px;
+  font-weight: 550;
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+.gallery-count {
+  background: #1d1d1d;
+  color: #a1a1aa;
+  border: 1px solid #282828;
+  font-size: 12px;
+  min-width: 31px;
+  height: 31px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gallery-scroll-area {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+.gallery-scroll-area::-webkit-scrollbar {
+  width: 5px;
+}
+
+.gallery-scroll-area::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 999px;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding-bottom: 6px;
+}
+
+.gallery-card {
+  position: relative;
+  height: 130px;
+  padding: 0;
+  overflow: hidden;
+  background: #080808;
+  border: 1px solid #242424;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  color: #fff;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.gallery-card:hover {
+  transform: translateY(-1px);
+  border-color: #525252;
+}
+
+.gallery-card img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.gallery-card span {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 24px 8px 8px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.84), transparent);
+  font-size: 10px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gallery-status {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #8c8c92;
+  text-align: center;
+  font-size: 13px;
+  padding: 25px;
+  line-height: 1.55;
+}
+
+.gallery-status p {
+  margin: 0 0 14px;
+}
+
+.gallery-status-error {
+  color: #e79292;
+}
+
+.gallery-status-error button,
+.gallery-back-btn {
+  color: #ededed;
+  background: #1d1d1d;
+  border: 1px solid #303030;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.gallery-status-error button {
+  padding: 8px 14px;
+}
+
+.gallery-detail {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.gallery-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 7px 11px;
+  margin-bottom: 14px;
+  font-size: 12px;
+}
+
+.gallery-back-btn:hover,
+.gallery-status-error button:hover {
+  background: #292929;
+}
+
+.gallery-detail-frame {
+  flex: 1;
+  min-height: 0;
+  background: #050505;
+  border: 1px solid #262626;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gallery-detail-frame img {
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.gallery-detail-meta {
+  padding: 13px 2px 0;
+  flex-shrink: 0;
+  max-height: 34%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, var(--border)) transparent;
+}
+
+.gallery-detail-meta p {
+  margin: 0 0 5px;
+  color: #dbdbdf;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.gallery-detail-meta span {
+  color: #777780;
+  font-size: 11px;
+}
+
+.gallery-detail-meta::-webkit-scrollbar { width: 5px; }
+.gallery-detail-meta::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb, var(--border)); border-radius: 999px; }
+
+/* Keep both the thumbnail list and the selected-image prompt independently
+   scrollable so long prompts never push the viewer or header off-screen. */
+.gallery-detail-frame { min-height: 180px; }
+.gallery-scroll-area { overscroll-behavior: contain; scrollbar-width: thin; }
+
+/* Drag Resizer in Bottom-Right Corner */
+.resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 15px;
+  height: 15px;
+  cursor: se-resize;
+  background: linear-gradient(135deg, transparent 50%, #333 50%);
+  border-bottom-right-radius: 12px;
+}
+
+/* Custom Scrollbar for side panel scrolling if needed */
+.image-content-wrapper::-webkit-scrollbar {
+  width: 4px;
+}
+
+.image-content-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.image-content-wrapper::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 10px;
+}
+/* Theme Studio contract: preserve the gallery composition while inheriting the active workspace. */
+.image-widget {
+  background: color-mix(in srgb, var(--widget-surface, var(--panel)) 94%, transparent) !important;
+  border-color: var(--widget-border, var(--border)) !important;
+  color: var(--widget-text, var(--fg)) !important;
+  border-radius: var(--theme-radius, 12px) !important;
+  backdrop-filter: blur(var(--theme-blur, 18px)) !important;
+  box-shadow: 0 18px 42px rgba(0,0,0,calc(var(--theme-shadow-strength,.45) * .55)), 0 0 26px color-mix(in srgb,var(--widget-accent,var(--red)) calc(var(--theme-glow-strength,.35) * 30%),transparent) !important;
+}
+.image-widget .image-header-brand,.image-widget .gallery-eyebrow,.image-widget .brand-text { color:var(--widget-accent,var(--red)) !important; }
+
+/* Image workspace theme contract.  Keep the existing footprint, but make all
+   surfaces, text, borders, and controls follow the active Astra theme. */
+.image-widget {
+  background: var(--widget-surface, var(--panel)) !important;
+  border-color: var(--border, var(--widget-border, currentColor)) !important;
+  color: var(--fg, var(--widget-text, currentColor)) !important;
+  min-width: 360px !important;
+}
+.image-header,
+.image-input-section,
+.gallery-view { background: color-mix(in srgb, var(--panel) 92%, transparent) !important; }
+.image-header { border-bottom-color: var(--border-soft, var(--border)) !important; }
+.image-header-brand .brand-text,
+.gallery-heading h2,
+.placeholder-summary,
+.pill-input-bar textarea,
+.gallery-detail-meta p { color: var(--fg, var(--widget-text)) !important; }
+.image-header .close-btn,
+.image-header .gallery-toggle-btn,
+.gallery-count,
+.gallery-status-error button,
+.gallery-back-btn {
+  background: var(--button-bg, color-mix(in srgb, var(--panel) 86%, var(--bg) 14%)) !important;
+  border-color: var(--border-soft, var(--border)) !important;
+  color: var(--fg, var(--widget-text)) !important;
+  box-shadow: none !important;
+}
+.image-header .close-btn:hover,
+.image-header .gallery-toggle-btn:hover,
+.image-header .gallery-toggle-btn.active,
+.gallery-status-error button:hover,
+.gallery-back-btn:hover {
+  background: var(--button-hover-bg, color-mix(in srgb, var(--panel) 72%, var(--red) 28%)) !important;
+  border-color: var(--widget-accent, var(--red)) !important;
+}
+.visual-prompt-label,
+.gallery-eyebrow,
+.gallery-detail-meta span,
+.loading-message { color: var(--text-muted, var(--widget-text-soft, var(--fg))) !important; }
+.image-results-area,
+.gallery-detail-frame,
+.gallery-card { background: var(--panel-overlay, var(--panel)) !important; border-color: var(--border-soft, var(--border)) !important; }
+.image-empty-void,
+.gallery-status { color: var(--text-muted, var(--widget-text-soft, var(--fg))) !important; }
+.pill-input-bar { background: var(--input-bg, var(--panel-muted, var(--panel))) !important; border-color: var(--input-border, var(--border)) !important; }
+.pill-icon-btn { color: var(--fg, var(--widget-text)) !important; }
+.generate-circle-btn { background: var(--widget-accent, var(--red)) !important; color: var(--bg, var(--panel)) !important; }
+.generate-circle-btn:disabled { background: var(--button-bg, var(--panel-muted)) !important; color: var(--text-muted, var(--fg)) !important; }
+.gallery-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+.gallery-card-caption { display: flex; align-items: center; gap: 6px; }
+.gallery-card-caption strong { color: var(--widget-accent, var(--red)); font-size: 10px; }
+.gallery-card img { background: var(--panel-muted, var(--panel)); }
+
+/* Shared full-result viewer: fresh generations and gallery selections use the
+   same artwork-first layout. The result scrolls vertically instead of being
+   squeezed into a fixed black canvas. */
+.image-result-scroll {
+  min-height: 0;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, var(--border)) transparent;
+  overscroll-behavior: contain;
+}
+.image-result-scroll::-webkit-scrollbar { width: 6px; }
+.image-result-scroll::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb, var(--border)); border-radius: 999px; }
+.image-result-viewer {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px 24px;
+}
+.image-result-back { flex: none; margin-bottom: 0; }
+.image-result-art {
+  position: relative;
+  flex: none;
+  width: 100%;
+  min-height: 220px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: visible;
+  border: 1px solid var(--border-soft, var(--border));
+  border-radius: var(--theme-radius, 12px);
+  background: color-mix(in srgb, var(--panel-overlay, var(--panel)) 72%, transparent);
+}
+.image-result-artwork {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: none;
+  object-fit: contain !important;
+  border-radius: inherit;
+  background: transparent !important;
+  animation: imageReveal 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.image-result-details {
+  flex: none;
+  padding: 4px 2px 0;
+  color: var(--fg, var(--widget-text));
+}
+.image-result-details-label {
+  margin-bottom: 6px;
+  color: var(--widget-accent, var(--accent-strong, var(--red)));
+  font: 700 10px/1.2 'IBM Plex Mono', monospace;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.image-result-prompt {
+  margin: 0;
+  color: var(--fg, var(--widget-text));
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.image-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 8px;
+  color: var(--text-muted, var(--widget-text-soft, var(--fg)));
+  font-size: 10px;
+}
+.image-result-viewer .image-empty-void {
+  min-height: 260px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.image-empty-icon { color: var(--widget-accent, var(--accent-strong, var(--red))); font-size: 28px; }
+.image-result-viewer .image-loading-overlay { position: absolute; border-radius: inherit; }
+.image-result-viewer .image-error { min-height: 220px; width: 100%; display: grid; place-items: center; }
+
+/* The gallery grid owns the only gallery scrollbar. The explicit zero flex
+   basis is important inside the fixed-height widget: it prevents the grid
+   from expanding its parent instead of producing a usable scroll region. */
+.gallery-view {
+  min-height: 0 !important;
+  overflow: hidden;
+}
+.gallery-scroll-area {
+  flex: 1 1 0 !important;
+  height: 0;
+  min-height: 0 !important;
+  overflow-x: hidden;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  pointer-events: auto;
+  scrollbar-width: thin;
+}
+.gallery-grid { min-height: min-content; }
+.gallery-card {
+  user-select: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.gallery-card:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--widget-accent, var(--accent-strong)));
+  outline-offset: 2px;
+}
+
+/* The connection portal is mounted directly into the image header. Keep it
+   beside the gallery and close controls instead of letting margin-left:auto
+   push it over the window buttons. */
+.image-header { gap: 8px; }
+.image-header > .aegis-connection-chip { order: 2; margin-left: 0; flex: 0 1 auto; }
+.image-header > .image-header-actions { order: 3; flex: 0 0 auto; }
+.image-header > .aegis-connection-chip + .image-header-actions { order: 3; }

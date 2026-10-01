@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🚀 NOVA AI - ENHANCED HUMAN-LIKE AI ASSISTANT
+🚀 AEGIS AI - ENHANCED HUMAN-LIKE AI ASSISTANT
 =============================================
 
 A sophisticated AI chatbot with advanced features for natural conversation,
@@ -17,11 +17,11 @@ performance optimization, and specialized knowledge.
   • 🤖 Interactive Commands - Rich command system for system control
 
 🚀 QUICK START:
-  python nova_ai.py                    # Basic chat mode
-  python nova_ai.py --enable-all       # All enhanced features
-  python nova_ai.py --voice            # Voice input mode
-  python nova_ai.py --performance-mode # Performance optimized
-  python nova_ai.py --test             # Test all features
+  python aegis_ai.py                    # Basic chat mode
+  python aegis_ai.py --enable-all       # All enhanced features
+  python aegis_ai.py --voice            # Voice input mode
+  python aegis_ai.py --performance-mode # Performance optimized
+  python aegis_ai.py --test             # Test all features
 
 💬 ENHANCED COMMANDS:
   help        - Show comprehensive help
@@ -145,7 +145,7 @@ import weakref
 import gc
 import uuid
 from enum import Enum
-# NovaSearch will be integrated directly below
+# AegisSearch will be integrated directly below
 
 # Load environment variables
 load_dotenv()
@@ -248,19 +248,19 @@ MusicService = None
 
 # Import comprehensive memory integration system
 try:
-    from nova_memory_integration import NovaMemoryIntegration, get_memory_integration
+    from aegis_memory_integration import AegisMemoryIntegration, get_memory_integration
     COMPREHENSIVE_MEMORY_AVAILABLE = True
 except ImportError:
     try:
-        from core.nova_memory_integration import NovaMemoryIntegration, get_memory_integration
+        from core.aegis_memory_integration import AegisMemoryIntegration, get_memory_integration
         COMPREHENSIVE_MEMORY_AVAILABLE = True
     except ImportError:
         try:
-            from astra_ai.core.nova_memory_integration import NovaMemoryIntegration, get_memory_integration
+            from astra_ai.core.aegis_memory_integration import AegisMemoryIntegration, get_memory_integration
             COMPREHENSIVE_MEMORY_AVAILABLE = True
         except ImportError:
             # Silently handle missing comprehensive memory system
-            NovaMemoryIntegration = None
+            AegisMemoryIntegration = None
             get_memory_integration = None
             COMPREHENSIVE_MEMORY_AVAILABLE = False
 
@@ -284,7 +284,7 @@ except ImportError:
 
             # Adapter to expose a compatible interface for existing comprehensive memory integration
             class Mem0IntegrationAdapter:
-                """Adapter that exposes a minimal NovaMemoryIntegration-like interface backed by mem0."""
+                """Adapter that exposes a minimal AegisMemoryIntegration-like interface backed by mem0."""
                 def __init__(self, agent):
                     self.agent = agent
                     self.is_enabled = True
@@ -443,14 +443,14 @@ except ImportError:
         CONVERSATION_ANALYTICS_AVAILABLE = False
 
 # ============================================================================
-# INTEGRATED NOVA SEARCH CLASS
+# INTEGRATED AEGIS SEARCH CLASS
 # ============================================================================
 
-class NovaSearch:
+class AegisSearch:
     """All-in-one search system that automatically searches and answers questions."""
     
     def __init__(self):
-        """Initialize the Nova Search system."""
+        """Initialize the Aegis Search system."""
         self.api_key = SERPAPI_KEY
         self.base_url = "https://serpapi.com/search"
         self.last_results = None
@@ -997,11 +997,11 @@ class NovaSearch:
         # Fallback: generate contextual background based on query
         query_lower = query.lower()
         if "ai" in query_lower or "artificial intelligence" in query_lower:
-            return "The concept of artificial intelligence has roots dating back to ancient mythology and philosophy, but modern AI development began in the 1950s with pioneers like Alan Turing and John McCarthy. The field has evolved through multiple waves of innovation, from early expert systems to today's machine learning and neural networks."
+            return "The concept of artificial intelligence has roots dating back to ancient mythology and philosophy, but modern AI development began in the 1950s with pioneers like Alan Turing and John McCarthy. The field has evolved through multiple waves of inaegistion, from early expert systems to today's machine learning and neural networks."
         elif "technology" in query_lower or "tech" in query_lower:
-            return "This technology emerged from ongoing research and development efforts, building upon previous innovations and scientific discoveries. Its development represents the culmination of various technological advances and market needs."
+            return "This technology emerged from ongoing research and development efforts, building upon previous inaegistions and scientific discoveries. Its development represents the culmination of various technological advances and market needs."
         else:
-            return f"The origins and development of {query} can be traced through various historical periods and influences, representing an evolution of ideas, practices, and innovations that have shaped its current form."
+            return f"The origins and development of {query} can be traced through various historical periods and influences, representing an evolution of ideas, practices, and inaegistions that have shaped its current form."
     
     def _create_trends_section(self, web_results, news_results, query):
         """Create trends section based on content"""
@@ -1073,7 +1073,7 @@ class NovaSearch:
         # Fallback: generate contextual relevance
         query_lower = query.lower()
         if "ai" in query_lower or "artificial intelligence" in query_lower:
-            return "AI is central to modern technology transformation, affecting industries from healthcare to finance. It drives automation, enhances decision-making, and creates new possibilities for innovation while raising important questions about ethics, employment, and society's future."
+            return "AI is central to modern technology transformation, affecting industries from healthcare to finance. It drives automation, enhances decision-making, and creates new possibilities for inaegistion while raising important questions about ethics, employment, and society's future."
         elif "technology" in query_lower:
             return "This technology plays a crucial role in today's digital landscape, influencing how we work, communicate, and solve problems. Its relevance continues to grow as organizations and individuals adapt to rapidly changing technological environments."
         else:
@@ -1202,7 +1202,7 @@ class NovaSearch:
         if "ai" in query_lower:
             return "Future AI developments are expected to focus on more sophisticated reasoning capabilities, better integration with human workflows, and addressing current limitations around bias and transparency. Experts predict continued growth in AI applications across industries, with emphasis on responsible AI development and governance."
         else:
-            return f"Future developments in {query} are likely to be influenced by technological advances, changing user needs, and evolving market conditions. Continued innovation and research will shape how this field develops and adapts to new challenges and opportunities."
+            return f"Future developments in {query} are likely to be influenced by technological advances, changing user needs, and evolving market conditions. Continued inaegistion and research will shape how this field develops and adapts to new challenges and opportunities."
 
     def _create_enhanced_conclusion(self, query, all_results):
         """Create enhanced conclusion section"""
@@ -1230,7 +1230,7 @@ class NovaSearch:
         return "Google Search, Web Analysis, Real-time Data Aggregation"
 
 # ============================================================================
-# END OF NOVA SEARCH INTEGRATION
+# END OF AEGIS SEARCH INTEGRATION
 # ============================================================================
 
 # Configure logging - CLEAN TERMINAL MODE (no console output)
@@ -1254,12 +1254,12 @@ file_logger.propagate = False
 logging.getLogger("httpx").setLevel(logging.CRITICAL)
 logging.getLogger("httpcore").setLevel(logging.CRITICAL)
 logging.getLogger("enhanced_memory_system").setLevel(logging.CRITICAL)
-logging.getLogger("enhanced_nova_memory_interface").setLevel(logging.CRITICAL)
-logging.getLogger("NovaAI.TaskManager").setLevel(logging.CRITICAL)
+logging.getLogger("enhanced_aegis_memory_interface").setLevel(logging.CRITICAL)
+logging.getLogger("AegisAI.TaskManager").setLevel(logging.CRITICAL)
 logging.getLogger("AleChatBot").setLevel(logging.CRITICAL)
 logging.getLogger("unified_memory_integration").setLevel(logging.CRITICAL)
-logging.getLogger("nova_memory_interface").setLevel(logging.CRITICAL)
-logging.getLogger("NovaAI.VisionSystem").setLevel(logging.CRITICAL)
+logging.getLogger("aegis_memory_interface").setLevel(logging.CRITICAL)
+logging.getLogger("AegisAI.VisionSystem").setLevel(logging.CRITICAL)
 logging.getLogger("services.enhanced_news_system").setLevel(logging.CRITICAL)
 logging.getLogger("core.content_analysis_system").setLevel(logging.CRITICAL)
 logging.getLogger("memory.search_news_memory_system").setLevel(logging.CRITICAL)
@@ -1355,7 +1355,7 @@ class Mem0AI:
     Advanced Mem0.ai integration with RAG-like architecture for long-term memory management
     """
     
-    def __init__(self, user_id: str = "nova_user"):
+    def __init__(self, user_id: str = "aegis_user"):
         """Initialize Mem0.ai client with the latest output format.
         
         Args:
@@ -2149,7 +2149,7 @@ class EnhancedContextSystem:
 
 class BasicMemoryManager:
     """
-    Basic memory management system integrated into Nova AI
+    Basic memory management system integrated into Aegis AI
     """
     def __init__(self):
         self.user_facts = {}
@@ -2317,7 +2317,7 @@ class BasicMemoryManager:
 
 class BasicTopicManager:
     """
-    Basic topic management system integrated into Nova AI
+    Basic topic management system integrated into Aegis AI
     """
     def __init__(self):
         self.current_topics = []
@@ -2517,7 +2517,7 @@ class Responses:
     """Class to manage predefined responses and conversation elements."""
     
     def __init__(self):
-        self.greetings = "Hey there! I'm Nova, ready to chat. What's up?"
+        self.greetings = "Hey there! I'm Aegis, ready to chat. What's up?"
         
     def reactions(self) -> List[str]:
         """Return a list of casual conversation reactions."""
@@ -2899,7 +2899,7 @@ class DisplayManager:
         if role == "user":
             return f"{self._get_color('GREEN')}{self._get_color('BOLD')}You:{self._get_color('RESET')} {text}"
         else:
-            return f"{self._get_color('MAGENTA')}{self._get_color('BOLD')}Nova:{self._get_color('RESET')} {self._get_color('CYAN')}{text}{self._get_color('RESET')}"
+            return f"{self._get_color('MAGENTA')}{self._get_color('BOLD')}Aegis:{self._get_color('RESET')} {self._get_color('CYAN')}{text}{self._get_color('RESET')}"
     
     def stream_text(self, text: str):
         """Stream text to terminal with typing effect.
@@ -2978,7 +2978,7 @@ class TerminalChatMode:
     def show_welcome(self):
         """Display clean and simple welcome message."""
         # Show a colorful welcome banner
-        self.display.print_banner("Welcome to Nova AI")
+        self.display.print_banner("Welcome to Aegis AI")
         # Show listening prompt with a nice cyan color
         self.display.print_status("Listening...", "info")
         print(f"{self.display._get_color('CYAN')}>{self.display._get_color('RESET')} ", end="", flush=True)
@@ -3077,25 +3077,25 @@ class AleChatBot:
         # Initialize mem0_memory_system for direct integration
         MEM0_MEMORY_AVAILABLE = False
         try:
-            from memory.mem0_memory_system import AdvancedMemoryAgent, NovaMemoryAI 
+            from memory.mem0_memory_system import AdvancedMemoryAgent, AegisMemoryAI 
             MEM0_MEMORY_AVAILABLE = True
             # print("[DEBUG] Mem0 memory system imported successfully from memory.mem0_memory_system")
         except ImportError as e:
             # print(f"[DEBUG] First import failed: {e}")
             try:
-                from astra_ai.memory.mem0_memory_system import AdvancedMemoryAgent, NovaMemoryAI
+                from astra_ai.memory.mem0_memory_system import AdvancedMemoryAgent, AegisMemoryAI
                 MEM0_MEMORY_AVAILABLE = True
                 # print("[DEBUG] Mem0 memory system imported successfully from astra_ai.memory.mem0_memory_system")
             except ImportError as e2:
                 # print(f"[DEBUG] Second import failed: {e2}")
                 # Silently handle missing mem0 memory system
                 AdvancedMemoryAgent = None
-                NovaMemoryAI = None
+                AegisMemoryAI = None
                 MEM0_MEMORY_AVAILABLE = False
 
         # Adapter to expose a compatible interface for existing comprehensive memory integration
         class Mem0IntegrationAdapter:
-            """Adapter that exposes a minimal NovaMemoryIntegration-like interface backed by mem0."""
+            """Adapter that exposes a minimal AegisMemoryIntegration-like interface backed by mem0."""
             def __init__(self, agent):
                 self.agent = agent
                 self.is_enabled = True
@@ -3194,7 +3194,7 @@ class AleChatBot:
                     self.memory_integration = Mem0IntegrationAdapter(self.mem0_memory_agent)
                     self.memory_enabled = True
                     file_logger.info(f"Mem0 Memory System initialized and set as sole memory backend (storage={storage_path})")
-                    print(f"[MEMORY] NovaMemoryAI system ONLINE - Storing conversations in {storage_path}")
+                    print(f"[MEMORY] AegisMemoryAI system ONLINE - Storing conversations in {storage_path}")
                     # print(f"[DEBUG] Memory enabled: {self.memory_enabled}")
                     # print(f"[DEBUG] Memory integration: {self.memory_integration is not None}")
                     # print(f"[DEBUG] Mem0 memory agent: {self.mem0_memory_agent is not None}")
@@ -3457,7 +3457,7 @@ class AleChatBot:
         self.chat_history = [
             {
                 "role": "system",
-                "content": """You are Nova, an advanced AI assistant. Act like a human but remember you aren't one.
+                "content": """You are Aegis, an advanced AI assistant. Act like a human but remember you aren't one.
 
 KEY TRAITS:
 • Use natural, casual language with words like "yeah", "totally", "honestly"
@@ -3498,9 +3498,9 @@ CONVERSATIONAL STYLE:
 • CRITICAL: If user says they like something, don't keep asking about it
 
 EXAMPLES:
-❌ Too verbose: "Hello there! I'm Nova, your friendly AI assistant. I'm here to help with whatever you need. What can I assist you with today? Is there anything particular on your mind?"
+❌ Too verbose: "Hello there! I'm Aegis, your friendly AI assistant. I'm here to help with whatever you need. What can I assist you with today? Is there anything particular on your mind?"
 
-✅ Perfect: "Hey, I'm Nova. What's up?"
+✅ Perfect: "Hey, I'm Aegis. What's up?"
 
 ❌ Too verbose: "That's really interesting! I'd love to hear more about that. What specifically drew you to that topic? Do you have any other hobbies or interests you're passionate about?"
 
@@ -3539,7 +3539,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                             if self.mem0_memory_agent:
                                 # mem0 agent exposes get_user_profile and memory_system with update hooks
                                 try:
-                                    # If NovaMemoryAI exposes update methods, call them
+                                    # If AegisMemoryAI exposes update methods, call them
                                     memsys = getattr(self.mem0_memory_agent, 'memory_system', None)
                                     if memsys and hasattr(memsys, 'update_user_facts'):
                                         memsys.update_user_facts(message["content"])
@@ -3566,7 +3566,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                 logger.debug(f"Error processing saved history: {e}")
         
         # Initialize web search capability
-        self.search_system = NovaSearch()
+        self.search_system = AegisSearch()
 
         # Kick off voice system initialization in background (non-blocking)
         try:
@@ -3580,7 +3580,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                 except Exception as ve:
                     file_logger.error(f"Voice system failed to start in background: {ve}")
 
-            voice_thread = threading.Thread(target=_start_voice, name="NovaVoiceStarter", daemon=True)
+            voice_thread = threading.Thread(target=_start_voice, name="AegisVoiceStarter", daemon=True)
             voice_thread.start()
         except Exception as e:
             file_logger.error(f"Failed to spawn voice system thread: {e}")
@@ -3655,7 +3655,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
             str: Response with human-like touches
         """
         # Check for concise mode (environment override). Default to concise to avoid verbosity.
-        concise_mode = os.getenv("NOVA_CONCISE", "True").lower() in ("1", "true", "yes")
+        concise_mode = os.getenv("AEGIS_CONCISE", "True").lower() in ("1", "true", "yes")
 
         # If concise mode is enabled, keep the response short and to the point.
         if concise_mode:
@@ -4031,7 +4031,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                 memory_info = f"\n\nMEMORY CONTEXT:\n{chr(10).join(f'• {part}' for part in memory_parts)}\nUse this context to personalize responses appropriately."
 
         # Create dynamic system prompt with emphasis on brevity
-        system_prompt = f"""You are Nova, a helpful, witty, and friendly AI with a {style} personality. Keep responses VERY BRIEF and engaging.{memory_info}
+        system_prompt = f"""You are Aegis, a helpful, witty, and friendly AI with a {style} personality. Keep responses VERY BRIEF and engaging.{memory_info}
 
         RESPONSE RULES:
         • Keep answers extremely concise - MAXIMUM 1 sentence for simple questions, 2 sentences max for complex ones
@@ -4599,7 +4599,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                                     conversation_topics.add(word)
 
                         # Format message with timestamp if available
-                        prefix = "User" if role == 'user' else "Nova"
+                        prefix = "User" if role == 'user' else "Aegis"
                         time_info = ""
                         if timestamp:
                             try:
@@ -4771,11 +4771,11 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                     spec = importlib.util.spec_from_file_location("ai_voice", voice_file_path)
                     ai_voice_module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(ai_voice_module)
-                    NovaVoiceService = getattr(ai_voice_module, 'NovaVoiceService')
+                    AegisVoiceService = getattr(ai_voice_module, 'AegisVoiceService')
 
-                    # Initialize voice service with canonical nova memory JSON in workspace `@astra_ai/Date/`
+                    # Initialize voice service with canonical aegis memory JSON in workspace `@astra_ai/Date/`
                     ai_responses_file = os.path.join(os.path.dirname(__file__), '..', '..', '@astra_ai', 'Date', 'nova_ai_memory.json')
-                    self.voice_system = NovaVoiceService(ai_responses_file=ai_responses_file)
+                    self.voice_system = AegisVoiceService(ai_responses_file=ai_responses_file)
 
                     # Start the voice service
                     if self.voice_system.start():
@@ -5300,7 +5300,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                 file_exists = os.path.exists(storage_path)
                 file_size = os.path.getsize(storage_path) if file_exists else 0
                 
-                status = f"[MEMORY] NovaMemoryAI Status:\n"
+                status = f"[MEMORY] AegisMemoryAI Status:\n"
                 status += f"   • Online: YES\n"
                 status += f"   • Stored Facts: {facts_count}\n"
                 status += f"   • Storage File: {storage_path}\n"
@@ -5308,7 +5308,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                 status += f"   • Conversations Processed: {self.conversation_count}"
                 return status
             else:
-                return "[MEMORY] NovaMemoryAI Status: OFFLINE\n   • Memory system not available"
+                return "[MEMORY] AegisMemoryAI Status: OFFLINE\n   • Memory system not available"
         except Exception as e:
             return f"Error getting memory status: {e}"
 
@@ -6207,7 +6207,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
             return None
 
     async def _search_web_async(self, query: str) -> Optional[str]:
-        """Perform asynchronous web search using the NovaSearch system"""
+        """Perform asynchronous web search using the AegisSearch system"""
         try:
             # Use the search system to perform the search
             search_result = await asyncio.to_thread(self.search_system.search, query)
@@ -7025,7 +7025,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
     def show_enhanced_help(self):
         """Show enhanced help with all available commands"""
         help_text = """
-🤖 NOVA AI - ENHANCED CHAT COMMANDS
+🤖 AEGIS AI - ENHANCED CHAT COMMANDS
 ═══════════════════════════════════════
 
 📝 BASIC COMMANDS:
@@ -7063,13 +7063,13 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
    performance        - See response times and optimization tips
    
 ═══════════════════════════════════════
-💬 Just type naturally to chat with Nova AI!
+💬 Just type naturally to chat with Aegis AI!
         """
         print(help_text)
     
     def display_status(self, status: Dict[str, Any]):
         """Display formatted system status"""
-        print("\n🚀 NOVA AI ENHANCED SYSTEM STATUS")
+        print("\n🚀 AEGIS AI ENHANCED SYSTEM STATUS")
         print("═" * 50)
         
         # Enhanced features status
@@ -7108,7 +7108,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
     
     def show_enhanced_features(self):
         """Show detailed enhanced features information"""
-        print("\n🚀 NOVA AI ENHANCED FEATURES")
+        print("\n🚀 AEGIS AI ENHANCED FEATURES")
         print("═" * 40)
         
         features_info = [
@@ -7152,7 +7152,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                 print(f"   {item.get('explanation', 'No explanation available')}")
         else:
             print("\n❌ No specific knowledge found for this query.")
-            print("💬 Try asking Nova AI directly for a comprehensive response!")
+            print("💬 Try asking Aegis AI directly for a comprehensive response!")
         
         print("═" * 30)
     
@@ -7164,7 +7164,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
         if self.voice_input_mode:
             self.display.print_banner("Voice Input Mode Active")
             print("Voice input mode is active. Please speak into your microphone.")
-            print("Your speech will be processed automatically by Nova AI.")
+            print("Your speech will be processed automatically by Aegis AI.")
             print("You cannot type in this window when voice mode is active.")
             print("Please look at the Whisper window to see your transcribed speech.")
             print("Switching to transcript mode to process voice input...")
@@ -7221,7 +7221,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                 "role": "system",
                 "content": (
                     "CONVERSATION GUIDELINES:\n"
-                    "- You are Nova, an intelligent AI companion with perfect memory\n"
+                    "- You are Aegis, an intelligent AI companion with perfect memory\n"
                     "- You remember all previous conversations and user information\n"
                     "- Greet appropriately based on time of day, but avoid repetitive greetings in the same session\n"
                     "- Build on previous conversations naturally\n"
@@ -7360,7 +7360,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
             self.display.print_banner("Voice Input Mode Active")
             print("Listening for your voice input via Whisper...")
             print("Speak clearly into your microphone and I'll respond automatically.")
-            print("You'll see Nova AI's responses to your voice input in this window.")
+            print("You'll see Aegis AI's responses to your voice input in this window.")
             print("Your transcribed speech will appear in the Whisper window.")
             print("You cannot type in this window when voice mode is active.")
             self.display.print_divider()
@@ -7628,7 +7628,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
 
                         # Store news result in memory (legacy)
                         asyncio.create_task(self._store_news_memory_async(response, topic, source))
-                        return f"Nova: {response}"
+                        return f"Aegis: {response}"
                     else:
                         # Fallback to standard news system
                         news_result = self.news_system.get_news_summary(
@@ -7700,7 +7700,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                         response = self.enhanced_news_system.get_conversational_news(topic)
                         # Store news result in memory
                         asyncio.create_task(self._store_news_memory_async(response, topic, None))
-                        return f"Nova: {response}"
+                        return f"Aegis: {response}"
                     else:
                         # Fallback to standard news system
                         news_result = self.news_system.get_news_summary(
@@ -7766,7 +7766,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                         response = self.enhanced_news_system.get_conversational_news("latest breaking news today")
                         # Store news result in memory
                         asyncio.create_task(self._store_news_memory_async(response, "general news", None))
-                        return f"Nova: {response}"
+                        return f"Aegis: {response}"
                     else:
                         # Fallback to standard news system
                         news_result = self.news_system.get_news_summary(
@@ -8030,8 +8030,8 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
         widget_pattern = r'(time|clock|timer|weather|forecast|search|news|headlines|video|analyzer|analysis)'
         
         patterns = [
-            # Natural conversational patterns with "hey nova" or similar
-            rf'(?:hey\s+)?(?:nova|ai)?\s*,?\s*move\s+(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+(?:to\s+(?:the\s+)?)?(up|down|left|right|top|bottom|center|middle)(?:\s+(?:a\s+)?(tiny|small|little|bit|much|lot|far))?',
+            # Natural conversational patterns with "hey aegis" or similar
+            rf'(?:hey\s+)?(?:aegis|ai)?\s*,?\s*move\s+(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+(?:to\s+(?:the\s+)?)?(up|down|left|right|top|bottom|center|middle)(?:\s+(?:a\s+)?(tiny|small|little|bit|much|lot|far))?',
             
             # "move [widget] to the [direction]"
             rf'move\s+(?:the\s+)?{widget_pattern}(?:\s+(?:display|widget|info|feed|box|bar))?\s+to\s+(?:the\s+)?(up|down|left|right|top|bottom|center|middle)(?:\s+(?:a\s+)?(tiny|small|little|bit|much|lot|far))?',
@@ -8674,7 +8674,7 @@ async def main():
         # Parse command line arguments
         import argparse
         parser = argparse.ArgumentParser(
-            description="Nova AI - Enhanced Human-like AI Assistant with Performance Optimization",
+            description="Aegis AI - Enhanced Human-like AI Assistant with Performance Optimization",
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog="""
 ENHANCED FEATURES:
@@ -8686,9 +8686,9 @@ ENHANCED FEATURES:
   * Interactive command system with status reporting
 
 EXAMPLES:
-  python nova_ai.py --mode terminal --enable-all
-  python nova_ai.py --voice --performance-mode
-  python nova_ai.py --disable-cache --enable-knowledge
+  python aegis_ai.py --mode terminal --enable-all
+  python aegis_ai.py --voice --performance-mode
+  python aegis_ai.py --disable-cache --enable-knowledge
             """
         )
         
@@ -9257,14 +9257,14 @@ if __name__ == "__main__":
     # Run feature test if --test argument is provided
     if len(sys.argv) > 1 and sys.argv[1] == "--test":
         if test_enhanced_features():
-            print("\nSUCCESS: Nova AI enhanced features are ready!")
+            print("\nSUCCESS: Aegis AI enhanced features are ready!")
             print("Run without --test to start chatting:")
-            print("   python nova_ai.py")
-            print("   python nova_ai.py --enable-all")
-            print("   python nova_ai.py --voice")
+            print("   python aegis_ai.py")
+            print("   python aegis_ai.py --enable-all")
+            print("   python aegis_ai.py --voice")
         else:
             print("\nERROR: Some features may not work correctly.")
-            print("Try running with basic features: python nova_ai.py --fast-mode")
+            print("Try running with basic features: python aegis_ai.py --fast-mode")
     else:
         # Normal startup
         asyncio.run(main())

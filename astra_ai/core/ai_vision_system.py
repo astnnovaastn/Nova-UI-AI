@@ -1,5 +1,5 @@
 """
-Nova AI Vision System
+Aegis AI Vision System
 Advanced AI vision capabilities with memory integration, real-time analysis, and natural language processing
 """
 
@@ -21,7 +21,7 @@ import threading
 import time
 
 # Configure logging
-logger = logging.getLogger("NovaAI.VisionSystem")
+logger = logging.getLogger("AegisAI.VisionSystem")
 
 @dataclass
 class VisionAnalysis:

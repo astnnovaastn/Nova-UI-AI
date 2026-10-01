@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Conversation Analytics System for Nova AI
+Conversation Analytics System for Aegis AI
 =========================================
 
 Tracks and analyzes conversation patterns including:
@@ -9,7 +9,7 @@ Tracks and analyzes conversation patterns including:
 - User engagement statistics
 - Memory integration for analytics data
 
-Author: Nova AI Enhancement Team
+Author: Aegis AI Enhancement Team
 Version: 1.0 - Production Ready
 """
 
@@ -22,7 +22,7 @@ import time
 
 class ConversationAnalytics:
     """
-    Conversation Analytics System for Nova AI
+    Conversation Analytics System for Aegis AI
     
     Tracks conversation duration, session gaps, and provides
     detailed analytics about user interaction patterns.

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * JARVIS Server Manager
- * Manages the backend server and frontend development together
+ * AEGIS Server Manager
+ * Manages the backend server and frontend development together.
  */
 
 import { spawn } from 'child_process';
@@ -17,117 +17,155 @@ const __dirname = path.dirname(__filename);
 const isWindows = os.platform() === 'win32';
 const backendDir = path.join(__dirname, '..', 'backend');
 const frontendDir = path.join(__dirname);
-const rootDir = path.join(__dirname, '..', '..', '..');  // Go up three levels to d:\Astra_ai
+const rootDir = path.join(__dirname, '..', '..', '..');
 
-// Load .env file
+let serverProcess = null;
+let viteProcess = null;
+let isShuttingDown = false;
+let backendFailed = false;
+
 function loadEnv(filePath) {
     if (!fs.existsSync(filePath)) {
-        console.warn(`⚠️  .env file not found at ${filePath}`);
+        console.warn(`[WARN] .env file not found at ${filePath}`);
         return;
     }
-    
+
     const envContent = fs.readFileSync(filePath, 'utf-8');
     const lines = envContent.split('\n');
-    
-    lines.forEach(line => {
-        line = line.trim();
-        if (!line || line.startsWith('#')) return;
-        
-        const [key, ...valueParts] = line.split('=');
+
+    lines.forEach((line) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) return;
+
+        const [key, ...valueParts] = trimmed.split('=');
         const value = valueParts.join('=').trim();
-        
         process.env[key.trim()] = value;
     });
 }
 
-// Load environment variables from .env file
-const envPath = path.join(rootDir, '.env');
-loadEnv(envPath);
+function stopProcesses() {
+    isShuttingDown = true;
 
-console.log('\n🚀 Nova AI UI - Starting Backend Server and Frontend\n');
-console.log('📍 Backend Server: ws://localhost:8340/ws/voice');
-console.log('📍 Frontend UI:    http://localhost:5173/');
-console.log('📍 REST API:       http://localhost:8340/api\n');
-
-let serverProcess = null;
-let viteProcess = null;
-
-// Handle cleanup on exit
-process.on('SIGINT', () => {
-    console.log('\n\n⚠️  Shutting down...');
-    
     if (serverProcess) {
         console.log('Stopping backend server...');
         serverProcess.kill();
     }
+
     if (viteProcess) {
         console.log('Stopping frontend...');
         viteProcess.kill();
     }
-    
+}
+
+process.on('SIGINT', () => {
+    console.log('\n\n[WARN] Shutting down...');
+    stopProcesses();
     process.exit(0);
 });
 
-// Start backend server
 function startServer() {
-    console.log('Starting Backend Server (nova_ai.py)...');
-    
-    const pythonCmd = isWindows ? 'python' : 'python3';
+    console.log(`Starting backend server from ${backendDir}...`);
+
+    // Always use the project's pinned environment. Using plain `python` here
+    // silently starts a different interpreter and can load an older Gemini
+    // SDK, which breaks Live tool/audio behavior.
+    const pythonCmd = isWindows
+        ? path.join(rootDir, 'astra_ai', '.venv', 'Scripts', 'python.exe')
+        : path.join(rootDir, 'astra_ai', '.venv', 'bin', 'python');
     serverProcess = spawn(pythonCmd, ['server.py'], {
         cwd: backendDir,
         stdio: 'inherit',
-        shell: true,
-        env: { ...process.env }
+        shell: false,
+        env: { ...process.env },
     });
-    
+
+    console.log(`[BACKEND] Python: ${pythonCmd}`);
+    console.log(`[BACKEND] Working directory: ${backendDir}`);
+
     serverProcess.on('error', (err) => {
-        console.error('❌ Failed to start server:', err.message);
+        console.error('[ERROR] Failed to start server:', err.message);
     });
-    
+
     serverProcess.on('exit', (code) => {
-        if (code !== 0) {
-            console.error(`❌ Server exited with code ${code}`);
+        if (isShuttingDown) {
+            console.log('Backend server stopped.');
+            return;
+        }
+
+        if (code !== 0 && code !== null) {
+            backendFailed = true;
+            console.error(`[ERROR] Server exited with code ${code}`);
+            console.error('[ERROR] Frontend startup will stop because the backend did not remain running. Scroll up for the Python traceback.');
+        } else if (code === null) {
+            backendFailed = true;
+            console.error('[ERROR] Server exited unexpectedly.');
         }
     });
 }
 
-// Start Vite frontend
+async function waitForBackend(timeoutMs = 20000) {
+    const startedAt = Date.now();
+    const healthUrl = 'http://127.0.0.1:8340/api/settings/status';
+    while (!backendFailed && Date.now() - startedAt < timeoutMs) {
+        try {
+            const response = await fetch(healthUrl);
+            if (response.ok) {
+                console.log('[BACKEND] Health check passed.');
+                return true;
+            }
+        } catch {
+            // The backend is still importing/starting.
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    if (backendFailed) {
+        console.error('[ERROR] Backend failed before the health check passed. Vite was not started.');
+    } else {
+        console.error(`[ERROR] Backend health check timed out after ${timeoutMs}ms. Vite was not started.`);
+    }
+    return false;
+}
+
 function startFrontend() {
-    console.log('Starting Frontend (Vite on port 5173)...');
-    
-    // Use npx to run vite
+    console.log('Starting frontend (Vite on port 5173)...');
+
     const cmd = isWindows ? 'npx.cmd' : 'npx';
     viteProcess = spawn(cmd, ['vite'], {
         cwd: frontendDir,
         stdio: 'inherit',
         shell: true,
-        env: { ...process.env }
+        env: { ...process.env },
     });
-    
+
     viteProcess.on('error', (err) => {
-        console.error('❌ Failed to start frontend:', err.message);
+        console.error('[ERROR] Failed to start frontend:', err.message);
     });
-    
+
     viteProcess.on('exit', (code) => {
         if (code !== 0) {
-            console.error(`⚠️ Frontend exited with code ${code}`);
+            console.error(`[WARN] Frontend exited with code ${code}`);
         }
-        // When frontend exits, shut down everything
         if (serverProcess) {
-            console.log('\n📴 Stopping backend server...');
+            console.log('\nStopping backend server...');
             serverProcess.kill();
         }
         process.exit(0);
     });
 }
 
-// Start both processes
+loadEnv(path.join(rootDir, '.env'));
+
+console.log('\nAegis AI UI - Starting backend server and frontend\n');
+console.log('Backend Server: ws://localhost:8340/ws/voice');
+console.log('Frontend UI:    http://localhost:5173/');
+console.log('REST API:       http://localhost:8340/api\n');
+
 startServer();
 
-// Give server time to initialize
-setTimeout(() => {
-    startFrontend();
-}, 2000);
+waitForBackend().then((ready) => {
+    if (ready && !isShuttingDown) startFrontend();
+});
 
-console.log('✅ System Starting...');
-console.log('⏰ Press Ctrl+C to stop all services\n');
+console.log('System starting...');
+console.log(`Active backend path: ${backendDir}`);
+console.log('Press Ctrl+C to stop all services\n');

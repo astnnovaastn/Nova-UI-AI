@@ -4,17 +4,22 @@
   left: 6vh;
   width: 320px;
   height: 380px;
-  background: linear-gradient(135deg, rgba(200, 16, 46, 0.15), rgba(255, 20, 147, 0.15));
-  border: 2px solid #FF1493;
-  color: #FF1493;
+  background: color-mix(in srgb, var(--widget-surface, var(--panel)) 90%, transparent);
+  border: var(--theme-border-width, 2px) var(--theme-border-style, solid) var(--widget-border, var(--border));
+  color: var(--widget-text, var(--fg));
   padding: 20px;
-  border-radius: 8px;
+  border-radius: var(--theme-radius, 8px);
   overflow-y: auto;
   box-shadow: 
     0 0 20px rgba(255, 20, 147, 0.3),
     inset 0 0 20px rgba(255, 20, 147, 0.05);
   animation: tictactoeGlow 4s ease-in-out infinite;
 }
+
+.tictactoe-widget .tictactoe-title,
+.tictactoe-widget .tictactoe-brand,
+.tictactoe-widget .game-mode-title,
+.tictactoe-widget .tictactoe-content { color: var(--widget-accent, var(--red)); }
 
 @keyframes tictactoeGlow {
   0% {

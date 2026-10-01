@@ -1,7 +1,7 @@
 {
-  "name": "nova-ai-react",
+  "name": "aegis-ai-react",
   "version": "1.0.0",
-  "description": "Nova AI - Voice-Enabled Interface with React",
+  "description": "Aegis AI - Voice-Enabled Interface with React",
   "private": true,
   "dependencies": {
     "ajv": "^8.17.1",
@@ -16,9 +16,9 @@
   },
   "scripts": {
     "start": "concurrently --kill-others --names \"SERVER,REACT\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\" \"npm run server\" \"npm run frontend\"",
-    "server": "cd ../.. && .venv\\Scripts\\activate && cd astra_ai/ui/src/backend && python server.py",
+    "server": "cd ../.. && .venv\\Scripts\\python.exe astra_ai/ui/backend/server.py",
     "frontend": "set PORT=3002 && react-scripts start",
-    "backend": "cd ../.. && .venv\\Scripts\\activate && cd astra_ai/ui/src/backend && python server.py",
+    "backend": "cd ../.. && .venv\\Scripts\\python.exe astra_ai/ui/backend/server.py",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"

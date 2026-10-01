@@ -1,5 +1,5 @@
 /**
- * JARVIS — Main entry point.
+ * AEGIS — Main entry point.
  *
  * Wires together the orb visualization, WebSocket communication,
  * speech recognition, and audio playback into a single experience.
@@ -22,6 +22,8 @@ const statusEl = document.getElementById("status-text")!;
 const errorEl = document.getElementById("error-text")!;
 const badgeEl = document.getElementById("connection-badge") as HTMLDivElement | null;
 const badgeLabelEl = badgeEl?.querySelector("#connection-label") as HTMLSpanElement | null;
+const API_HOST = (import.meta.env.VITE_API_URL || "http://localhost:8340").replace(/\/$/, "");
+const CLIENT_LOCATION_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // State machine & Audio Control
@@ -31,7 +33,7 @@ type State = "idle" | "listening" | "thinking" | "speaking";
 let currentState: State = "idle";
 // Persist microphone mute state in localStorage
 let isMuted = false;
-const MIC_MUTE_KEY = "novaai_mic_muted";
+const MIC_MUTE_KEY = "aegisai_mic_muted";
 
 // Restore mute state from localStorage on load
 const storedMute = localStorage.getItem(MIC_MUTE_KEY);
@@ -69,6 +71,41 @@ function updateStatus(state: State) {
   statusEl.textContent = labels[state];
 }
 
+async function postClientLocation(coords: GeolocationCoordinates): Promise<void> {
+  await fetch(`${API_HOST}/api/client/location`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      accuracy: coords.accuracy,
+    }),
+  });
+}
+
+async function syncClientLocation(highAccuracy = false): Promise<void> {
+  if (!("geolocation" in navigator)) {
+    console.warn("[LOCATION] Browser geolocation is not available; backend will use IP fallback.");
+    return;
+  }
+
+  try {
+    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: highAccuracy,
+        timeout: highAccuracy ? 15000 : 10000,
+        maximumAge: highAccuracy ? 0 : 5 * 60 * 1000,
+      });
+    });
+    await postClientLocation(position.coords);
+    console.log(
+      `[LOCATION] Synced browser coordinates: ${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`
+    );
+  } catch (error) {
+    console.warn("[LOCATION] Browser geolocation sync failed; backend will keep fallback location.", error);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Init components
 // ---------------------------------------------------------------------------
@@ -97,7 +134,7 @@ function setTranscriptionVisual(active: boolean): void {
   }
 }
 
-const ORB_THEME_KEY = "novaai_orb_theme";
+const ORB_THEME_KEY = "aegisai_orb_theme";
 const DEFAULT_ORB_THEME = "default";
 let selectedOrbTheme = (localStorage.getItem(ORB_THEME_KEY) || DEFAULT_ORB_THEME).toString();
 
@@ -130,6 +167,17 @@ const audioPlayer = createAudioPlayer();
 orb.setAnalyser(audioPlayer.getAnalyser());
 soundWave.setAIAnalyser(audioPlayer.getAnalyser());
 applyOrbTheme(selectedOrbTheme);
+window.addEventListener("themechange", ((event: CustomEvent) => {
+  const detail = event.detail || {};
+  const theme = detail.theme || {};
+  if (theme.orb?.mode === "custom" && theme.orb?.preset) {
+    applyOrbTheme(theme.orb.preset);
+  }
+  if (typeof detail.orbColor === "string") {
+    orb.setThemeColor(detail.orbColor);
+    document.documentElement.style.setProperty('--theme-color', detail.orbColor);
+  }
+}) as EventListener);
 registerOrbThemeChangedHandler((themeName) => {
   applyOrbTheme(themeName);
 });
@@ -241,10 +289,19 @@ audioPlayer.onFinished(() => {
 socket.onMessage((msg) => {
   const type = msg.type as string;
 
+  if (type === 'typed_transcript_status') {
+    window.dispatchEvent(new CustomEvent('aegisTypedTranscriptStatus', { detail: {
+      status: String(msg.status || 'failed'),
+      request_id: String(msg.request_id || ''),
+      source: String(msg.source || 'server'),
+      message: String(msg.detail || ''),
+    } }));
+  }
+
   // =========================================================================
   // MICROPHONE CONTROL - Explicit disable/enable from backend
   // =========================================================================
-  if (type === "mic_control") {
+  else if (type === "mic_control") {
     const action = msg.action as string;
     const reason = msg.reason as string;
     
@@ -328,19 +385,50 @@ socket.onMessage((msg) => {
   // =========================================================================
   // WIDGET CONTROL - AI requests the UI to open/close/toggle a widget
   // =========================================================================
+  else if (type === "widget_connection") {
+    const widget = String(msg.widget || '');
+    const status = String(msg.status || 'disconnected').toLowerCase();
+    const controller = (window as any).aegisWidgetControl;
+    if (!controller) {
+      socket.send({
+        type: 'widget_action_result', protocol_version: 2, widget,
+        command: status === 'disconnected' ? 'disconnect' : 'connect',
+        request_id: msg.request_id, status: 'failed',
+        detail: 'Widget controller is not available in the frontend.',
+      });
+    } else {
+      controller(status === 'disconnected' ? 'disconnect' : 'connection', widget, {
+        protocol_version: 2,
+        request_id: msg.request_id,
+        status,
+        connection_id: msg.connection_id,
+        detail: msg.detail,
+      });
+      if (status !== 'disconnected' && msg.request_snapshot) {
+        window.setTimeout(() => controller('snapshot', widget, {
+          protocol_version: 2,
+          request_id: msg.request_id,
+          connection_id: msg.connection_id,
+        }), 0);
+      }
+    }
+  }
+
   else if (type === "widget_control") {
     const command = msg.command as string;
     const widget = msg.widget as string;
 
     console.log(`🧩 [WIDGET-CONTROL] ${command} ${widget}`);
-    if ((window as any).novaWidgetControl) {
-      (window as any).novaWidgetControl(command, widget, {
-        prompt: msg.prompt,
-        request_id: msg.request_id,
-        source: msg.source,
-        direction: msg.direction,
-        amount: msg.amount,
-      });
+    const { type: _type, widget: _widget, command: _command, arguments: commandArguments, payload: commandPayload, ...envelope } = msg;
+    const widgetPayload = {
+      ...envelope,
+      ...(commandPayload && typeof commandPayload === 'object' ? commandPayload : {}),
+      ...(commandArguments && typeof commandArguments === 'object' ? commandArguments : {}),
+    };
+    if (widget === "ui" && (window as any).aegisUiControl) {
+      (window as any).aegisUiControl(command, widgetPayload);
+    } else if ((window as any).aegisWidgetControl) {
+      (window as any).aegisWidgetControl(command, widget, widgetPayload);
     } else {
       console.warn("⚠️ [WIDGET-CONTROL] No widget controller available");
       setTranscriptionVisual(false);
@@ -436,7 +524,7 @@ socket.onMessage((msg) => {
 setConnected(false);
 updateStatus("idle");
 
-console.log(" [INIT] Starting Nova AI Frontend Integration");
+console.log(" [INIT] Starting Aegis AI Frontend Integration");
 console.log(" [INIT] WebSocket URL:", WS_URL);
 console.log(" [INIT] Creating orb visualization...");
 console.log(" [INIT] Creating voice input system...");
@@ -473,16 +561,99 @@ console.log("✅ [INIT] Frontend initialization complete!");
 
 // Initialize React widgets
 initWidgets();
+syncClientLocation(true);
+window.setInterval(() => {
+  syncClientLocation(false);
+}, CLIENT_LOCATION_SYNC_INTERVAL_MS);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    syncClientLocation(false);
+  }
+});
 
-window.addEventListener('novaWidgetActionResult', (event: Event) => {
+window.addEventListener('aegisWidgetActionResult', (event: Event) => {
   const detail = (event as CustomEvent).detail || {};
   socket.send({
     type: 'widget_action_result',
+    protocol_version: detail.protocol_version || 2,
     widget: detail.widget,
     command: detail.command,
     request_id: detail.request_id,
     status: detail.status,
     detail: detail.detail,
+    provider: detail.provider,
+    model: detail.model,
+    backup_id: detail.backup_id,
+    image_number: detail.image_number,
+    selected_image_id: detail.selected_image_id,
+    selected_image_number: detail.selected_image_number,
+    selected_prompt: detail.selected_prompt,
+    created_at: detail.created_at,
+    current_view: detail.current_view,
+    query: detail.query,
+    match_count: detail.match_count,
+    fallback_from: detail.fallback_from,
+    error_code: detail.error_code,
+    retry_after_seconds: detail.retry_after_seconds,
+    data: detail.data,
+    state_revision: detail.state_revision,
+  });
+});
+
+window.addEventListener('aegisTypedTranscript', (event: Event) => {
+  const detail = (event as CustomEvent).detail || {};
+  const text = String(detail.text || '').trim();
+  const requestId = String(detail.request_id || '').trim();
+  const publishStatus = (status: 'accepted' | 'busy' | 'failed', message: string) => {
+    window.dispatchEvent(new CustomEvent('aegisTypedTranscriptStatus', { detail: {
+      status,
+      message,
+      request_id: requestId,
+      source: detail.source || 'typed_input',
+    } }));
+  };
+
+  if (!text || !requestId) {
+    publishStatus('failed', 'A search query and request ID are required.');
+    return;
+  }
+  if (!socket.isConnected()) {
+    publishStatus('failed', 'Aegis is offline. Reconnect and try again.');
+    return;
+  }
+  if (currentState === 'thinking' || currentState === 'speaking') {
+    publishStatus('busy', 'Aegis is finishing another turn. Try again in a moment.');
+    return;
+  }
+
+  socket.send({
+    type: 'transcript',
+    text,
+    display_query: String(detail.display_query || text),
+    request_id: requestId,
+    source: String(detail.source || 'typed_input'),
+    isFinal: true,
+  });
+  setTranscriptionVisual(false);
+  if (voiceInput) transition('thinking');
+  publishStatus('accepted', 'Aegis accepted the live search.');
+});
+
+window.addEventListener('aegisWidgetTelemetry', (event: Event) => {
+  const detail = (event as CustomEvent).detail || {};
+  if (detail.type !== 'widget_telemetry' || detail.protocol_version !== 2) return;
+  socket.send(detail);
+});
+
+window.addEventListener('aegisWidgetConnectionRequest', (event: Event) => {
+  const detail = (event as CustomEvent).detail || {};
+  if (detail.action !== 'disconnect' && detail.action !== 'connect') return;
+  socket.send({
+    type: 'widget_connection_request',
+    protocol_version: 2,
+    action: detail.action,
+    widget: detail.widget,
+    connection_id: detail.connection_id,
   });
 });
 
@@ -567,6 +738,34 @@ btnSettings.addEventListener("click", (e) => {
   menuDropdown.style.display = menuDropdown.style.display === "none" ? "block" : "none";
   openSettings();
 });
+
+(window as any).aegisUiControl = (command: string, payload: Record<string, unknown> = {}) => {
+  const normalized = String(command || "").trim().toLowerCase();
+  let status = "completed";
+  let detail = `UI command ${normalized} completed.`;
+  try {
+    if (normalized === "mute" && !isMuted) btnMute.click();
+    else if (normalized === "unmute" && isMuted) btnMute.click();
+    else if (normalized === "open_menu") menuDropdown.style.display = "block";
+    else if (normalized === "close_menu") menuDropdown.style.display = "none";
+    else if (normalized === "open_settings") openSettings();
+    else if (normalized === "restart") throw new Error("Restart must be confirmed and executed by the backend.");
+    else if (!["mute", "unmute", "open_menu", "close_menu", "open_settings"].includes(normalized)) {
+      throw new Error(`Unsupported UI command: ${normalized}`);
+    }
+  } catch (error) {
+    status = "failed";
+    detail = error instanceof Error ? error.message : String(error);
+  }
+  socket.send({
+    type: "widget_action_result",
+    widget: "ui",
+    command: normalized,
+    request_id: payload.request_id,
+    status,
+    detail,
+  });
+};
 
 // First-time setup detection — check after a short delay for server readiness
 setTimeout(() => {

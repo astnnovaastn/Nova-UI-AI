@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Content Analysis System for Nova AI
+Content Analysis System for Aegis AI
 ==================================
 
-This system allows Nova AI to internally analyze and comprehend search results
+This system allows Aegis AI to internally analyze and comprehend search results
 and news content before presenting it to users, enabling natural follow-up
 discussions and contextual understanding.
 

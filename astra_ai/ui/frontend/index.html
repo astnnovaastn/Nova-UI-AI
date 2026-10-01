@@ -3,11 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>JARVIS</title>
+    <title>Aegis AI Workspace</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/aegis_logo.svg" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <canvas id="orb-canvas"></canvas>
+
+    <a id="app-brand" href="/" aria-label="Aegis AI Workspace home">
+      <span class="app-brand-mark" aria-hidden="true"></span>
+      <span>A.E.G.I.S</span>
+    </a>
 
     <!-- Minimal controls — top right -->
     <div id="controls">
@@ -33,7 +39,7 @@
     </div>
 
     <div id="status-text"></div>
-    <div id="jarvis-label">JARVIS</div>
+    <div id="sound-wave" class="sound-wave" aria-hidden="true"></div>
     <div id="error-text"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

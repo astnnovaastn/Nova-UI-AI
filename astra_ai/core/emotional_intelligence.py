@@ -1,5 +1,5 @@
 """
-Emotional Intelligence module for Nova AI.
+Emotional Intelligence module for Aegis AI.
 Provides sentiment analysis and emotion detection capabilities.
 """
 

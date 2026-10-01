@@ -1,463 +1,163 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './NewsWidget.css';
+import NewsBriefing from './NewsBriefing.jsx';
+import NewsLayoutStudio from './NewsLayoutStudio.jsx';
+import { DEFAULT_AEGIS_LAYOUT, buildLayoutContentManifest, createLayoutFromTemplate, normalizeNewsLayout, validateNewsLayout } from './newsLayout.js';
+import { getLayoutTestData } from './newsLayoutPreview.js';
 
-const NewsWidget = ({ onClose, isVisible = true, initialNews }) => {
-  const [newsArticles, setNewsArticles] = useState([]);
-  const [activeTab, setActiveTab] = useState('current'); // 'current' or 'history'
-  const [isLoading, setIsLoading] = useState(false);
-  const [newsHistory, setNewsHistory] = useState([]);
-  const [newsCount, setNewsCount] = useState(0);
-  const [italyTime, setItalyTime] = useState('--:--:--');
+const STORAGE_KEY = 'astra.newsWidget.window.v1';
+const BOOKMARKS_KEY = 'astra.newsWidget.bookmarks.v1';
+const DEFAULT_WINDOW = { x: 56, y: 76, width: 500, height: 560 };
+const MARGIN = 10;
 
-  // Custom Drag & Resize State
-  const [widgetPos, setWidgetPos] = useState({ x: 100, y: 100 });
-  const [widgetSize, setWidgetSize] = useState({ width: 550, height: 400 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-
-  const widgetRef = useRef(null);
-  const resizeStartRef = useRef({ x: 0, y: 0, width: 0, height: 0 });
-
-  // Initialize position and load history
-  useEffect(() => {
-    // 12vh from top, positioned on the right side
-    setWidgetPos({ 
-      x: window.innerWidth - 400, 
-      y: window.innerHeight * 0.12 
-    });
-
-    const savedHistory = localStorage.getItem('astra_news_history');
-    if (savedHistory) {
-      try {
-        setNewsHistory(JSON.parse(savedHistory));
-      } catch (e) {
-        console.error('Error loading news history:', e);
-      }
-    }
-  }, []);
-
-  // Update Italy time every second
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date();
-      // Create a date object with Italy's timezone
-      const italyTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Rome"}));
-      const timeString = italyTime.toLocaleTimeString('it-IT', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      });
-      setItalyTime(timeString);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Handle incoming news from AI
-  useEffect(() => {
-    if (initialNews) {
-      const content = typeof initialNews === 'object' ? initialNews.content : initialNews;
-      handleNewNews(content);
-    }
-  }, [initialNews]);
-
-  const handleNewNews = async (content) => {
-    if (!content) return;
-    setIsLoading(true);
-    setActiveTab('current');
-
-    try {
-      // Parse the news content
-      let articles = [];
-      
-      // Check if the text contains structured news data
-      if (content.includes('HEADLINE:') || content.includes('SOURCE:')) {
-        articles = parseStructuredNews(content);
-      } else {
-        // Handle plain text news
-        const headline = extractHeadlineFromText(content);
-        const source = extractSourceFromText(content) || "News Feed";
-
-        articles = [{
-          headline: headline,
-          summary: content, // FULL CONTENT - NO SUMMARIZATION
-          source: source
-        }];
-      }
-
-      setNewsArticles(articles);
-      setNewsCount(articles.length);
-      
-      // Add to history
-      const historyItem = {
-        id: Date.now(),
-        query: content.substring(0, 30) + (content.length > 30 ? '...' : ''),
-        result: content,
-        timestamp: new Date().toISOString(),
-        date: new Date().toLocaleString()
-      };
-
-      const updatedHistory = [historyItem, ...newsHistory].slice(0, 50);
-      setNewsHistory(updatedHistory);
-      localStorage.setItem('astra_news_history', JSON.stringify(updatedHistory));
-    } catch (error) {
-      console.error('Error processing news:', error);
-      // Fallback to simple text display
-      setNewsArticles([{
-        headline: "News Update",
-        summary: content,
-        source: "News Feed"
-      }]);
-    } finally {
-      setIsLoading(false);
-
-      // Animation trigger
-      if (widgetRef.current) {
-        widgetRef.current.style.animation = 'none';
-        setTimeout(() => {
-          if (widgetRef.current) widgetRef.current.style.animation = 'newsGlow 3s ease-in-out infinite';
-        }, 10);
-      }
-    }
-  };
-
-  const parseStructuredNews = (newsText) => {
-    const articles = [];
-    const sections = newsText.split(/(?=HEADLINE:|SOURCE:)/);
-
-    let currentArticle = {};
-
-    for (const section of sections) {
-      if (section.includes('HEADLINE:')) {
-        const lines = section.split('\n');
-        for (const line of lines) {
-          if (line.startsWith('HEADLINE:')) {
-            currentArticle.headline = line.replace('HEADLINE:', '').trim();
-          } else if (line.startsWith('SOURCE:')) {
-            currentArticle.source = line.replace('SOURCE:', '').trim();
-          } else if (line.startsWith('TIME:')) {
-            currentArticle.time = line.replace('TIME:', '').trim();
-          } else if (line.trim() && !line.startsWith('HEADLINE:') && !line.startsWith('SOURCE:') && !line.startsWith('TIME:')) {
-            if (!currentArticle.summary) currentArticle.summary = '';
-            currentArticle.summary += line.trim() + ' ';
-          }
-        }
-
-        if (currentArticle.headline) {
-          articles.push({
-            headline: currentArticle.headline,
-            summary: currentArticle.summary?.trim() || '',
-            source: currentArticle.source || 'Unknown Source',
-            time: currentArticle.time || 'Recently'
-          });
-          currentArticle = {};
-        }
-      }
-    }
-
-    return articles.length > 0 ? articles : [{
-      headline: "News Update",
-      summary: newsText,
-      source: "News Feed",
-      time: "Just now"
-    }];
-  };
-
-  const extractHeadlineFromText = (text) => {
-    // Extract a reasonable headline from the first sentence
-    const firstSentence = text.split(/[.!?]/)[0].trim();
-
-    // If first sentence is too long, truncate it
-    if (firstSentence.length > 80) {
-      const words = firstSentence.split(' ');
-      if (words.length > 10) {
-        return words.slice(0, 10).join(' ') + '...';
-      }
-      return firstSentence.substring(0, 80) + '...';
-    }
-
-    // If first sentence is too short, try to get more context
-    if (firstSentence.length < 20) {
-      const sentences = text.split(/[.!?]/).filter(s => s.trim().length > 0);
-      if (sentences.length > 1) {
-        const combined = sentences.slice(0, 2).join('. ').trim();
-        return combined.length > 80 ? combined.substring(0, 80) + '...' : combined;
-      }
-    }
-
-    return firstSentence || 'News Update';
-  };
-
-  const extractSourceFromText = (text) => {
-    // Try to extract source from common patterns
-    const sourcePatterns = [
-      /(?:according to|reported by|from|source:|via)\s+([A-Za-z\s]+)/i,
-      /\b([A-Z][a-z]+\s+News|[A-Z][a-z]+\s+Times|BBC|CNN|Reuters|AP|Reuters)\b/i
-    ];
-
-    for (const pattern of sourcePatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        return match[1].trim();
-      }
-    }
-
-    return null; // Return null if no source found, will use default
-  };
-
-  // Drag handles
-  useEffect(() => {
-    if (!isDragging) return;
-
-    // Add class to body to indicate dragging state
-    document.body.classList.add('widget-is-dragging');
-
-    const onMove = (e) => {
-      setWidgetPos({
-        x: e.clientX - dragOffset.x,
-        y: e.clientY - dragOffset.y
-      });
-    };
-    const onUp = () => {
-      setIsDragging(false);
-      document.body.classList.remove('widget-is-dragging');
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      document.body.classList.remove('widget-is-dragging');
-    };
-  }, [isDragging, dragOffset]);
-
-  // Resize handles
-  useEffect(() => {
-    if (!isResizing) return;
-
-    // Add class to body to indicate resizing state
-    document.body.classList.add('widget-is-resizing');
-
-    const onMove = (e) => {
-      const deltaX = e.clientX - resizeStartRef.current.x;
-      const deltaY = e.clientY - resizeStartRef.current.y;
-      setWidgetSize({
-        width: Math.max(300, resizeStartRef.current.width + deltaX),
-        height: Math.max(200, resizeStartRef.current.height + deltaY)
-      });
-    };
-    const onUp = () => {
-      setIsResizing(false);
-      document.body.classList.remove('widget-is-resizing');
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      document.body.classList.remove('widget-is-resizing');
-    };
-  }, [isResizing]);
-
-  const handleDragStart = (e) => {
-    // Only prevent dragging if clicking directly on control elements
-    if (e.target.closest('.widget-controls') ||
-      e.target.closest('.resize-handle') ||
-      e.target.tagName === 'BUTTON' ||
-      e.target.tagName === 'A') {
-      return;
-    }
-
-    // Allow dragging from anywhere else in the widget
-    setIsDragging(true);
-    setDragOffset({
-      x: e.clientX - widgetPos.x,
-      y: e.clientY - widgetPos.y
-    });
-  };
-
-  const handleResizeStart = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsResizing(true);
-    resizeStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      width: widgetSize.width,
-      height: widgetSize.height
-    };
-  };
-
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-  };
-
-  const viewHistoryItem = (item) => {
-    handleNewNews(item.result);
-    setActiveTab('current');
-  };
-
-  const handleMakeBigger = (e) => {
-    e.stopPropagation();
-    setWidgetSize(prev => ({
-      width: prev.width * 1.1,
-      height: prev.height * 1.1
-    }));
-  };
-
-  const handleMakeSmaller = (e) => {
-    e.stopPropagation();
-    setWidgetSize(prev => ({
-      width: Math.max(300, prev.width * 0.9),
-      height: Math.max(200, prev.height * 0.9)
-    }));
-  };
-
-  const formatNewsContent = (content) => {
-    // Format the news content for display
-    return content.split('\n\n').map((paragraph, index) =>
-      paragraph.trim() ? `<p key="${index}">${paragraph.trim()}</p>` : ''
-    ).join('');
-  };
-
-  return (
-    <div
-      className={`news-widget ${isDragging ? 'widget-dragging' : ''}`}
-      ref={widgetRef}
-      style={{
-        left: `${widgetPos.x}px`,
-        top: `${widgetPos.y}px`,
-        width: `${widgetSize.width}px`,
-        height: `${widgetSize.height}px`,
-        position: 'fixed',
-        display: isVisible ? 'flex' : 'none'
-      }}
-      onMouseDown={handleDragStart}
-    >
-      {/* Corner Brackets */}
-      <div className="corner-top-right"></div>
-      <div className="corner-bottom-left"></div>
-
-      {/* Widget Controls - Hover controlled in CSS */}
-      <div className="widget-controls">
-        <button className="widget-control-btn" onClick={handleMakeBigger} title="Make Bigger">⧨</button>
-        <button className="widget-control-btn" onClick={handleMakeSmaller} title="Make Smaller">⧩</button>
-        <button className="widget-control-btn" onClick={(e) => { e.stopPropagation(); onClose(); }} title="Close">⧬</button>
-      </div>
-
-      <div className="resize-handle" onMouseDown={handleResizeStart}></div>
-
-      {/* Header */}
-      <div className="news-header">
-        <div className="news-title">
-          <div className="news-logo">N</div>
-          <div className="news-brand">News Feed</div>
-        </div>
-        <div className="news-status">
-          <div className="news-time-display">{italyTime}</div>
-          <div className="status-indicator"></div>
-          <span>Live</span>
-        </div>
-      </div>
-
-      {/* Navigation Tabs */}
-      <div className="news-nav">
-        <div
-          className={`nav-tab ${activeTab === 'current' ? 'active' : ''}`}
-          onClick={(e) => { e.stopPropagation(); setActiveTab('current'); }}
-        >
-          Current
-        </div>
-        <div
-          className={`nav-tab ${activeTab === 'history' ? 'active' : ''}`}
-          onClick={(e) => { e.stopPropagation(); setActiveTab('history'); }}
-        >
-          History
-        </div>
-      </div>
-
-      {/* Content Area */}
-      <div className="news-content-wrapper">
-        {activeTab === 'current' ? (
-          <>
-            {isLoading ? (
-              <div className="news-loading" style={{ display: 'block', textAlign: 'center', padding: '20px' }}>
-                <div className="loading-spinner"></div>
-                <div>Fetching latest headlines...</div>
-              </div>
-            ) : (
-              <div className="news-content-area">
-                {newsArticles.length > 0 ? (
-                  newsArticles.map((article, index) => (
-                    <div key={index} className="news-item" style={{ animationDelay: `${index * 0.1}s` }}>
-                      <div className="news-meta">
-                        <span className="news-category">{article.source}</span>
-                        {article.time && <span className="news-time">{article.time}</span>}
-                      </div>
-                      <div className="news-headline">{article.headline}</div>
-                      <div
-                        className="news-summary"
-                        dangerouslySetInnerHTML={{
-                          __html: formatNewsContent(article.summary)
-                        }}
-                      />
-                    </div>
-                  ))
-                ) : (
-                  <div className="news-item">
-                    <div className="news-meta">
-                      <span className="news-category"> Ready News Feed</span>
-                    </div>
-                    <div className="news-headline">No news available</div>
-                    <div className="news-summary">Stay tuned for the latest updates.</div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Copy button for current news */}
-            {!isLoading && newsArticles.length > 0 && (
-              <button
-                className="copy-button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const textToCopy = newsArticles.map(a => `${a.headline}\n\nSource: ${a.source}\n\n${a.summary}`).join('\n\n---\n\n');
-                  copyToClipboard(textToCopy);
-                }}
-                title="Copy news articles"
-              >
-                <svg viewBox="0 0 24 24" width="16" height="16">
-                  <path fill="currentColor" d="M16 1H4C2.9 1 2 1.9 2 3V15H4V3H16V1ZM19 5H8C6.9 5 6 5.9 6 7V21C6 22.1 6.9 23 8 23H19C20.1 23 21 22.1 21 21V7C21 5.9 20.1 5 19 5ZM19 21H8V7H19V21Z" />
-                </svg>
-              </button>
-            )}
-          </>
-        ) : (
-          <div className="news-history">
-            {newsHistory.length === 0 ? (
-              <div className="news-history-empty">No news history yet</div>
-            ) : (
-              newsHistory.map(item => (
-                <div key={item.id} className="news-history-item" onClick={(e) => { e.stopPropagation(); viewHistoryItem(item); }}>
-                  <div className="news-history-query">{item.query}</div>
-                  <div className="news-history-date">{item.date}</div>
-                  <div className="news-history-preview">{item.result.substring(0, 80)}...</div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="news-footer">
-        <div className="news-controls"></div>
-        <div className="news-count">{newsCount} {newsCount === 1 ? 'story' : 'stories'}</div>
-      </div>
-    </div>
-  );
+const clampWindow = (value) => {
+  const width = Math.min(Math.max(380, Number(value.width) || 500), Math.max(320, window.innerWidth - 20));
+  const height = Math.min(Math.max(420, Number(value.height) || 560), Math.max(400, window.innerHeight - 20));
+  return { width, height, x: Math.min(Math.max(MARGIN, Number(value.x) || 56), Math.max(MARGIN, window.innerWidth - width - MARGIN)), y: Math.min(Math.max(MARGIN, Number(value.y) || 76), Math.max(MARGIN, window.innerHeight - height - MARGIN)) };
 };
+const initialWindow = () => { try { return clampWindow({ ...DEFAULT_WINDOW, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') }); } catch { return clampWindow(DEFAULT_WINDOW); } };
+const safeUrl = (value) => { try { const url = new URL(String(value || '')); return /^https?:$/.test(url.protocol) ? url.toString() : ''; } catch { return ''; } };
+const text = (...values) => String(values.find((value) => value !== undefined && value !== null && String(value).trim()) || '').trim();
+const formatDate = (value) => { if (!value) return ''; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date); };
+const status = (story) => story?.isBreaking ? 'BREAKING' : story?.isLive ? 'LIVE UPDATE' : story?.isTopStory ? 'TOP STORY' : 'LATEST';
+const normalizeSource = (source, index) => ({ id: text(source?.id, `${index}-${source?.url}`), name: text(source?.name, source?.source_name, source?.publisher, 'News source'), url: safeUrl(text(source?.url, source?.link)), headline: text(source?.headline, source?.title), publishedAt: text(source?.publishedAt, source?.published_at, source?.date) });
+const normalizeSection = (section, index) => {
+  if (typeof section === 'string') return { id: `section-${index}`, title: '', body: section.trim() };
+  const body = text(section?.body, section?.content, section?.text, section?.summary);
+  return body ? { id: text(section?.id, `section-${index}`), title: text(section?.title, section?.heading), body } : null;
+};
+const normalizeMedia = (item, index, fallbackAlt = '') => {
+  const url = safeUrl(text(item?.url, item?.originalUrl, item?.src, item));
+  if (!url) return null;
+  const width = Number(item?.width) || 0; const height = Number(item?.height) || 0;
+  const type = text(item?.type, item?.semanticType, item?.kind).toLowerCase();
+  const ratio = Number(item?.aspectRatio) || (width && height ? width / height : 0);
+  return { id: text(item?.id, `media-${index}-${url}`), url, width, height, aspectRatio: ratio, type, alt: text(item?.alt, fallbackAlt), caption: text(item?.caption, item?.publisher), qualityScore: Number(item?.qualityScore || item?.quality_score) || 0, recommendedSlot: text(item?.recommendedSlot, item?.recommended_slot), relatedSectionId: text(item?.relatedSectionId, item?.related_section_id), variants: Array.isArray(item?.variants) ? item.variants.map((variant) => ({ url: safeUrl(variant?.url), width: Number(variant?.width) || 0 })).filter((variant) => variant.url) : [] };
+};
+const mediaVariant = (media) => {
+  if (!media) return 'landscape';
+  if (/chart|diagram|graphic|logo|screenshot|infographic/.test(media.type)) return 'contained';
+  if (media.aspectRatio >= 1.7) return 'wide';
+  if (media.aspectRatio > 1.15) return 'landscape';
+  if (media.aspectRatio < .82) return 'portrait';
+  return 'square';
+};
+const normalizeStory = (raw, index = 0) => {
+  if (!raw || typeof raw !== 'object') return null;
+  const headline = text(raw.headline, raw.title);
+  if (!headline) return null;
+  const hero = raw.heroImage || raw.hero_image || {};
+  const groupedMedia = (raw.mediaGroups || raw.media_groups || []).flatMap((group) => Array.isArray(group?.items) ? group.items : []);
+  const media = (raw.media || raw.images || groupedMedia || []).map((item, mediaIndex) => normalizeMedia(item, mediaIndex, headline)).filter(Boolean);
+  const primaryMedia = normalizeMedia(hero.url ? hero : { url: raw.imageUrl || raw.image_url || raw.thumbnail, alt: raw.imageAlt }, 0, headline);
+  if (primaryMedia && !media.some((item) => item.url === primaryMedia.url)) media.unshift(primaryMedia);
+  return {
+    id: text(raw.id, `${index}-${headline}`), researchId: text(raw.researchId, raw.research_id, raw.session_id), headline,
+    summary: text(raw.summary, raw.snippet, raw.description), body: text(raw.body, raw.content, raw.briefing, raw.summary, raw.snippet),
+    publishedAt: text(raw.publishedAt, raw.published_at, raw.date, raw.time), updatedAt: text(raw.updatedAt, raw.updated_at), category: text(raw.category, raw.section), location: text(raw.location),
+    imageUrl: primaryMedia?.url || safeUrl(text(hero.url, hero.originalUrl, raw.imageUrl, raw.image_url, raw.thumbnail)), imageSrcSet: text(hero.srcSet, hero.srcset, raw.imageSrcSet, raw.image_srcset), imageSizes: text(hero.sizes, raw.imageSizes, raw.image_sizes), imageAlt: text(hero.alt, raw.imageAlt, headline), media, mediaPlan: raw.mediaPlan || raw.media_plan || { heroMedia: raw.featuredMedia || raw.featured_media || raw.featuredImageSet || raw.featured_image_set || [], supportingMedia: raw.supportingImages || raw.supporting_images || [], relatedCoverageMedia: raw.relatedCoverageImages || raw.related_coverage_images || [], quoteMedia: raw.quoteMedia || raw.quote_media || [] },
+    isBreaking: Boolean(raw.isBreaking), isLive: Boolean(raw.isLive), isTopStory: Boolean(raw.isTopStory), whyItMatters: text(raw.whyItMatters, raw.why_it_matters), context: text(raw.context, raw.background), whatToWatch: text(raw.whatToWatch, raw.what_to_watch),
+    briefingSections: (raw.briefingSections || raw.briefing_sections || raw.sections || []).map(normalizeSection).filter(Boolean), timeline: (raw.timeline || []).map(normalizeSection).filter(Boolean),
+    insight: raw.insight && typeof raw.insight === 'object' ? { text: text(raw.insight.text, raw.insight.body), sourceId: text(raw.insight.sourceId, raw.insight.source_id), publisher: text(raw.insight.publisher, raw.insight.source) } : null,
+    keyPoints: Array.isArray(raw.keyPoints || raw.key_points) ? (raw.keyPoints || raw.key_points).map((point, pointIndex) => typeof point === 'string' ? { title: point, description: '', iconType: '' } : { title: text(point?.title, `Point ${pointIndex + 1}`), description: text(point?.description, point?.summary), iconType: text(point?.iconType, point?.icon_type) }).filter((point) => point.title) : [],
+    sources: (raw.sources || raw.sourceCoverage || raw.source_coverage || []).map(normalizeSource).filter((source) => source.url || source.name),
+  };
+};
+const normalizeHistory = (items) => Array.isArray(items) ? items.map((item, index) => ({ id: text(item?.request_id, item?.id, `history-${index}`), request_id: text(item?.request_id, item?.id), query: text(item?.query), display_topic: text(item?.display_topic, item?.query, 'News briefing'), display_subtopic: text(item?.display_subtopic), saved_at: text(item?.saved_at, item?.timestamp), story_count: Number(item?.story_count) || 0 })) : [];
+const Icon = ({ name, size = 18 }) => <svg className="news-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{{ search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>, newspaper: <><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h8M8 17h4"/><path d="M4 8h3v11"/></>, close: <><path d="m6 6 12 12"/><path d="m18 6-12 12"/></>, trash: <><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 14h10l1-14M9 7V4h6v3"/></>, arrow: <><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></>, external: <><path d="M14 3h7v7"/><path d="m10 14 11-11"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2h5"/></>, bookmark: <path d="M6 3h12v18l-6-4-6 4z"/>, more: <><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/></>, chevron: <path d="m8 10 4 4 4-4"/>, history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></>, layout: <><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 17h6M17 14v6"/></> }[name]}</svg>;
 
-export default NewsWidget;
+export default function NewsWidget({ onClose, onMinimize, isVisible = true, aiConnected = false, aiCommand = null, stateSnapshot = null }) {
+  const [windowState, setWindowState] = useState(initialWindow); const [query, setQuery] = useState(''); const [inputValue, setInputValue] = useState(''); const [story, setStory] = useState(null); const [relatedStories, setRelatedStories] = useState([]); const [fullSearchResults, setFullSearchResults] = useState([]); const [history, setHistory] = useState([]); const [activeTab, setActiveTab] = useState('answer'); const [loading, setLoading] = useState(false); const [researchingMore, setResearchingMore] = useState(false); const [error, setError] = useState(''); const [noResults, setNoResults] = useState(false); const [generatedAt, setGeneratedAt] = useState(''); const [sourcesOpen, setSourcesOpen] = useState(false); const [sourceMenuOpen, setSourceMenuOpen] = useState(false); const [moreOpen, setMoreOpen] = useState(false); const [imageReady, setImageReady] = useState(false); const [imageFailed, setImageFailed] = useState(false); const [bookmarks, setBookmarks] = useState([]); const [feedback, setFeedback] = useState('Ready for live coverage'); const [deleteTarget, setDeleteTarget] = useState(null); const [historyActionPending, setHistoryActionPending] = useState(false); const [researchId, setResearchId] = useState(''); const [layouts, setLayouts] = useState([DEFAULT_AEGIS_LAYOUT]); const [activeLayoutId, setActiveLayoutId] = useState(DEFAULT_AEGIS_LAYOUT.id); const [draftLayout, setDraftLayout] = useState(null); const [customizing, setCustomizing] = useState(false); const [previewingLayout, setPreviewingLayout] = useState(false); const [layoutSaving, setLayoutSaving] = useState(false); const [exitConfirmOpen, setExitConfirmOpen] = useState(false); const [saveAsOpen, setSaveAsOpen] = useState(false); const [saveAsName, setSaveAsName] = useState('My News Layout'); const [liveTestOpen, setLiveTestOpen] = useState(false); const [liveTestQuery, setLiveTestQuery] = useState('');
+  const inputRef = useRef(null); const scrollRef = useRef(null); const interactionRef = useRef(null); const activeRequestRef = useRef(''); const answerScrollRef = useRef(0); const deleteTriggerRef = useRef(null); const deleteDialogRef = useRef(null); const preEditWindowRef = useRef(null);
+  const allSources = useMemo(() => { const seen = new Set(); return (story?.sources || []).filter((source) => { const key = `${source.name}|${source.url}`; if (seen.has(key)) return false; seen.add(key); return true; }); }, [story]);
+  const bookmarked = Boolean(story && bookmarks.includes(story.id));
+  const activeLayout = useMemo(() => layouts.find((layout) => layout.id === activeLayoutId) || DEFAULT_AEGIS_LAYOUT, [activeLayoutId, layouts]);
+  const renderedLayout = previewingLayout && draftLayout ? draftLayout : activeLayout;
+  const layoutPreviewData = useMemo(() => getLayoutTestData(), []);
+  const applyCurrent = useCallback((payload) => {
+    const current = payload?.current && typeof payload.current === 'object' ? payload.current : payload || {}; const requestId = text(current.request_id);
+    if (activeRequestRef.current && requestId && requestId !== activeRequestRef.current) return;
+    const primary = normalizeStory(current.primary_story || current.primaryStory || (current.articles || [])[0]); const fullSearch = (current.full_search_results || current.fullSearchResults || current.related_stories || current.relatedStories || current.articles || []).map(normalizeStory).filter(Boolean); const related = (current.related_stories || current.relatedStories || current.articles || current.full_search_results || current.fullSearchResults || []).map(normalizeStory).filter(Boolean); const continuing = Boolean(current.continuation); const terminalWithoutStory = !current.loading && !primary && !text(current.error) && (current.no_results === true || Boolean(requestId));
+    if (!continuing || primary) setStory(primary); if (!continuing || fullSearch.length) { setRelatedStories(fullSearch.length ? fullSearch : related); setFullSearchResults(fullSearch); }
+    setQuery(text(current.query, query)); setLoading(Boolean(current.loading)); setResearchingMore(Boolean(current.loading && continuing)); setError(text(current.error)); setNoResults(Boolean(current.no_results) || terminalWithoutStory); setGeneratedAt(text(current.generated_at, current.generatedAt)); setResearchId(text(current.research_id, current.researchId, primary?.researchId, current.request_id, researchId)); setHistory(normalizeHistory(payload?.history || current.history_preview));
+    if (current.view_mode === 'history') setActiveTab('history'); else if (current.view_mode === 'results') setActiveTab('results'); else if (current.loading || primary || current.error || terminalWithoutStory) setActiveTab('answer');
+    if (activeRequestRef.current && requestId === activeRequestRef.current && !current.loading) { activeRequestRef.current = ''; setFeedback(current.error ? 'News service needs attention' : terminalWithoutStory ? 'No current coverage found' : continuing ? 'Briefing expanded' : 'Briefing updated'); }
+  }, [query, researchId]);
+  useEffect(() => { if (stateSnapshot) applyCurrent(stateSnapshot); }, [applyCurrent, stateSnapshot]);
+  useEffect(() => { setImageReady(false); setImageFailed(false); }, [story?.id]);
+  useEffect(() => { try { setBookmarks(JSON.parse(localStorage.getItem(BOOKMARKS_KEY) || '[]')); } catch { setBookmarks([]); } }, []);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/news/layouts').then((response) => response.ok ? response.json() : Promise.reject(new Error('Unable to load News layouts'))).then((payload) => {
+      if (cancelled) return;
+      if (Array.isArray(payload.layouts) && payload.layouts.length) setLayouts(payload.layouts);
+      if (typeof payload.activeLayoutId === 'string') setActiveLayoutId(payload.activeLayoutId);
+    }).catch(() => setFeedback('Using Default AEGIS layout'));
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(windowState)); } catch {} }, [windowState]);
+  useEffect(() => { const resize = () => setWindowState((value) => clampWindow(value)); window.addEventListener('resize', resize); return () => window.removeEventListener('resize', resize); }, []);
+  useEffect(() => { const move = (event) => { const state = interactionRef.current; if (!state || event.pointerId !== state.pointerId) return; setWindowState((previous) => clampWindow(state.type === 'drag' ? { ...previous, x: event.clientX - state.offsetX, y: event.clientY - state.offsetY } : { ...previous, width: state.width + event.clientX - state.x, height: state.height + event.clientY - state.y })); }; const stop = () => { interactionRef.current = null; }; window.addEventListener('pointermove', move); window.addEventListener('pointerup', stop); window.addEventListener('pointercancel', stop); return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop); window.removeEventListener('pointercancel', stop); }; }, []);
+  useEffect(() => { const listener = (event) => { const detail = event.detail || {}; if (detail.request_id !== activeRequestRef.current) return; if (detail.status === 'accepted') { setLoading(true); setError(''); } if (['busy', 'failed'].includes(detail.status)) { activeRequestRef.current = ''; setLoading(false); setResearchingMore(false); setError(text(detail.message, 'News request could not be started.')); } }; window.addEventListener('aegisTypedTranscriptStatus', listener); return () => window.removeEventListener('aegisTypedTranscriptStatus', listener); }, []);
+  useEffect(() => { if (!aiCommand?.command) return; if (['set_loading', 'show_news', 'refresh_news'].includes(aiCommand.command)) applyCurrent(aiCommand); if (aiCommand.command === 'show_history') setActiveTab('history'); if (aiCommand.command === 'show_results') setActiveTab('results'); }, [aiCommand, applyCurrent]);
+  useEffect(() => {
+    if (!deleteTarget) return undefined;
+    const onKey = (event) => {
+      if (event.key === 'Escape') { event.preventDefault(); setDeleteTarget(null); return; }
+      if (event.key !== 'Tab') return;
+      const focusable = [...(deleteDialogRef.current?.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') || [])];
+      if (!focusable.length) { event.preventDefault(); return; }
+      const first = focusable[0]; const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener('keydown', onKey); requestAnimationFrame(() => deleteDialogRef.current?.focus());
+    return () => { window.removeEventListener('keydown', onKey); deleteTriggerRef.current?.focus(); };
+  }, [deleteTarget]);
+  const runNews = (event, layoutOverride = null, queryOverride = '') => { event?.preventDefault(); const value = String(queryOverride || inputValue).trim(); if (!value || loading) return; const requestId = `news-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; activeRequestRef.current = requestId; setQuery(value); setLoading(true); setResearchingMore(false); setError(''); setNoResults(false); setFeedback('Fetching live coverage'); setActiveTab('answer'); window.dispatchEvent(new CustomEvent('aegisTypedTranscript', { detail: { text: `get the latest news for ${value}`, display_query: value, source: 'news_widget', isFinal: true, request_id: requestId, layout_manifest: buildLayoutContentManifest(layoutOverride || renderedLayout) } })); };
+  const researchMore = () => { if (!story || loading || researchingMore) return; const currentResearchId = researchId || story.researchId; if (!currentResearchId) { setError('This briefing is not available for continued research yet.'); setMoreOpen(false); return; } const requestId = `news-more-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; activeRequestRef.current = requestId; setLoading(true); setResearchingMore(true); setError(''); setFeedback('Searching for additional coverage…'); setMoreOpen(false); window.dispatchEvent(new CustomEvent('aegisTypedTranscript', { detail: { text: `research more on ${query}`, display_query: query, source: 'news_widget', isFinal: true, request_id: requestId, research_id: currentResearchId, continuation: true, layout_manifest: buildLayoutContentManifest(renderedLayout) } })); };
+  const refreshHistory = async () => { try { const response = await fetch('/api/news/history'); const data = await response.json(); if (!response.ok) throw new Error(data.error); setHistory(normalizeHistory(data.history)); setActiveTab('history'); } catch (cause) { setError(text(cause?.message, 'Unable to refresh news history.')); } };
+  const restore = async (requestId) => { try { const endpoint = requestId === 'latest' ? '/api/news/history/restore-latest' : '/api/news/history/restore'; const response = await fetch(endpoint, requestId === 'latest' ? { method: 'POST' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request_id: requestId }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error); applyCurrent(data); setInputValue(text(data?.current?.query, data?.query)); setActiveTab('answer'); setFeedback('Saved briefing restored'); } catch (cause) { setError(text(cause?.message, 'Unable to restore briefing.')); } };
+  const removeHistory = async (mode) => { if (!deleteTarget || historyActionPending) return; setHistoryActionPending(true); try { const response = await fetch('/api/news/history/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request_id: deleteTarget.request_id, mode }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error); setHistory(normalizeHistory(data.history)); setDeleteTarget(null); setFeedback(mode === 'archive' ? 'Briefing removed from history' : 'Briefing permanently deleted'); } catch (cause) { setError(text(cause?.message, 'Unable to delete briefing.')); } finally { setHistoryActionPending(false); } };
+  const copyBriefing = async () => { if (!story) return; const value = [story.headline, story.summary, story.body, story.briefingSections.map((section) => `${section.title}\n${section.body}`), story.keyPoints.map((point) => `${point.title}: ${point.description}`).join('\n'), allSources.map((source) => source.name).join(', ')].flat().filter(Boolean).join('\n\n'); try { await navigator.clipboard.writeText(value); setFeedback('Copied'); } catch { setFeedback('Copy unavailable'); } setMoreOpen(false); };
+  const toggleBookmark = () => { if (!story) return; const next = bookmarked ? bookmarks.filter((id) => id !== story.id) : [...new Set([...bookmarks, story.id])]; setBookmarks(next); localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(next)); setFeedback(bookmarked ? 'Briefing removed from saved' : 'Briefing saved'); setMoreOpen(false); };
+  const enterCustomizer = () => { setDraftLayout(normalizeNewsLayout(activeLayout)); setCustomizing(true); setPreviewingLayout(false); setMoreOpen(false); setExitConfirmOpen(false); setSaveAsName((activeLayout.name || 'My News Layout') + ' copy'); };
+  const draftIsDirty = () => Boolean(draftLayout && JSON.stringify(draftLayout) !== JSON.stringify(activeLayout));
+  const exitCustomizer = (force = false) => { if (!force && draftIsDirty()) { setExitConfirmOpen(true); return; } setCustomizing(false); setPreviewingLayout(false); setDraftLayout(null); setExitConfirmOpen(false); setLiveTestOpen(false); };
+  const saveLayout = async (saveAs = false, requestedName = '') => {
+    if (!draftLayout || layoutSaving) return;
+    const normalizedDraft = normalizeNewsLayout(draftLayout); const validation = validateNewsLayout(normalizedDraft);
+    if (!validation.valid) { setFeedback(validation.errors[0]); return; }
+    setLayoutSaving(true);
+    try {
+      const isDefault = saveAs || normalizedDraft.id === DEFAULT_AEGIS_LAYOUT.id;
+      const nextName = String(requestedName || (normalizedDraft.name === 'Default AEGIS' ? 'My News Layout' : normalizedDraft.name)).trim() || 'My News Layout'; const payload = isDefault ? { ...createLayoutFromTemplate(normalizedDraft, nextName), name: nextName } : { ...normalizedDraft, name: nextName };
+      const response = await fetch(isDefault ? '/api/news/layouts' : `/api/news/layouts/${encodeURIComponent(payload.id)}`, { method: isDefault ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const data = await response.json(); if (!response.ok) throw new Error(data.error);
+      const activate = await fetch(`/api/news/layouts/${encodeURIComponent(payload.id)}/activate`, { method: 'POST' }); if (!activate.ok) throw new Error('Unable to activate saved layout');
+      const nextLayouts = Array.isArray(data.layouts) ? [...data.layouts.filter((layout) => layout.id !== payload.id), payload] : [payload]; setLayouts(nextLayouts); setActiveLayoutId(payload.id); setDraftLayout(payload); setFeedback('Layout saved'); setSaveAsOpen(false); return true;
+    } catch (cause) { setFeedback(text(cause?.message, 'Unable to save News layout')); return false; } finally { setLayoutSaving(false); }
+  };
+  const changeTab = (tab) => { if (activeTab === 'answer' && scrollRef.current) answerScrollRef.current = scrollRef.current.scrollTop; setActiveTab(tab); if (tab === 'history') refreshHistory(); if (tab === 'answer') requestAnimationFrame(() => { if (scrollRef.current) scrollRef.current.scrollTop = answerScrollRef.current; }); };
+  if (!isVisible) return null;
+  const stories = fullSearchResults.length ? fullSearchResults : relatedStories;
+  return <section className={`search-widget news-widget ${aiConnected ? 'is-connected' : ''}${customizing ? ' is-layout-edit' : ''}`} data-aegis-widget="news" style={{ left: windowState.x, top: windowState.y, width: windowState.width, height: windowState.height }} aria-label="Astra live news">
+    <header className="search-header news-header" onPointerDown={(event) => { if (customizing || event.button !== 0 || event.target.closest('button, input, a')) return; event.currentTarget.setPointerCapture?.(event.pointerId); interactionRef.current = { type: 'drag', pointerId: event.pointerId, offsetX: event.clientX - windowState.x, offsetY: event.clientY - windowState.y }; }}><div className="search-brand-mark news-brand-mark"><Icon name="newspaper" size={22}/></div><div className="search-brand-copy news-brand-copy"><h2>LIVE NEWS BRIEFING</h2><div className="search-eyebrow news-eyebrow"><span className="search-status-dot news-status-dot"/>{customizing ? 'CUSTOMIZE LAYOUT' : <>AEGIS LIVE INDEX <span>{aiConnected ? 'CONNECTED' : 'LOCAL'}</span><em>LIVE</em></>}</div></div><div className="news-header-actions">{!customizing && <button className="search-icon-button" type="button" onClick={enterCustomizer} aria-label="Customize News layout" title="Customize News layout"><Icon name="layout" size={16}/></button>}<button className="search-icon-button news-minimize" type="button" onClick={onMinimize} aria-label="Minimize News widget" title="Minimize News">—</button><button className="search-icon-button search-close news-close" type="button" onClick={onClose} aria-label="Close News widget"><Icon name="close"/></button></div></header>
+    <div className="search-fixed-controls"><form className={`search-form news-form ${inputValue.trim() ? 'has-value' : ''}`} onSubmit={(event) => { if (customizing) { event.preventDefault(); return; } runNews(event); }} role="search" onClick={(event) => { if (!event.target.closest('button')) inputRef.current?.focus(); }}><Icon name="search" size={19}/><input ref={inputRef} type="search" value={inputValue} onChange={(event) => setInputValue(event.target.value)} placeholder={customizing ? 'Search to add new content block…' : 'Ask for the latest news...'} aria-label={customizing ? 'Search layout blocks' : 'Ask for the latest news'}/>{inputValue && <button className="search-clear-input" type="button" onClick={() => { setInputValue(''); inputRef.current?.focus(); }} aria-label="Clear news query"><Icon name="close" size={15}/></button>}</form>{!customizing && <nav className="search-tabs news-tabs" role="tablist" aria-label="News views">{[['answer', 'Answer'], ['results', `Full Search${stories.length ? ` · ${stories.length}` : ''}`], ['history', `History${history.length ? ` · ${history.length}` : ''}`]].map(([id, label]) => <button key={id} id={`news-tab-${id}`} type="button" role="tab" aria-selected={activeTab === id} aria-controls={`news-panel-${id}`} tabIndex={activeTab === id ? 0 : -1} className={activeTab === id ? 'is-active' : ''} onClick={() => changeTab(id)}>{label}</button>)}</nav>}</div>
+    <main className="search-scroll-region news-scroll-region" ref={scrollRef}>
+      {customizing && !previewingLayout && <NewsLayoutStudio draftLayout={draftLayout || activeLayout} setDraftLayout={setDraftLayout} onSave={(saveAs) => saveAs ? setSaveAsOpen(true) : saveLayout(false)} onCancel={exitCustomizer} onPreview={() => setPreviewingLayout(true)} onLiveTest={() => { setLiveTestQuery(inputValue || query || ''); setLiveTestOpen(true); }} isSaving={layoutSaving}/>}
+      {customizing && previewingLayout && <div className="news-layout-preview-bar"><span>DRAFT PREVIEW</span><button type="button" onClick={() => setPreviewingLayout(false)}>Back to editor</button></div>}
+      {!customizing && activeTab === 'answer' && <div className="search-answer-view news-answer-view" id="news-panel-answer" role="tabpanel">{loading && !story && <div className="search-loading news-loading" role="status"><div className="search-scan-mark"><Icon name="newspaper" size={27}/></div><strong>FETCHING LIVE COVERAGE</strong><p>Finding relevant reports, comparing sources, and building the briefing.</p></div>}{!loading && error && <div className="search-error news-error" role="alert"><span>NEWS SERVICE UNAVAILABLE</span><h3>Live coverage could not be retrieved.</h3><p>{error}</p><button type="button" onClick={runNews} disabled={!inputValue.trim()}>Retry</button></div>}{!loading && !error && !story && <div className="search-empty news-empty"><div className="search-empty-symbol"><Icon name="newspaper" size={28}/></div><span>{noResults ? 'NO CURRENT COVERAGE FOUND' : 'NO ACTIVE BRIEFING'}</span><h3>{noResults ? 'No reliable coverage was found.' : 'Ask for the latest news.'}</h3><p>{noResults ? 'Try another topic or a more specific query.' : 'Search a topic, company, person, or event to begin a live briefing.'}</p></div>}{story && <NewsBriefing story={story} relatedStories={relatedStories} allSources={allSources} sourcesOpen={sourcesOpen} setSourcesOpen={setSourcesOpen} changeTab={changeTab} researchingMore={researchingMore} layout={renderedLayout}/>}</div>}
+      {customizing && previewingLayout && <NewsBriefing story={layoutPreviewData.story} relatedStories={layoutPreviewData.relatedStories} allSources={layoutPreviewData.allSources} sourcesOpen={sourcesOpen} setSourcesOpen={setSourcesOpen} changeTab={changeTab} researchingMore={false} layout={draftLayout || renderedLayout} layoutMode="preview"/>}
+      {activeTab === 'results' && <div className="search-results-view news-results-view" id="news-panel-results" role="tabpanel"><div className="search-view-intro news-view-intro"><span>FULL SEARCH</span><h3>{stories.length ? `${stories.length} indexed stories` : 'No linked stories yet'}</h3></div>{stories.length === 0 ? <div className="search-inline-empty">Run a live news request to build the story index.</div> : <ol className="search-result-list news-result-list">{stories.map((item, index) => <li className="search-result-card news-result-card" key={item.id}>{item.imageUrl && <img src={item.imageUrl} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none'; }}/>}<div className="search-result-main"><div className="search-result-meta"><span>{String(index + 1).padStart(2, '0')}</span><strong>{item.sources[0]?.name || 'News source'}</strong><time>{formatDate(item.publishedAt)}</time>{item.category && <em>{item.category}</em>}</div><h3>{item.sources[0]?.url ? <a href={item.sources[0].url} target="_blank" rel="noopener noreferrer">{item.headline}<Icon name="external" size={14}/></a> : item.headline}</h3>{item.summary && <p>{item.summary}</p>}</div></li>)}</ol>}</div>}
+      {activeTab === 'history' && <div className="search-history-view news-history-view" id="news-panel-history" role="tabpanel"><div className="search-view-intro news-view-intro"><div><span>NEWS ARCHIVE</span><h3>{history.length} saved briefings</h3></div>{history.length > 0 && <button type="button" onClick={() => restore('latest')}>Latest <Icon name="arrow" size={15}/></button>}</div>{history.length === 0 ? <div className="search-inline-empty"><Icon name="history" size={25}/><p>Your completed live briefings will appear here.</p></div> : <div className="search-history-list news-history-list">{history.map((item, index) => <article className="search-history-card news-history-card" key={item.id}><button className="search-history-restore" type="button" onClick={() => restore(item.request_id)}><span className="search-history-index">{String(index + 1).padStart(2, '0')}</span><span><strong>{item.display_topic}</strong><small>{item.display_subtopic || item.query}</small><time>{formatDate(item.saved_at)} · {item.story_count} stories</time></span><Icon name="arrow" size={16}/></button><div className="search-history-actions"><button type="button" ref={deleteTarget?.request_id === item.request_id ? deleteTriggerRef : null} onClick={(event) => { deleteTriggerRef.current = event.currentTarget; setDeleteTarget(item); }} aria-label={`Delete ${item.display_topic}`}><Icon name="trash" size={15}/></button></div></article>)}</div>}</div>}
+    </main>
+    <footer className="search-footer news-footer"><span className={loading ? 'is-working' : ''}>{researchingMore ? 'EXPANDING' : loading ? 'UPDATING' : error ? 'ATTENTION' : generatedAt ? `Updated ${formatDate(generatedAt)}` : 'SYSTEM READY'}</span><p aria-live="polite">{feedback}</p><div className="news-footer-actions"><button type="button" onClick={() => { setSourcesOpen(true); setSourceMenuOpen((open) => !open); }} disabled={!allSources.length}>Sources: {allSources.length} <Icon name="chevron" size={13}/></button>{sourceMenuOpen && <div className="news-source-menu">{allSources.map((source) => <button type="button" key={source.id} onClick={() => { setSourcesOpen(true); setSourceMenuOpen(false); }}>{source.name}</button>)}</div>}<button type="button" className={bookmarked ? 'is-active' : ''} onClick={toggleBookmark} disabled={!story} title={bookmarked ? 'Remove bookmark' : 'Save briefing'} aria-label={bookmarked ? 'Remove saved News briefing' : 'Save News briefing'}><Icon name="bookmark" size={16}/></button><button type="button" onClick={() => setMoreOpen((open) => !open)} disabled={!story} aria-expanded={moreOpen} aria-label="More News actions"><Icon name="more" size={17}/></button>{moreOpen && <div className="news-more-menu"><button type="button" onClick={researchMore} disabled={researchingMore}>Research more</button><button type="button" onClick={copyBriefing}>Copy briefing</button><button type="button" onClick={() => { setMoreOpen(false); runNews(); }}>Refresh briefing</button><button type="button" onClick={() => { setMoreOpen(false); changeTab('results'); }}>View all sources</button><button type="button" onClick={toggleBookmark}>{bookmarked ? 'Unsave briefing' : 'Save briefing'}</button></div>}</div></footer>
+    {deleteTarget && <div className="news-confirm-backdrop" role="presentation"><section className="news-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="news-delete-title" aria-describedby="news-delete-description" tabIndex="-1" ref={deleteDialogRef}><span>HISTORY MANAGEMENT</span><h3 id="news-delete-title">Remove this briefing from history?</h3><p id="news-delete-description"><strong>{deleteTarget.display_topic}</strong> can be hidden from this archive or permanently deleted with its saved research state.</p><div><button type="button" onClick={() => setDeleteTarget(null)} disabled={historyActionPending}>Cancel</button><button type="button" onClick={() => removeHistory('archive')} disabled={historyActionPending}>Remove from history</button><button type="button" className="is-danger" onClick={() => removeHistory('permanent')} disabled={historyActionPending}>Delete permanently</button></div></section></div>}
+    {saveAsOpen && <div className="news-layout-confirm-backdrop"><section className="news-layout-confirm" role="dialog" aria-modal="true" aria-label="Save layout as"><span>SAVE AS</span><h3>Name this News layout</h3><input aria-label="Layout name" value={saveAsName} maxLength="80" onChange={(event) => setSaveAsName(event.target.value)}/><div><button type="button" onClick={() => setSaveAsOpen(false)}>Cancel</button><button type="button" className="is-primary" disabled={!saveAsName.trim() || layoutSaving} onClick={() => saveLayout(true, saveAsName)}>Save layout</button></div></section></div>}
+    {liveTestOpen && <div className="news-layout-confirm-backdrop"><section className="news-layout-confirm" role="dialog" aria-modal="true" aria-label="Test live News"><span>TEST LIVE NEWS</span><h3>Use this unsaved layout with live coverage</h3><input aria-label="Live News query" value={liveTestQuery} placeholder="latest NVIDIA news" onChange={(event) => setLiveTestQuery(event.target.value)}/><div><button type="button" onClick={() => setLiveTestOpen(false)}>Cancel</button><button type="button" className="is-primary" disabled={!liveTestQuery.trim()} onClick={() => { setInputValue(liveTestQuery); runNews(null, draftLayout, liveTestQuery); setLiveTestOpen(false); setPreviewingLayout(true); }}>Run test</button></div></section></div>}
+    {exitConfirmOpen && <div className="news-layout-confirm-backdrop"><section className="news-layout-confirm" role="dialog" aria-modal="true" aria-label="Unsaved layout changes"><span>UNSAVED CHANGES</span><h3>Keep editing this draft?</h3><p>Your saved News layout remains unchanged until you save.</p><div><button type="button" onClick={() => setExitConfirmOpen(false)}>Continue Editing</button><button type="button" onClick={() => exitCustomizer(true)}>Discard</button><button type="button" className="is-primary" onClick={async () => { if (await saveLayout(false)) exitCustomizer(true); }}>Save & Exit</button></div></section></div>}    <button className="search-resize-handle news-resize-handle" type="button" aria-label="Resize News widget" onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture?.(event.pointerId); interactionRef.current = { type: 'resize', pointerId: event.pointerId, x: event.clientX, y: event.clientY, width: windowState.width, height: windowState.height }; }}/></section>;
+}
+
+function LegacyNewsBriefing({ story, allSources, sourcesOpen, setSourcesOpen, changeTab, imageReady, setImageReady, imageFailed, setImageFailed, researchingMore }) {
+  return <article className="news-briefing" aria-busy={researchingMore}><div className="news-briefing-label"><span>{status(story)}</span>{(story.isBreaking || story.isLive) && <em>JUST IN</em>}</div>{researchingMore && <div className="news-researching" role="status"><span/>Searching for additional coverage…</div>}<h1>{story.headline}</h1>{[formatDate(story.publishedAt), story.category, story.location].filter(Boolean).length > 0 && <div className="news-briefing-meta">{[formatDate(story.publishedAt), story.category, story.location].filter(Boolean).join(' · ')}</div>}{story.imageUrl && !imageFailed && <div className={`news-hero ${imageReady ? 'is-ready' : ''}`}><img src={story.imageUrl} srcSet={story.imageSrcSet || undefined} sizes={story.imageSizes || '(max-width: 600px) 100vw, 560px'} alt={story.imageAlt || ''} decoding="async" fetchPriority="high" onLoad={() => setImageReady(true)} onError={() => setImageFailed(true)}/></div>}<div className="news-briefing-body">{(story.body || story.summary).split(/\n+/).filter(Boolean).map((paragraph, index) => <p className={index === 0 ? 'lead' : ''} key={index}>{paragraph}</p>)}</div>{story.briefingSections.map((section) => <section className="news-section news-detail-section" key={section.id}>{section.title && <h2>{section.title}</h2>}{section.body.split(/\n+/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</section>)}{story.keyPoints.length > 0 && <section className="news-section"><h2>KEY POINTS</h2><div className="news-key-points">{story.keyPoints.map((point, index) => <article className="news-key-point" key={`${point.title}-${index}`}><span className="news-key-icon">{point.iconType?.slice(0, 1).toUpperCase() || '•'}</span><div><strong>{point.title}</strong>{point.description && <p>{point.description}</p>}</div></article>)}</div></section>}{story.timeline.length > 0 && <section className="news-section news-timeline"><h2>TIMELINE</h2>{story.timeline.map((item) => <article key={item.id}><strong>{item.title}</strong><p>{item.body}</p></article>)}</section>}{story.context && <section className="news-section news-detail-section"><h2>CONTEXT</h2><p>{story.context}</p></section>}{story.whyItMatters && <section className="news-section news-why"><h2>WHY IT MATTERS</h2><p>{story.whyItMatters}</p></section>}{story.whatToWatch && <section className="news-section news-detail-section"><h2>WHAT TO WATCH NEXT</h2><p>{story.whatToWatch}</p></section>}<section className="news-sources"><div><h2>{allSources.length} SOURCE{allSources.length === 1 ? '' : 'S'}</h2><p>Coverage supporting this briefing.</p></div><button type="button" onClick={() => setSourcesOpen((open) => !open)} aria-expanded={sourcesOpen}>{sourcesOpen ? 'Hide sources' : 'View sources'} <Icon name="chevron" size={15}/></button></section>{sourcesOpen && <div className="news-source-coverage">{allSources.map((source) => <article key={source.id}><div><strong>{source.name}</strong>{source.headline && <p>{source.headline}</p>}<time>{formatDate(source.publishedAt)}</time></div>{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer">Open <Icon name="external" size={13}/></a>}</article>)}</div>}<button className="news-full-coverage" type="button" onClick={() => changeTab('results')}>See full coverage <Icon name="arrow" size={15}/></button></article>;
+}

@@ -97,10 +97,26 @@ class ImageBackupManager:
             "image/webp": "webp",
             "image/gif": "gif",
             "image/bmp": "bmp",
+            "image/svg+xml": "svg",
         }
         ext = ext_map.get(mime_type.lower(), "jpg")
         
         return f"{timestamp}_{prompt_hash}.{ext}"
+
+    def _unique_filename(self, prompt: str, mime_type: str) -> str:
+        """Return a collision-free filename for a persisted gallery image.
+
+        The legacy filename used only second precision and a prompt hash. Two
+        generations with the same prompt in one second could therefore
+        overwrite the image while appending duplicate index records. Keep the
+        legacy shape when possible, but add a short UUID suffix on collision.
+        """
+        filename = self._generate_filename(prompt, mime_type)
+        if not (self.backup_root / filename).exists():
+            return filename
+        stem = Path(filename).stem
+        suffix = Path(filename).suffix
+        return f"{stem}_{uuid.uuid4().hex[:8]}{suffix}"
     
     def _extract_mime_type_from_uri(self, data_uri: str) -> str:
         """
@@ -262,7 +278,7 @@ class ImageBackupManager:
             logger.info(f"[BACKUP] Decoded image: {len(image_bytes)} bytes")
             
             # Step 4: Generate filename
-            filename = self._generate_filename(prompt, mime_type)
+            filename = self._unique_filename(prompt, mime_type)
             filepath = self.backup_root / filename
             logger.info(f"[BACKUP] Generated filename: {filename}")
             
@@ -333,18 +349,44 @@ class ImageBackupManager:
             Index dictionary with total_images, last_updated, and image list
         """
         index = self._read_index()
-        return {
-            **index,
-            "images": [
-                self._with_metadata_defaults(image)
-                for image in index.get("images", [])
-            ],
-        }
+        images = []
+        stale_ids = []
+        for image in index.get("images", []):
+            normalized = self._with_metadata_defaults(image)
+            image_id = str(normalized.get("id") or "")
+            # The index can outlive generated files after a manual cleanup or
+            # an old workspace migration. Do not publish broken gallery
+            # entries that would produce guaranteed 404 thumbnail requests.
+            if not image_id or not self.get_image_by_id(image_id):
+                if image_id:
+                    stale_ids.append(image_id)
+                continue
+            normalized["available"] = True
+            images.append(normalized)
+        images.sort(key=lambda image: image.get("timestamp", ""), reverse=True)
+        numbered_images = []
+        for offset, image in enumerate(images, start=1):
+            numbered_images.append({
+                **image,
+                "display_number": offset,
+                "created_at": image.get("timestamp"),
+            })
+        # Keep the persisted index truthful. This is deliberately a metadata
+        # reconciliation only; it never deletes an existing image file.
+        if stale_ids or index.get("total_images") != len(images):
+            reconciled = {
+                **index,
+                "total_images": len(images),
+                "images": images,
+                "last_updated": datetime.now().isoformat() + "Z",
+            }
+            self._write_index(reconciled)
+            index = reconciled
+        return {**index, "total_images": len(numbered_images), "images": numbered_images}
     
     def get_images_count(self) -> int:
         """Get total number of backed-up images"""
-        index = self._read_index()
-        return index.get("total_images", 0)
+        return len(self.get_index().get("images", []))
     
     def get_image_by_id(self, filename: str) -> Optional[Path]:
         """
@@ -356,10 +398,45 @@ class ImageBackupManager:
         Returns:
             Path to image file, or None if not found
         """
-        filepath = self.backup_root / filename
+        # Resolve inside the backup root even when this helper is called from
+        # code paths that do not pass through the HTTP route's sanitization.
+        candidate = Path(str(filename))
+        if candidate.name != str(filename) or candidate.name in {"", ".", ".."}:
+            return None
+        filepath = (self.backup_root / candidate).resolve()
+        try:
+            filepath.relative_to(self.backup_root.resolve())
+        except ValueError:
+            return None
         if filepath.exists() and filepath.is_file():
             return filepath
         return None
+
+    def delete_image(self, filename: str) -> bool:
+        """Delete one persisted gallery image and its index record.
+
+        The stable filename/ID is used for deletion; callers should resolve a
+        visible gallery number to this ID before invoking this method.
+        """
+        filepath = self.get_image_by_id(filename)
+        if not filepath:
+            return False
+        try:
+            filepath.unlink()
+            index = self._read_index()
+            remaining = [
+                image for image in index.get("images", [])
+                if str(image.get("id") or "") != str(filename)
+            ]
+            index["images"] = remaining
+            index["total_images"] = len(remaining)
+            index["last_updated"] = datetime.now().isoformat() + "Z"
+            self._write_index(index)
+            logger.info("[BACKUP] Deleted image %s", filename)
+            return True
+        except Exception as exc:
+            logger.error("[BACKUP] Failed to delete image %s: %s", filename, exc, exc_info=True)
+            return False
     
     def get_recent_images(self, limit: int = 10) -> List[Dict[str, Any]]:
         """
@@ -371,16 +448,7 @@ class ImageBackupManager:
         Returns:
             List of image metadata dictionaries, sorted by timestamp (newest first)
         """
-        index = self._read_index()
-        images = [
-            self._with_metadata_defaults(image)
-            for image in index.get("images", [])
-        ]
-        
-        # Sort by timestamp descending (newest first)
-        images.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        
-        return images[:limit]
+        return self.get_index().get("images", [])[:limit]
     
     def get_images_by_provider(self, provider: str) -> List[Dict[str, Any]]:
         """
@@ -392,12 +460,7 @@ class ImageBackupManager:
         Returns:
             List of image metadata dictionaries
         """
-        index = self._read_index()
-        images = [
-            self._with_metadata_defaults(image)
-            for image in index.get("images", [])
-        ]
-        
+        images = self.get_index().get("images", [])
         return [img for img in images if img.get("provider") == provider]
     
     def search_by_prompt(self, query: str) -> List[Dict[str, Any]]:
@@ -410,13 +473,8 @@ class ImageBackupManager:
         Returns:
             List of matching image metadata dictionaries
         """
-        index = self._read_index()
-        images = [
-            self._with_metadata_defaults(image)
-            for image in index.get("images", [])
-        ]
+        images = self.get_index().get("images", [])
         query_lower = query.lower()
-        
         return [
             img for img in images
             if query_lower in img.get("prompt", "").lower()

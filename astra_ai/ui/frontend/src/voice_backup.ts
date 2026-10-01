@@ -741,12 +741,12 @@ function createLegacyGroqVoiceInput(
         body: formData
       });
 
+      const data = await readJsonResponse<TranscriptionResponse>(response);
+
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error?.message || `HTTP ${response.status}`);
+        throw new Error(data.error || `HTTP ${response.status}`);
       }
 
-      const data = await response.json();
       const text = data.text?.trim();
       
       if (text && text.length > 1) {
@@ -855,6 +855,24 @@ interface TranscriptionResponse {
   no_speech_prob?: number | null;
 }
 
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  const body = await response.text();
+  if (!body.trim()) {
+    throw new Error(`Empty response from transcription server (${response.status})`);
+  }
+
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    const preview = body.replace(/\s+/g, " ").trim().slice(0, 120);
+    throw new Error(
+      preview
+        ? `Transcription server returned non-JSON response (${response.status}): ${preview}`
+        : `Transcription server returned invalid JSON (${response.status})`
+    );
+  }
+}
+
 /**
  * Records complete utterances using browser-side voice activity detection.
  * Transcription is delegated to the local backend so provider credentials
@@ -955,7 +973,7 @@ export function createGroqVoiceInput(
       const extension = blob.type.includes("ogg") ? "ogg" : "webm";
       formData.append("audio", blob, `utterance.${extension}`);
       const response = await fetch("/api/transcribe", { method: "POST", body: formData });
-      const data = await response.json() as TranscriptionResponse;
+      const data = await readJsonResponse<TranscriptionResponse>(response);
 
       if (!response.ok) {
         throw new Error(data.error || `Transcription request failed (${response.status})`);

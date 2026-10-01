@@ -1,5 +1,5 @@
 """
-Machine Learning Personalization module for Nova AI.
+Machine Learning Personalization module for Aegis AI.
 Provides user preference learning and response adaptation capabilities.
 """
 

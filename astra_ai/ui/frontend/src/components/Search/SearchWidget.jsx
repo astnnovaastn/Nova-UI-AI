@@ -1,252 +1,500 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './SearchWidget.css';
+import {
+  compactSearchSources,
+  formatSavedAt,
+  normalizeSearchHistory,
+  normalizeSearchResults,
+  parseSearchAnswer,
+} from './searchUtils.js';
 
-const SearchWidget = ({ onClose, isVisible = true, initialQuery }) => {
-  const [result, setResult] = useState('Ready to search...');
-  const [currentQuery, setCurrentQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+const STORAGE_KEY = 'astra.searchWidget.window.v2';
+const DEFAULT_WINDOW = { x: 56, y: 76, width: 500, height: 560 };
+const MARGIN = 10;
 
-  // Custom Drag & Resize State
-  const [widgetPos, setWidgetPos] = useState({ x: 100, y: 100 });
-  const [widgetSize, setWidgetSize] = useState({ width: 550, height: 650 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+const clampWindow = (candidate) => {
+  const maxWidth = Math.max(320, window.innerWidth - (MARGIN * 2));
+  const maxHeight = Math.max(400, window.innerHeight - (MARGIN * 2));
+  const width = Math.min(Math.max(380, Number(candidate.width) || DEFAULT_WINDOW.width), maxWidth);
+  const height = Math.min(Math.max(420, Number(candidate.height) || DEFAULT_WINDOW.height), maxHeight);
+  return {
+    width,
+    height,
+    x: Math.min(Math.max(MARGIN, Number(candidate.x) || MARGIN), Math.max(MARGIN, window.innerWidth - width - MARGIN)),
+    y: Math.min(Math.max(MARGIN, Number(candidate.y) || MARGIN), Math.max(MARGIN, window.innerHeight - height - MARGIN)),
+  };
+};
 
-  const widgetRef = useRef(null);
-  const resizeStartRef = useRef({ x: 0, y: 0, width: 0, height: 0 });
+const initialWindow = () => {
+  try {
+    return clampWindow({ ...DEFAULT_WINDOW, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') });
+  } catch {
+    return clampWindow(DEFAULT_WINDOW);
+  }
+};
 
-  // Initialize position
-  useEffect(() => {
-    const startX = (window.innerWidth / 2) - 275;
-    const startY = window.innerHeight * 0.12;
-    setWidgetPos({ x: startX, y: startY });
+const Icon = ({ name, size = 18 }) => {
+  const paths = {
+    search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
+    observatory: <><circle cx="10.5" cy="10.5" r="5.4" /><path d="m14.5 14.5 5 5" /><path d="M3.2 8.2A8 8 0 0 1 15.8 4" /><path d="M6.3 17.4A8 8 0 0 0 17.8 8" /><circle cx="3.2" cy="8.2" r="1" fill="currentColor" stroke="none" /><circle cx="15.8" cy="4" r="1" fill="currentColor" stroke="none" /><path d="M10.5 7.8v5.4M7.8 10.5h5.4" opacity=".75" /></>,
+    close: <><path d="m6 6 12 12" /><path d="M18 6 6 18" /></>,
+    arrow: <><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></>,
+    copy: <><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></>,
+    refresh: <><path d="M20 11a8 8 0 1 0-2.3 5.7" /><path d="M20 4v7h-7" /></>,
+    history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" /></>,
+    external: <><path d="M14 3h7v7" /><path d="m10 14 11-11" /><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" /></>,
+    trash: <><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="m19 6-1 15H6L5 6" /><path d="M10 11v6M14 11v6" /></>,
+    eyeOff: <><path d="m3 3 18 18" /><path d="M10.6 10.7a2 2 0 0 0 2.7 2.7" /><path d="M9.9 4.2A10.4 10.4 0 0 1 12 4c5 0 9 5 9 8a9.6 9.6 0 0 1-2 3.5M6.6 6.6C4.4 8 3 10.3 3 12c0 3 4 8 9 8a9 9 0 0 0 3.4-.7" /></>,
+    chevron: <path d="m8 10 4 4 4-4" />,
+    spark: <><path d="m12 3 1.3 4.2L17 9l-3.7 1.8L12 15l-1.3-4.2L7 9l3.7-1.8L12 3Z" /><path d="m19 14 .7 2.3L22 17l-2.3.7L19 20l-.7-2.3L16 17l2.3-.7L19 14Z" /></>,
+  };
+  return <svg className="search-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+};
+
+const SearchWidget = ({ onClose, isVisible = true, aiConnected = false, aiCommand = null, stateSnapshot = null, onCommandResult }) => {
+  const [windowState, setWindowState] = useState(initialWindow);
+  const [query, setQuery] = useState('');
+  const [inputValue, setInputValue] = useState('');
+  const [topic, setTopic] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [results, setResults] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [searchType, setSearchType] = useState('web');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState('answer');
+  const [feedback, setFeedback] = useState('Ready for live research');
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const [pendingId, setPendingId] = useState('');
+  const [hiddenIds, setHiddenIds] = useState([]);
+  const [deleteId, setDeleteId] = useState('');
+  const [openSections, setOpenSections] = useState({});
+  const interactionRef = useRef(null);
+  const handledCommands = useRef(new Set());
+  const inputRef = useRef(null);
+  const activeRequestRef = useRef('');
+
+  const parsedAnswer = useMemo(() => parseSearchAnswer(answer), [answer]);
+  const answerSources = useMemo(() => compactSearchSources(results, 3), [results]);
+  const answerSections = useMemo(() => parsedAnswer.sections.filter((section) => !(
+    results.length > 0 && section.title === 'Sources'
+  )), [parsedAnswer.sections, results.length]);
+  const visibleHistory = useMemo(() => history.filter((item) => !hiddenIds.includes(item.request_id)), [history, hiddenIds]);
+
+  const applyCurrent = useCallback((payload, includeHistory = true) => {
+    const current = payload?.current && typeof payload.current === 'object' ? payload.current : payload || {};
+    const incomingRequestId = String(current.request_id || '');
+    if (activeRequestRef.current && incomingRequestId !== activeRequestRef.current) return;
+    const nextQuery = String(current.query || '');
+    setQuery(nextQuery);
+    setInputValue(nextQuery);
+    setTopic(String(current.display_topic || ''));
+    setAnswer(String(current.answer || ''));
+    setResults(normalizeSearchResults(current.results));
+    setSearchType(String(current.search_type || 'web'));
+    setLoading(Boolean(current.loading));
+    setError(String(current.error || ''));
+    if (includeHistory) setHistory(normalizeSearchHistory(payload?.history || current.history_preview || []));
+    if (current.view_mode === 'history') setActiveTab('history');
+    else if (current.view_mode === 'current' || current.loading || current.answer || current.error) {
+      setActiveTab((view) => view === 'history' ? view : 'answer');
+    }
+    if (activeRequestRef.current && incomingRequestId === activeRequestRef.current && !current.loading) {
+      activeRequestRef.current = '';
+      setFeedback(current.error ? 'Search needs attention' : 'Research updated and saved');
+    }
   }, []);
 
-  // Handle incoming search results from AI
   useEffect(() => {
-    if (initialQuery) {
-      const content = typeof initialQuery === 'object' ? initialQuery.content : initialQuery;
-      const queryText = typeof initialQuery === 'object' ? initialQuery.queryText : null;
-      handleNewSearch(content, queryText);
-    }
-  }, [initialQuery]);
+    if (stateSnapshot) applyCurrent(stateSnapshot);
+  }, [applyCurrent, stateSnapshot]);
 
-  const handleNewSearch = async (content, providedQuery) => {
-    if (!content) return;
-    setIsLoading(true);
-
-    let cleanContent = content;
-    if (typeof content === 'string') {
-      cleanContent = content.replace(/^SEARCH_RESULT:\s*/i, '').replace(/^SEARCH RESULT\s*/i, '').trim();
-    }
-
-    if (providedQuery) {
-       setCurrentQuery(providedQuery);
-    } else {
-       let displayQuery = cleanContent.substring(0, 50).replace(/\n/g, ' ') + '...';
-       setCurrentQuery(displayQuery);
-    }
-    
-    setResult(cleanContent);
-    setIsLoading(false);
-  };
-
-  // Drag handles
   useEffect(() => {
-    if (!isDragging) return;
-    const onMove = (e) => {
-      setWidgetPos({
-        x: e.clientX - dragOffset.x,
-        y: e.clientY - dragOffset.y
-      });
-    };
-    const onUp = () => setIsDragging(false);
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-  }, [isDragging, dragOffset]);
-
-  // Resize handles
-  useEffect(() => {
-    if (!isResizing) return;
-    const onMove = (e) => {
-      setWidgetSize({
-        width: Math.max(350, resizeStartRef.current.width + (e.clientX - resizeStartRef.current.x)),
-        height: Math.max(300, resizeStartRef.current.height + (e.clientY - resizeStartRef.current.y))
-      });
-    };
-    const onUp = () => setIsResizing(false);
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-  }, [isResizing]);
-
-  const handleDragStart = (e) => {
-    if (e.target.closest('.search-header-actions') ||
-      e.target.closest('.resize-handle') ||
-      e.target.tagName === 'BUTTON' ||
-      e.target.tagName === 'A') {
-      return;
-    }
-
-    setIsDragging(true);
-    setDragOffset({
-      x: e.clientX - widgetPos.x,
-      y: e.clientY - widgetPos.y
-    });
-  };
-
-  const handleResizeStart = (e) => {
-    e.preventDefault();
-    setIsResizing(true);
-    resizeStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      width: widgetSize.width,
-      height: widgetSize.height
-    };
-  };
-
-  // Helper function to heuristically parse raw AI search text into structured results
-  const parseResults = (text) => {
-    if (!text || text === 'Ready to search...') return [];
-
-    const chunks = text.split(/\n\n+/).map(c => c.trim()).filter(Boolean);
-
-    return chunks.map((chunk, idx) => {
-      let title = `Search Result ${idx + 1}`;
-      let snippet = chunk;
-      let source = "Web Source";
-      
-      const mdLinkMatch = chunk.match(/\[([^\]]+)\]\(([^)]+)\)/);
-      const boldMatch = chunk.match(/\*\*([^*]+)\*\*/);
-      
-      if (mdLinkMatch) {
-         title = mdLinkMatch[1].replace(/\*\*/g, '');
-         source = mdLinkMatch[2].replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
-         snippet = chunk.replace(mdLinkMatch[0], '').trim();
-      } else if (boldMatch) {
-         title = boldMatch[1];
-         snippet = chunk.replace(boldMatch[0], '').trim();
-      } else {
-         const lines = chunk.split('\n');
-         if (lines.length > 1) {
-           title = lines[0].replace(/^[0-9-.*]+\s*/, '');
-           snippet = lines.slice(1).join(' ').trim();
-         } else {
-           snippet = chunk.replace(/^[0-9-.*]+\s*/, '');
-         }
+    const handleTypedStatus = (event) => {
+      const detail = event.detail || {};
+      if (!activeRequestRef.current || String(detail.request_id || '') !== activeRequestRef.current) return;
+      const status = String(detail.status || '');
+      if (status === 'accepted') {
+        setLoading(true);
+        setError('');
+        setFeedback('Aegis accepted the live search');
+        return;
       }
+      if (status === 'busy' || status === 'failed') {
+        activeRequestRef.current = '';
+        setLoading(false);
+      setError(String(detail.message || (status === 'busy' ? 'Aegis is busy. Try again shortly.' : 'Search could not be started.')));
+      setFeedback(status === 'busy' ? 'Aegis is busy' : 'Search needs attention');
+      }
+    };
+    window.addEventListener('aegisTypedTranscriptStatus', handleTypedStatus);
+    return () => window.removeEventListener('aegisTypedTranscriptStatus', handleTypedStatus);
+  }, []);
 
-      snippet = snippet.replace(/^[-\s]+/, '');
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('aegisWidgetSemanticState', { detail: {
+      widget: 'search',
+      phase: loading ? 'loading' : error ? 'error' : answer || results.length ? 'ready' : 'idle',
+      active_tab: activeTab,
+      query,
+      draft_query: inputValue,
+      result_count: results.length,
+      history_count: history.length,
+      has_answer: Boolean(answer),
+      search_type: searchType,
+      request_id: activeRequestRef.current || stateSnapshot?.request_id || '',
+    } }));
+  }, [activeTab, answer, error, history.length, inputValue, loading, query, results.length, searchType, stateSnapshot?.request_id]);
 
-      const colors = ['#e11d48', '#dc2626', '#ea580c', '#2563eb', '#16a34a', '#8b5cf6'];
-      const iconBg = colors[idx % colors.length];
-      const iconLetter = title.charAt(0).toUpperCase();
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(windowState)); } catch { /* storage is optional */ }
+  }, [windowState]);
 
-      return {
-        id: idx,
-        title: title.substring(0, 80),
-        snippet: snippet.substring(0, 200) + (snippet.length > 200 ? '...' : ''),
-        source: source.substring(0, 30),
-        iconBg,
-        iconLetter
-      };
-    });
+  useEffect(() => {
+    const onResize = () => setWindowState((previous) => clampWindow(previous));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    const move = (event) => {
+      const interaction = interactionRef.current;
+      if (!interaction || event.pointerId !== interaction.pointerId) return;
+      if (interaction.type === 'drag') {
+        setWindowState((previous) => clampWindow({ ...previous, x: event.clientX - interaction.offsetX, y: event.clientY - interaction.offsetY }));
+      } else {
+        setWindowState((previous) => clampWindow({ ...previous, width: interaction.width + event.clientX - interaction.x, height: interaction.height + event.clientY - interaction.y }));
+      }
+    };
+    const stop = () => { interactionRef.current = null; };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!suggestionsOpen) return undefined;
+    const timer = window.setTimeout(async () => {
+      const needle = inputValue.trim();
+      if (!needle) {
+        setSuggestions(visibleHistory.slice(0, 6));
+        return;
+      }
+      try {
+        const response = await fetch(`/api/search/history/match?query=${encodeURIComponent(needle)}`);
+        const payload = await response.json();
+        if (response.ok) setSuggestions(normalizeSearchHistory(payload.matches || []));
+      } catch { /* recent local history remains available */ }
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [inputValue, suggestionsOpen, visibleHistory]);
+
+  const emitResult = useCallback((command, status, detail, metadata = {}) => {
+    if (!command?.request_id || !onCommandResult) return;
+    onCommandResult({ widget: 'search', command: command.command, request_id: command.request_id, status, detail, current_query: query || null, ...metadata });
+  }, [onCommandResult, query]);
+
+  useEffect(() => {
+    if (!aiCommand?.command) return;
+    const commandKey = `${aiCommand.request_id || 'none'}:${aiCommand.command}:${aiCommand.issuedAt || ''}`;
+    if (handledCommands.current.has(commandKey)) return;
+    handledCommands.current.add(commandKey);
+    if (aiCommand.command === 'set_query') {
+      const next = String(aiCommand.query || '');
+      setInputValue(next);
+      setQuery(next);
+      inputRef.current?.focus();
+    }
+    if (aiCommand.command === 'hide_search_result') {
+      const explicitId = String(aiCommand.request_id_to_restore || aiCommand.target_request_id || '').trim();
+      const needle = String(aiCommand.query || '').trim().toLowerCase();
+      const matched = history.find((item) => explicitId === item.request_id || (
+        needle && `${item.display_topic} ${item.query}`.toLowerCase().includes(needle)
+      ));
+      if (matched?.request_id) setHiddenIds((ids) => [...new Set([...ids, matched.request_id])]);
+    }
+    if (['show_current', 'restore_latest', 'restore_search_result', 'show_results', 'set_loading'].includes(aiCommand.command)) setActiveTab('answer');
+    if (aiCommand.command === 'show_history') setActiveTab('history');
+    emitResult(aiCommand, aiCommand.error ? 'failed' : 'completed', aiCommand.error || `Search command ${aiCommand.command} applied.`);
+  }, [aiCommand, emitResult, history]);
+
+  const runSearch = (event) => {
+    event?.preventDefault();
+    const cleaned = inputValue.trim();
+    if (!cleaned || loading) return;
+    const requestId = globalThis.crypto?.randomUUID?.() || `search-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    activeRequestRef.current = requestId;
+    setSuggestionsOpen(false);
+    setActiveTab('answer');
+    setLoading(true);
+    setError('');
+    setQuery(cleaned);
+    setTopic(cleaned);
+    setFeedback(`Searching the live web for ${cleaned}`);
+    window.dispatchEvent(new CustomEvent('aegisTypedTranscript', { detail: {
+      text: `search the web for ${cleaned}`,
+      display_query: cleaned,
+      request_id: requestId,
+      source: 'search_widget',
+    } }));
+  };
+
+  const refreshHistory = async () => {
+    setPendingId('history');
+    try {
+      const response = await fetch('/api/search/history');
+      const payload = await response.json();
+      if (!response.ok) throw new Error('Unable to refresh history.');
+      setHistory(normalizeSearchHistory(payload.history));
+      setActiveTab('history');
+      setFeedback('History refreshed');
+    } catch (historyError) { setError(String(historyError.message)); } finally { setPendingId(''); }
+  };
+
+  const restore = async (requestId = 'latest') => {
+    setPendingId(requestId);
+    try {
+      const endpoint = requestId === 'latest' ? '/api/search/history/restore-latest' : '/api/search/history/restore';
+      const response = await fetch(endpoint, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        ...(requestId === 'latest' ? {} : { body: JSON.stringify({ request_id: requestId }) }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Unable to restore search.');
+      applyCurrent(payload);
+      setActiveTab('answer');
+      setFeedback('Saved research restored');
+    } catch (restoreError) { setError(String(restoreError.message)); } finally { setPendingId(''); }
+  };
+
+  const clearCurrent = async () => {
+    setPendingId('clear');
+    try {
+      const response = await fetch('/api/search/clear-current', { method: 'POST' });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Unable to clear current search.');
+      applyCurrent(payload);
+      setActiveTab('answer');
+      setFeedback('Current research cleared; history preserved');
+    } catch (clearError) { setError(String(clearError.message)); } finally { setPendingId(''); }
+  };
+
+  const deleteHistory = async (requestId) => {
+    setPendingId(`delete:${requestId}`);
+    try {
+      const response = await fetch('/api/search/history/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request_id: requestId }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Unable to delete saved search.');
+      setHistory(normalizeSearchHistory(payload.history));
+      setDeleteId('');
+      setActiveTab('history');
+      setFeedback('Saved search permanently deleted');
+    } catch (deleteError) { setError(String(deleteError.message)); } finally { setPendingId(''); }
+  };
+
+  const copyAnswer = async () => {
+    try {
+      await navigator.clipboard.writeText(parsedAnswer.directAnswer || answer);
+      setFeedback('Direct answer copied');
+    } catch { setFeedback('Clipboard access was unavailable'); }
+  };
+
+  const chooseSuggestion = (item) => {
+    setInputValue(item.query || item.display_topic);
+    setSuggestionsOpen(false);
+    setActiveSuggestion(-1);
+    if (item.request_id) restore(item.request_id);
+  };
+
+  const onInputKeyDown = (event) => {
+    if (!suggestionsOpen || !suggestions.length) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault(); setActiveSuggestion((index) => (index + 1) % suggestions.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault(); setActiveSuggestion((index) => (index <= 0 ? suggestions.length - 1 : index - 1));
+    } else if (event.key === 'Enter' && activeSuggestion >= 0) {
+      event.preventDefault(); chooseSuggestion(suggestions[activeSuggestion]);
+    } else if (event.key === 'Escape') {
+      setSuggestionsOpen(false); setActiveSuggestion(-1);
+    }
   };
 
   if (!isVisible) return null;
-
-  const parsedItems = parseResults(result);
-  const isDefaultState = !result || result === 'Ready to search...';
-
-  const renderContent = () => {
-    if (isLoading) {
-      return <div className="search-loading">Searching web...</div>;
-    }
-    
-    if (isDefaultState) {
-      return (
-        <div className="search-placeholder">
-           Waiting for search results... Ask Nova AI to search!
-        </div>
-      );
-    }
-
-    if (parsedItems.length === 1 && parsedItems[0].snippet.length > 250 && parsedItems[0].title === 'Search Result 1') {
-       return <div className="search-content">{result}</div>;
-    }
-
-    return (
-      <>
-        {parsedItems.map(item => (
-          <div key={item.id} className="mock-result">
-            <div className="mock-result-title">{item.title}</div>
-            <div className="mock-result-snippet">{item.snippet}</div>
-            <div className="mock-result-source">
-              <div className="mock-source-icon" style={{background: item.iconBg}}>{item.iconLetter}</div>
-              <span>{item.source}</span>
-            </div>
-          </div>
-        ))}
-      </>
-    );
-  };
+  const hasResearch = Boolean(answer || results.length || error || loading);
+  const title = topic || query || 'Open web research';
 
   return (
-    <div
-      ref={widgetRef}
-      className={`search-widget ${isDragging ? 'widget-dragging' : ''} ${isResizing ? 'widget-resizing' : ''}`}
-      style={{
-        left: `${widgetPos.x}px`,
-        top: `${widgetPos.y}px`,
-        width: `${widgetSize.width}px`,
-        height: `${widgetSize.height}px`,
-      }}
+    <section
+      className={`search-widget ${aiConnected ? 'is-connected' : ''} ${interactionRef.current ? 'is-interacting' : ''}`}
+      data-aegis-widget="search"
+      style={{ left: windowState.x, top: windowState.y, width: windowState.width, height: windowState.height }}
+      aria-label="Astra live search"
     >
-      <div className="search-header" onMouseDown={handleDragStart}>
-        <div className="search-header-title">Sources</div>
-        <div className="search-header-actions">
-          <button className="close-btn" onClick={(e) => { e.stopPropagation(); onClose(); }} title="Close">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
+      <header className="search-header" onPointerDown={(event) => {
+        if (event.button !== 0 || event.target.closest('button, input, a')) return;
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        interactionRef.current = { type: 'drag', pointerId: event.pointerId, offsetX: event.clientX - windowState.x, offsetY: event.clientY - windowState.y };
+      }}>
+        <div className="search-brand-mark"><Icon name="observatory" size={22} /></div>
+        <div className="search-brand-copy">
+          <h2>{title}</h2>
+          <div className="search-eyebrow"><span className="search-status-dot" />AEGIS LIVE INDEX <span>{aiConnected ? 'CONNECTED' : 'LOCAL'}</span></div>
         </div>
-      </div>
+        <button className="search-icon-button search-close" type="button" onClick={onClose} aria-label="Close Search widget"><Icon name="close" /></button>
+      </header>
 
-      <div className="search-content-wrapper">
-        <div className="search-query-bar">
-          <div className="query-top">
-            <div className="query-label">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-              </svg>
-              Searched web
+      <div className="search-fixed-controls">
+        <form className={`search-form ${inputValue.trim() ? 'has-value' : ''}`} onSubmit={runSearch} role="search" onClick={(event) => { if (!event.target.closest('button')) inputRef.current?.focus(); }}>
+          <Icon name="search" size={19} />
+          <input
+            ref={inputRef}
+            type="search"
+            value={inputValue}
+            onChange={(event) => { setInputValue(event.target.value); setSuggestionsOpen(true); setActiveSuggestion(-1); }}
+            onFocus={() => { setSuggestions(visibleHistory.slice(0, 6)); setSuggestionsOpen(true); }}
+            onBlur={() => window.setTimeout(() => setSuggestionsOpen(false), 140)}
+            onKeyDown={onInputKeyDown}
+            placeholder="Search the live web…"
+            aria-label="Search the live web"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={suggestionsOpen && suggestions.length > 0}
+            aria-controls="search-suggestions"
+            aria-activedescendant={activeSuggestion >= 0 ? `search-suggestion-${activeSuggestion}` : undefined}
+          />
+          {inputValue && <button className="search-clear-input" type="button" onClick={() => { setInputValue(''); inputRef.current?.focus(); }} aria-label="Clear search input"><Icon name="close" size={15} /></button>}
+          {suggestionsOpen && suggestions.length > 0 && (
+            <div className="search-suggestions" id="search-suggestions" role="listbox" aria-label="Recent searches">
+              <div className="search-suggestions-label">RECENT RESEARCH</div>
+              {suggestions.map((item, index) => (
+                <button
+                  id={`search-suggestion-${index}`}
+                  className={index === activeSuggestion ? 'is-active' : ''}
+                  key={item.id}
+                  type="button"
+                  role="option"
+                  aria-selected={index === activeSuggestion}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => chooseSuggestion(item)}
+                >
+                  <Icon name="history" size={15} /><span><strong>{item.display_topic}</strong><small>{item.query || formatSavedAt(item.saved_at)}</small></span><Icon name="arrow" size={14} />
+                </button>
+              ))}
             </div>
-            <div className="query-count">{parsedItems.length}</div>
-          </div>
-          <div className="query-text">
-            {currentQuery || 'Awaiting Search Query...'}
-          </div>
-        </div>
+          )}
+        </form>
 
-        <div className="search-results-list">
-          {renderContent()}
-        </div>
+        <nav className="search-tabs" role="tablist" aria-label="Search views" onKeyDown={(event) => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          const tabs = [...event.currentTarget.querySelectorAll('[role="tab"]')];
+          const currentIndex = tabs.indexOf(document.activeElement);
+          const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (
+            event.key === 'ArrowRight' ? (currentIndex + 1) % tabs.length : (currentIndex - 1 + tabs.length) % tabs.length
+          );
+          event.preventDefault();
+          tabs[nextIndex]?.focus();
+        }}>
+          {[
+            ['answer', 'Answer'], ['results', `Full Search${results.length ? ` · ${results.length}` : ''}`], ['history', `History${history.length ? ` · ${history.length}` : ''}`],
+          ].map(([id, label]) => (
+            <button key={id} id={`search-tab-${id}`} type="button" role="tab" aria-selected={activeTab === id} aria-controls={`search-panel-${id}`} tabIndex={activeTab === id ? 0 : -1} className={activeTab === id ? 'is-active' : ''} onClick={() => id === 'history' ? refreshHistory() : setActiveTab(id)}>{label}</button>
+          ))}
+        </nav>
       </div>
 
-      <div className="resize-handle" onMouseDown={handleResizeStart}></div>
-    </div>
+      <main className="search-scroll-region">
+        {activeTab === 'answer' && (
+          <div className="search-answer-view" id="search-panel-answer" role="tabpanel" aria-labelledby="search-tab-answer">
+            {loading && <div className="search-loading" role="status"><div className="search-scan-mark"><span className="search-scan-arc arc-one" /><span className="search-scan-arc arc-two" /><Icon name="observatory" size={27} /></div><strong>Scanning live sources</strong><p>Building a concise answer and source trail for “{query}”.</p></div>}
+            {!loading && error && <div className="search-error" role="alert"><span>SEARCH INTERRUPTED</span><h3>The live index did not respond.</h3><p>{error}</p><button type="button" onClick={() => inputRef.current?.focus()} disabled={!inputValue.trim()}>Edit search</button></div>}
+            {!loading && !error && !hasResearch && <div className="search-empty"><div className="search-empty-symbol"><Icon name="spark" size={28} /></div><span>LIVE RESEARCH WORKSPACE</span><h3>Start with a precise question.</h3><p>Astra will synthesize a direct answer, organize additional context, and keep every real source one tab away.</p><button type="button" onClick={() => inputRef.current?.focus()}>Focus search <Icon name="arrow" size={16} /></button>{history.length > 0 && <button className="secondary" type="button" onClick={() => restore('latest')}>Restore latest</button>}</div>}
+            {!loading && !error && answer && (
+              <>
+                <article className="search-direct-card search-trail-node">
+                  <div className="search-card-heading"><span><small>01</small><span>DIRECT ANSWER</span></span><button type="button" onClick={copyAnswer}><Icon name="copy" size={15} />Copy</button></div>
+                  <div className="search-answer-text">{(parsedAnswer.directAnswer || answer).split('\n').map((line, index) => line ? <p key={index}>{line.replace(/^[-*]\s*/, '')}</p> : null)}</div>
+                  <div className="search-answer-actions"><button type="button" onClick={clearCurrent} disabled={pendingId === 'clear'}>Clear current</button></div>
+                </article>
+                {answerSections.map((section, index) => {
+                  const open = openSections[index] ?? index === 0;
+                  return <article className="search-section-card search-trail-node" key={`${section.title}-${index}`}>
+                    <button type="button" className="search-section-toggle" onClick={() => setOpenSections((current) => ({ ...current, [index]: !open }))} aria-expanded={open}>
+                      <span><small>{String(index + 2).padStart(2, '0')}</small><span>{section.title}</span></span><Icon name="chevron" size={17} />
+                    </button>
+                    {open && <div className="search-section-body">{section.body.split('\n').filter(Boolean).map((line, lineIndex) => <p key={lineIndex}>{line.replace(/^[-*]\s*/, '')}</p>)}</div>}
+                  </article>;
+                })}
+                <section className="search-source-preview search-trail-node">
+                  <div><span>VERIFIED TRAIL</span><strong>{results.length} live source{results.length === 1 ? '' : 's'}</strong>{answerSources.length ? <ul className="search-source-links">{answerSources.map((source) => <li key={source.link}><a href={source.link} target="_blank" rel="noopener noreferrer"><span>{source.source_name || source.domain}</span><small>{source.title}</small><Icon name="external" size={12} /></a></li>)}</ul> : <p>No linked sources were returned for this answer.</p>}</div>
+                  {results.length > 0 && <button type="button" onClick={() => setActiveTab('results')}>Open all <Icon name="arrow" size={15} /></button>}
+                </section>
+              </>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'results' && (
+          <div className="search-results-view" id="search-panel-results" role="tabpanel" aria-labelledby="search-tab-results">
+            <div className="search-view-intro"><div><span>FULL SEARCH</span><h3>{results.length ? `${results.length} indexed sources` : 'No linked sources yet'}</h3></div></div>
+            {results.length === 0 && <div className="search-inline-empty"><Icon name="search" size={24} /><p>Run a live search to build the source index.</p></div>}
+            <ol className="search-result-list">
+              {results.map((result, index) => (
+                <li key={result.id} className="search-result-card">
+                  {result.thumbnail && <img src={result.thumbnail} alt="" loading="lazy" />}
+                  <div className="search-result-main">
+                    <div className="search-result-meta"><span>{String(index + 1).padStart(2, '0')}</span>{result.link ? <a href={result.link} target="_blank" rel="noopener noreferrer">{result.source_name || result.domain}</a> : <strong>{result.source_name || result.domain}</strong>}{result.date && <time>{result.date}</time>}{result.kind !== 'web' && <em>{result.kind}</em>}</div>
+                    <h3>{result.link ? <a href={result.link} target="_blank" rel="noopener noreferrer">{result.title}<Icon name="external" size={14} /></a> : result.title}</h3>
+                    {result.snippet && <p>{result.snippet}</p>}
+                    {(result.position || result.relevance) && <div className="search-result-signals">{result.position && <span>Rank {result.position}</span>}{result.relevance && <span>Relevance {result.relevance}</span>}</div>}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {activeTab === 'history' && (
+          <div className="search-history-view" id="search-panel-history" role="tabpanel" aria-labelledby="search-tab-history">
+            <div className="search-view-intro"><div><span>RESEARCH ARCHIVE</span><h3>{visibleHistory.length} saved sessions</h3></div>{history.length > 0 && <button type="button" onClick={() => restore('latest')} disabled={pendingId === 'latest'}>Latest <Icon name="arrow" size={15} /></button>}</div>
+            {visibleHistory.length === 0 && <div className="search-inline-empty"><Icon name="history" size={25} /><p>Your completed live searches will appear here.</p></div>}
+            <div className="search-history-list">
+              {visibleHistory.map((item, index) => (
+                <article className="search-history-card" key={item.id}>
+                  <button className="search-history-restore" type="button" onClick={() => restore(item.request_id)} disabled={pendingId === item.request_id}>
+                    <span className="search-history-index">{String(index + 1).padStart(2, '0')}</span><span><strong>{item.display_topic}</strong><small>{item.display_subtopic || item.query || 'Web research'}</small><time>{formatSavedAt(item.saved_at)}</time></span><Icon name="arrow" size={16} />
+                  </button>
+                  <div className="search-history-actions">
+                    <button type="button" onClick={() => setHiddenIds((ids) => [...new Set([...ids, item.request_id])])} aria-label={`Hide ${item.display_topic} for this session`}><Icon name="eyeOff" size={15} /></button>
+                    <button type="button" onClick={() => setDeleteId(item.request_id)} aria-label={`Delete ${item.display_topic}`}><Icon name="trash" size={15} /></button>
+                  </div>
+                  {deleteId === item.request_id && <div className="search-delete-confirm" role="alert"><span>Delete permanently?</span><button type="button" onClick={() => deleteHistory(item.request_id)} disabled={pendingId === `delete:${item.request_id}`}>Delete</button><button type="button" onClick={() => setDeleteId('')}>Keep</button></div>}
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
+
+      <footer className="search-footer"><span className={loading ? 'is-working' : ''}>{loading ? 'INDEXING' : error ? 'ATTENTION' : 'SYSTEM READY'}</span><p aria-live="polite">{feedback}</p><small>{history.length} SAVED · {searchType.toUpperCase()}</small></footer>
+      <button
+        className="search-resize-handle"
+        type="button"
+        aria-label="Resize Search widget"
+        onPointerDown={(event) => {
+          event.preventDefault(); event.currentTarget.setPointerCapture?.(event.pointerId);
+          interactionRef.current = { type: 'resize', pointerId: event.pointerId, x: event.clientX, y: event.clientY, width: windowState.width, height: windowState.height };
+        }}
+      />
+    </section>
   );
 };
 

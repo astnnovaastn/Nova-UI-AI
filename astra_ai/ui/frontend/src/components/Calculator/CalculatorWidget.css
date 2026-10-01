@@ -1,5 +1,15 @@
 /* Calculator Widget Styles - With Dynamic Scaling Support */
 
+.calculator-widget {
+  background: color-mix(in srgb, var(--widget-surface, var(--panel)) 88%, transparent) !important;
+  border-color: var(--widget-border, var(--border)) !important;
+  color: var(--widget-text, var(--fg)) !important;
+  border-radius: var(--theme-radius, 12px) !important;
+  box-shadow: 0 0 24px color-mix(in srgb,var(--widget-accent,var(--red)) calc(var(--theme-glow-strength,.35) * 32%),transparent), inset 0 0 15px color-mix(in srgb,var(--widget-accent,var(--red)) 8%,transparent) !important;
+  backdrop-filter: blur(var(--theme-blur,18px)) !important;
+}
+.calculator-widget .calculator-label,.calculator-widget .calculator-input { color:var(--widget-accent,var(--red)) !important; }
+
 /* Main Container */
 .calculator-widget {
   position: fixed !important;
@@ -162,6 +172,17 @@
   transform: scale(0.95) translateY(0px) !important;
 }
 
+.widget-control-close {
+  background: linear-gradient(135deg, rgba(137, 43, 75, 0.92) 0%, rgba(79, 17, 36, 0.98) 100%) !important;
+  border-color: rgba(255, 160, 189, 0.34) !important;
+  color: rgba(255, 232, 239, 0.96) !important;
+}
+
+.widget-control-close:hover {
+  background: linear-gradient(135deg, rgba(175, 48, 92, 0.98) 0%, rgba(108, 20, 49, 1) 100%) !important;
+  border-color: rgba(255, 197, 216, 0.55) !important;
+}
+
 /* Resize Handle */
 .resize-handle {
   position: absolute !important;
@@ -207,6 +228,10 @@
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4) !important;
   filter: brightness(1.05) !important;
   cursor: grabbing !important;
+}
+
+.resize-handle::before {
+  content: '::' !important;
 }
 
 .calculator-wrapper {

@@ -9,6 +9,7 @@ Write-Host "====================================================================
 Write-Host "  🚀 JARVIS - Complete Startup (Backend + Frontend)" -ForegroundColor Cyan
 Write-Host "============================================================================`n" -ForegroundColor Cyan
 
+$projectRoot = (Get-Location).Path
 $backendPath = ".\astra_ai\ui\backend"
 $frontendPath = ".\astra_ai\ui\frontend"
 
@@ -36,7 +37,7 @@ Write-Host "`n✅ API Key set`n" -ForegroundColor Green
 
 # Start Backend Server in background
 Write-Host "🚀 Starting Backend Server..." -ForegroundColor Cyan
-$backendProcess = Start-Process -FilePath "python" -ArgumentList "server.py" `
+$backendProcess = Start-Process -FilePath (Join-Path $projectRoot 'astra_ai\.venv\Scripts\python.exe') -ArgumentList "server.py" `
     -WorkingDirectory $backendPath `
     -NoNewWindow `
     -PassThru

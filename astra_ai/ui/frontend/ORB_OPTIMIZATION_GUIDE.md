@@ -388,7 +388,7 @@ window.dispatchEvent(new CustomEvent('orbWidgetStateChange', {
 }));
 
 // Trigger demo mode
-window.novaOrb?.triggerDemo();
+window.aegisOrb?.triggerDemo();
 ```
 
 ---

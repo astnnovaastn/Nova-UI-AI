@@ -1,5 +1,5 @@
 """
-Unified Response Management System for Nova AI.
+Unified Response Management System for Aegis AI.
 Combines generation, formatting, and personalization of responses.
 """
 

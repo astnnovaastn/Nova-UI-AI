@@ -1,5 +1,5 @@
 /**
- * JARVIS — Main entry point.
+ * AEGIS — Main entry point.
  *
  * Wires together the orb visualization, WebSocket communication,
  * speech recognition, and audio playback into a single experience.
@@ -7,11 +7,12 @@
 
 import { createOrb, type OrbState, type OrbMood } from "./orb";
 import { orbThemes, type OrbTheme } from "./orb-themes";
-import { createVoiceInput, createAudioPlayer } from "./voice";
+import { createGroqVoiceInput, createLiveVoiceInput, createAudioPlayer } from "./voice";
 import { createSocket } from "./ws";
 import { openSettings, checkFirstTimeSetup, registerOrbThemeChangedHandler } from "./settings";
 import { initWidgets } from "./widgets";
 import "./style.css";
+import { SoundWaveController } from "./sound-wave";
 
 // ---------------------------------------------------------------------------
 // DOM refs ──────────────────────────────────────────────────────────────────
@@ -21,6 +22,8 @@ const statusEl = document.getElementById("status-text")!;
 const errorEl = document.getElementById("error-text")!;
 const badgeEl = document.getElementById("connection-badge") as HTMLDivElement | null;
 const badgeLabelEl = badgeEl?.querySelector("#connection-label") as HTMLSpanElement | null;
+const API_HOST = (import.meta.env.VITE_API_URL || "http://localhost:8340").replace(/\/$/, "");
+const CLIENT_LOCATION_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // State machine & Audio Control
@@ -29,15 +32,13 @@ const badgeLabelEl = badgeEl?.querySelector("#connection-label") as HTMLSpanElem
 type State = "idle" | "listening" | "thinking" | "speaking";
 let currentState: State = "idle";
 // Persist microphone mute state in localStorage
-let isMuted = false;
-const MIC_MUTE_KEY = "novaai_mic_muted";
+let isMuted = true;
+const MIC_MUTE_KEY = "aegisai_mic_muted";
 
 // Restore mute state from localStorage on load
-const storedMute = localStorage.getItem(MIC_MUTE_KEY);
-if (storedMute === "true") {
-  isMuted = true;
-}
+localStorage.setItem(MIC_MUTE_KEY, "true");
 let isAudioPlaying = false;  // Track if audio is currently being played
+let activeVoiceProvider: "gemini_live" | "legacy" = "gemini_live";
 let errorTimer: ReturnType<typeof setTimeout> | null = null;
 
 function showError(msg: string) {
@@ -61,11 +62,46 @@ function setConnected(ok: boolean): void {
 function updateStatus(state: State) {
   const labels: Record<State, string> = {
     idle: "",
-    listening: "listening...",
-    thinking: "thinking...",
+    listening: "",
+    thinking: "",
     speaking: "",
   };
   statusEl.textContent = labels[state];
+}
+
+async function postClientLocation(coords: GeolocationCoordinates): Promise<void> {
+  await fetch(`${API_HOST}/api/client/location`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      accuracy: coords.accuracy,
+    }),
+  });
+}
+
+async function syncClientLocation(highAccuracy = false): Promise<void> {
+  if (!("geolocation" in navigator)) {
+    console.warn("[LOCATION] Browser geolocation is not available; backend will use IP fallback.");
+    return;
+  }
+
+  try {
+    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: highAccuracy,
+        timeout: highAccuracy ? 15000 : 10000,
+        maximumAge: highAccuracy ? 0 : 5 * 60 * 1000,
+      });
+    });
+    await postClientLocation(position.coords);
+    console.log(
+      `[LOCATION] Synced browser coordinates: ${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`
+    );
+  } catch (error) {
+    console.warn("[LOCATION] Browser geolocation sync failed; backend will keep fallback location.", error);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -74,8 +110,29 @@ function updateStatus(state: State) {
 
 const canvas = document.getElementById("orb-canvas") as HTMLCanvasElement;
 const orb = createOrb(canvas);
+const soundWave = new SoundWaveController("sound-wave");
+soundWave.setMuted(isMuted);
 
-const ORB_THEME_KEY = "novaai_orb_theme";
+const soundWaveEl = document.getElementById("sound-wave") as HTMLDivElement | null;
+const transcriptionDots = document.createElement("div");
+transcriptionDots.id = "transcription-dots";
+transcriptionDots.className = "transcription-dots";
+transcriptionDots.setAttribute("aria-hidden", "true");
+for (let i = 0; i < 6; i++) {
+  const dot = document.createElement("span");
+  transcriptionDots.appendChild(dot);
+}
+document.body.appendChild(transcriptionDots);
+
+function setTranscriptionVisual(active: boolean): void {
+  transcriptionDots.classList.toggle("active", active);
+  soundWaveEl?.classList.toggle("visual-hidden", active);
+  if (active) {
+    statusEl.textContent = "";
+  }
+}
+
+const ORB_THEME_KEY = "aegisai_orb_theme";
 const DEFAULT_ORB_THEME = "default";
 let selectedOrbTheme = (localStorage.getItem(ORB_THEME_KEY) || DEFAULT_ORB_THEME).toString();
 
@@ -89,6 +146,7 @@ function applyOrbTheme(themeName: string) {
   selectedOrbTheme = theme.name;
   localStorage.setItem(ORB_THEME_KEY, selectedOrbTheme);
   orb.setThemeColor(theme.orbColor);
+  document.documentElement.style.setProperty('--theme-color', theme.orbColor);
   console.log(`[ORB-THEME] Applied theme: ${theme.label} (${theme.orbColor})`);
 }
 
@@ -105,7 +163,19 @@ const socket = createSocket(WS_URL);
 
 const audioPlayer = createAudioPlayer();
 orb.setAnalyser(audioPlayer.getAnalyser());
+soundWave.setAIAnalyser(audioPlayer.getAnalyser());
 applyOrbTheme(selectedOrbTheme);
+window.addEventListener("themechange", ((event: CustomEvent) => {
+  const detail = event.detail || {};
+  const theme = detail.theme || {};
+  if (theme.orb?.mode === "custom" && theme.orb?.preset) {
+    applyOrbTheme(theme.orb.preset);
+  }
+  if (typeof detail.orbColor === "string") {
+    orb.setThemeColor(detail.orbColor);
+    document.documentElement.style.setProperty('--theme-color', detail.orbColor);
+  }
+}) as EventListener);
 registerOrbThemeChangedHandler((themeName) => {
   applyOrbTheme(themeName);
 });
@@ -114,31 +184,39 @@ function transition(newState: State) {
   if (newState === currentState) return;
   
   console.log(`🔄 [STATE] Transitioning: ${currentState} → ${newState}`);
+  setTranscriptionVisual(false);
   currentState = newState;
+  document.body.dataset.aiState = newState;
   orb.setState(newState as OrbState);
   updateStatus(newState);
+  soundWave.setState(newState);
 
   switch (newState) {
     case "idle":
       console.log("🔊 [STATE] Idle - Resuming microphone for next input");
       if (!isMuted && !isAudioPlaying) {
-        voiceInput.resume();
+        voiceInput?.resume();
       }
       break;
     case "listening":
       console.log("🎤 [STATE] Listening - Microphone active and ready");
       if (!isMuted && !isAudioPlaying) {
-        voiceInput.resume();
+        voiceInput?.resume();
       }
       break;
     case "thinking":
       console.log("🔇 [STATE] Thinking - PAUSING microphone (processing user input)");
-      voiceInput.pause();
+      voiceInput?.pause();
       break;
     case "speaking":
       console.log("🔇 [STATE] Speaking - PAUSING microphone (AI audio playing)");
-      voiceInput.pause();
+      voiceInput?.pause();
       break;
+  }
+  // Speaking is intentionally not a microphone lock: resume after the
+  // legacy state branch so Gemini Live can receive a user barge-in.
+  if (newState === "speaking" && !isMuted) {
+    voiceInput?.resume();
   }
 }
 
@@ -146,27 +224,69 @@ function transition(newState: State) {
 // Voice input
 // ---------------------------------------------------------------------------
 
-let voiceInput: ReturnType<typeof createVoiceInput>;
-function setupVoiceInput() {
-  voiceInput = createVoiceInput(
+let voiceInput: ReturnType<typeof createGroqVoiceInput>;
+function setupLegacyVoiceInput() {
+  voiceInput?.stop();
+  voiceInput = createGroqVoiceInput(
     (text: string) => {
-      // If muted, ignore ALL input (extra safety)
       if (isMuted) {
         console.log("[MIC-MUTE] Ignoring transcript while muted");
         return;
       }
-      console.log(` [FRONTEND] User spoke: "${text}"`);
-      audioPlayer.stop();
-      console.log(` [FRONTEND → BACKEND] Sending transcript over WebSocket...`);
-      socket.send({ type: "transcript", text, isFinal: true });
-      setOrbMood("neutral");
-      console.log(`📤 [FRONTEND] Transitioning to thinking state...`);
+
+      const cleaned = text.trim();
+      if (!cleaned) {
+        return;
+      }
+
+      console.log("📤 [TRANSCRIPT] Sending user transcript to server:", cleaned);
+      socket.send({
+        type: "transcript",
+        text: cleaned,
+        isFinal: true,
+      });
+      setTranscriptionVisual(false);
       transition("thinking");
     },
     (msg: string) => {
       showError(msg);
+    },
+    () => {
+      if (!isMuted && !isAudioPlaying) {
+        setTranscriptionVisual(false);
+        transition("listening");
+      }
+    },
+    () => {
+      if (!isMuted && !isAudioPlaying) {
+        setTranscriptionVisual(true);
+      }
+    },
+    () => {
+      setTranscriptionVisual(false);
     }
   );
+}
+
+function setupLiveVoiceInput() {
+  voiceInput?.stop();
+  voiceInput = createLiveVoiceInput(
+    (pcm) => {
+      // Keep capture alive while Aegis speaks so Gemini Live can detect barge-in.
+      if (!isMuted && activeVoiceProvider === "gemini_live") {
+        socket.sendBinary(pcm);
+      }
+    },
+    (message) => showError(message)
+  );
+}
+
+function startPreferredVoiceSession() {
+  activeVoiceProvider = "gemini_live";
+  setupLiveVoiceInput();
+  socket.send({ type: "live_start" });
+  voiceInput.start();
+  transition("listening");
 }
 
 // ---------------------------------------------------------------------------
@@ -177,15 +297,24 @@ audioPlayer.onFinished(() => {
   console.log("🎵 [AUDIO-FINISHED] Playback complete");
   console.log("🔊 [AUDIO-FINISHED] Audio stream ended, marking playback flag as false");
   isAudioPlaying = false;
-  
-  // Add delay (800ms) to allow audio data to clear from microphone buffer
-  // This prevents residual audio from being picked up
-  console.log("⏱️ [AUDIO-FINISHED] Waiting 800ms for audio buffer to clear...");
-  setTimeout(() => {
-    console.log("⏱️ [AUDIO-FINISHED] Buffer clear delay complete");
-    console.log("🎤 [AUDIO-FINISHED] Transitioning to idle - resuming listening");
-    transition("idle");
-  }, 800);
+  // Gemini Live owns end-of-turn detection; resume immediately when the
+  // browser playback queue drains instead of adding an artificial delay.
+  console.log("🎤 [AUDIO-FINISHED] Transitioning immediately to listening");
+  transition("listening");
+});
+
+socket.onBinary((pcm) => {
+  if (activeVoiceProvider !== "gemini_live") return;
+  if (!isAudioPlaying) {
+    isAudioPlaying = true;
+    transition("speaking");
+  }
+  void audioPlayer.enqueuePcm(pcm, 24000);
+});
+
+socket.onOpen(() => {
+  setConnected(true);
+  if (!isMuted) startPreferredVoiceSession();
 });
 
 // ---------------------------------------------------------------------------
@@ -195,10 +324,65 @@ audioPlayer.onFinished(() => {
 socket.onMessage((msg) => {
   const type = msg.type as string;
 
+  if (type === "live_status") {
+    const provider = String(msg.provider || "gemini_live");
+    const liveState = String(msg.state || "idle");
+    if (badgeLabelEl && provider !== "none") {
+      badgeLabelEl.textContent = provider === "legacy" ? "legacy fallback" : "Gemini Live";
+    }
+    if (provider === "legacy" && activeVoiceProvider !== "legacy") {
+      activeVoiceProvider = "legacy";
+      setupLegacyVoiceInput();
+      if (!isMuted) voiceInput.start();
+      showError("Gemini Live is unavailable; using legacy voice for this session.");
+    } else if (provider === "gemini_live") {
+      activeVoiceProvider = "gemini_live";
+    }
+    if (liveState === "connecting") transition("thinking");
+    else if (liveState === "listening" && !isMuted && !isAudioPlaying) transition("listening");
+    else if (liveState === "error") showError("No AI voice provider is available.");
+  }
+
+  else if (type === "live_input_transcript") {
+    console.log("[GEMINI-LIVE] User:", String(msg.text || ""));
+  }
+
+  else if (type === "live_output_transcript") {
+    const text = String(msg.text || "");
+    console.log("[GEMINI-LIVE] Aegis:", text);
+    if (/thank|great|awesome|perfect|good|excellent|nice/i.test(text)) setOrbMood("good");
+    else if (/sorry|error|fail|problem|issue/i.test(text)) setOrbMood("error");
+    else setOrbMood("neutral");
+  }
+
+  else if (type === "live_turn_complete") {
+    audioPlayer.finishPcmTurn();
+    if (!isAudioPlaying && !isMuted) transition("listening");
+  }
+
+  else if (type === "live_interrupted") {
+    audioPlayer.stop();
+    isAudioPlaying = false;
+    if (!isMuted) transition("listening");
+  }
+
+  else if (type === "live_error") {
+    showError(String(msg.message || "Gemini Live error"));
+  }
+
+  else if (type === 'typed_transcript_status') {
+    window.dispatchEvent(new CustomEvent('aegisTypedTranscriptStatus', { detail: {
+      status: String(msg.status || 'failed'),
+      request_id: String(msg.request_id || ''),
+      source: String(msg.source || 'server'),
+      message: String(msg.detail || ''),
+    } }));
+  }
+
   // =========================================================================
   // MICROPHONE CONTROL - Explicit disable/enable from backend
   // =========================================================================
-  if (type === "mic_control") {
+  else if (type === "mic_control") {
     const action = msg.action as string;
     const reason = msg.reason as string;
     
@@ -240,6 +424,10 @@ socket.onMessage((msg) => {
     } else {
       setOrbMood("neutral");
     }
+  } else if (type === "live_transcript") {
+    const text = msg.text as string;
+    console.log(`📝 [LIVE-TRANSCRIPT] ${text}`);
+    setOrbMood("neutral");
   }
 
   // =========================================================================
@@ -273,7 +461,74 @@ socket.onMessage((msg) => {
       isAudioPlaying = false;
       transition("idle");
     }
-  } 
+  }
+
+  // =========================================================================
+  // WIDGET CONTROL - AI requests the UI to open/close/toggle a widget
+  // =========================================================================
+  else if (type === "widget_connection") {
+    const widget = String(msg.widget || '');
+    const status = String(msg.status || 'disconnected').toLowerCase();
+    const controller = (window as any).aegisWidgetControl;
+    if (!controller) {
+      socket.send({
+        type: 'widget_action_result', protocol_version: 2, widget,
+        command: status === 'disconnected' ? 'disconnect' : 'connect',
+        request_id: msg.request_id, status: 'failed',
+        detail: 'Widget controller is not available in the frontend.',
+      });
+    } else {
+      controller(status === 'disconnected' ? 'disconnect' : 'connection', widget, {
+        protocol_version: 2,
+        request_id: msg.request_id,
+        status,
+        connection_id: msg.connection_id,
+        detail: msg.detail,
+      });
+      if (status !== 'disconnected' && msg.request_snapshot) {
+        window.setTimeout(() => controller('snapshot', widget, {
+          protocol_version: 2,
+          request_id: msg.request_id,
+          connection_id: msg.connection_id,
+        }), 0);
+      }
+    }
+  }
+
+  else if (type === "widget_control") {
+    const command = msg.command as string;
+    const widget = msg.widget as string;
+
+    console.log(`🧩 [WIDGET-CONTROL] ${command} ${widget}`);
+    const { type: _type, widget: _widget, command: _command, arguments: commandArguments, payload: commandPayload, ...envelope } = msg;
+    const widgetPayload = {
+      ...envelope,
+      ...(commandPayload && typeof commandPayload === 'object' ? commandPayload : {}),
+      ...(commandArguments && typeof commandArguments === 'object' ? commandArguments : {}),
+    };
+    if (widget === "ui" && (window as any).aegisUiControl) {
+      (window as any).aegisUiControl(command, widgetPayload);
+    } else if ((window as any).aegisWidgetControl) {
+      (window as any).aegisWidgetControl(command, widget, widgetPayload);
+    } else {
+      console.warn("⚠️ [WIDGET-CONTROL] No widget controller available");
+      setTranscriptionVisual(false);
+      socket.send({
+        type: 'widget_action_result',
+        widget,
+        command,
+        request_id: msg.request_id,
+        status: 'failed',
+        detail: 'Widget controller is not available in the frontend.',
+      });
+    }
+  }
+
+  else if (type === "widget_action_ack") {
+    console.log(
+      `[WIDGET-ACTION] Server acknowledged ${String(msg.widget)} ${String(msg.command)}: ${String(msg.status)}`
+    );
+  }
 
   // =========================================================================
   // STATUS UPDATES - Server state notifications
@@ -350,7 +605,7 @@ socket.onMessage((msg) => {
 setConnected(false);
 updateStatus("idle");
 
-console.log(" [INIT] Starting Nova AI Frontend Integration");
+console.log(" [INIT] Starting Aegis AI Frontend Integration");
 console.log(" [INIT] WebSocket URL:", WS_URL);
 console.log(" [INIT] Creating orb visualization...");
 console.log(" [INIT] Creating voice input system...");
@@ -358,11 +613,10 @@ console.log(" [INIT] Creating audio player...");
 
 // Start listening after a brief delay for the orb to render
 setTimeout(() => {
-  setupVoiceInput();
+  setupLiveVoiceInput();
   console.log("🎧 [INIT] Voice input ready, transitioning to listening...");
   if (!isMuted) {
-    voiceInput.start();
-    transition("listening");
+    startPreferredVoiceSession();
   } else {
     transition("idle");
   }
@@ -387,6 +641,122 @@ console.log("✅ [INIT] Frontend initialization complete!");
 
 // Initialize React widgets
 initWidgets();
+syncClientLocation(true);
+window.setInterval(() => {
+  syncClientLocation(false);
+}, CLIENT_LOCATION_SYNC_INTERVAL_MS);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    syncClientLocation(false);
+  }
+});
+
+window.addEventListener('aegisWidgetActionResult', (event: Event) => {
+  const detail = (event as CustomEvent).detail || {};
+  socket.send({
+    type: 'widget_action_result',
+    protocol_version: detail.protocol_version || 2,
+    widget: detail.widget,
+    command: detail.command,
+    request_id: detail.request_id,
+    status: detail.status,
+    detail: detail.detail,
+    provider: detail.provider,
+    model: detail.model,
+    backup_id: detail.backup_id,
+    image_number: detail.image_number,
+    selected_image_id: detail.selected_image_id,
+    selected_image_number: detail.selected_image_number,
+    selected_prompt: detail.selected_prompt,
+    created_at: detail.created_at,
+    current_view: detail.current_view,
+    query: detail.query,
+    match_count: detail.match_count,
+    fallback_from: detail.fallback_from,
+    error_code: detail.error_code,
+    retry_after_seconds: detail.retry_after_seconds,
+    data: detail.data,
+    state_revision: detail.state_revision,
+  });
+});
+
+window.addEventListener('aegisTypedTranscript', (event: Event) => {
+  const detail = (event as CustomEvent).detail || {};
+  const text = String(detail.text || '').trim();
+  const requestId = String(detail.request_id || '').trim();
+  const publishStatus = (status: 'accepted' | 'busy' | 'failed', message: string) => {
+    window.dispatchEvent(new CustomEvent('aegisTypedTranscriptStatus', { detail: {
+      status,
+      message,
+      request_id: requestId,
+      source: detail.source || 'typed_input',
+    } }));
+  };
+
+  if (!text || !requestId) {
+    publishStatus('failed', 'A search query and request ID are required.');
+    return;
+  }
+  if (!socket.isConnected()) {
+    publishStatus('failed', 'Aegis is offline. Reconnect and try again.');
+    return;
+  }
+  if (currentState === 'thinking' || currentState === 'speaking') {
+    publishStatus('busy', 'Aegis is finishing another turn. Try again in a moment.');
+    return;
+  }
+
+  const source = String(detail.source || 'typed_input').toLowerCase();
+  socket.send({
+    // News needs the same structured retrieval pipeline as Search. Sending it
+    // through Gemini Live skips the `show_news` result message entirely.
+    type: ['search_widget', 'news_widget'].includes(source) ? 'transcript' : 'live_text',
+    text,
+    display_query: String(detail.display_query || text),
+    request_id: requestId,
+    source,
+    continuation: detail.continuation === true,
+    research_id: String(detail.research_id || ''),
+    isFinal: true,
+  });
+  setTranscriptionVisual(false);
+  if (voiceInput) transition('thinking');
+  publishStatus('accepted', 'Aegis accepted the live search.');
+});
+
+window.addEventListener('aegisWidgetTelemetry', (event: Event) => {
+  const detail = (event as CustomEvent).detail || {};
+  if (detail.type !== 'widget_telemetry' || detail.protocol_version !== 2) return;
+  socket.send(detail);
+});
+
+window.addEventListener('aegisWidgetConnectionRequest', (event: Event) => {
+  const detail = (event as CustomEvent).detail || {};
+  if (detail.action !== 'disconnect' && detail.action !== 'connect') return;
+  socket.send({
+    type: 'widget_connection_request',
+    protocol_version: 2,
+    action: detail.action,
+    widget: detail.widget,
+    connection_id: detail.connection_id,
+  });
+});
+
+// Listen for widget open/close events to reposition the orb
+window.addEventListener('orbWidgetStateChange', (ev: Event) => {
+  try {
+    const detail = (ev as CustomEvent).detail || {};
+    const hasAny = !!detail.hasAnyWidgetOpen;
+    orb.setPosition(hasAny ? 'right' : 'center');
+
+    if (soundWaveEl) {
+      soundWaveEl.classList.toggle("shifted-right", hasAny);
+    }
+    transcriptionDots.classList.toggle("shifted-right", hasAny);
+  } catch (e) {
+    console.warn('[ORB-EVENT] Failed to handle orbWidgetStateChange', e);
+  }
+});
 
 // ---------------------------------------------------------------------------
 // UI Controls
@@ -396,22 +766,22 @@ const btnMute = document.getElementById("btn-mute")!;
 const btnMenu = document.getElementById("btn-menu")!;
 const menuDropdown = document.getElementById("menu-dropdown")!;
 const btnRestart = document.getElementById("btn-restart")!;
-const btnFixSelf = document.getElementById("btn-fix-self")!;
 
 btnMute.addEventListener("click", (e) => {
   e.stopPropagation();
   isMuted = !isMuted;
   localStorage.setItem(MIC_MUTE_KEY, isMuted ? "true" : "false");
   btnMute.classList.toggle("muted", isMuted);
+  soundWave.setMuted(isMuted);
   if (isMuted) {
     // Fully stop and destroy the voice input system
     if (voiceInput) voiceInput.stop();
+    socket.send({ type: "live_stop" });
+    audioPlayer.stop();
+    isAudioPlaying = false;
     transition("idle");
   } else {
-    // Re-create and start the voice input system
-    setupVoiceInput();
-    voiceInput.start();
-    transition("listening");
+    startPreferredVoiceSession();
   }
 });
 
@@ -446,21 +816,41 @@ btnRestart.addEventListener("click", async (e) => {
   }
 });
 
-btnFixSelf.addEventListener("click", (e) => {
-  e.stopPropagation();
-  menuDropdown.style.display = "none";
-  // Activate work mode on the WebSocket session (JARVIS becomes Claude Code's voice)
-  socket.send({ type: "fix_self" });
-  statusEl.textContent = "entering work mode...";
-});
-
 // Settings button
 const btnSettings = document.getElementById("btn-settings")!;
 btnSettings.addEventListener("click", (e) => {
   e.stopPropagation();
-  menuDropdown.style.display = "none";
+  menuDropdown.style.display = menuDropdown.style.display === "none" ? "block" : "none";
   openSettings();
 });
+
+(window as any).aegisUiControl = (command: string, payload: Record<string, unknown> = {}) => {
+  const normalized = String(command || "").trim().toLowerCase();
+  let status = "completed";
+  let detail = `UI command ${normalized} completed.`;
+  try {
+    if (normalized === "mute" && !isMuted) btnMute.click();
+    else if (normalized === "unmute" && isMuted) btnMute.click();
+    else if (normalized === "open_menu") menuDropdown.style.display = "block";
+    else if (normalized === "close_menu") menuDropdown.style.display = "none";
+    else if (normalized === "open_settings") openSettings();
+    else if (normalized === "restart") throw new Error("Restart must be confirmed and executed by the backend.");
+    else if (!["mute", "unmute", "open_menu", "close_menu", "open_settings"].includes(normalized)) {
+      throw new Error(`Unsupported UI command: ${normalized}`);
+    }
+  } catch (error) {
+    status = "failed";
+    detail = error instanceof Error ? error.message : String(error);
+  }
+  socket.send({
+    type: "widget_action_result",
+    widget: "ui",
+    command: normalized,
+    request_id: payload.request_id,
+    status,
+    detail,
+  });
+};
 
 // First-time setup detection — check after a short delay for server readiness
 setTimeout(() => {

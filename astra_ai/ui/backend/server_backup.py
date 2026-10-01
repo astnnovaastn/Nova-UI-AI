@@ -22,14 +22,17 @@ import os
 import json
 import asyncio
 import base64
+import io
 import logging
 import subprocess
 import threading
 import queue
 import time
 import uuid
+import sys
+from collections import deque
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Set
+from typing import Optional, Dict, Any, List, Set, Tuple
 from datetime import datetime
 from contextlib import asynccontextmanager
 
@@ -38,7 +41,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent.parent.parent / '.env')
 
 # FastAPI & WebSocket
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile, Form
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -47,9 +50,61 @@ import uvicorn
 import requests
 import re
 import yaml
+from PIL import Image
 
 # Image Backup Manager
 from image_backup_manager import ImageBackupManager
+from search_state import (
+    apply_search_widget_command,
+    build_frontend_payload,
+    delete_history_entry,
+    default_search_widget_state,
+    find_history_matches,
+    get_history_preview,
+    load_search_widget_state,
+    resolve_history_request_id,
+    restore_history_entry,
+    restore_latest_entry,
+    save_search_widget_state,
+)
+from notes_state import (
+    add_note,
+    add_summary,
+    clear_notes,
+    delete_note as delete_saved_note,
+    delete_summary,
+    find_matching_note,
+    load_notes_state,
+    prepare_notes_state_dir,
+    update_note,
+)
+from weather_runtime import WeatherRuntimeService
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+try:
+    from astra_ai.services.weather_service import WeatherService
+except ImportError:
+    from services.weather_service import WeatherService
+
+try:
+    from astra_ai.core.search_intent import (
+        extract_search_query,
+        format_search_display_subtopic,
+        format_search_display_topic,
+        is_explicit_search_request,
+        parse_search_request,
+    )
+except ImportError:
+    from astra_ai.core.search_intent import (
+        extract_search_query,
+        format_search_display_subtopic,
+        format_search_display_topic,
+        is_explicit_search_request,
+        parse_search_request,
+    )
 
 # Configure logging
 logging.basicConfig(
@@ -80,6 +135,379 @@ class ServerConfig:
 IMAGE_CONFIG_PATH = Path(__file__).parent / "config.yaml"
 
 
+def _first_real_api_key(*candidates: Optional[str]) -> str:
+    for candidate in candidates:
+        cleaned = (candidate or "").strip()
+        if not cleaned:
+            continue
+        lowered = cleaned.lower()
+        if "your" in lowered and "key" in lowered:
+            continue
+        if lowered in {"changeme", "replace-me", "replace_with_real_key"}:
+            continue
+        return cleaned
+    return ""
+
+
+def _get_notes_openai_api_key() -> str:
+    return _first_real_api_key(
+        os.getenv("NOTES_WIDGET_OPENAI_API_KEY"),
+        os.getenv("OPENAI_API_KEY"),
+    )
+
+
+def _get_notes_openai_model() -> str:
+    model = (os.getenv("NOTES_WIDGET_OPENAI_MODEL") or os.getenv("OPENAI_NOTES_MODEL") or "gpt-4o").strip()
+    return model or "gpt-4o"
+
+
+def _get_notes_openrouter_api_key() -> str:
+    return _first_real_api_key(
+        os.getenv("NOTES_WIDGET_OPENROUTER_API_KEY"),
+        os.getenv("OPENROUTER_API_KEY"),
+        os.getenv("openrouter_api_key"),
+    )
+
+
+def _get_notes_openrouter_model() -> str:
+    model = (
+        os.getenv("NOTES_WIDGET_OPENROUTER_MODEL")
+        or os.getenv("OPENROUTER_NOTES_MODEL")
+        or "openai/gpt-4o-mini"
+    ).strip()
+    return model or "openai/gpt-4o-mini"
+
+
+def _get_notes_groq_api_key() -> str:
+    return _first_real_api_key(
+        os.getenv("NOTES_WIDGET_GROQ_API_KEY"),
+        os.getenv("GROQ_API_KEY"),
+    )
+
+
+def _get_notes_groq_model() -> str:
+    model = (
+        os.getenv("NOTES_WIDGET_GROQ_MODEL")
+        or os.getenv("GROQ_NOTES_MODEL")
+        or "llama-3.3-70b-versatile"
+    ).strip()
+    return model or "llama-3.3-70b-versatile"
+
+
+def _get_notes_ai_provider_chain() -> List[Dict[str, Any]]:
+    providers: List[Dict[str, Any]] = []
+
+    openai_key = _get_notes_openai_api_key()
+    if openai_key:
+        providers.append(
+            {
+                "name": "openai",
+                "model": _get_notes_openai_model(),
+                "url": "https://api.openai.com/v1/chat/completions",
+                "headers": {
+                    "Authorization": f"Bearer {openai_key}",
+                    "Content-Type": "application/json",
+                },
+            }
+        )
+
+    openrouter_key = _get_notes_openrouter_api_key()
+    if openrouter_key:
+        providers.append(
+            {
+                "name": "openrouter",
+                "model": _get_notes_openrouter_model(),
+                "url": "https://openrouter.ai/api/v1/chat/completions",
+                "headers": {
+                    "Authorization": f"Bearer {openrouter_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://nova-ai.local",
+                    "X-Title": "NOVA AI Notes",
+                },
+            }
+        )
+
+    groq_key = _get_notes_groq_api_key()
+    if groq_key:
+        providers.append(
+            {
+                "name": "groq",
+                "model": _get_notes_groq_model(),
+                "url": "https://api.groq.com/openai/v1/chat/completions",
+                "headers": {
+                    "Authorization": f"Bearer {groq_key}",
+                    "Content-Type": "application/json",
+                },
+            }
+        )
+
+    return providers
+
+
+def _get_notes_ai_provider_status() -> Dict[str, Any]:
+    return {
+        "configured": {
+            "openai": bool(_get_notes_openai_api_key()),
+            "openrouter": bool(_get_notes_openrouter_api_key()),
+            "groq": bool(_get_notes_groq_api_key()),
+        },
+        "order": [provider["name"] for provider in _get_notes_ai_provider_chain()],
+    }
+
+
+def _safe_json_loads(raw_text: str) -> Dict[str, Any]:
+    try:
+        data = json.loads(raw_text or "{}")
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return {
+        "assistant_response": (raw_text or "").strip(),
+        "updated_note": "",
+        "summary_text": (raw_text or "").strip(),
+        "title": "",
+    }
+
+
+def _load_weather_service() -> WeatherService:
+    return WeatherService()
+
+
+DEFAULT_WEATHER_FALLBACK_LOCATION = "Milan, IT"
+IPINFO_LOCATION_URL = "https://ipinfo.io/json"
+
+
+def _parse_weather_widget_response(response_text: str) -> Optional[Dict[str, Any]]:
+    raw = str(response_text or "").strip()
+    if not raw.startswith("WEATHER_DISPLAY_SHOW:"):
+        return None
+
+    try:
+        header, weather_section = raw.split("|WEATHER_DATA:", 1)
+        location = header.replace("WEATHER_DISPLAY_SHOW:", "", 1).strip() or DEFAULT_WEATHER_FALLBACK_LOCATION
+        weather_data = json.loads(weather_section.strip())
+        if not isinstance(weather_data, dict):
+            return None
+        return {
+            "location": location,
+            "weather_data": weather_data,
+        }
+    except Exception as exc:
+        logger.error("[WEATHER] Failed to parse weather widget response: %s", exc)
+        return None
+
+
+def _build_weather_spoken_summary(location: str, weather_data: Dict[str, Any]) -> str:
+    condition = str(weather_data.get("condition") or "current conditions").strip()
+    temperature = weather_data.get("temperature")
+    feels_like = weather_data.get("feelsLike")
+    humidity = weather_data.get("humidity")
+    wind_speed = weather_data.get("windSpeed")
+    wind_direction = str(weather_data.get("windDirection") or "").strip()
+
+    parts = [f"Here's the weather for {location}."]
+    if temperature not in {None, "", "--"}:
+        parts.append(f"It's {temperature} degrees Celsius")
+        if feels_like not in {None, "", "--"}:
+            parts[-1] += f", feeling like {feels_like}."
+        else:
+            parts[-1] += "."
+    if condition:
+        parts.append(f"Conditions are {condition.lower()}.")
+    if humidity not in {None, "", "--"}:
+        parts.append(f"Humidity is {humidity} percent.")
+    if wind_speed not in {None, "", "--"}:
+        wind_text = f"Winds are around {wind_speed} kilometers per hour"
+        if wind_direction and wind_direction != "--":
+            wind_text += f" from the {wind_direction}"
+        parts.append(f"{wind_text}.")
+    return " ".join(parts)
+
+
+def _is_where_am_i_request(text: str) -> bool:
+    lowered = str(text or "").strip().lower()
+    return bool(
+        re.search(
+            r"\b(where am i|what(?:'s| is) my location|what city am i in|which city am i in|where are we)\b",
+            lowered,
+        )
+    )
+
+
+def _is_local_weather_request(text: str) -> bool:
+    lowered = str(text or "").strip().lower()
+    has_weather_language = bool(
+        re.search(r"\b(weather|temperature|forecast|rain|snow|humidity|wind|sunrise|sunset)\b", lowered)
+    )
+    refers_to_current_place = bool(
+        re.search(r"\b(here|my location|this place|current location|where i am|around me)\b", lowered)
+    )
+    return has_weather_language and refers_to_current_place
+
+
+def _build_location_spoken_summary(location_snapshot: Dict[str, Any]) -> str:
+    label = str(location_snapshot.get("label") or "").strip()
+    latitude = location_snapshot.get("latitude")
+    longitude = location_snapshot.get("longitude")
+    if label:
+        return f"Your current server-detected location is {label}."
+    if latitude is not None and longitude is not None:
+        return f"Your current server-detected location is latitude {latitude:.4f} and longitude {longitude:.4f}."
+    return f"I do not have a detected location yet, so I will use {DEFAULT_WEATHER_FALLBACK_LOCATION} as the weather default."
+
+
+def _get_current_location_query() -> Tuple[str, Dict[str, Any]]:
+    snapshot = state.get_client_location()
+    weather_query = str(snapshot.get("weather_query") or "").strip()
+    label = str(snapshot.get("label") or "").strip()
+    if weather_query:
+        return weather_query, snapshot
+    if label:
+        return label, snapshot
+    return DEFAULT_WEATHER_FALLBACK_LOCATION, snapshot
+
+
+async def generate_notes_ai_completion(
+    *,
+    mode: str,
+    note_content: str,
+    instruction: str,
+    note_id: str = "",
+    category: str = "",
+    conversation: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    provider_chain = _get_notes_ai_provider_chain()
+    if not provider_chain:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Notes AI is not configured. Set a notes AI provider key in .env "
+                "(OPENAI_API_KEY, NOTES_WIDGET_OPENAI_API_KEY, OPENROUTER_API_KEY, or GROQ_API_KEY) "
+                "and restart the server."
+            ),
+        )
+
+    cleaned_mode = (mode or "chat").strip().lower()
+    cleaned_note = (note_content or "").strip()
+    cleaned_instruction = (instruction or "").strip()
+    cleaned_category = (category or "").strip()
+    cleaned_note_id = (note_id or "").strip()
+    recent_turns = conversation[-8:] if isinstance(conversation, list) else []
+
+    mode_guidance = {
+        "summary": "Summarize the supplied note clearly. Return a concise assistant response and a clean summary_text.",
+        "improve": "Improve the supplied note for clarity, grammar, and structure. Return the full improved note in updated_note.",
+        "chat": "Answer the user's request using only the supplied note context. If the user asks to rewrite or expand the note, provide the proposed full rewritten note in updated_note.",
+    }.get(cleaned_mode, "Answer the user's request using the supplied note context.")
+
+    system_prompt = (
+        "You are Astra Notes AI, a dedicated GPT-4o assistant that works only inside the Notes widget. "
+        "You must operate only on the note context supplied to you. "
+        "Always return strict JSON with the keys: assistant_response, updated_note, summary_text, title. "
+        "If a field does not apply, return an empty string for it. "
+        "Do not include markdown fences or any text outside the JSON object. "
+        f"{mode_guidance}"
+    )
+
+    user_payload = {
+        "mode": cleaned_mode,
+        "instruction": cleaned_instruction,
+        "note_id": cleaned_note_id,
+        "category": cleaned_category,
+        "note_content": cleaned_note,
+        "conversation": [
+            {
+                "role": str(turn.get("role") or "user"),
+                "content": str(turn.get("content") or "").strip(),
+            }
+            for turn in recent_turns
+            if str(turn.get("content") or "").strip()
+        ],
+    }
+
+    payload_template = {
+        "temperature": 0.35,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
+        ],
+    }
+
+    loop = asyncio.get_event_loop()
+    provider_errors: List[str] = []
+
+    for provider in provider_chain:
+        provider_name = str(provider.get("name") or "unknown")
+        provider_model = str(provider.get("model") or "").strip()
+        payload = {
+            **payload_template,
+            "model": provider_model,
+        }
+
+        def make_request(active_provider=provider, active_payload=payload):
+            return requests.post(
+                str(active_provider["url"]),
+                headers=active_provider["headers"],
+                json=active_payload,
+                timeout=60,
+            )
+
+        try:
+            response = await loop.run_in_executor(None, make_request)
+        except Exception as exc:
+            logger.error("[NOTES AI] %s request exception: %s", provider_name.upper(), exc)
+            provider_errors.append(f"{provider_name}: request error")
+            continue
+
+        if response.status_code != 200:
+            error_text = response.text[:600] if response.text else "No response body"
+            lowered_error = error_text.lower()
+            logger.error("[NOTES AI] %s error %s: %s", provider_name.upper(), response.status_code, error_text)
+
+            if response.status_code == 401 or "invalid_api_key" in lowered_error or "incorrect api key" in lowered_error:
+                provider_errors.append(f"{provider_name}: invalid API key")
+            elif response.status_code == 429:
+                provider_errors.append(f"{provider_name}: rate limit reached")
+            else:
+                provider_errors.append(f"{provider_name}: HTTP {response.status_code}")
+            continue
+
+        result = response.json()
+        content = (
+            result.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+        )
+        parsed = _safe_json_loads(content)
+        assistant_response = str(parsed.get("assistant_response") or "").strip()
+        updated_note = str(parsed.get("updated_note") or "").strip()
+        summary_text = str(parsed.get("summary_text") or "").strip()
+        title = str(parsed.get("title") or "").strip()
+
+        if not assistant_response and summary_text:
+            assistant_response = summary_text
+        if cleaned_mode == "improve" and not updated_note:
+            updated_note = assistant_response
+
+        return {
+            "success": True,
+            "mode": cleaned_mode,
+            "provider": provider_name,
+            "model": provider_model,
+            "assistant_response": assistant_response,
+            "updated_note": updated_note,
+            "summary_text": summary_text or assistant_response,
+            "title": title,
+        }
+
+    detail = "Notes AI request failed across all configured providers."
+    if provider_errors:
+        detail = f"{detail} {'; '.join(provider_errors)}"
+    raise HTTPException(status_code=502, detail=detail)
+
+
 def load_image_generation_config() -> Dict[str, Any]:
     """Read widget image generation settings from backend config.yaml and environment."""
     config = {
@@ -88,6 +516,8 @@ def load_image_generation_config() -> Dict[str, Any]:
         "fallback_model": "",
         "enabled": True,
         "api_key": "",
+        "pollinations_api_key": "",
+        "allow_pollinations_fallback": True,
     }
 
     try:
@@ -107,12 +537,26 @@ def load_image_generation_config() -> Dict[str, Any]:
         config["model"] = image_widget.get("model", google_provider.get("model", config["model"]))
         config["fallback_model"] = image_widget.get("fallback_model", google_provider.get("fallback_model", config["fallback_model"]))
         config["enabled"] = image_widget.get("enabled", True)
-        config["api_key"] = (
-            image_widget.get("api_key") or
-            google_provider.get("api_key") or
-            os.getenv("GOOGLE_API_KEY") or
-            os.getenv("google_api_key") or
-            os.getenv("GOOGLE_APIKEY")
+        config["allow_pollinations_fallback"] = bool(
+            image_widget.get(
+                "allow_pollinations_fallback",
+                image_widget.get("allow_free_pollinations_fallback", True),
+            )
+        )
+        config["api_key"] = _first_real_api_key(
+            image_widget.get("api_key"),
+            google_provider.get("api_key"),
+            os.getenv("GOOGLE_GENERATIVE_AI_API_KEY"),
+            os.getenv("LLM_API_KEY"),
+            os.getenv("GEMINI_API_KEY"),
+            os.getenv("GOOGLE_API_KEY"),
+            os.getenv("google_api_key"),
+            os.getenv("GOOGLE_APIKEY"),
+        )
+        config["pollinations_api_key"] = _first_real_api_key(
+            image_widget.get("pollinations_api_key"),
+            os.getenv("POLLINATIONS_API_KEY"),
+            os.getenv("pollinations_api_key"),
         )
     except Exception as e:
         logger.warning(f"[IMAGE CONFIG] Failed to load image generation config: {e}")
@@ -138,41 +582,552 @@ def _format_image_output(image_payload: Any) -> str:
     return f"data:image/png;base64,{payload}"
 
 
+def _detect_image_key_type(api_key: str) -> str:
+    cleaned = (api_key or "").strip()
+    if not cleaned:
+        return "missing"
+    if cleaned.startswith("AIza"):
+        return "google_gemini_api"
+    if cleaned.startswith("AQ."):
+        return "vertex_express"
+    return "unknown"
+
+
+class ImageGenerationFailure(Exception):
+    def __init__(
+        self,
+        message: str,
+        *,
+        provider: str,
+        model: str = "",
+        error_code: str = "IMAGE_GENERATION_FAILED",
+        status_code: int = 500,
+        retry_after_seconds: Optional[int] = None,
+        action_required: Optional[str] = None,
+    ):
+        super().__init__(message)
+        self.provider = provider
+        self.model = model
+        self.error_code = error_code
+        self.status_code = status_code
+        self.retry_after_seconds = retry_after_seconds
+        self.action_required = action_required
+
+
+def _image_error_detail(error: ImageGenerationFailure) -> Dict[str, Any]:
+    detail = {
+        "success": False,
+        "provider": error.provider,
+        "model": error.model,
+        "error_code": error.error_code,
+        "message": str(error),
+    }
+    if error.retry_after_seconds is not None:
+        detail["retry_after_seconds"] = error.retry_after_seconds
+    if error.action_required:
+        detail["action_required"] = error.action_required
+    return detail
+
+
 def _generate_image_rest(prompt: str, model: str, api_key: str) -> str:
     """
     FREE FALLBACK: Uses Pollinations.ai to generate images for free
     Downloads the image and returns it as a base64 data URL to avoid CORS issues
     """
-    logger.info(f"[IMAGE] Using Free Pollinations API for prompt: {prompt[:50]}...")
+    keyed_pollinations = bool((api_key or "").strip().startswith(("sk_", "pk_")))
+    logger.info(
+        f"[IMAGE] Using {'keyed' if keyed_pollinations else 'free'} Pollinations API for prompt: {prompt[:50]}..."
+    )
 
     # Clean the prompt for a URL
     encoded_prompt = requests.utils.quote(prompt)
 
-    # We use Pollinations because it's reliable and free in 2026
-    # It returns a direct image URL which we download and proxy
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={int(time.time())}"
+    if keyed_pollinations:
+        image_url = (
+            f"https://gen.pollinations.ai/image/{encoded_prompt}"
+            f"?model=flux&width=1024&height=1024&enhance=false&key={requests.utils.quote(api_key)}"
+        )
+    else:
+        image_url = (
+            f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+            f"?width=1024&height=1024&nologo=true&seed={int(time.time())}"
+        )
 
     try:
-        # Download the image from Pollinations
         logger.info(f"[IMAGE] Downloading image from Pollinations...")
-        response = requests.get(image_url, timeout=30)
+        max_retries = 6
+        for attempt in range(1, max_retries + 1):
+            response = requests.get(image_url, timeout=60)
 
-        if response.status_code == 200:
-            # Convert to base64 data URL
-            image_data = response.content
-            base64_data = base64.b64encode(image_data).decode('utf-8')
-            content_type = response.headers.get('content-type', 'image/jpeg')
+            if response.status_code == 200:
+                image_data = response.content
+                base64_data = base64.b64encode(image_data).decode('utf-8')
+                content_type = response.headers.get('content-type', 'image/jpeg')
+                data_url = f"data:{content_type};base64,{base64_data}"
+                logger.info(f"[IMAGE] Successfully downloaded and encoded image ({len(image_data)} bytes)")
+                return data_url
 
-            data_url = f"data:{content_type};base64,{base64_data}"
-            logger.info(f"[IMAGE] Successfully downloaded and encoded image ({len(image_data)} bytes)")
-            return data_url
-        else:
+            if response.status_code == 402 and attempt < max_retries:
+                wait_schedule = [1, 2, 4, 8, 12]
+                wait_seconds = wait_schedule[min(attempt - 1, len(wait_schedule) - 1)]
+                logger.warning(f"[IMAGE] Pollinations rate limit (402). Retrying in {wait_seconds}s (attempt {attempt}/{max_retries})...")
+                time.sleep(wait_seconds)
+                continue
+
+            if response.status_code == 402:
+                queue_message = "Pollinations queue is full for this IP."
+                try:
+                    payload = response.json()
+                    queue_message = payload.get("error") or queue_message
+                except Exception:
+                    pass
+                logger.error(f"[IMAGE] Pollinations returned status 402: {queue_message}")
+                raise ImageGenerationFailure(
+                    queue_message,
+                    provider="pollinations",
+                    model="pollinations-free",
+                    error_code="QUEUE_FULL_FOR_IP",
+                    status_code=503,
+                    retry_after_seconds=15,
+                    action_required="Wait for the active Pollinations request on this IP to finish, then retry.",
+                )
+
             logger.error(f"[IMAGE] Pollinations returned status {response.status_code}")
-            raise Exception(f"Pollinations API returned {response.status_code}")
+            raise ImageGenerationFailure(
+                f"Pollinations API returned {response.status_code}",
+                provider="pollinations",
+                model="pollinations-free",
+                error_code="PROVIDER_FAILED",
+                status_code=502,
+            )
 
+        raise ImageGenerationFailure(
+            "Pollinations queue is full for this IP.",
+            provider="pollinations",
+            model="pollinations-free",
+            error_code="QUEUE_FULL_FOR_IP",
+            status_code=503,
+            retry_after_seconds=15,
+            action_required="Wait for the active Pollinations request on this IP to finish, then retry.",
+        )
     except Exception as e:
         logger.error(f"[IMAGE] Failed to download image from Pollinations: {e}")
         raise e
+
+
+def _enhance_prompt_with_gemini(prompt: str, api_key: str) -> str:
+    cleaned_key = (api_key or "").strip()
+    if not cleaned_key or _detect_image_key_type(cleaned_key) != "google_gemini_api":
+        return prompt
+
+    try:
+        from google import genai
+    except ImportError:
+        return prompt
+
+    saved_env = {
+        name: os.environ.get(name)
+        for name in ("GOOGLE_API_KEY", "GEMINI_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY")
+    }
+    try:
+        os.environ["GOOGLE_API_KEY"] = cleaned_key
+        os.environ.pop("GEMINI_API_KEY", None)
+        os.environ.pop("GOOGLE_GENERATIVE_AI_API_KEY", None)
+
+        client = genai.Client(api_key=cleaned_key)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                "Rewrite this as one concise, vivid image-generation prompt. Return only the prompt text.",
+                prompt,
+            ],
+        )
+        enhanced = (getattr(response, "text", "") or "").strip()
+        if enhanced:
+            logger.info(f"[IMAGE] Gemini enhanced prompt for Pollinations: {enhanced[:120]}")
+            return enhanced
+        return prompt
+    except Exception as e:
+        logger.warning(f"[IMAGE] Gemini prompt enhancement failed: {e}")
+        return prompt
+    finally:
+        for name, value in saved_env.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+def _reverse_prompt_image_with_gemini(instruction: str, image_bytes: bytes, mime_type: str, api_key: str) -> str:
+    cleaned_key = (api_key or "").strip()
+    if not cleaned_key or _detect_image_key_type(cleaned_key) != "google_gemini_api":
+        raise ImageGenerationFailure(
+            "Gemini image analysis is not configured.",
+            provider="google_gemini_api",
+            model="gemini-2.5-flash",
+            error_code="GEMINI_IMAGE_ANALYSIS_UNAVAILABLE",
+            status_code=503,
+            action_required="Add a valid Gemini API key for image recreation.",
+        )
+
+    try:
+        from google import genai
+    except ImportError as exc:
+        raise ImageGenerationFailure(
+            "Gemini image analysis support is not installed on the server.",
+            provider="google_gemini_api",
+            model="gemini-2.5-flash",
+            error_code="GEMINI_SDK_MISSING",
+            status_code=500,
+        ) from exc
+
+    saved_env = {
+        name: os.environ.get(name)
+        for name in ("GOOGLE_API_KEY", "GEMINI_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY")
+    }
+    models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
+    retry_wait_schedule = [1, 2]
+
+    try:
+        os.environ["GOOGLE_API_KEY"] = cleaned_key
+        os.environ.pop("GEMINI_API_KEY", None)
+        os.environ.pop("GOOGLE_GENERATIVE_AI_API_KEY", None)
+
+        client = genai.Client(api_key=cleaned_key)
+        base_image = Image.open(io.BytesIO(image_bytes)).copy()
+        prompt_instructions = (
+            "You are an expert reverse-prompt engineer. Analyze the uploaded image in extreme detail and "
+            "generate one optimized image-generation prompt that can recreate or faithfully remix it. "
+            "Respect the user's instruction while preserving the visual truth of the uploaded image. "
+            "Describe objects, colors, lighting, background, composition, style, mood, textures, and "
+            "visible text. Return only the final prompt text."
+        )
+        last_error: Optional[Exception] = None
+
+        for model_name in models_to_try:
+            for attempt in range(1, len(retry_wait_schedule) + 2):
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=[
+                            prompt_instructions,
+                            f"User instruction: {instruction}",
+                            base_image.copy(),
+                        ],
+                    )
+                    recreated_prompt = (getattr(response, "text", "") or "").strip()
+                    if not recreated_prompt:
+                        raise ImageGenerationFailure(
+                            "Gemini returned an empty recreation prompt.",
+                            provider="google_gemini_api",
+                            model=model_name,
+                            error_code="EMPTY_RECREATION_PROMPT",
+                            status_code=502,
+                        )
+                    logger.info("[IMAGE] Gemini recreation prompt for Pollinations (%s): %s", model_name, recreated_prompt[:180])
+                    return recreated_prompt
+                except ImageGenerationFailure:
+                    raise
+                except Exception as exc:
+                    last_error = exc
+                    error_text = str(exc)
+                    is_transient = "503" in error_text or "UNAVAILABLE" in error_text or "high demand" in error_text.lower()
+                    if is_transient and attempt <= len(retry_wait_schedule):
+                        wait_seconds = retry_wait_schedule[attempt - 1]
+                        logger.warning(
+                            "[IMAGE] Gemini reverse prompt transient failure on %s (attempt %s). Retrying in %ss: %s",
+                            model_name,
+                            attempt,
+                            wait_seconds,
+                            exc,
+                        )
+                        time.sleep(wait_seconds)
+                        continue
+                    logger.warning(
+                        "[IMAGE] Gemini reverse prompt failed on %s (attempt %s): %s",
+                        model_name,
+                        attempt,
+                        exc,
+                    )
+                    break
+
+        raise ImageGenerationFailure(
+            f"Gemini image analysis failed: {last_error}",
+            provider="google_gemini_api",
+            model=models_to_try[-1],
+            error_code="GEMINI_IMAGE_ANALYSIS_FAILED",
+            status_code=503 if last_error and ("503" in str(last_error) or "UNAVAILABLE" in str(last_error)) else 502,
+            retry_after_seconds=15 if last_error and ("503" in str(last_error) or "UNAVAILABLE" in str(last_error)) else None,
+            action_required="Retry in a few moments if Gemini is under temporary demand spikes." if last_error and ("503" in str(last_error) or "UNAVAILABLE" in str(last_error)) else None,
+        )
+    except ImageGenerationFailure:
+        raise
+    except Exception as exc:
+        logger.warning("[IMAGE] Gemini reverse prompt failed: %s", exc)
+        raise ImageGenerationFailure(
+            f"Gemini image analysis failed: {exc}",
+            provider="google_gemini_api",
+            model="gemini-2.5-flash",
+            error_code="GEMINI_IMAGE_ANALYSIS_FAILED",
+            status_code=502,
+        ) from exc
+    finally:
+        for name, value in saved_env.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+def _gallery_images() -> List[Dict[str, Any]]:
+    return state.image_backup.get_index().get("images", [])
+
+
+def _current_selected_image() -> Optional[Dict[str, Any]]:
+    selected_id = state.image_widget_context.get("selected_image_id")
+    selected_number = state.image_widget_context.get("selected_image_number")
+    images = _gallery_images()
+    if selected_id:
+        for image in images:
+            if image.get("id") == selected_id:
+                return image
+    if selected_number:
+        for image in images:
+            if int(image.get("display_number", 0) or 0) == int(selected_number):
+                return image
+    return None
+
+
+def _find_images_by_query(query: str) -> List[Dict[str, Any]]:
+    lowered = (query or "").strip().lower()
+    if not lowered:
+        return []
+    matches = []
+    for image in _gallery_images():
+        prompt = (image.get("prompt") or "").lower()
+        image_id = (image.get("id") or "").lower()
+        if lowered in prompt or lowered in image_id:
+            matches.append(image)
+    return matches
+
+
+def _image_label(image: Dict[str, Any]) -> str:
+    prompt = (image.get("prompt") or "").strip() or "Untitled image"
+    if len(prompt) > 68:
+        prompt = f"{prompt[:65]}..."
+    created_at = image.get("created_at") or image.get("timestamp") or ""
+    when = ""
+    if created_at:
+        try:
+            when = datetime.fromisoformat(created_at.replace("Z", "+00:00")).strftime("%b %d, %Y %H:%M")
+        except Exception:
+            when = created_at
+    return f"image #{image.get('display_number')}{f' ({when})' if when else ''} - {prompt}"
+
+
+def _describe_image(image: Dict[str, Any]) -> str:
+    prompt = (image.get("prompt") or "").strip() or "Untitled image"
+    created_at = image.get("created_at") or image.get("timestamp") or "unknown time"
+    provider = image.get("provider") or "unknown provider"
+    model = image.get("model") or ""
+    model_text = f" using {model}" if model else ""
+    return (
+        f"Showing image number {image.get('display_number')}. "
+        f"It was created on {created_at} with {provider}{model_text}. "
+        f"The prompt was: {prompt}"
+    )
+
+
+def _send_widget_control(
+    websocket: WebSocket,
+    *,
+    widget: str = "image",
+    command: str,
+    request_id: Optional[str] = None,
+    prompt: Optional[str] = None,
+    image_number: Optional[int] = None,
+    image_id: Optional[str] = None,
+    query: Optional[str] = None,
+    fit_mode: Optional[str] = None,
+    extra_payload: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    message = {
+        "type": "widget_control",
+        "widget": widget,
+        "command": command,
+        "request_id": request_id or f"server-{widget}-{uuid.uuid4().hex}",
+        "source": "server_direct",
+    }
+    if prompt:
+        message["prompt"] = prompt
+    if image_number:
+        message["image_number"] = image_number
+    if image_id:
+        message["image_id"] = image_id
+    if query:
+        message["query"] = query
+    if fit_mode:
+        message["fit_mode"] = fit_mode
+    if extra_payload:
+        message.update(extra_payload)
+    return message
+
+
+async def _resolve_image_widget_request(websocket: WebSocket, user_text: str) -> Optional[str]:
+    lowered = (user_text or "").strip().lower()
+    if not lowered:
+        return None
+
+    if not re.search(r"\b(image|images|gallery|picture|photo)\b", lowered):
+        return None
+
+    images = _gallery_images()
+    image_count = len(images)
+    if re.search(r"\b(scroll down|scroll up|scroll to|top of|bottom of|go back|back to gallery|back to create)\b", lowered):
+        if "scroll down" in lowered:
+            await ws_manager.send_to_client(websocket, _send_widget_control(websocket, command="scroll_gallery_down"))
+            return "I've scrolled the image gallery down."
+        if "scroll up" in lowered:
+            await ws_manager.send_to_client(websocket, _send_widget_control(websocket, command="scroll_gallery_up"))
+            return "I've scrolled the image gallery up."
+        if re.search(r"\b(top|beginning)\b", lowered):
+            await ws_manager.send_to_client(websocket, _send_widget_control(websocket, command="scroll_gallery_top"))
+            return "I've moved to the top of the image gallery."
+        if re.search(r"\b(bottom|end)\b", lowered):
+            await ws_manager.send_to_client(websocket, _send_widget_control(websocket, command="scroll_gallery_bottom"))
+            return "I've moved to the bottom of the image gallery."
+        if "back to gallery" in lowered or ("go back" in lowered and "gallery" in lowered):
+            await ws_manager.send_to_client(websocket, _send_widget_control(websocket, command="back_to_gallery"))
+            return "I've returned to the image gallery."
+        if "back to create" in lowered or (("go back" in lowered or "return" in lowered) and re.search(r"\b(create|generator|prompt)\b", lowered)):
+            await ws_manager.send_to_client(websocket, _send_widget_control(websocket, command="back_to_create"))
+            return "I've returned to the image generator."
+
+    if re.search(r"\b(open|show|display|view)\b", lowered) and "gallery" in lowered:
+        await ws_manager.send_to_client(websocket, _send_widget_control(websocket, command="show_gallery"))
+        return f"I've opened your image gallery with {image_count} saved images."
+
+    number_match = re.search(r"\b(?:image|picture|photo)\s*(?:number|#)?\s*(\d{1,3})\b", lowered)
+    requested_number = int(number_match.group(1)) if number_match else None
+    if requested_number is None:
+        word_numbers = {
+            "one": 1, "first": 1,
+            "two": 2, "second": 2,
+            "three": 3, "third": 3,
+            "four": 4, "fourth": 4,
+            "five": 5, "fifth": 5,
+            "six": 6, "sixth": 6,
+            "seven": 7, "seventh": 7,
+            "eight": 8, "eighth": 8,
+            "nine": 9, "ninth": 9,
+            "ten": 10, "tenth": 10,
+        }
+        for label, value in word_numbers.items():
+            if re.search(rf"\b(?:image|picture|photo)\s+(?:number\s+)?{label}\b", lowered):
+                requested_number = value
+                break
+    if requested_number and re.search(r"\b(open|show|display|view|tell me about|what is|what was|when was)\b", lowered):
+        match = next((image for image in images if int(image.get("display_number", 0) or 0) == requested_number), None)
+        if not match:
+            return f"I couldn't find image number {requested_number}. Your gallery currently has {image_count} saved images."
+        await ws_manager.send_to_client(
+            websocket,
+            _send_widget_control(
+                websocket,
+                command="open_gallery_image",
+                image_number=requested_number,
+                image_id=match.get("id"),
+            ),
+        )
+        if re.search(r"\b(tell me about|what is|what was|when was|information about)\b", lowered):
+            return _describe_image(match)
+        return f"I've opened image number {requested_number}."
+
+    if re.search(r"\b(this image|current image|selected image)\b", lowered):
+        selected = _current_selected_image()
+        if not selected:
+            return "I don't have a currently selected image yet. Ask me to open an image by number or subject first."
+        if re.search(r"\b(tell me about|what is|what was|when was|information about)\b", lowered):
+            await ws_manager.send_to_client(
+                websocket,
+                _send_widget_control(
+                    websocket,
+                    command="open_gallery_image",
+                    image_number=selected.get("display_number"),
+                    image_id=selected.get("id"),
+                ),
+            )
+            return _describe_image(selected)
+
+    subject_match = None
+    subject_patterns = [
+        r"\b(?:open|show|display|view|tell me about|information about)\s+(?:the\s+)?(?:image|picture|photo)\s+(?:of|about|for)\s+(.+)$",
+        r"\b(?:open|show|display|view|tell me about|information about)\s+(?:the\s+)?(.+?)\s+(?:image|picture|photo)\b",
+    ]
+    for pattern in subject_patterns:
+        candidate = re.search(pattern, user_text, re.IGNORECASE)
+        if candidate:
+            subject_match = candidate.group(1).strip(" .,!?:;")
+            subject_match = re.sub(
+                r"\s+(?:in|inside|on|from)\s+(?:the\s+)?(?:image\s+widget|widget|gallery)\s*$",
+                "",
+                subject_match,
+                flags=re.IGNORECASE,
+            ).strip(" .,!?:;")
+            break
+    if subject_match:
+        matches = _find_images_by_query(subject_match)
+        if not matches:
+            return f'I could not find a saved image matching "{subject_match}".'
+        if len(matches) > 1:
+            listed = "; ".join(_image_label(image) for image in matches[:5])
+            extra = f" There are {len(matches) - 5} more matches." if len(matches) > 5 else ""
+            await ws_manager.send_to_client(websocket, _send_widget_control(websocket, command="show_gallery"))
+            return f'I found multiple matches for "{subject_match}": {listed}.{extra} Tell me which image number to open.'
+        match = matches[0]
+        await ws_manager.send_to_client(
+            websocket,
+            _send_widget_control(
+                websocket,
+                command="open_gallery_image",
+                image_number=match.get("display_number"),
+                image_id=match.get("id"),
+                query=subject_match,
+            ),
+        )
+        if re.search(r"\b(tell me about|information about)\b", lowered):
+            return _describe_image(match)
+        return f'I found and opened {_image_label(match)}.'
+
+    if re.search(r"\b(how many|how much)\b", lowered) and "image" in lowered:
+        return f"You currently have {image_count} saved images in the gallery."
+
+    return None
+
+
+async def _resolve_search_widget_request(websocket: WebSocket, user_text: str) -> Optional[str]:
+    if not is_explicit_search_request(user_text):
+        return None
+
+    query = extract_search_query(user_text)
+    if not query:
+        return None
+
+    _, search_options = parse_search_request(user_text)
+    loading_message = _send_widget_control(
+        websocket,
+        widget="search",
+        command="set_loading",
+        query=query,
+        extra_payload={
+            "loading": True,
+            "search_type": search_options.get("target_site") or "web",
+            "original_transcript": user_text,
+        },
+    )
+    state.update_search_widget_context(loading_message)
+    await ws_manager.send_to_client(websocket, loading_message)
+    return None
 
 
 def generate_image_with_google(prompt: str, model: str, fallback_model: str, api_key: str) -> str:
@@ -328,8 +1283,54 @@ class NovaAIProcess:
                                     "request_id": widget_cmd.get("request_id") or f"widget-{uuid.uuid4().hex}",
                                     "source": widget_cmd.get("source", "nova_ai"),
                                 }
-                                if widget_cmd.get("prompt") or payload.get("prompt"):
-                                    frontend_cmd["prompt"] = widget_cmd.get("prompt") or payload.get("prompt")
+                                merged_payload = {**payload}
+                                for key, value in widget_cmd.items():
+                                    if key not in {"type", "widget", "command", "action", "request_id", "source", "payload"}:
+                                        merged_payload[key] = value
+                                frontend_cmd.update(merged_payload)
+                                if frontend_cmd.get("widget") == "search":
+                                    search_command = str(frontend_cmd.get("command") or "").strip().lower()
+                                    if search_command == "restore_latest":
+                                        restored = state.restore_latest_search_request()
+                                        snapshot = build_frontend_payload(restored)
+                                        if snapshot:
+                                            frontend_cmd = snapshot
+                                    elif search_command == "restore_search_result":
+                                        restore_id = str(frontend_cmd.get("request_id_to_restore") or frontend_cmd.get("target_request_id") or "").strip()
+                                        if not restore_id:
+                                            restore_query = str(frontend_cmd.get("query") or "").strip()
+                                            if restore_query:
+                                                restore_id = str(state.resolve_search_request_id(restore_query) or "").strip()
+                                        if restore_id:
+                                            restored = state.restore_search_request(restore_id)
+                                            snapshot = build_frontend_payload(restored)
+                                            if snapshot:
+                                                frontend_cmd = snapshot
+                                    elif search_command == "delete_search_result":
+                                        delete_id = str(frontend_cmd.get("request_id_to_delete") or frontend_cmd.get("target_request_id") or "").strip()
+                                        if not delete_id:
+                                            delete_query = str(frontend_cmd.get("query") or "").strip()
+                                            if delete_query:
+                                                delete_id = str(state.resolve_search_request_id(delete_query) or "").strip()
+                                        if delete_id:
+                                            updated = state.delete_search_request(delete_id)
+                                            snapshot = build_frontend_payload(updated)
+                                            if snapshot:
+                                                frontend_cmd = snapshot
+                                            else:
+                                                frontend_cmd = {
+                                                    "type": "widget_control",
+                                                    "widget": "search",
+                                                    "command": "show_history" if state.get_search_history_preview() else "clear_current",
+                                                    "source": "server_state",
+                                                    "history_preview": state.get_search_history_preview(),
+                                                    "view_mode": "history" if state.get_search_history_preview() else "current",
+                                                }
+                                    elif search_command in {"show_history", "show_current", "clear_current", "set_loading", "show_results", "close", "hide", "dismiss", "open", "show", "activate"}:
+                                        updated = state.update_search_widget_context(frontend_cmd)
+                                        snapshot = build_frontend_payload(updated)
+                                        if search_command in {"show_history", "show_current", "clear_current"} and snapshot:
+                                            frontend_cmd = snapshot
                                 logger.info(f"[WIDGET] Relaying command: {frontend_cmd}")
                                 if self.event_loop and self.event_loop.is_running():
                                     asyncio.run_coroutine_threadsafe(
@@ -515,17 +1516,272 @@ class ServerState:
         self.current_user_session = "default"
         self.processed_transcripts: Set[str] = set()
         self.task_counter = 0
+        self.image_generation_lock = threading.Lock()
         self.memory_monitor_task: Optional[asyncio.Task] = None
         self.memory_file = project_root / "Date" / "nova_ai_memory.json"
         self.start_time = time.time()  # Track when server started for uptime calculation
+        self.backend_dir = Path(__file__).parent
+        self.search_state_dir = self.backend_dir / "search_widget_data"
+        self.weather_runtime = WeatherRuntimeService(
+            backend_dir=self.backend_dir,
+            weather_service_factory=_load_weather_service,
+            logger=logger,
+            fallback_location=DEFAULT_WEATHER_FALLBACK_LOCATION,
+            ipinfo_url=IPINFO_LOCATION_URL,
+        )
+        self.weather_state_dir = self.weather_runtime.state_dir
+        self.weather_location_snapshot_file = self.weather_runtime.location_snapshot_file
+        self.weather_history_file = self.weather_runtime.weather_history_file
+        self.notes_state_dir = prepare_notes_state_dir(
+            self.backend_dir / "noted_widget_data",
+            legacy_dirs=[self.backend_dir / "notes_widget_data"],
+        )
+        self.search_state_lock = threading.Lock()
+        self.notes_state_lock = threading.Lock()
+        self.location_refresh_task: Optional[asyncio.Task] = None
+        self.image_widget_context: Dict[str, Any] = {
+            "current_view": "create",
+            "selected_image_id": None,
+            "selected_image_number": None,
+            "selected_prompt": None,
+            "last_gallery_query": None,
+            "recent_results": deque(maxlen=12),
+        }
+        self.search_widget_context: Dict[str, Any] = load_search_widget_state(self.search_state_dir)
+        notes_state = load_notes_state(self.notes_state_dir)
+        self.notes_data: List[Dict[str, Any]] = notes_state.get("notes", [])
+        self.notes_summaries: List[Dict[str, Any]] = notes_state.get("summaries", [])
         
         # Initialize image backup manager
-        backend_dir = Path(__file__).parent
-        self.image_backup = ImageBackupManager(backend_dir / "ai_generated_images")
+        self.image_backup = ImageBackupManager(self.backend_dir / "ai_generated_images")
+
+    def _default_client_location_snapshot(self) -> Dict[str, Any]:
+        return self.weather_runtime.default_location_snapshot()
+
+    def _load_client_location_snapshot_from_disk(self) -> None:
+        return None
+
+    def _save_client_location_snapshot(self) -> None:
+        return None
+
+    def _fetch_ipinfo_location_snapshot(self) -> Dict[str, Any]:
+        return self.weather_runtime._fetch_ipinfo_location_snapshot()
+
+    def refresh_client_location_snapshot(self) -> Dict[str, Any]:
+        return self.weather_runtime.refresh_client_location_snapshot(force=False)
+
+    def update_client_location(
+        self,
+        *,
+        latitude: float,
+        longitude: float,
+        accuracy: Optional[float] = None,
+        label: str = "",
+    ) -> Dict[str, Any]:
+        return self.weather_runtime.update_client_location(
+            latitude=latitude,
+            longitude=longitude,
+            accuracy=accuracy,
+            label=label,
+        )
+
+    def merge_client_location_label(self, label: str) -> Dict[str, Any]:
+        return self.weather_runtime.merge_client_location_label(label)
+
+    def get_client_location(self) -> Dict[str, Any]:
+        return self.weather_runtime.get_client_location()
+
+    async def refresh_client_location_snapshot_async(self) -> Dict[str, Any]:
+        return await self.weather_runtime.refresh_client_location_snapshot_async(force=False)
+
+    async def _location_refresh_loop(self) -> None:
+        await self.weather_runtime.location_refresh_loop()
+
+    def get_weather_history(self, *, date: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
+        return self.weather_runtime.get_weather_history(date=date, limit=limit)
+
+    def record_widget_result(self, message: Dict[str, Any]) -> None:
+        widget = message.get("widget")
+        if widget == "search":
+            command = str(message.get("command") or "").strip().lower()
+            return
+
+        if widget != "image":
+            return
+        current_view = message.get("current_view")
+        if isinstance(current_view, str) and current_view:
+            self.image_widget_context["current_view"] = current_view
+        if message.get("selected_image_id"):
+            self.image_widget_context["selected_image_id"] = message.get("selected_image_id")
+        if message.get("selected_image_number"):
+            self.image_widget_context["selected_image_number"] = message.get("selected_image_number")
+        if message.get("selected_prompt"):
+            self.image_widget_context["selected_prompt"] = message.get("selected_prompt")
+        if message.get("query") is not None:
+            self.image_widget_context["last_gallery_query"] = message.get("query")
+
+        snapshot = {
+            "command": message.get("command"),
+            "status": message.get("status"),
+            "detail": message.get("detail"),
+            "selected_image_id": message.get("selected_image_id"),
+            "selected_image_number": message.get("selected_image_number"),
+            "selected_prompt": message.get("selected_prompt"),
+            "provider": message.get("provider"),
+            "model": message.get("model"),
+            "created_at": message.get("created_at"),
+            "current_view": self.image_widget_context["current_view"],
+            "query": message.get("query"),
+            "match_count": message.get("match_count"),
+        }
+        self.image_widget_context["recent_results"].append(snapshot)
+
+    def update_search_widget_context(self, message: Dict[str, Any]) -> Dict[str, Any]:
+        with self.search_state_lock:
+            self.search_widget_context = apply_search_widget_command(
+                self.search_widget_context or default_search_widget_state(),
+                message,
+                self.search_state_dir,
+            )
+            save_search_widget_state(self.search_state_dir, self.search_widget_context)
+            return self.search_widget_context
+
+    def _save_search_widget_state(self) -> None:
+        with self.search_state_lock:
+            save_search_widget_state(self.search_state_dir, self.search_widget_context)
+
+    def build_search_widget_snapshot(self) -> Optional[Dict[str, Any]]:
+        with self.search_state_lock:
+            return build_frontend_payload(self.search_widget_context)
+
+    def get_search_history_preview(self) -> List[Dict[str, Any]]:
+        with self.search_state_lock:
+            return get_history_preview(self.search_widget_context)
+
+    def restore_search_request(self, request_id: str) -> Dict[str, Any]:
+        with self.search_state_lock:
+            self.search_widget_context = restore_history_entry(self.search_widget_context, self.search_state_dir, request_id)
+            save_search_widget_state(self.search_state_dir, self.search_widget_context)
+            return self.search_widget_context
+
+    def restore_latest_search_request(self) -> Dict[str, Any]:
+        with self.search_state_lock:
+            self.search_widget_context = restore_latest_entry(self.search_widget_context, self.search_state_dir)
+            save_search_widget_state(self.search_state_dir, self.search_widget_context)
+            return self.search_widget_context
+
+    def find_search_requests(self, query: str, limit: int = 8) -> List[Dict[str, Any]]:
+        with self.search_state_lock:
+            return find_history_matches(self.search_widget_context, self.search_state_dir, query, limit=limit)
+
+    def resolve_search_request_id(self, query: str) -> Optional[str]:
+        with self.search_state_lock:
+            return resolve_history_request_id(self.search_widget_context, self.search_state_dir, query)
+
+    def delete_search_request(self, request_id: str) -> Dict[str, Any]:
+        with self.search_state_lock:
+            self.search_widget_context = delete_history_entry(self.search_widget_context, self.search_state_dir, request_id)
+            save_search_widget_state(self.search_state_dir, self.search_widget_context)
+            return self.search_widget_context
+
+    def get_notes_state(self) -> Dict[str, Any]:
+        with self.notes_state_lock:
+            return {
+                "notes": list(self.notes_data),
+                "summaries": list(self.notes_summaries),
+            }
+
+    def add_note(self, content: str, category: str = "") -> Dict[str, Any]:
+        with self.notes_state_lock:
+            note = add_note(self.notes_state_dir, self.notes_data, self.notes_summaries, content, category)
+            self.notes_data = load_notes_state(self.notes_state_dir).get("notes", [])
+            return note
+
+    def update_note(self, note_id: str, content: str, category: str = "") -> Dict[str, Any]:
+        with self.notes_state_lock:
+            note = update_note(self.notes_state_dir, self.notes_data, self.notes_summaries, note_id, content, category)
+            self.notes_data = load_notes_state(self.notes_state_dir).get("notes", [])
+            return note
+
+    def delete_note(self, note_id: str) -> List[Dict[str, Any]]:
+        with self.notes_state_lock:
+            self.notes_data = delete_saved_note(self.notes_state_dir, self.notes_data, self.notes_summaries, note_id)
+            return list(self.notes_data)
+
+    def clear_all_notes(self) -> None:
+        with self.notes_state_lock:
+            clear_notes(self.notes_state_dir, self.notes_summaries)
+            refreshed = load_notes_state(self.notes_state_dir)
+            self.notes_data = refreshed.get("notes", [])
+            self.notes_summaries = refreshed.get("summaries", [])
+
+    def add_summary(self, content: str, summary_type: str = "single-note", tags: Optional[List[str]] = None) -> Dict[str, Any]:
+        with self.notes_state_lock:
+            summary = add_summary(self.notes_state_dir, self.notes_data, self.notes_summaries, content, summary_type, tags)
+            self.notes_summaries = load_notes_state(self.notes_state_dir).get("summaries", [])
+            return summary
+
+    def delete_summary(self, summary_id: str) -> List[Dict[str, Any]]:
+        with self.notes_state_lock:
+            self.notes_summaries = delete_summary(self.notes_state_dir, self.notes_data, self.notes_summaries, summary_id)
+            return list(self.notes_summaries)
+
+    def find_note(self, query: str) -> Optional[Dict[str, Any]]:
+        with self.notes_state_lock:
+            return find_matching_note(self.notes_data, query)
+
+    def get_note_by_id(self, note_id: str) -> Optional[Dict[str, Any]]:
+        cleaned_note_id = str(note_id or "").strip()
+        if not cleaned_note_id:
+            return None
+        with self.notes_state_lock:
+            for note in self.notes_data:
+                if str(note.get("id") or "") == cleaned_note_id:
+                    return dict(note)
+        return None
 
     async def initialize(self):
         """Initialize server components"""
         logger.info("[INIT] Starting JARVIS Server...")
+        try:
+            location_snapshot = await self.weather_runtime.initialize()
+            logger.info(
+                "[LOCATION] Cached startup location: %s",
+                location_snapshot.get("label") or location_snapshot.get("weather_query") or DEFAULT_WEATHER_FALLBACK_LOCATION,
+            )
+            self.location_refresh_task = asyncio.create_task(self._location_refresh_loop())
+        except Exception as exc:
+            logger.warning("[LOCATION] Startup location refresh failed: %s", exc)
+
+        notes_ai_status = _get_notes_ai_provider_status()
+        configured_providers = notes_ai_status.get("configured", {})
+        provider_order = notes_ai_status.get("order", [])
+        logger.info(
+            "[NOTES AI] Provider availability: openai=%s openrouter=%s groq=%s",
+            configured_providers.get("openai", False),
+            configured_providers.get("openrouter", False),
+            configured_providers.get("groq", False),
+        )
+        if provider_order:
+            logger.info(
+                "[NOTES AI] Provider order: %s",
+                " -> ".join(provider_order),
+            )
+            logger.info(
+                "[NOTES AI] Primary model: %s",
+                (
+                    _get_notes_openai_model()
+                    if provider_order[0] == "openai"
+                    else _get_notes_openrouter_model()
+                    if provider_order[0] == "openrouter"
+                    else _get_notes_groq_model()
+                ),
+            )
+        else:
+            logger.warning(
+                "[NOTES AI] Notes AI not configured. Set OPENAI_API_KEY, NOTES_WIDGET_OPENAI_API_KEY, "
+                "OPENROUTER_API_KEY, or GROQ_API_KEY in .env."
+            )
         
         # Initialize Nova AI as subprocess
         try:
@@ -549,6 +1805,14 @@ class ServerState:
     async def shutdown(self):
         """Cleanup server resources"""
         logger.info("[SHUTDOWN] Stopping JARVIS Server...")
+
+        if self.location_refresh_task:
+            self.location_refresh_task.cancel()
+            try:
+                await self.location_refresh_task
+            except asyncio.CancelledError:
+                pass
+            self.location_refresh_task = None
         
         # Stop Nova AI process
         if self.nova_ai:
@@ -582,6 +1846,8 @@ class WebSocketManager:
             "state": "idle",
             "message": "Connected to JARVIS Server"
         })
+        # Search content rehydrates through /api/search/state when the widget is opened.
+        # Do not auto-open the search widget on client reconnect or page reload.
     
     def disconnect(self, websocket: WebSocket):
         """Remove WebSocket connection"""
@@ -1461,10 +2727,46 @@ async def handle_transcript_message(websocket: WebSocket, message: Dict[str, Any
             })
             state.is_processing = False
             return
-        
-        # Step 1: Send user input to Nova AI subprocess
-        logger.info(f"  [1/4] Calling Nova AI subprocess...")
-        response_text = await state.nova_ai.send_message(text, timeout=30.0)
+
+        lowered_text = text.lower()
+        if _is_where_am_i_request(lowered_text):
+            logger.info("  [1/4] Answering current-location request from live UI state.")
+            response_text = _build_location_spoken_summary(state.get_client_location())
+        elif _is_local_weather_request(lowered_text):
+            logger.info("  [1/4] Resolving local weather request from live UI location.")
+            location_query, snapshot = _get_current_location_query()
+            weather_service = _load_weather_service()
+            weather_data = weather_service.get_comprehensive_weather_data(location_query)
+            if "error" in weather_data:
+                response_text = f"Sorry, I couldn't get your local weather right now: {weather_data['error']}"
+            else:
+                resolved_location = str(weather_data.get("location") or snapshot.get("label") or location_query).strip()
+                state.merge_client_location_label(resolved_location)
+                await ws_manager.send_to_client(
+                    websocket,
+                    _send_widget_control(
+                        websocket,
+                        widget="weather",
+                        command="show_weather",
+                        query=resolved_location,
+                        extra_payload={
+                            "location": resolved_location,
+                            "weather_data": weather_data,
+                        },
+                    ),
+                )
+                response_text = _build_weather_spoken_summary(resolved_location, weather_data)
+        else:
+            direct_image_response = await _resolve_image_widget_request(websocket, text)
+            if direct_image_response:
+                logger.info("  [1/4] Resolved image widget request directly from saved gallery state.")
+                response_text = direct_image_response
+            else:
+                # Trigger the search widget loading state for explicit live-search requests.
+                await _resolve_search_widget_request(websocket, text)
+                # Step 1: Send user input to Nova AI subprocess
+                logger.info(f"  [1/4] Calling Nova AI subprocess...")
+                response_text = await state.nova_ai.send_message(text, timeout=30.0)
         
         if not response_text:
             logger.error("  [FAILED] No response from Nova AI subprocess")
@@ -1477,6 +2779,23 @@ async def handle_transcript_message(websocket: WebSocket, message: Dict[str, Any
             state.is_processing = False
             return
         
+        weather_widget_payload = _parse_weather_widget_response(response_text)
+        if weather_widget_payload:
+            await ws_manager.send_to_client(
+                websocket,
+                _send_widget_control(
+                    websocket,
+                    widget="weather",
+                    command="show_weather",
+                    query=str(weather_widget_payload.get("location") or ""),
+                    extra_payload=weather_widget_payload,
+                ),
+            )
+            response_text = _build_weather_spoken_summary(
+                str(weather_widget_payload.get("location") or "that location"),
+                weather_widget_payload.get("weather_data") or {},
+            )
+
         logger.info(f"  [2/4] Nova AI Response: {response_text}\n")
         
         # DISABLE MICROPHONE before starting TTS to prevent feedback loop
@@ -1561,7 +2880,7 @@ async def handle_transcript_message(websocket: WebSocket, message: Dict[str, Any
 
 # ============================================================================
 # LIFESPAN CONTEXT
-# ============================================================================
+# =================================================  ,, ===========================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1671,6 +2990,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         message.get("status"),
                         message.get("detail", ""),
                     )
+                    state.record_widget_result(message)
                     await ws_manager.send_to_client(websocket, {
                         "type": "widget_action_ack",
                         "widget": message.get("widget"),
@@ -2057,7 +3377,7 @@ async def get_logs(lines: int = 100):
 
 @app.post("/api/generate-image")
 async def generate_image_endpoint(data: Dict[str, Any]):
-    """Generate an image using the configured Gemini/Google image model."""
+    """Generate an image using the documented widget flow: Gemini prompt enhancement + Pollinations render."""
     prompt = (data.get("prompt") or "").strip()
     if not prompt:
         raise HTTPException(status_code=400, detail="Prompt is required")
@@ -2065,24 +3385,43 @@ async def generate_image_endpoint(data: Dict[str, Any]):
     config = load_image_generation_config()
     if not config.get("enabled", True):
         raise HTTPException(status_code=503, detail="Image generation is disabled in config")
-    if config.get("provider") != "google":
-        raise HTTPException(status_code=501, detail="Only Google image generation is supported currently")
+    if config.get("provider") not in {"google", "google_gemini_api", "auto"}:
+        raise HTTPException(status_code=501, detail="Only Gemini-enhanced Pollinations generation is supported currently")
+    if not state.image_generation_lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "success": False,
+                "provider": "pollinations",
+                "model": "pollinations-free",
+                "error_code": "IMAGE_GENERATION_IN_PROGRESS",
+                "message": "An image is already being generated.",
+                "action_required": "Wait for the current image generation request to finish, then retry.",
+            },
+        )
 
     try:
-        image_uri = await asyncio.to_thread(
-            generate_image_with_google,
+        enhanced_prompt = await asyncio.to_thread(
+            _enhance_prompt_with_gemini,
             prompt,
-            config.get("model", "imagen-3.0-generate-001"),
-            config.get("fallback_model", "imagen-2.0-generate-001"),
-            config.get("api_key", "")
+            config.get("api_key", ""),
+        )
+        pollinations_key = config.get("pollinations_api_key", "")
+        pollinations_model = "pollinations-flux" if (pollinations_key or "").strip().startswith(("sk_", "pk_")) else "pollinations-free"
+        image_uri = await asyncio.to_thread(
+            _generate_image_rest,
+            enhanced_prompt,
+            config.get("model", "gemini-2.5-flash-image"),
+            pollinations_key,
         )
         
         # Backup image after successful generation
+        backup_filename = None
         try:
             backup_filename = state.image_backup.save_image_backup(
                 image_uri,
                 prompt,
-                config.get("provider", "google")
+                "pollinations"
             )
             if backup_filename:
                 logger.info(f"[IMAGE] Successfully backed up image: {backup_filename}")
@@ -2096,12 +3435,118 @@ async def generate_image_endpoint(data: Dict[str, Any]):
             "success": True,
             "image": image_uri,
             "prompt": prompt,
-            "provider": config.get("provider"),
-            "model": config.get("model")
+            "provider": "pollinations",
+            "model": pollinations_model,
+            "backup_id": backup_filename,
+            "created_at": datetime.utcnow().isoformat(),
+            "enhanced_prompt": enhanced_prompt if enhanced_prompt != prompt else None,
         }
+    except ImageGenerationFailure as e:
+        logger.error(f"[IMAGE] Image generation failed: {e}")
+        raise HTTPException(status_code=e.status_code, detail=_image_error_detail(e))
     except Exception as e:
         logger.error(f"[IMAGE] Image generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        state.image_generation_lock.release()
+
+
+@app.post("/api/recreate-image")
+async def recreate_image_endpoint(
+    instruction: str = Form(...),
+    image: UploadFile = File(...),
+):
+    """Recreate or remix an uploaded image using Gemini reverse prompting and Pollinations rendering."""
+    trimmed_instruction = (instruction or "").strip()
+    if not trimmed_instruction:
+        raise HTTPException(status_code=400, detail="Instruction is required")
+
+    supported_types = {"image/jpeg", "image/png", "image/webp"}
+    if image.content_type not in supported_types:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG, and WEBP images are supported")
+
+    image_bytes = await image.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded image is empty")
+    if len(image_bytes) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Uploaded image exceeds the 10MB limit")
+
+    config = load_image_generation_config()
+    if not config.get("enabled", True):
+        raise HTTPException(status_code=503, detail="Image generation is disabled in config")
+    if config.get("provider") not in {"google", "google_gemini_api", "auto"}:
+        raise HTTPException(status_code=501, detail="Only Gemini-enhanced Pollinations generation is supported currently")
+    if not state.image_generation_lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "success": False,
+                "provider": "pollinations",
+                "model": "pollinations-free",
+                "error_code": "IMAGE_GENERATION_IN_PROGRESS",
+                "message": "An image is already being generated.",
+                "action_required": "Wait for the current image generation request to finish, then retry.",
+            },
+        )
+
+    try:
+        source_image_id = await asyncio.to_thread(
+            state.image_backup.save_source_image,
+            image_bytes,
+            image.content_type,
+        )
+        enhanced_prompt = await asyncio.to_thread(
+            _reverse_prompt_image_with_gemini,
+            trimmed_instruction,
+            image_bytes,
+            image.content_type,
+            config.get("api_key", ""),
+        )
+        pollinations_key = config.get("pollinations_api_key", "")
+        pollinations_model = "pollinations-flux" if (pollinations_key or "").strip().startswith(("sk_", "pk_")) else "pollinations-free"
+        image_uri = await asyncio.to_thread(
+            _generate_image_rest,
+            enhanced_prompt,
+            config.get("model", "gemini-2.5-flash-image"),
+            pollinations_key,
+        )
+
+        backup_filename = None
+        try:
+            backup_filename = state.image_backup.save_image_backup(
+                image_uri,
+                trimmed_instruction,
+                "pollinations",
+                kind="recreated",
+                source_image_id=source_image_id,
+            )
+            if backup_filename:
+                logger.info("[IMAGE] Successfully backed up recreated image: %s", backup_filename)
+            else:
+                logger.warning("[IMAGE] Recreated image backup returned None")
+        except Exception as backup_error:
+            logger.error("[IMAGE] Recreated image backup failed (non-blocking): %s", backup_error)
+
+        return {
+            "success": True,
+            "image": image_uri,
+            "prompt": trimmed_instruction,
+            "provider": "pollinations",
+            "model": pollinations_model,
+            "backup_id": backup_filename,
+            "created_at": datetime.utcnow().isoformat(),
+            "enhanced_prompt": enhanced_prompt,
+            "kind": "recreated",
+            "source_image_id": source_image_id,
+        }
+    except ImageGenerationFailure as e:
+        logger.error(f"[IMAGE] Image recreation failed: {e}")
+        raise HTTPException(status_code=e.status_code, detail=_image_error_detail(e))
+    except Exception as e:
+        logger.error(f"[IMAGE] Image recreation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        state.image_generation_lock.release()
 
 
 @app.post("/api/generate-ai-audio")
@@ -2366,6 +3811,8 @@ async def get_config_status():
             "elevenlabs_voice_id": os.getenv("elevenlabs_voice_id", "") or os.getenv("ELEVENLABS_VOICE_ID", "MuWZEhlucXEKPv3WaubS"),
             "deepgram_api_key": os.getenv("DEEPGRAM_API_KEY", ""),
             "deepgram_api_key_status": bool(os.getenv("DEEPGRAM_API_KEY")),
+            "weather_api_key": os.getenv("WEATHER_API_KEY", ""),
+            "weather_api_key_status": bool(os.getenv("WEATHER_API_KEY")),
         }
         
         return {
@@ -2417,6 +3864,8 @@ async def update_config(config: Dict[str, Any]):
             env_dict['elevenlabs_voice_id'] = config['elevenlabs_voice_id']
         if 'deepgram_api_key' in config and config['deepgram_api_key']:
             env_dict['DEEPGRAM_API_KEY'] = config['deepgram_api_key']
+        if 'weather_api_key' in config and config['weather_api_key']:
+            env_dict['WEATHER_API_KEY'] = config['weather_api_key']
         
         # Write back to .env
         with open(env_file, 'w') as f:
@@ -2727,6 +4176,8 @@ async def save_api_keys(data: Dict[str, Any]):
             key_name = "GROQ_API_KEY"
         elif key_name.lower() == "deepgram_api_key":
             key_name = "DEEPGRAM_API_KEY"
+        elif key_name.lower() == "weather_api_key":
+            key_name = "WEATHER_API_KEY"
         elif key_name.lower() == "elevenlabs_voice_id":
             key_name = "elevenlabs_voice_id"
         
@@ -2779,6 +4230,368 @@ async def save_api_keys(data: Dict[str, Any]):
             status_code=500,
             content={"success": False, "error": str(e)}
         )
+
+
+@app.get("/api/search/state")
+async def get_search_widget_state():
+    return {
+        "current": state.search_widget_context.get("current", {}),
+        "history": state.get_search_history_preview(),
+    }
+
+
+@app.get("/api/search/history")
+async def get_search_widget_history():
+    return {"history": state.get_search_history_preview()}
+
+
+@app.get("/api/search/history/match")
+async def match_search_widget_history(query: str):
+    cleaned_query = str(query or "").strip()
+    if not cleaned_query:
+        return JSONResponse(status_code=400, content={"success": False, "error": "query is required"})
+    return {"success": True, "matches": state.find_search_requests(cleaned_query)}
+
+
+@app.post("/api/search/history/restore")
+async def restore_search_widget_history(data: Dict[str, Any]):
+    request_id = str(data.get("request_id") or "").strip()
+    if not request_id:
+        return JSONResponse(status_code=400, content={"success": False, "error": "request_id is required"})
+    try:
+        restored = state.restore_search_request(request_id)
+        snapshot = build_frontend_payload(restored)
+        if snapshot:
+            await ws_manager.broadcast(snapshot)
+        return {"success": True, **(snapshot or {"current": restored.get("current", {})})}
+    except KeyError:
+        return JSONResponse(status_code=404, content={"success": False, "error": "Search record not found"})
+
+
+@app.post("/api/search/history/restore-latest")
+async def restore_latest_search_widget_history():
+    try:
+        restored = state.restore_latest_search_request()
+        snapshot = build_frontend_payload(restored)
+        if snapshot:
+            await ws_manager.broadcast(snapshot)
+        return {"success": True, **(snapshot or {"current": restored.get("current", {})})}
+    except KeyError:
+        return JSONResponse(status_code=404, content={"success": False, "error": "No saved search history found"})
+
+
+@app.post("/api/search/clear-current")
+async def clear_current_search_widget_result():
+    updated = state.update_search_widget_context({"widget": "search", "command": "clear_current", "source": "server_api"})
+    snapshot = build_frontend_payload(updated)
+    if snapshot:
+        await ws_manager.broadcast(snapshot)
+    return {
+        "success": True,
+        "current": updated.get("current", {}),
+        "history": state.get_search_history_preview(),
+    }
+
+
+@app.post("/api/search/history/delete")
+async def delete_search_widget_history(data: Dict[str, Any]):
+    request_id = str(data.get("request_id") or "").strip()
+    if not request_id:
+        return JSONResponse(status_code=400, content={"success": False, "error": "request_id is required"})
+    try:
+        updated = state.delete_search_request(request_id)
+    except KeyError:
+        return JSONResponse(status_code=404, content={"success": False, "error": "Search record not found"})
+    snapshot = build_frontend_payload(updated)
+    if snapshot:
+        await ws_manager.broadcast(snapshot)
+    else:
+        await ws_manager.broadcast({
+            "type": "widget_control",
+            "widget": "search",
+            "command": "show_history" if state.get_search_history_preview() else "clear_current",
+            "source": "server_state",
+            "history_preview": state.get_search_history_preview(),
+            "view_mode": "history" if state.get_search_history_preview() else "current",
+        })
+    return {
+        "success": True,
+        "current": updated.get("current", {}),
+        "history": state.get_search_history_preview(),
+    }
+
+
+@app.get("/api/notes/state")
+async def get_notes_widget_state():
+    return state.get_notes_state()
+
+
+@app.get("/api/notes/match")
+async def match_note_widget_entry(query: str):
+    cleaned_query = str(query or "").strip()
+    if not cleaned_query:
+        return JSONResponse(status_code=400, content={"success": False, "error": "query is required"})
+    note = state.find_note(cleaned_query)
+    if not note:
+        return JSONResponse(status_code=404, content={"success": False, "error": "Note not found"})
+    return {"success": True, "note": note}
+
+
+@app.post("/api/notes")
+async def create_note_widget_entry(data: Dict[str, Any]):
+    content = str(data.get("content") or "").strip()
+    category = str(data.get("category") or "").strip()
+    if not content:
+        return JSONResponse(status_code=400, content={"success": False, "error": "content is required"})
+    note = state.add_note(content, category=category)
+    return {"success": True, "note": note, **state.get_notes_state()}
+
+
+@app.put("/api/notes/{note_id}")
+async def update_note_widget_entry(note_id: str, data: Dict[str, Any]):
+    content = str(data.get("content") or "").strip()
+    category = str(data.get("category") or "").strip()
+    if not content:
+        return JSONResponse(status_code=400, content={"success": False, "error": "content is required"})
+    try:
+        note = state.update_note(note_id, content, category=category)
+    except KeyError:
+        return JSONResponse(status_code=404, content={"success": False, "error": "Note not found"})
+    return {"success": True, "note": note, **state.get_notes_state()}
+
+
+@app.delete("/api/notes/{note_id}")
+async def delete_note_widget_entry(note_id: str):
+    try:
+        notes = state.delete_note(note_id)
+    except KeyError:
+        return JSONResponse(status_code=404, content={"success": False, "error": "Note not found"})
+    return {"success": True, "notes": notes, "summaries": state.get_notes_state().get("summaries", [])}
+
+
+@app.post("/api/notes/clear")
+async def clear_note_widget_entries():
+    state.clear_all_notes()
+    return {"success": True, **state.get_notes_state()}
+
+
+@app.post("/api/notes/summaries")
+async def create_note_widget_summary(data: Dict[str, Any]):
+    content = str(data.get("content") or "").strip()
+    summary_type = str(data.get("type") or "single-note").strip() or "single-note"
+    tags = data.get("tags") if isinstance(data.get("tags"), list) else []
+    if not content:
+        return JSONResponse(status_code=400, content={"success": False, "error": "content is required"})
+    summary = state.add_summary(content, summary_type=summary_type, tags=tags)
+    return {"success": True, "summary": summary, **state.get_notes_state()}
+
+
+@app.delete("/api/notes/summaries/{summary_id}")
+async def delete_note_widget_summary(summary_id: str):
+    try:
+        summaries = state.delete_summary(summary_id)
+    except KeyError:
+        return JSONResponse(status_code=404, content={"success": False, "error": "Summary not found"})
+    return {"success": True, "notes": state.get_notes_state().get("notes", []), "summaries": summaries}
+
+
+@app.post("/api/notes/ai")
+async def run_notes_widget_ai(data: Dict[str, Any]):
+    mode = str(data.get("mode") or "chat").strip().lower() or "chat"
+    note_id = str(data.get("note_id") or "").strip()
+    instruction = str(data.get("instruction") or "").strip()
+    draft_content = str(data.get("draft_content") or "").strip()
+    category = str(data.get("category") or "").strip()
+    conversation = data.get("conversation") if isinstance(data.get("conversation"), list) else []
+
+    note = state.get_note_by_id(note_id) if note_id else None
+    note_content = draft_content or str((note or {}).get("content") or "").strip()
+    note_category = category or str((note or {}).get("category") or "").strip()
+
+    if not note_content:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Note content is required"})
+
+    if not instruction:
+        if mode == "summary":
+            instruction = "Summarize this note with key points, context, and useful follow-up details."
+        elif mode == "improve":
+            instruction = "Improve this note for clarity, grammar, structure, and completeness while preserving meaning."
+        else:
+            instruction = "Help with this note using the provided context."
+
+    result = await generate_notes_ai_completion(
+        mode=mode,
+        note_content=note_content,
+        instruction=instruction,
+        note_id=note_id,
+        category=note_category,
+        conversation=conversation,
+    )
+    return {
+        **result,
+        "note_id": note_id,
+        "category": note_category,
+        "note_content": note_content,
+    }
+
+
+@app.post("/api/client/location")
+async def update_client_location(data: Dict[str, Any]):
+    latitude = data.get("latitude")
+    longitude = data.get("longitude")
+    if latitude is None or longitude is None:
+        raise HTTPException(status_code=400, detail="latitude and longitude are required")
+
+    try:
+        latitude = float(latitude)
+        longitude = float(longitude)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="latitude and longitude must be numbers") from exc
+
+    accuracy = data.get("accuracy")
+    try:
+        accuracy = float(accuracy) if accuracy is not None else None
+    except (TypeError, ValueError):
+        accuracy = None
+
+    provided_label = str(data.get("label") or "").strip()
+    snapshot = state.update_client_location(
+        latitude=latitude,
+        longitude=longitude,
+        accuracy=accuracy,
+        label=provided_label,
+    )
+
+    resolved_label = provided_label
+    try:
+        if not resolved_label:
+            weather_service = _load_weather_service()
+            weather_data = weather_service.get_comprehensive_weather_data(f"{latitude},{longitude}")
+            if "error" not in weather_data:
+                resolved_label = str(weather_data.get("location") or "").strip()
+                if resolved_label:
+                    snapshot = state.merge_client_location_label(resolved_label)
+    except Exception as exc:
+        logger.warning("[LOCATION] Could not resolve live location label for %.5f, %.5f: %s", latitude, longitude, exc)
+
+    return {
+        "success": True,
+        "location": snapshot,
+    }
+
+
+@app.get("/api/client/location")
+async def get_client_location():
+    return {
+        "success": True,
+        "location": state.get_client_location(),
+    }
+
+
+@app.get("/api/weather/location")
+async def get_weather_location_snapshot():
+    snapshot = state.get_client_location()
+    return {
+        "success": True,
+        "location": snapshot,
+        "default_weather_query": str(snapshot.get("weather_query") or DEFAULT_WEATHER_FALLBACK_LOCATION).strip() or DEFAULT_WEATHER_FALLBACK_LOCATION,
+    }
+
+
+@app.get("/api/weather/current")
+async def get_weather_widget_data(
+    location: Optional[str] = None,
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    refresh: int = 0,
+):
+    try:
+        result = state.weather_runtime.get_current_weather(
+            location=location,
+            lat=lat,
+            lon=lon,
+            refresh=bool(refresh),
+        )
+        if result.get("success") is False:
+            return JSONResponse(status_code=502, content=result)
+        return result
+    except Exception as exc:
+        logger.error("[WEATHER] Weather endpoint failed for %s: %s", location or f"{lat},{lon}", exc)
+        return JSONResponse(status_code=502, content={"success": False, "error": str(exc)})
+
+
+@app.get("/api/weather/history")
+async def get_weather_history(date: Optional[str] = None, limit: int = 20):
+    cleaned_date = str(date or "").strip() or None
+    if cleaned_date:
+        try:
+            datetime.strptime(cleaned_date, "%Y-%m-%d")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="date must be in YYYY-MM-DD format") from exc
+
+    records = state.get_weather_history(date=cleaned_date, limit=max(1, min(limit, 500)))
+    return {
+        "success": True,
+        "date": cleaned_date,
+        "count": len(records),
+        "records": records,
+    }
+
+
+@app.post("/api/search/test-display")
+async def test_search_widget_display(data: Optional[Dict[str, Any]] = None):
+    payload = data or {}
+    query = str(payload.get("query") or "latest AI interface design trends").strip()
+    request_id = f"search-test-{uuid.uuid4().hex}"
+    sample_results = [
+        {
+            "rank": 1,
+            "title": "AI Interface Design Trends for 2026",
+            "snippet": "A breakdown of the strongest UI patterns shaping AI-first products, including live search panels, persistent activity widgets, and adaptive response layouts.",
+            "link": "https://example.com/ai-interface-design-trends-2026",
+            "source": "example.com",
+            "type": "web_result",
+        },
+        {
+            "rank": 2,
+            "title": "Designing Search Experiences That Feel Instant",
+            "snippet": "This article covers loading affordances, source visibility, and result-card hierarchy for conversational search experiences.",
+            "link": "https://example.com/instant-search-experience",
+            "source": "example.com",
+            "type": "web_result",
+        },
+        {
+            "rank": 3,
+            "title": "Why Structured Search Results Improve Trust",
+            "snippet": "Users trust AI answers more when they can scan ranked sources, summaries, and direct links inside a dedicated search widget.",
+            "link": "https://example.com/structured-search-trust",
+            "source": "example.com",
+            "type": "web_result",
+        },
+    ]
+    message = {
+        "type": "widget_control",
+        "widget": "search",
+        "command": "show_results",
+        "request_id": request_id,
+        "source": "server_test",
+        "original_transcript": f"test search for {query}",
+        "query": query,
+        "display_topic": format_search_display_topic(query),
+        "display_subtopic": format_search_display_subtopic("web"),
+        "search_type": "web",
+        "loading": False,
+        "answer": (
+            f"Test search results for {query}. "
+            "This payload was generated by the backend test route so the widget can be verified live in the UI."
+        ),
+        "results": sample_results,
+        "error": None,
+    }
+    updated = state.update_search_widget_context(message)
+    snapshot = build_frontend_payload(updated) or message
+    await ws_manager.broadcast(snapshot)
+    return {"success": True, "request_id": request_id, "query": query, "result_count": len(sample_results)}
 
 
 # ============================================================================

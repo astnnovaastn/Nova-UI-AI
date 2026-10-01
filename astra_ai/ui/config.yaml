@@ -17,7 +17,7 @@ ai:
       api_key: ''
       enabled: true
       max_tokens: 4000
-      model: gemini-pro
+      model: gemini-2.5-flash-image
     groq:
       api_key: ''
       enabled: true

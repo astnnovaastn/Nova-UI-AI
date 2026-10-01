@@ -1,5 +1,5 @@
 {
-  "name": "jarvis-frontend",
+  "name": "aegis-frontend",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -9,9 +9,13 @@
     "start": "node kill-port.js && node server.js",
     "clean-start": "node kill-port.js && node server.js",
     "build": "tsc && vite build",
+    "test:calendar": "node --test src/components/Calendar/calendarUtils.test.mjs src/components/Calendar/calendarApi.test.mjs",
+    "test:calendar:e2e": "playwright test tests/calendar-controls.spec.js",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@tauri-apps/cli": "^2.11.4",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
@@ -21,6 +25,7 @@
   },
   "dependencies": {
     "@types/three": "^0.183.1",
+    "leaflet": "^1.9.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.183.2"

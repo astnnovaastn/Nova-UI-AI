@@ -1,5 +1,5 @@
 /**
- * JARVIS — Settings Panel
+ * AEGIS — Settings Panel
  *
  * Overlay panel for API keys, connection status, preferences, and system info.
  * Slides in from the right with glass-morphism styling.
@@ -12,7 +12,7 @@ import { orbThemes, type OrbTheme } from "./orb-themes";
 // ---------------------------------------------------------------------------
 
 interface StatusResponse {
-  nova_ai_connected: boolean;
+  aegis_ai_connected: boolean;
   google_calendar_accessible: boolean;
   google_mail_accessible: boolean;
   memory_count: number;
@@ -37,7 +37,7 @@ interface PreferencesResponse {
 // State
 // ---------------------------------------------------------------------------
 
-const ORB_THEME_KEY = "novaai_orb_theme";
+const ORB_THEME_KEY = "aegisai_orb_theme";
 let panelEl: HTMLElement | null = null;
 let isOpen = false;
 let isFirstTimeSetup = false;
@@ -76,7 +76,7 @@ function buildPanelHTML(): string {
       </div>
 
       <div class="settings-welcome" id="settings-welcome" style="display:none">
-        <p>Welcome to JARVIS. Let's get you set up.</p>
+        <p>Welcome to AEGIS. Let's get you set up.</p>
       </div>
 
       <div class="settings-body">
@@ -120,7 +120,7 @@ function buildPanelHTML(): string {
         <section class="settings-section" id="section-status">
           <h3>Connection Status</h3>
           <div class="status-grid">
-            <div class="status-row"><span class="status-dot" id="status-claude-cli"></span><span>Nova_AI</span></div>
+            <div class="status-row"><span class="status-dot" id="status-claude-cli"></span><span>Aegis AI</span></div>
             <div class="status-row"><span class="status-dot" id="status-calendar"></span><span>Google Calendar</span></div>
             <div class="status-row"><span class="status-dot" id="status-mail"></span><span>Google Mail</span></div>
             <div class="status-row"><span class="status-dot" id="status-server"></span><span>Server</span><span class="status-detail" id="status-server-detail"></span></div>
@@ -263,9 +263,9 @@ async function loadStatus() {
     const status = await apiGet<StatusResponse>("/api/settings/status");
     // If we got a response, server is definitely connected
     setDotStatus("status-server", "green");
-    // Nova_AI connection - if server is running and nova_ai.py is the subprocess
-    const novaAiConnected = status.nova_ai_connected === true;
-    setDotStatus("status-claude-cli", novaAiConnected ? "green" : "red");
+    // Aegis_AI connection - if server is running and aegis_ai.py is the subprocess
+    const aegisAiConnected = status.aegis_ai_connected === true;
+    setDotStatus("status-claude-cli", aegisAiConnected ? "green" : "red");
     // Google Calendar - only green if explicitly accessible
     const calendarConnected = status.google_calendar_accessible === true;
     setDotStatus("status-calendar", calendarConnected ? "green" : "red");
@@ -290,7 +290,7 @@ async function loadStatus() {
     if (upEl) upEl.textContent = formatUptime(status.uptime_seconds || 0);
     console.log("[SETTINGS] Status loaded:", {
       server: "green",
-      nova_ai: novaAiConnected ? "green" : "red",
+      aegis_ai: aegisAiConnected ? "green" : "red",
       calendar: calendarConnected ? "green" : "red",
       mail: mailConnected ? "green" : "red"
     });

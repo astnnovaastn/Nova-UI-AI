@@ -1,5 +1,5 @@
 """
-Nova AI Task Management System
+Aegis AI Task Management System
 Comprehensive task management with scheduling, natural language processing, and memory integration
 """
 
@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 # Configure logging
-logger = logging.getLogger("NovaAI.TaskManager")
+logger = logging.getLogger("AegisAI.TaskManager")
 
 class TaskStatus(Enum):
     """Task status enumeration"""
@@ -137,13 +137,13 @@ class TaskManager:
         if not self.memory_system:
             return None, None
 
-        # Handle both NovaMemoryIntegration and NovaMemoryInterface
+        # Handle both AegisMemoryIntegration and AegisMemoryInterface
         if hasattr(self.memory_system, 'memory_system'):
-            # NovaMemoryIntegration -> NovaMemoryInterface -> NovaMemoryAI
+            # AegisMemoryIntegration -> AegisMemoryInterface -> AegisMemoryAI
             memory_data = self.memory_system.memory_system.memory_system.data
             memory_system = self.memory_system.memory_system.memory_system
         else:
-            # Direct NovaMemoryInterface -> NovaMemoryAI
+            # Direct AegisMemoryInterface -> AegisMemoryAI
             memory_data = self.memory_system.memory_system.data
             memory_system = self.memory_system.memory_system
 
@@ -373,7 +373,7 @@ class TaskManager:
                 self._save_tasks_to_memory()
 
     def _trigger_task_reminder(self, task: Task):
-        """Trigger a task reminder through Nova AI's messaging system"""
+        """Trigger a task reminder through Aegis AI's messaging system"""
         logger.info(f"Task reminder triggered: {task.title}")
 
         try:
@@ -387,7 +387,7 @@ class TaskManager:
             reminder_message += f"⏰ Due: {due_str}{priority_str}\n\n"
             reminder_message += "Would you like to mark this task as completed, or do you need more time?"
 
-            # Store the reminder in memory for Nova AI to pick up
+            # Store the reminder in memory for Aegis AI to pick up
             if self.memory_system:
                 reminder_data = {
                     "type": "task_reminder",

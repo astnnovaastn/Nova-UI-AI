@@ -54,7 +54,7 @@ class ContextManager:
             # Check for greeting patterns
             is_greeting = any(greeting in message_lower for greeting in greeting_patterns) or \
                          (message_lower.startswith('hi ') or message_lower.startswith('hello ') or 
-                          message_lower.startswith('hey ') or 'nova' in message_lower and 
+                          message_lower.startswith('hey ') or 'aegis' in message_lower and 
                           any(greeting in message_lower for greeting in ['hi', 'hello', 'hey', 'what up']))
             
             if is_greeting:

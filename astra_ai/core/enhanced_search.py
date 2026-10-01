@@ -1,5 +1,5 @@
 """
-Enhanced Search System for Nova AI
+Enhanced Search System for Aegis AI
 Provides advanced semantic search capabilities with multiple ranking algorithms.
 """
 

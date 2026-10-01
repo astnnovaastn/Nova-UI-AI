@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Smart Greeting System for Nova AI
+Smart Greeting System for Aegis AI
 =================================
 
 Provides intelligent greeting functionality with:
@@ -9,7 +9,7 @@ Provides intelligent greeting functionality with:
 - Memory integration for greeting patterns
 - User name recognition and personalization
 
-Author: Nova AI Enhancement Team
+Author: Aegis AI Enhancement Team
 Version: 1.0 - Production Ready
 """
 
@@ -22,7 +22,7 @@ import os
 
 class SmartGreetingSystem:
     """
-    Smart Greeting System for Nova AI
+    Smart Greeting System for Aegis AI
     
     Handles intelligent greetings based on time of day, user identity,
     and session tracking to prevent repetitive greetings.
@@ -98,7 +98,7 @@ class SmartGreetingSystem:
             # Get user identity from memory system
             memory_interface = self.memory_integration.memory_system
             
-            # Access the underlying NovaMemoryAI system
+            # Access the underlying AegisMemoryAI system
             if hasattr(memory_interface, 'memory_system'):
                 underlying_memory = memory_interface.memory_system
                 
@@ -226,7 +226,7 @@ class SmartGreetingSystem:
             # Get greeting patterns from memory
             memory_interface = self.memory_integration.memory_system
             
-            # Access the underlying NovaMemoryAI system
+            # Access the underlying AegisMemoryAI system
             if hasattr(memory_interface, 'memory_system'):
                 underlying_memory = memory_interface.memory_system
                 greeting_category = underlying_memory.data["memory_categories"].get("greeting_patterns", {})

@@ -1,11 +1,11 @@
 /**
- * JARVIS — Multi-mode particle visualization with advanced animations.
+ * AEGIS — Multi-mode particle visualization with advanced animations.
  *
  * States: idle, listening, thinking, speaking
  * Special effects: vortex, shockwave, breathing, treble flutter
  * Demo mode: 10-second spectacular light show with rainbow colors
  *
- * Enhanced from https://github.com/ethanplusai/jarvis
+ * Enhanced from https://github.com/ethanplusai/aegis
  */
 
 import * as THREE from "three";
@@ -29,6 +29,12 @@ export interface Orb {
   setThemeColor(color: string): void;
   setAnalyser(a: AnalyserNode | null): void;
   triggerDemo(): void;
+  setPosition(pos: "center" | "right", animate?: boolean): void;
+  resizeParticles(sizeAdjustment: Partial<{
+    idle: number; listening: number; thinking: number; speaking: number;
+    bassBoost: number; midBoost: number; trebleBoost: number;
+    shockwaveBoost: number; lerpSpeed: number;
+  }>): void;
   destroy(): void;
 }
 
@@ -36,7 +42,37 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
   let mood: OrbMood = "neutral";
   let neutralColor = MOOD_COLORS.neutral;
   let destroyed = false;
-  const N = 2000;
+  const N = 500; // Reduced particle count for smaller animation
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SIZE ANIMATION CONFIGURATION — USER ADJUSTABLE
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Change these values to customize particle size behavior across all states
+  const SIZE_CONFIG = {
+    // Base sizes for each state
+    idle:      0.08,      // Minimal size when idle
+    listening: 0.10,      // Slightly larger when listening
+    thinking:  0.06,      // Compact during thinking (lots of lines)
+    speaking:  0.1,      // Medium size for speaking (audio-reactive)
+    
+    // Demo sizes (triggered by triggerDemo())
+    demoBigBang:  0.30,   // Explosive expansion
+    demoVortex:   0.25,   // Vortex phase
+    demoPulse:    0.20,   // Pulse phase
+    demoCollapse: 0.18,   // Final phase
+    
+    // Audio responsiveness during speaking
+    bassBoost:    0.02,   // Reduce bass-driven size growth
+    midBoost:     0.015,  // Reduce mid-driven size growth
+    trebleBoost:  0.012,  // Reduce treble-driven size growth
+    
+    // Shockwave effect size boost
+    shockwaveBoost: 0.05, // Reduce shockwave size burst
+    
+    // Animation speed (higher = snappier transitions)
+    lerpSpeed:     0.022, // Normal state transitions
+    demoLerpSpeed: 0.06,  // Demo mode (faster)
+  };
   
   // Demo state
   let demoActive = false;
@@ -44,14 +80,14 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
   let demoBurstNextAt = 0;
   const DEMO_DURATION = 10.0;
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(0x050508, 1);
+  renderer.setClearColor(0x000000, 0);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
-  camera.position.z = 80;
+  camera.position.z = 95;
 
   // ── Particles ──
   const geo = new THREE.BufferGeometry();
@@ -62,7 +98,7 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
   for (let i = 0; i < N; i++) {
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos(2 * Math.random() - 1);
-    const r = Math.pow(Math.random(), 0.5) * 25;
+    const r = Math.pow(Math.random(), 0.5) * 18;
     pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
     pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
     pos[i * 3 + 2] = r * Math.cos(phi);
@@ -72,7 +108,7 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
 
   const mat = new THREE.PointsMaterial({
-    color: 0x4ca8e8, size: 0.4, transparent: true, opacity: 0.6,
+    color: 0x4ca8e8, size: 0.08, transparent: true, opacity: 0.6,
     sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false,
   });
 
@@ -121,12 +157,14 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
 
   // ── State ──
   let state: OrbState = "idle";
-  let targetRadius = 25, currentRadius = 25;
+  let targetRadius = 18, currentRadius = 18;
   let targetSpeed = 0.3, currentSpeed = 0.3;
   let targetBright = 0.6, currentBright = 0.6;
-  let targetSize = 0.4, currentSize = 0.4;
+  let targetSize = 0.08, currentSize = 0.08;
   let lineAmount = 0, targetLineAmount = 0;
-  let lineDistance = 8;
+  let lineDistance = 6;
+  let positionLerp = 0; // 0 = center, 1 = right
+  let currentPositionLerp = 0;
 
   // Transition tumble
   let spinX = 0, spinY = 0, spinZ = 0;
@@ -184,49 +222,49 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
     // ── Per-state targets ───────────────────────────────────────────────────
     if (demoActive) {
       if (demoBigBang) {
-        targetRadius = 40;   targetSpeed = 1.0;   targetBright = 1.0;  targetSize = 0.75;
+        targetRadius = 40;   targetSpeed = 1.0;   targetBright = 1.0;  targetSize = SIZE_CONFIG.demoBigBang;
         targetLineAmount = 1.0; targetElectronRate = 0.04;
         targetVortex = 0.5;  targetBreathAmp = 2.5;
       } else if (demoVortex) {
-        targetRadius = 32;   targetSpeed = 0.9;   targetBright = 1.0;  targetSize = 0.65;
+        targetRadius = 32;   targetSpeed = 0.9;   targetBright = 1.0;  targetSize = SIZE_CONFIG.demoVortex;
         targetLineAmount = 1.0; targetElectronRate = 0.04;
         targetVortex = 4.5;  targetBreathAmp = 2.0;
       } else if (demoPulse) {
-        targetRadius = 28;   targetSpeed = 0.7;   targetBright = 0.95; targetSize = 0.55;
+        targetRadius = 28;   targetSpeed = 0.7;   targetBright = 0.95; targetSize = SIZE_CONFIG.demoPulse;
         targetLineAmount = 0.9; targetElectronRate = 0.03;
         targetVortex = 2.0;  targetBreathAmp = 3.0;
       } else {
-        targetRadius = 10;   targetSpeed = 0.5;   targetBright = 0.85; targetSize = 0.5;
+        targetRadius = 10;   targetSpeed = 0.5;   targetBright = 0.85; targetSize = SIZE_CONFIG.demoCollapse;
         targetLineAmount = 0.7; targetElectronRate = 0.015;
         targetVortex = 1.0;  targetBreathAmp = 0.5;
       }
     } else {
       switch (state) {
         case "idle":
-          targetRadius = 28;  targetSpeed = 0.2;  targetBright = 0.5;  targetSize = 0.35;
+          targetRadius = 28;  targetSpeed = 0.2;  targetBright = 0.5;  targetSize = SIZE_CONFIG.idle;
           targetLineAmount = 0.15; targetElectronRate = 0;
           targetVortex = 0;   targetBreathAmp = 0;
           break;
         case "listening":
-          targetRadius = 22;  targetSpeed = 0.3;  targetBright = 0.65; targetSize = 0.4;
+          targetRadius = 22;  targetSpeed = 0.3;  targetBright = 0.65; targetSize = SIZE_CONFIG.listening;
           targetLineAmount = 0.4;  targetElectronRate = 0;
           targetVortex = 0;   targetBreathAmp = 0;
           break;
         case "thinking":
-          targetRadius = 16;  targetSpeed = 0.5;  targetBright = 0.7;  targetSize = 0.3;
+          targetRadius = 16;  targetSpeed = 0.5;  targetBright = 0.7;  targetSize = SIZE_CONFIG.thinking;
           targetLineAmount = 1.0;  targetElectronRate = 0.015;
           targetVortex = 0;   targetBreathAmp = 0;
           break;
         case "speaking":
-          targetRadius = 20;  targetSpeed = 0.45; targetBright = 0.78; targetSize = 0.46;
-          targetLineAmount = 0.92; targetElectronRate = 0.01;
-          targetVortex = 1.4; targetBreathAmp = 1.0;
+          targetRadius = 17;  targetSpeed = 0.35; targetBright = 0.78; targetSize = SIZE_CONFIG.speaking;
+          targetLineAmount = 0.72; targetElectronRate = 0.01;
+          targetVortex = 0.9; targetBreathAmp = 0.5;
           break;
       }
     }
 
     // ── Lerp base params ────────────────────────────────────────────────────
-    const L = demoActive ? 0.06 : 0.022;
+    const L = demoActive ? SIZE_CONFIG.demoLerpSpeed : SIZE_CONFIG.lerpSpeed;
     currentRadius += (targetRadius - currentRadius) * L;
     currentSpeed  += (targetSpeed  - currentSpeed)  * L;
     currentBright += (targetBright - currentBright) * L;
@@ -293,7 +331,7 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
     // ── Cloud drift ──────────────────────────────────────────────────────────
     let zTarget = Math.sin(t * 0.12) * 8;
     if (state === "thinking") zTarget = Math.sin(t * 0.3) * 15 + Math.sin(t * 0.9) * 6;
-    else if (state === "speaking") zTarget = Math.sin(t * 0.18) * 7 - bass * 8;
+    else if (state === "speaking") zTarget = Math.sin(t * 0.18) * 3 - bass * 4;
     else if (demoActive) zTarget = Math.sin(t * 0.4) * 12;
     cloudZVel += (zTarget - cloudZ) * 0.008;
     cloudZVel *= 0.94;
@@ -338,7 +376,7 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
 
       // ── Bass push ──
       if (bass > 0.05) {
-        const bf = (speaking || demoActive) ? bass * 0.032 : bass * 0.02;
+        const bf = (speaking || demoActive) ? bass * 0.018 : bass * 0.01;
         vel[i3]     += (x / dist) * bf;
         vel[i3 + 1] += (y / dist) * bf;
         vel[i3 + 2] += (z / dist) * bf;
@@ -347,7 +385,7 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
       // ── Mid pulse ──
       if (mid > 0.1) {
         const pulse = Math.sin(t * 8 + px);
-        const mf = (speaking || demoActive) ? mid * 0.022 : mid * 0.012;
+        const mf = (speaking || demoActive) ? mid * 0.012 : mid * 0.008;
         vel[i3]     += (x / dist) * mf * pulse;
         vel[i3 + 1] += (y / dist) * mf * pulse;
       }
@@ -357,21 +395,21 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
         // 1. VORTEX
         if (vortexStrength > 0.01) {
           const xzLen = Math.sqrt(x * x + z * z) || 0.01;
-          vel[i3]     += (-z / xzLen) * vortexStrength * 0.0022;
-          vel[i3 + 2] += ( x / xzLen) * vortexStrength * 0.0022;
-          vel[i3 + 1] += Math.sin(px) * vortexStrength * 0.0005;
+          vel[i3]     += (-z / xzLen) * vortexStrength * 0.0014;
+          vel[i3 + 2] += ( x / xzLen) * vortexStrength * 0.0014;
+          vel[i3 + 1] += Math.sin(px) * vortexStrength * 0.00025;
         }
 
         // 2. SHOCKWAVE
         if (shockwave > 0.005) {
-          vel[i3]     += (x / dist) * shockwave * 0.10;
-          vel[i3 + 1] += (y / dist) * shockwave * 0.05;
-          vel[i3 + 2] += (z / dist) * shockwave * 0.10;
+          vel[i3]     += (x / dist) * shockwave * 0.06;
+          vel[i3 + 1] += (y / dist) * shockwave * 0.03;
+          vel[i3 + 2] += (z / dist) * shockwave * 0.06;
         }
 
         // 3. BREATHING
         if (breathAmp > 0.005) {
-          const bp = Math.sin(t * 7.5 + px * 0.4) * breathAmp * 0.0018;
+          const bp = Math.sin(t * 7.5 + px * 0.4) * breathAmp * 0.0009;
           vel[i3]     += (x / dist) * bp;
           vel[i3 + 1] += (y / dist) * bp;
           vel[i3 + 2] += (z / dist) * bp;
@@ -540,7 +578,8 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
       }
 
       mat.opacity = Math.min(1.4, currentBright + shockwave * 0.3);
-      mat.size    = currentSize + shockwave * 0.5;
+      // Audio-reactive sizing: shockwave adds massive size boost during demo
+      mat.size    = currentSize + shockwave * SIZE_CONFIG.shockwaveBoost;
       mat.color.lerp(_rainbowCol, 0.12);
       lineMat.color.lerp(_rainbowCol, 0.12);
       lineMat.opacity = lineAmount * 0.18 + shockwave * 0.25;
@@ -548,7 +587,12 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
 
     } else if (speaking) {
       mat.opacity = Math.min(1.2, currentBright + bass * 0.18 + shockwave * 0.25);
-      mat.size    = currentSize + bass * 0.20 + shockwave * 0.30;
+      // Audio-reactive sizing: bass, mid, treble each boost size independently
+      const audioBoost = (bass * SIZE_CONFIG.bassBoost) + 
+                        (mid * SIZE_CONFIG.midBoost) + 
+                        (treble * SIZE_CONFIG.trebleBoost) +
+                        (shockwave * SIZE_CONFIG.shockwaveBoost);
+      mat.size    = currentSize + audioBoost;
 
       const pulseIntensity = (bass * 0.7 + mid * 0.2 + shockwave * 0.5);
       const wave = 0.5 + 0.5 * Math.sin(t * 12.0 + bass * 8.0);
@@ -563,7 +607,8 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
 
     } else {
       mat.opacity = currentBright + bass * 0.08;
-      mat.size    = currentSize   + bass * 0.05;
+      // Non-speaking: subtle bass response
+      mat.size    = currentSize + bass * 0.05;
 
       if (state === "thinking") {
         mat.color.lerp(COL_THINK, 0.015);
@@ -589,12 +634,15 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
       camera.position.x = Math.sin(demoT * 0.5) * 12;
       camera.position.y = Math.cos(demoT * 0.35) * 8;
       camera.position.z = 80 + Math.sin(demoT * 0.6) * 15;
+      camera.lookAt(0, 0, cloudZ * 0.2);
     } else {
-      camera.position.x = Math.sin(t * 0.02) * 5;
+      currentPositionLerp += (positionLerp - currentPositionLerp) * 0.04;
+      const targetCameraX = currentPositionLerp > 0.5 ? -22 : Math.sin(t * 0.02) * 5;
+      camera.position.x = targetCameraX;
       camera.position.y = Math.cos(t * 0.03) * 3;
       camera.position.z = 80;
+      camera.lookAt(currentPositionLerp * -25, 0, cloudZ * 0.2);
     }
-    camera.lookAt(0, 0, cloudZ * 0.2);
 
     renderer.render(scene, camera);
   }
@@ -622,12 +670,32 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
       analyser = a;
       if (a) freqData = new Uint8Array(a.frequencyBinCount);
     },
+    setPosition(pos: "center" | "right", animate = true) {
+      positionLerp = pos === "right" ? 1 : 0;
+      if (!animate) {
+        currentPositionLerp = positionLerp;
+      }
+    },
     triggerDemo() {
       demoActive    = true;
       demoStartTime = clock.getElapsedTime();
       demoBurstNextAt = demoStartTime;
       shockwave = 1.0;
       transitionEnergy = 1.0;
+    },
+    resizeParticles(sizeAdjustment) {
+      // Allow runtime adjustment of particle sizes
+      // Usage: orb.resizeParticles({ idle: 0.40, speaking: 0.50, bassBoost: 0.25 })
+      if (sizeAdjustment.idle !== undefined) SIZE_CONFIG.idle = sizeAdjustment.idle;
+      if (sizeAdjustment.listening !== undefined) SIZE_CONFIG.listening = sizeAdjustment.listening;
+      if (sizeAdjustment.thinking !== undefined) SIZE_CONFIG.thinking = sizeAdjustment.thinking;
+      if (sizeAdjustment.speaking !== undefined) SIZE_CONFIG.speaking = sizeAdjustment.speaking;
+      if (sizeAdjustment.bassBoost !== undefined) SIZE_CONFIG.bassBoost = sizeAdjustment.bassBoost;
+      if (sizeAdjustment.midBoost !== undefined) SIZE_CONFIG.midBoost = sizeAdjustment.midBoost;
+      if (sizeAdjustment.trebleBoost !== undefined) SIZE_CONFIG.trebleBoost = sizeAdjustment.trebleBoost;
+      if (sizeAdjustment.shockwaveBoost !== undefined) SIZE_CONFIG.shockwaveBoost = sizeAdjustment.shockwaveBoost;
+      if (sizeAdjustment.lerpSpeed !== undefined) SIZE_CONFIG.lerpSpeed = sizeAdjustment.lerpSpeed;
+      console.log("[ORB] Particle sizes updated:", SIZE_CONFIG);
     },
     destroy() {
       destroyed = true;

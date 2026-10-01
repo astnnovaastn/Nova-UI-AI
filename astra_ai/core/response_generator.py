@@ -1,5 +1,5 @@
 """
-Response Generator for EnhancedNovaAI system.
+Response Generator for EnhancedAegisAI system.
 This module provides response generation functionality.
 """
 
@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ResponseGenerator:
-    """Generates responses for the EnhancedNovaAI system."""
+    """Generates responses for the EnhancedAegisAI system."""
     
     def __init__(self):
         """Initialize the response generator."""
@@ -77,7 +77,7 @@ class ResponseGenerator:
             
             is_greeting_like = any(greeting in message_lower for greeting in greeting_patterns) or \
                               (message_lower.startswith('hi ') or message_lower.startswith('hello ') or 
-                               message_lower.startswith('hey ') or 'nova' in message_lower and 
+                               message_lower.startswith('hey ') or 'aegis' in message_lower and 
                                any(greeting in message_lower for greeting in ['hi', 'hello', 'hey', 'what up']))
             
             if is_greeting_like:
