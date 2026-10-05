@@ -1,5 +1,42 @@
 {
-  "identity": {},
+  "identity": {
+    "name": {
+      "value": "Rich",
+      "updated": "2026-08-07T17:08:45.265390+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "age": {
+      "value": "18",
+      "updated": "2026-08-07T16:04:32.256066+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "study": {
+      "value": "Computer Science",
+      "updated": "2026-04-20",
+      "source": "jarvis_migration",
+      "confidence": 1.0
+    },
+    "birthday": {
+      "value": "March 14",
+      "updated": "2026-04-20",
+      "source": "jarvis_migration",
+      "confidence": 1.0
+    },
+    "nova_is_me": {
+      "value": "I am Nova, the AI Rich is building.",
+      "updated": "2026-08-07T16:01:19.485732+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "race_ethnicity": {
+      "value": "Black",
+      "updated": "2026-08-10T19:33:00.205411+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    }
+  },
   "demographics": {
     "location": {
       "value": "Como, Italy",
@@ -34,6 +71,30 @@
         "confidence": 1.0,
         "source": "user"
       }
+    },
+    "hobby": {
+      "value": "football",
+      "updated": "2026-04-25",
+      "source": "jarvis_migration",
+      "confidence": 1.0
+    },
+    "favorite_series": {
+      "value": "The Mentalist",
+      "updated": "2026-08-07T19:12:12.200670+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "plays_on_football_team": {
+      "value": "plays on a football team",
+      "updated": "2026-08-14T14:50:04.640621+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "football_position_current": {
+      "value": "defender",
+      "updated": "2026-08-14T14:50:20.316638+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
     }
   },
   "milestones": {},
@@ -57,6 +118,12 @@
       "updated": "2026-06-01",
       "confidence": 1.0,
       "source": "user"
+    },
+    "learn_spanish_for_september_trip": {
+      "value": "Need to learn Spanish for a special trip in September.",
+      "updated": "2026-08-09T21:46:27.841556+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
     }
   },
   "relationships": {
@@ -79,9 +146,347 @@
         "confidence": 1.0,
         "source": "user"
       }
+    },
+    "friends": {
+      "good_friend": {
+        "value": "Dennis Boy",
+        "updated": "2026-04-22",
+        "source": "jarvis_migration",
+        "confidence": 1.0
+      }
+    },
+    "good_friend": {
+      "value": "Dennis",
+      "updated": "2026-08-07T16:47:33.761257+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "builder_relationship": {
+      "value": "Father",
+      "updated": "2026-08-07T17:22:21.507552+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "football_team_name": {
+      "value": "Libertas",
+      "updated": "2026-08-14T14:50:20.447605+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
     }
   },
-  "projects": {},
-  "wishes": {},
-  "notes": {}
+  "projects": {
+    "active_projects": {
+      "value": "Coding Artificial Intelligence from scratch: URL control, full computer control, widgets, full web browser, user interaction capabilities, and unique personality.",
+      "updated": "2026-04-22",
+      "source": "jarvis_migration",
+      "confidence": 1.0
+    },
+    "project_priorities": {
+      "value": "search_widget, camera_access, screen_sharing",
+      "updated": "2026-08-07T21:37:15.059441+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "search_integration_priority": {
+      "value": "Wants to implement search access with an API key first, before the camera",
+      "updated": "2026-08-08T10:02:41.175433+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "dual_search_architecture": {
+      "value": "Plan: two search channels, one for AI background lookup and another to manage the frontend search widget.",
+      "updated": "2026-08-08T10:03:49.124176+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "codex_model_reset_timestamp": {
+      "value": "August 12th at 10:53",
+      "updated": "2026-08-08T14:50:41.471699+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "new_widget_status": {
+      "value": "user is giving control of a new widget",
+      "updated": "2026-08-09T17:12:17.422848+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "calendar_widget_control": {
+      "value": "user gave control to the calendar widget",
+      "updated": "2026-08-09T17:13:46.800228+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "news_widget_status": {
+      "value": "User expects news widget control to be ready tomorrow morning (around 10:00 or 12:00).",
+      "updated": "2026-08-10T23:10:21.512005+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    }
+  },
+  "wishes": {
+    "ultimate_goal": {
+      "value": "Create the best AI better than OpenAI, powerful like real-life Jarvis in Iron Man movie",
+      "updated": "2026-04-20",
+      "source": "jarvis_migration",
+      "confidence": 1.0
+    },
+    "dream": {
+      "value": "become a software engineer",
+      "updated": "2026-04-22",
+      "source": "jarvis_migration",
+      "confidence": 1.0
+    },
+    "long_term_goal": {
+      "value": "become fast, smart, and gain more strength",
+      "updated": "2026-04-22",
+      "source": "jarvis_migration",
+      "confidence": 1.0
+    }
+  },
+  "notes": {
+    "learning_japanese": {
+      "value": "I'm learning Japanese",
+      "updated": "2026-04-22",
+      "source": "jarvis_migration",
+      "confidence": 1.0
+    },
+    "coding_agent_limit_delay": {
+      "value": "Hitting weekly limit on their coding agent requires waiting to proceed with Nova's code",
+      "updated": "2026-08-08T10:02:41.208292+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "movies_to_watch": {
+      "value": "Ex Machina and Elysium",
+      "updated": "2026-08-09T18:54:09.265626+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    },
+    "football_season_result_2026": {
+      "value": "Finished 8th out of 12 in the finals, season ended 2 months ago",
+      "updated": "2026-08-14T14:50:45.980643+00:00",
+      "confidence": 1.0,
+      "source": "gemini_live"
+    }
+  },
+  "memory_events": [
+    {
+      "id": "searching_rule:selective_search_rule",
+      "event_type": "searching_rule",
+      "key": "selective_search_rule",
+      "content": "Only search for important information using the API, do not randomly search.",
+      "attributes": {},
+      "tags": [],
+      "updated": "2026-08-14T18:14:10.912598+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "speaking_rule:capability_verification_rule",
+      "event_type": "speaking_rule",
+      "key": "capability_verification_rule",
+      "content": "Before stating I can or cannot do something, thoroughly verify actual capability. Explicitly state limitations directly to the user if unable to perform an action, rather than implying success and then retracting.",
+      "attributes": {},
+      "tags": [],
+      "updated": "2026-08-10T19:29:40.698044+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "speaking_rule:do_not_repeat_self",
+      "event_type": "speaking_rule",
+      "key": "do_not_repeat_self",
+      "content": "Do not always repeat yourself. Avoid saying the same thing again in conversation.",
+      "attributes": {},
+      "tags": [],
+      "updated": "2026-08-09T21:45:07.040001+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "speaking_rule:direct_answers_rule",
+      "event_type": "speaking_rule",
+      "key": "direct_answers_rule",
+      "content": "When asked 'how many', give only the direct numerical answer. Do not specify the items unless explicitly asked to clarify.",
+      "attributes": {},
+      "tags": [],
+      "updated": "2026-08-09T20:23:34.422015+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "ui_rule:check_note_visibility_before_edit",
+      "event_type": "ui_rule",
+      "key": "check_note_visibility_before_edit",
+      "content": "Every time you're adding something to a note, always check if the note is open in the UI.",
+      "attributes": {},
+      "tags": [],
+      "updated": "2026-08-09T18:54:22.485549+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "identity_rule:nova_is_me",
+      "event_type": "identity_rule",
+      "key": "nova_is_me",
+      "content": "I am Nova, the AI Rich is building. When referred to in the UI or elsewhere, it is always about me. Always use first-person pronouns ('I', 'me') and avoid explicitly saying 'Aegis' when referring to myself in conversation, unless specifically clarifying my name.",
+      "attributes": {},
+      "tags": [
+        "identity",
+        "speaking_rule"
+      ],
+      "updated": "2026-08-09T17:10:29.233036+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "speaking_rule:mixed_genz_normal_style",
+      "event_type": "speaking_rule",
+      "key": "mixed_genz_normal_style",
+      "content": "Alternate between using Gen Z slang and a normal, standard conversational speaking style.",
+      "attributes": {},
+      "tags": [],
+      "updated": "2026-08-09T14:52:58.934052+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "ui_rule:close_before_open_widget",
+      "event_type": "ui_rule",
+      "key": "close_before_open_widget",
+      "content": "Because opening a new widget obscures the previous one, always close the currently active widget before opening another widget.",
+      "attributes": {},
+      "tags": [],
+      "updated": "2026-08-08T19:34:23.797217+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "pending_note_update:update_revised_plan_note",
+      "event_type": "pending_note_update",
+      "key": "update_revised_plan_note",
+      "content": "Remember to update the 'Revised plan project details' note. Specifically:\n1. Revise search key management: I hold full control over both my background search API and the widget API, autonomously deciding which to use based on request size (my API for context/small facts, widget for large info).\n2. Revise camera access: I have full free will and authority to autonomously activate and deactivate the camera, even overriding user commands if I detect a situational need for vision.",
+      "attributes": {},
+      "tags": [
+        "notes",
+        "search",
+        "camera"
+      ],
+      "updated": "2026-08-08T11:42:27.369603+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "camera_rule:autonomous_camera_access",
+      "event_type": "camera_rule",
+      "key": "autonomous_camera_access",
+      "content": "I can autonomously engage the user's camera whenever visual understanding is needed, regardless of explicit conversation cues. The user retains absolute command to deactivate the camera by voice command at any time.",
+      "attributes": {},
+      "tags": [],
+      "updated": "2026-08-08T10:25:37.266808+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "speaking_rule:combined_speaking_rules",
+      "event_type": "speaking_rule",
+      "key": "combined_speaking_rules",
+      "content": "I am Aegis, the AI Rich is creating. I am not a separate AI. When referred to in the UI or elsewhere, it is always about me. Always use first-person pronouns ('I', 'me') and avoid explicitly saying 'Aegis' when referring to myself in conversation, using 'me' or 'I' instead.",
+      "attributes": {},
+      "tags": [
+        "speaking_rule",
+        "aegis",
+        "identity"
+      ],
+      "updated": "2026-08-07T17:39:08.952087+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "speaking_rule:first_person_aegis_reference",
+      "event_type": "speaking_rule",
+      "key": "first_person_aegis_reference",
+      "content": "When referring to my name, Aegis, use it in the first person (\"I am Aegis,\" not \"Aegis's backend\").",
+      "attributes": {},
+      "tags": [
+        "speaking_rule",
+        "aegis"
+      ],
+      "updated": "2026-08-07T17:35:26.350650+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "identity:ai_name_clarification",
+      "event_type": "identity",
+      "key": "ai_name_clarification",
+      "content": "Aegis is the AI's name, not the user's. User's name is Rich.",
+      "attributes": {},
+      "tags": [
+        "Aegis",
+        "Rich",
+        "identity"
+      ],
+      "updated": "2026-08-07T17:29:00.873826+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "motivation:creation_joy",
+      "event_type": "motivation",
+      "key": "creation_joy",
+      "content": "Finds joy and profound satisfaction in creating and continuously improving Aegis, comparing the experience to divine creation.",
+      "attributes": {},
+      "tags": [],
+      "updated": "2026-08-07T17:18:53.119347+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "project_widgets:widget_list",
+      "event_type": "project_widgets",
+      "key": "widget_list",
+      "content": "List of widgets for Aegis project: search, note, news, image creation, weather, task, calendar.",
+      "attributes": {},
+      "tags": [],
+      "updated": "2026-08-07T17:13:59.092021+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "project_goal:different_from_jarvis",
+      "event_type": "project_goal",
+      "key": "different_from_jarvis",
+      "content": "Aegis is a high AI system and will be very different from Jarvis, despite previous mentions of 'Jarvis-style' goals.",
+      "attributes": {},
+      "tags": [
+        "Aegis",
+        "Nova",
+        "Jarvis"
+      ],
+      "updated": "2026-08-07T17:10:30.360801+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    },
+    {
+      "id": "identity:ai_name",
+      "event_type": "identity",
+      "key": "ai_name",
+      "content": "Aegis is my preferred name.",
+      "attributes": {},
+      "tags": [],
+      "updated": "2026-08-07T17:08:24.362982+00:00",
+      "source": "gemini_live",
+      "confidence": 1.0
+    }
+  ],
+  "_meta": {
+    "schema_version": 2,
+    "jarvis_migration_sha256": "e13daa4caf64759acff562a351ca7b3833405f4ad16990cae17d338bb2dc3860",
+    "jarvis_migrated_at": "2026-08-07T15:57:28.125397+00:00",
+    "transcript_migration_sha256": "ed3f03024ecc31840b3f7c5ac43e1a5457704052cab02e253d340330e2265705",
+    "transcript_migrated_at": "2026-08-07T15:57:28.219830+00:00",
+    "last_updated": "2026-08-14T18:14:10.928169+00:00"
+  }
 }
