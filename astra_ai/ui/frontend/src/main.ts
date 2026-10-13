@@ -1,3 +1,4 @@
+import {VoiceSessionState} from './voiceSession.mjs';
 import {PresenceCapture} from './presenceCapture';
 import {requestedResearchReady} from './taskNotices';
 import {conversationInterrupt,conversationState,conversationMessage,conversationSnapshot,conversationLoad,conversationReplace,updateUiContext,uiSnapshot} from "./conversation";
@@ -45,6 +46,7 @@ const MIC_MUTE_KEY = "aegisai_mic_muted";
 localStorage.setItem(MIC_MUTE_KEY, "true");
 let isAudioPlaying = false;  // Track if audio is currently being played
 let activeVoiceProvider: "gemini_live" | "legacy" = "gemini_live";
+const voiceSession=new VoiceSessionState();
 let errorTimer: ReturnType<typeof setTimeout> | null = null;
 
 function showError(msg: string) {
@@ -293,6 +295,7 @@ function setupLiveVoiceInput() {
 }
 
 function startPreferredVoiceSession() {
+  voiceSession.begin();
   activeVoiceProvider = "gemini_live";
   setupLiveVoiceInput();
   socket.send({ type: "live_start", muted:isMuted, session_id:conversationSnapshot().sessionId });
@@ -328,6 +331,7 @@ socket.onBinary((pcm) => {
 });
 
 socket.onOpen(() => {
+  voiceSession.reset();
   setConnected(true);
   conversationState({connected:true,status:""});socket.send({type:"ui_context",snapshot:uiSnapshot()});
   if (!isMuted) startPreferredVoiceSession();
@@ -364,6 +368,7 @@ socket.onMessage((msg) => {
     const provider = String(msg.provider || "gemini_live");
     if(msg.model)conversationState({model:String(msg.model)});
     const liveState = String(msg.state || "idle");
+    voiceSession.receive(provider,liveState);
     recoveryVoiceState = liveState;
     recoveryVoiceReason = String(msg.reason || 'AI voice session failed.');
     recoveryVoiceRetryable = msg.retryable !== false;
@@ -668,16 +673,9 @@ console.log(" [INIT] Creating orb visualization...");
 console.log(" [INIT] Creating voice input system...");
 console.log(" [INIT] Creating audio player...");
 
-// Start listening after a brief delay for the orb to render
-setTimeout(() => {
-  setupLiveVoiceInput();
-  console.log("🎧 [INIT] Voice input ready, transitioning to listening...");
-  if (!isMuted) {
-    startPreferredVoiceSession();
-  } else {
-    transition("idle");
-  }
-}, 1000);
+// Prepare capture once; enabling the microphone opens it on user interaction.
+setupLiveVoiceInput();
+transition("idle");
 
 // Resume AudioContext on ANY user interaction (browser autoplay policy)
 function ensureAudioContext() {
@@ -831,7 +829,7 @@ btnMute.addEventListener("click", (e) => {
   if (isMuted) {
     if (voiceInput) voiceInput.stop();
     if(!isAudioPlaying)transition("idle");
-  } else if(activeVoiceProvider==="gemini_live"){
+  } else if(activeVoiceProvider==="gemini_live"&&!voiceSession.needsStart()){
     voiceInput.start();transition(isAudioPlaying?"speaking":"listening");
   } else {
     startPreferredVoiceSession();
@@ -913,6 +911,8 @@ function recoverTransient(message: string) {
   void recoverRuntime();
 }
 socket.onClose(() => {
+  voiceSession.reset();
+  voiceInput?.stop();
   setConnected(false); conversationState({sessionSwitching:false,connected:false,status:"Reconnecting…"});canceledGeneration=audioGeneration;window.dispatchEvent(new CustomEvent("nova-memory-activity",{detail:{phase:"clear"}})); audioPlayer.stop(); isAudioPlaying = false;
   statusEl.textContent = 'reconnecting…';
   if (recoveryTimer) clearTimeout(recoveryTimer);

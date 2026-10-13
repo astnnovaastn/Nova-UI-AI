@@ -32,3 +32,7 @@ The optional camera decoder runs in the approved separate .venv_presence with Op
 
 ## Outstanding physical checks
 This computer has no camera: real hardware detection, permission revocation and a full physical presence-to-speech cycle remain outstanding. Optional cloud-camera capability is verified only through its explicit runtime UI flow; automated tests use mocks. Mobile remains paused. Provider quota behavior is tested with fixtures, not by exhausting real keys. No private memory, recordings, credentials or runtime artifacts are included in the Git commit.
+
+
+## Voice startup repair
+The first microphone click previously resumed capture because Gemini was the default provider, even when no provider session existed. Explicit provider-session state now opens the first session, preserves it on microphone-only mute/unmute, and resets on failure/disconnect. Immediate capture preparation replaces a delayed initializer that could overwrite capture after an early click. Eight focused voice/transport tests, TypeScript and the production build passed. Live UI verification reached Listening with no microphone error, and backend health confirmed a verified connected Gemini Live session retained while muted.
