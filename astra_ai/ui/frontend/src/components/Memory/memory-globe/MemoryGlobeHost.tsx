@@ -4,16 +4,17 @@ import {conversationSnapshot} from "../../../conversation";
 import type {GlobeEngine,SelectionInfo} from "./globeEngine";
 import type {GraphData,RawMemoryFile,RawRecord} from "./memoryTypes";
 
-export default function MemoryGlobeHost({active,railOpen,onSelection,onRecords}:{active:boolean;railOpen:boolean;onSelection?:(selection:SelectionInfo|null)=>void;onRecords?:(records:GraphData)=>void}){
+export default function MemoryGlobeHost({active,railOpen,libraryOpen,onSelection,onRecords}:{active:boolean;railOpen:boolean;libraryOpen?:boolean;onSelection?:(selection:SelectionInfo|null)=>void;onRecords?:(records:GraphData)=>void}){
  const [connection,setConnection]=useState(()=>conversationSnapshot()),[data,setData]=useState<GraphData|null>(null),[dataScope,setDataScope]=useState(""),[error,setError]=useState(""),[detail,setDetail]=useState<RawRecord|null>(null),[detailError,setDetailError]=useState(""),[detailLoading,setDetailLoading]=useState(false),[undo,setUndo]=useState<{id:string;revision?:number}|null>(null),[actionError,setActionError]=useState("");
  const scopeKey=connection.clientId+":"+connection.guest;
  const engine=useRef<GlobeEngine|null>(null),cache=useRef<GraphData|null>(null),revision=useRef(""),refresh=useRef<()=>void>(()=>{}),selected=useRef<string|null>(null),activity=useRef(new Map<string,number>()),pendingRecall=useRef<{ids:string[];until:number}[]>([]);
+ const queuedCommands=useRef<Record<string,any>[]>([]),applyCommand=useRef<(v:Record<string,any>)=>void>(()=>{});
  const recordsCallback=useRef(onRecords),selectionCallback=useRef(onSelection);recordsCallback.current=onRecords;selectionCallback.current=onSelection;
  useEffect(()=>{const sync=()=>{const next=conversationSnapshot();setConnection(old=>old.clientId===next.clientId&&old.connected===next.connected&&old.guest===next.guest?old:next);};window.addEventListener("nova-conversation",sync);return()=>window.removeEventListener("nova-conversation",sync);},[]);
  const select=useCallback((selection:SelectionInfo|null)=>{selected.current=selection?.id||null;setDetail(null);setDetailError("");selectionCallback.current?.(selection);if(!selection||selection.type!=="memory"){setDetailLoading(false);return;}setDetailLoading(true);const id=selection.id,snapshot=conversationSnapshot(),client=snapshot.clientId,guest=snapshot.guest;fetch(`/api/memory/globe/record/${encodeURIComponent(id)}`,{headers:{"X-Nova-Client":client}}).then(async r=>{if(!r.ok)throw Error();return r.json();}).then(result=>{if(selected.current===id&&conversationSnapshot().clientId===client&&conversationSnapshot().guest===guest)setDetail(result.record);}).catch(()=>{if(selected.current===id&&conversationSnapshot().clientId===client&&conversationSnapshot().guest===guest)setDetailError("Full memory is unavailable. Reconnect and select it again.");}).finally(()=>{if(selected.current===id)setDetailLoading(false);});},[]);
  useEffect(()=>{
-  engine.current=null;cache.current=null;revision.current="";activity.current.clear();pendingRecall.current=[];setData(null);setDataScope(scopeKey);setError("");setDetail(null);setUndo(null);setActionError("");selected.current=null;
-  if(!active||!connection.connected||!connection.clientId)return;
+  engine.current=null;queuedCommands.current=[];cache.current=null;revision.current="";activity.current.clear();pendingRecall.current=[];setData(null);setDataScope(scopeKey);setError("");setDetail(null);setUndo(null);setActionError("");selected.current=null;
+  if(!connection.connected||!connection.clientId)return;
   const abort=new AbortController(),worker=new Worker(new URL("./adapter.worker.ts",import.meta.url),{type:"module"});let generation=0,timer:ReturnType<typeof setTimeout>,settle:ReturnType<typeof setTimeout>,busy=false,again=false;
   const headers={"X-Nova-Client":connection.clientId};
   const flushRecall=()=>{if(!engine.current)return;const known=new Set(cache.current?.memories.map(m=>m.id)||[]);pendingRecall.current=pendingRecall.current.filter(item=>{if(item.until<Date.now())return false;const ready=item.ids.filter(id=>known.has(id));if(ready.length)engine.current?.recall(ready);item.ids=item.ids.filter(id=>!known.has(id));return item.ids.length>0;});};
@@ -50,8 +51,24 @@ export default function MemoryGlobeHost({active,railOpen,onSelection,onRecords}:
   };
   refresh.current=load;load();window.addEventListener("nova-memory-globe-changed",changed);window.addEventListener("nova-memory-changed",changed);window.addEventListener("nova-memory-activity",signal);window.addEventListener("online",changed);
   return()=>{abort.abort();worker.terminate();clearTimeout(timer);clearTimeout(settle);engine.current=null;for(const name of ["nova-memory-globe-changed","nova-memory-changed","online"])window.removeEventListener(name,changed);window.removeEventListener("nova-memory-activity",signal);};
- },[active,connection.clientId,connection.connected,connection.guest]);
- useEffect(()=>{const resolve=(id:string)=>{if(id?.startsWith("category:"))return "cat:"+id.slice(9);if(cache.current?.entities.some(e=>e.id===id))return "ent:"+id;return id;};const choose=(event:Event)=>engine.current?.select(resolve((event as CustomEvent).detail?.id)||null);const command=(event:Event)=>{const value=(event as CustomEvent).detail||{};if(["rail","session","filter"].includes(value.action))return;let status="completed",reason="";if(!engine.current){status="failed";reason="Memory globe is loading";}else if(["focus","inspect","expand"].includes(value.action))engine.current.select(resolve(value.record_id||value.focus_id));else if(value.action==="category")engine.current.select("cat:"+value.category);else if(value.action==="search")engine.current.search(value.query||"");else{status="failed";reason="This view operation is not supported by the supplied globe";}if(value.request_id)window.dispatchEvent(new CustomEvent("nova-memory-view-result",{detail:{request_id:value.request_id,command:value.action,status,reason}}));};window.addEventListener("nova-memory-globe-select",choose);window.addEventListener("nova-memory-view-action",command);return()=>{window.removeEventListener("nova-memory-globe-select",choose);window.removeEventListener("nova-memory-view-action",command);};},[]);
+ },[connection.clientId,connection.connected,connection.guest]);
+ useEffect(()=>{
+  const resolve=(id:string)=>{if(id?.startsWith("category:"))return "cat:"+id.slice(9);if(cache.current?.entities.some(e=>e.id===id))return "ent:"+id;return id;};
+  const choose=(event:Event)=>engine.current?.select(resolve((event as CustomEvent).detail?.id)||null);
+  const command=(event:Event)=>{
+   const v=(event as CustomEvent).detail||{};if(["rail","session","filter","day"].includes(v.action))return;
+   let result:{status:string;reason?:string};
+   if(!engine.current){if(queuedCommands.current.length<20){queuedCommands.current.push(v);return;}result={status:"waiting_for_ui",reason:"Memory globe is loading"};}
+   else if(v.action==="open")result={status:"completed"};
+   else if(v.action==="search"){engine.current.search(v.query||"");result={status:"completed"};}
+   else result=engine.current.view({...v,id:v.action==="category"?"cat:"+v.category:resolve(v.record_id||v.focus_id),ids:v.record_ids});
+   if(v.request_id)window.dispatchEvent(new CustomEvent("nova-memory-view-result",{detail:{request_id:v.request_id,command:v.action,...result}}));
+  };
+  applyCommand.current=v=>command(new CustomEvent("nova-memory-view-action",{detail:v}));
+  window.addEventListener("nova-memory-globe-select",choose);window.addEventListener("nova-memory-view-action",command);
+  return()=>{window.removeEventListener("nova-memory-globe-select",choose);window.removeEventListener("nova-memory-view-action",command);};
+ },[]);
+
  const recordAction=useCallback(async(action:string,id:string,value?:unknown,expectedRevision?:number)=>{
   const snapshot=conversationSnapshot();const response=await fetch(`/api/memory/globe/record/${encodeURIComponent(id)}/action`,{method:"POST",headers:{"X-Nova-Client":snapshot.clientId,"Content-Type":"application/json"},body:JSON.stringify({action,value,expected_revision:expectedRevision,operation_id:crypto.randomUUID()})});const result=await response.json();
   if(!response.ok||!["updated","saved","forgotten","restored"].includes(result.status))throw Error(result.status==="conflict"?"Memory changed. Select it again before editing.":"The change could not be saved.");
@@ -60,9 +77,9 @@ export default function MemoryGlobeHost({active,railOpen,onSelection,onRecords}:
   else if(selected.current===id)select({id,type:"memory"} as SelectionInfo);
   refresh.current();window.dispatchEvent(new CustomEvent("nova-memory-changed",{detail:{record_id:id,action}}));
  },[select]);
- const ready=useCallback((value:GlobeEngine)=>{engine.current=value;const known=new Set(cache.current?.memories.map(m=>m.id)||[]);for(const item of pendingRecall.current)if(item.until>Date.now())value.recall(item.ids.filter(id=>known.has(id)));pendingRecall.current=pendingRecall.current.filter(item=>{item.ids=item.ids.filter(id=>!known.has(id));return item.ids.length>0&&item.until>Date.now();});},[]);
+ const ready=useCallback((value:GlobeEngine|null)=>{engine.current=value;if(!value)return;const commands=queuedCommands.current.splice(0);for(const command of commands)applyCommand.current(command);const known=new Set(cache.current?.memories.map(m=>m.id)||[]);for(const item of pendingRecall.current)if(item.until>Date.now())value.recall(item.ids.filter(id=>known.has(id)));pendingRecall.current=pendingRecall.current.filter(item=>{item.ids=item.ids.filter(id=>!known.has(id));return item.ids.length>0&&item.until>Date.now();});},[]);
  return <div className="memory-globe-host" style={{position:"absolute",inset:0,right:railOpen&&!matchMedia("(max-width:700px)").matches?340:0}}>
-  {active&&connection.connected&&dataScope===scopeKey&&data&&<MemoryGlobe data={data} onReady={ready} onSelection={select} onAction={recordAction} detail={detail} detailLoading={detailLoading} detailError={detailError} theme="obsidian" ambient={false} options={{flows:false,maxMemories:Infinity}} style={{background:"var(--widget-surface)",color:"var(--widget-text,#eee)"}}/>}
+  {active&&connection.connected&&dataScope===scopeKey&&data&&<MemoryGlobe hideDetails={libraryOpen} data={data} onReady={ready} onSelection={select} onAction={recordAction} detail={detail} detailLoading={detailLoading} detailError={detailError} theme="obsidian" ambient={false} options={{flows:false,idlePulses:false,maxMemories:Infinity}} style={{background:"var(--widget-surface)",color:"var(--widget-text,#eee)"}}/>}
   {active&&!data&&!error&&<div className="memory-network-notice">{connection.connected?"Loading memory globe…":"Connecting to memory…"}</div>}
   {undo&&dataScope===scopeKey&&connection.connected&&<div className="memory-globe-undo" role="status">Memory forgotten. <button onClick={()=>recordAction("restore",undo.id,undefined,undo.revision).catch(()=>setActionError("Restoration is unavailable. Retry when connected."))}>Restore</button></div>}
   {actionError&&<p role="alert">{actionError}</p>}

@@ -17,8 +17,11 @@ class ResearchLearning:
             for note in data['notes'].values():
                 if note['state']=='running':note['state']='queued'
             atomic(self.path,data)
-    def request(self,query,context,operation_id='',requested=True,refresh=False,source_refs=None):
+    def request(self,query,context,operation_id='',requested=True,refresh=False,source_refs=None,subquestions=None):
         query=str(query).strip()
+        if subquestions is not None and (not isinstance(subquestions,list) or len(subquestions)>4 or any(not isinstance(q,str) or not 3<=len(q.strip())<=300 or safe(q)!=q for q in subquestions)):return {'status':'rejected','reason':'invalid_research_subquestions'}
+        questions=list(dict.fromkeys(q.strip() for q in (subquestions or [query])))
+
         if not 3<=len(query)<=300 or safe(query)!=query:return {'status':'rejected','reason':'invalid_or_sensitive_research_query'}
         if context.get('guest'):return {'status':'rejected','reason':'guest_research_not_retained'}
         privacy=self.memory.privacy_settings()
@@ -27,14 +30,14 @@ class ResearchLearning:
         profile=context.get('profile_id','');project=context.get('project_id','');scope=stable(profile,project);stamp=time.time()
         with self.lock:
             data=self.load()
-            previous=[n for n in data['notes'].values() if n.get('scope_key')==scope and normal(n['query'])==normal(query)]
+            previous=[n for n in data['notes'].values() if n.get('scope_key')==scope and normal(n['query'])==normal(query) and n.get('subquestions',[n['query']])==questions]
             for note in reversed(previous):
                 if note.get('record_id') in self.memory.load().get('forgotten_records',{}):return {'status':'forgotten','reason':'explicit_restore_required'}
                 if note['state'] in {'queued','running','quota_paused'}:return {'status':'duplicate','research_id':note['id'],'job_id':note.get('job_id')}
                 if note['state']=='completed' and stamp-note.get('completed_at',0)<86400 and not refresh:return {'status':'completed','research_id':note['id'],'cached':True,'record_id':note.get('record_id')}
             rid=stable('research',scope,operation_id or uuid.uuid4().hex,normal(query))
             if rid in data['notes']:return {'status':'duplicate','research_id':rid,'job_id':data['notes'][rid].get('job_id')}
-            note={'id':rid,'query':query,'state':'queued','scope_key':scope,'scope':'default' if not profile and not project else f'profile:{profile}/project:{project}','profile_id':profile,'project_id':project,'created':now(),'requested':requested,'source_refs':source_refs or [],'operation_id':operation_id,'context':{k:context.get(k,'') for k in ('client_id','session_id','profile_id','project_id','turn_id')},'revision':1}
+            note={'id':rid,'query':query,'state':'queued','scope_key':scope,'scope':'default' if not profile and not project else f'profile:{profile}/project:{project}','profile_id':profile,'project_id':project,'created':now(),'requested':requested,'source_refs':source_refs or [],'subquestions':questions,'search_checkpoints':{},'operation_id':operation_id,'context':{k:context.get(k,'') for k in ('client_id','session_id','profile_id','project_id','turn_id')},'revision':1}
             data['notes'][rid]=note;atomic(self.path,data)
         result=self.jobs.submit([{'name':'research_action','arguments':{'action':'run','research_id':rid}}],{**note['context'],'background':not requested,'research_id':rid},'research:'+rid)
         with self.lock:data=self.load();data['notes'][rid]['job_id']=result.get('job_id');atomic(self.path,data)
@@ -65,15 +68,24 @@ class ResearchLearning:
         if self.paused:return {'status':'waiting_for_retry','next_attempt':time.time()+60,'reason':'learning_paused'}
         with self.lock:data=self.load();data['notes'][rid].update(state='running',updated=now());atomic(self.path,data)
         try:
-            result=await self.search(note['query'])
-            if result.get('status') not in {'completed','ok'}:return self.fail(rid,result)
-            sources=[]
-            for source in result.get('results',[])[:5]:
-                url=str(source.get('url',''));parsed=urlsplit(url)
-                if parsed.scheme not in {'http','https'} or not parsed.hostname or parsed.username or parsed.password:continue
-                if parsed.hostname in {'localhost','127.0.0.1','::1'}:continue
-                sources.append({'url':url[:1200],'title':safe(source.get('title','Source'))[:200],'content':safe(source.get('content') or source.get('description') or '')[:3000]})
+            checkpoints=dict(note.get('search_checkpoints',{}));sources=[];seen_urls=set()
+            for question in note.get('subquestions') or [note['query']]:
+                checkpoint=stable(normal(question))
+                if checkpoint not in checkpoints:
+                    result=await self.search(question)
+                    if result.get('status') not in {'completed','ok'}:return self.fail(rid,result)
+                    checkpoints[checkpoint]=result
+                    with self.lock:
+                        data=self.load();data['notes'][rid]['search_checkpoints']=checkpoints;atomic(self.path,data)
+                result=checkpoints[checkpoint]
+                for source in result.get('results',[])[:5]:
+                    url=str(source.get('url',''));parsed=urlsplit(url)
+                    if parsed.scheme not in {'http','https'} or not parsed.hostname or parsed.username or parsed.password:continue
+                    if parsed.hostname in {'localhost','127.0.0.1','::1'} or url in seen_urls:continue
+                    seen_urls.add(url);sources.append({'url':url[:1200],'title':safe(source.get('title','Source'))[:200],'content':safe(source.get('content') or source.get('description') or '')[:3000]})
+            sources=sources[:12]
             if not sources:return self.fail(rid,{'status':'failed','reason':'no_verifiable_sources'})
+            result={'summary':''}
             summary=safe(result.get('summary',''))[:4000]
             if self.summarize:
                 try:summary=await self.summarize(note['query'],sources)

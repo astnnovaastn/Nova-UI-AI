@@ -1,3 +1,4 @@
+import {acquireCamera,releaseCamera} from './cameraBroker';
 import type { AegisSocket } from "./ws";
 
 export type VisionChannel = "camera";
@@ -81,7 +82,7 @@ export class VisionCapture {
     if (this.cameraStream?.active) return;
     this.update("camera", "starting");
     try {
-      this.cameraStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 10, max: 15 } } });
+      this.cameraStream = await acquireCamera('vision');
       if (this.preview) {
         this.preview.srcObject = this.cameraStream;
         void this.preview.play();
@@ -97,7 +98,7 @@ export class VisionCapture {
   stopCamera() {
     if (this.cameraTimer !== null) window.clearInterval(this.cameraTimer);
     this.cameraTimer = null;
-    this.cameraStream?.getTracks().forEach((track) => track.stop());
+    releaseCamera('vision');
     this.cameraStream = null;
     this.update("camera", "off");
   }

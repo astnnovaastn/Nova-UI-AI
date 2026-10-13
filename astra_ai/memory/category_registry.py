@@ -3,15 +3,16 @@ import copy
 from dataclasses import asdict, replace
 from .category_policy import POLICIES, matches_scope
 
-VERSION=1
-PALETTE={'blue':'#4C83B7','violet':'#916CB0','red':'#BA6068','orange':'#C58D3D','highlight':'#DCD7CE'}
-FAMILIES=('blue','violet','red','orange')
+VERSION=3
+PALETTE={'blue':'#5b8def','gray_blue':'#8b95a7','red':'#d9544f','green':'#6fcf7f','violet':'#9b6bff','pink':'#ffb3c1','deep_red':'#8f1d2c','deep_violet':'#5a3aa8','orange':'#ffb3c1','deep_blue':'#8b95a7','yellow':'#6fcf7f','highlight':'#DCD7CE'}
+FAMILIES=('blue','gray_blue','red','green','violet','pink','deep_red','deep_violet')
+COMPATIBLE_FAMILIES=FAMILIES+('orange','deep_blue','yellow')
 
 def registry(memory):
     from .shared_memory import stable
     rows=memory.setdefault('category_registry',{})
     for i,(cid,policy) in enumerate(POLICIES.items()):
-        rows.setdefault(cid,{'id':cid,'label':policy.title,'description':policy.content,'parent_id':None,'aliases':[],'policy_template':cid,'profile_id':'','project_id':'','state':'active','revision':1,'builtin':True,'color_family':('blue' if cid=='user_identity' else 'orange' if cid=='session_themes' else FAMILIES[i%4]),'provenance':[{'kind':'builtin_policy'}],'history':[]})
+        rows.setdefault(cid,{'id':cid,'label':policy.title,'description':policy.content,'parent_id':None,'aliases':[],'policy_template':cid,'profile_id':'','project_id':'','state':'active','revision':1,'builtin':True,'color_family':('blue' if cid=='user_identity' else 'orange' if cid=='session_themes' else ('blue','violet','red','orange')[i%4]),'provenance':[{'kind':'builtin_policy'}],'history':[]})
     return rows
 
 def source_visible(memory,row,profile_id='',project_id=''):
@@ -62,8 +63,8 @@ def category_ids(memory,value,profile_id='',project_id='',descendants=False):
 
 def palette(row):
     from .shared_memory import stable
-    family=row.get('color_family','blue');base=PALETTE[family];other=PALETTE['violet' if family=='blue' else 'blue' if family=='violet' else 'orange' if family=='red' else 'red']
-    blend=8+int(stable(row['id'])[:4],16)%18
+    family=row.get('color_family','blue');base=PALETTE[family];other=base
+    blend=8+int(stable(row['id'])[:4],16)%9
     return {'family':family,'base':base,'blend_with':other,'blend_percent':blend,'mix_space':'oklch','color':f'color-mix(in oklch, {base} {100-blend}%, {other})','highlight':PALETTE['highlight']}
 
 def prepare(manager):
@@ -72,7 +73,7 @@ def prepare(manager):
         if memory['_meta'].get('category_registry_version')==VERSION:return manager.stats(memory)
         for path in (manager.memory_path,manager.transcript_path,manager.forgotten_path):manager._backup(path,'before_category_registry')
         registry(memory);memory['_meta']['category_registry_version']=VERSION
-        memory['_meta']['memory_palette']={'version':1,'bases':PALETTE,'mix_space':'oklch'}
+        memory['_meta']['memory_palette']={'version':3,'bases':PALETTE,'mix_space':'oklch'}
         manager._commit(memory);return manager.stats(memory)
 
 def execute(manager,action,category_id='',label='',parent_id=None,aliases=None,policy_template='',description='',color_family='',merge_id='',expected_revision=None,profile_id='',project_id='',source_refs=None,evidence='',operation_id='',offset=0,limit=50):
@@ -120,7 +121,7 @@ def execute(manager,action,category_id='',label='',parent_id=None,aliases=None,p
                 if extra:
                     existing['history'].append({k:copy.deepcopy(v) for k,v in existing.items() if k!='history'});existing.setdefault('provenance',[]).extend(extra);existing['member_ids']=sorted(set(existing.get('member_ids',[]))|{r['record_id'] for r in extra});existing['revision']+=1;existing['updated']=now();manager._commit(memory)
                 return {'status':'duplicate','category':copy.deepcopy(existing),'id':cid}
-            row={'id':cid,'label':label,'description':safe(description[:500]),'parent_id':parent['id'] if parent else None,'aliases':[],'policy_template':template,'profile_id':profile_id,'project_id':project_id,'state':'active','revision':1,'builtin':False,'created':now(),'updated':now(),'history':[],'member_ids':[r['record_id'] for r in refs],'provenance':refs or [{'kind':'user_organization','evidence':safe(evidence[:1000])}],'color_family':color_family or (parent['color_family'] if parent else FAMILIES[int(stable(cid)[:4],16)%4])}
+            row={'id':cid,'label':label,'description':safe(description[:500]),'parent_id':parent['id'] if parent else None,'aliases':[],'policy_template':template,'profile_id':profile_id,'project_id':project_id,'state':'active','revision':1,'builtin':False,'created':now(),'updated':now(),'history':[],'member_ids':[r['record_id'] for r in refs],'provenance':refs or [{'kind':'user_organization','evidence':safe(evidence[:1000])}],'color_family':color_family or (parent['color_family'] if parent else FAMILIES[int(stable(cid)[:4],16)%len(FAMILIES)])}
         else:
             row=rows.get(category_id)
             if not row or not matches_scope(row,profile_id,project_id):return {'status':'not_found'}
@@ -159,7 +160,7 @@ def execute(manager,action,category_id='',label='',parent_id=None,aliases=None,p
             if not isinstance(aliases,list) or len(aliases)>50 or any(not isinstance(a,str) or not a.strip() or len(a)>128 or safe(a)!=a for a in aliases):return {'status':'rejected','reason':'invalid_aliases'}
             row['aliases']=list(dict.fromkeys(row['aliases']+aliases))
         if color_family:row['color_family']=color_family
-        if row['color_family'] not in FAMILIES:return {'status':'rejected','reason':'invalid_color_family'}
+        if row['color_family'] not in COMPATIBLE_FAMILIES:return {'status':'rejected','reason':'invalid_color_family'}
         names={normal(row['label']),*(normal(a) for a in row['aliases'])}
         if any(other['id']!=row['id'] and other.get('state')=='active' and other.get('parent_id')==row['parent_id'] and (other.get('profile_id',''),other.get('project_id',''))==(profile_id,project_id) and names&{normal(other['label']),*(normal(a) for a in other.get('aliases',[]))} for other in rows.values()):return {'status':'conflict','reason':'category_name_collision'}
         rows[row['id']]=row;result={'status':'created' if action=='create' else 'merged' if action=='merge' else 'retired' if action=='retire' else 'restored' if action=='restore' else 'updated','id':row['id'],'category':copy.deepcopy(row)}

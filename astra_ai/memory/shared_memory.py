@@ -337,8 +337,15 @@ class SharedMemory(PersistentRules,CategoryEngine):
         with self._lock:
             m=self.load();pending=m['pending_approvals'].get(approval_id)
             if not pending: return {'status':'not_found'}
+            from .library import approval_token
+            audit={'id':'memory:'+approval_id,'source':'memory','source_id':approval_id,'title':pending.get('record',{}).get('key') or 'Memory relationship','state':'approved' if approved else 'rejected','created':pending.get('created') or pending.get('record',{}).get('created'),'decided':now(),'version':approval_token(pending),'details':copy.deepcopy(pending),**{k:pending.get('record',{}).get(k,'') for k in ('profile_id','project_id','scope')}}
+            if pending.get('kind')=='relationship':
+                endpoint=m['records'].get(pending.get('relationship',{}).get('from'),{})
+                audit.update({k:endpoint.get(k,'') for k in ('profile_id','project_id','scope')})
+            if 'approval_history' not in m:self._backup(self.memory_path,'pre_approval_history')
             if not approved:
                 del m['pending_approvals'][approval_id]
+                m.setdefault('approval_history',{})[approval_id]=audit
                 for operation in m['_meta'].get('operations',{}).values():
                     if operation['result'].get('approval_id')==approval_id:operation['result']={'status':'rejected','reason':'user_declined'}
                 self._commit(m);return {'status':'rejected'}
@@ -347,10 +354,11 @@ class SharedMemory(PersistentRules,CategoryEngine):
                 if not r.get('evidence'):return {'status':'pending_approval','reason':'supporting_evidence_required','approval_id':approval_id}
                 result=self.link(r['from'],r['to'],r['type'],r['evidence'],approved=True)
                 if result['status']!='saved':return result
-                m=self.load();m['pending_approvals'].pop(approval_id,None);self._commit(m);return result
+                m=self.load();m['pending_approvals'].pop(approval_id,None);m.setdefault('approval_history',{})[approval_id]=audit;self._commit(m);return result
             r=pending['record'];result=self.propose(r['kind'],r['category'],r['key'],r['value'],**{k:v for k,v in r.items() if k not in {'kind','category','key','value','id','content','revision','history','created','updated','consent','operation_id'}},approved=True)
             if result['status'] not in {'saved','updated','duplicate'}:return result
             m=self.load();m['pending_approvals'].pop(approval_id,None)
+            m.setdefault('approval_history',{})[approval_id]=audit
             for operation in m['_meta'].get('operations',{}).values():
                 if operation['result'].get('approval_id')==approval_id:operation['result']=result
             for c in m['conflicts']:

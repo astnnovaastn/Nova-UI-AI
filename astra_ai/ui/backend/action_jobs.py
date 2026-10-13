@@ -110,6 +110,13 @@ class ActionJobs:
     def resume(self):
         with self.lock:data=self.load();data.setdefault('metadata',{})['paused']=False;self.write(data);self.paused=False
         return {'status':'resumed'}
+    def control_job(self,jid,paused):
+        with self.lock:
+            data=self.load();job=data['jobs'].get(jid)
+            if not job:return {'status':'not_found'}
+            if job['state'] in {'completed','failed','canceled'}:return {'status':'rejected','reason':'terminal_job'}
+            job['paused']=bool(paused);job['updated']=now();self.write(data)
+        return {'status':'paused' if paused else 'resumed','job_id':jid}
     def retry(self,jid,repair_id='',validated=False):
         with self.lock:
             data=self.load();job=data['jobs'].get(jid)
@@ -147,6 +154,7 @@ class ActionJobs:
                     # Round-robin across admitted jobs, then fill spare slots from one job.
                     candidates=[]
                     for job in active:
+                        if job.get('paused'):continue
                         eligible=[(i,a) for i,a in enumerate(job['actions']) if a['state'] in {'queued','waiting_for_ui','waiting_for_retry'} and a.get('next_attempt',0)<=time.time() and all(job['actions'][d]['state']=='completed' for d in a['depends_on'])]
                         for rank,(i,a) in enumerate(eligible):candidates.append((rank,job,i,a))
                     candidates.sort(key=lambda x:(x[0],x[1]['created']))
@@ -200,7 +208,7 @@ class ActionJobs:
                     return None
                 job["actions"][index].update(state=state,result=result,**extra);job["sequence"]+=1;job["updated"]=now()
                 self.write(data)
-                return {"type":"job_progress","job_id":jid,"sequence":job["sequence"],"state":job["state"],"action_index":index,"action_state":state,"completed":sum(a["state"]=="completed" for a in job["actions"]),"total":len(job["actions"]),"client_id":job["context"].get("client_id",""),"scope":{k:job["context"].get(k,"" if k!="guest" else False) for k in ("profile_id","project_id","guest","session_id")}}
+                return {"type":"job_progress","job_id":jid,"sequence":job["sequence"],"state":job["state"],"action_index":index,"action_state":state,"completed":sum(a["state"]=="completed" for a in job["actions"]),"total":len(job["actions"]),"client_id":job["context"].get("client_id",""),"scope":{k:job["context"].get(k,"" if k!="guest" else False) for k in ("profile_id","project_id","guest","session_id","background")}}
         event=await asyncio.to_thread(update)
         if event and result and result.get('notification'):event['notification']=result['notification'];event['research_id']=result.get('research_id','')
         if event:
@@ -223,7 +231,7 @@ class ActionJobs:
                 self.write(data)
                 if previous!=j["state"]:
                     j["sequence"]+=1;self.write(data)
-                    return {"type":"job_progress","job_id":jid,"state":j["state"],"sequence":j["sequence"],"completed":sum(a["state"]=="completed" for a in j["actions"]),"total":len(j["actions"]),"client_id":j["context"].get("client_id",""),"scope":{k:j["context"].get(k,"" if k!="guest" else False) for k in ("profile_id","project_id","guest","session_id")}}
+                    return {"type":"job_progress","job_id":jid,"state":j["state"],"sequence":j["sequence"],"completed":sum(a["state"]=="completed" for a in j["actions"]),"total":len(j["actions"]),"client_id":j["context"].get("client_id",""),"scope":{k:j["context"].get(k,"" if k!="guest" else False) for k in ("profile_id","project_id","guest","session_id","background")}}
         event=await asyncio.to_thread(update)
         if event:
             try:await self.notify(event.pop("client_id"),event)

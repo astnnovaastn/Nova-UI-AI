@@ -20,6 +20,7 @@ export interface RawRecord {
   attributes?: Record<string, unknown>;
   provenance?: Record<string, unknown>;
   evidence_refs?: unknown[];
+  history?: unknown[];
   lifecycle?: string;
   profile_id?: string;
   project_id?: string;
@@ -34,7 +35,7 @@ export interface RawRelation {
 }
 type Groups = Record<string, Record<string, RawRecord>>;
 export interface RawMemoryFile {
-  visual_topics?: {id:string;label:string;description:string;member_ids:string[];visual_only:boolean}[];
+  visual_topics?: {id:string;label:string;description:string;member_ids:string[];visual_only:boolean;palette?: import("./memoryPalette").CategoryPalette}[];
   facts?: Groups;
   events?: Groups;
   activity_history?: Groups;
@@ -53,7 +54,7 @@ export interface RawMemoryFile {
 /** category = a hub, entity = a relay node inside the globe, the rest are strings between nodes */
 export type LinkKind = "category" | "entity" | "explicit" | "semantic" | "session" | "catalog";
 
-export interface GraphCategory { id: string; label: string; description: string; count: number }
+export interface GraphCategory { id: string; label: string; description: string; count: number; totalCount?: number; palette?: import('./memoryPalette').CategoryPalette }
 export interface GraphMemory {
   displayCategory?: string;
   id: string;
@@ -76,6 +77,7 @@ export interface GraphEntity { id: string; label: string; category: string; memb
 /** a and b are node ids: a memory id, `cat:<categoryId>` or `ent:<entityId>` */
 export interface GraphLink { a: string; b: string; kind: LinkKind; weight: number; reason: string }
 export interface GraphData {
+  layout?: import('./globeEngine').PreparedLayout;
   categories: GraphCategory[];
   memories: GraphMemory[];
   entities: GraphEntity[];

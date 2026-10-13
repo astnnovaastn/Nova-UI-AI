@@ -147,7 +147,7 @@ MEMORY_EVENT_TOOL_DECLARATIONS = [
 ]
 
 MEMORY_EVENT_TOOL_DECLARATIONS.extend([
-    {"name": "approve_memory", "description": "Approve or reject a specific pending memory only after the user explicitly confirms or rejects it. Never approve on your own.", "parameters": {"type":"OBJECT","properties":{"approval_id":{"type":"STRING"},"approved":{"type":"BOOLEAN"}},"required":["approval_id","approved"]}},
+    {"name": "approve_memory", "description": "Approve or reject a specific pending memory only after the user explicitly confirms or rejects it. Never approve on your own.", "parameters": {"type":"OBJECT","properties":{"approval_id":{"type":"STRING"},"approved":{"type":"BOOLEAN"},"version":{"type":"STRING"},"confirmation_quote":{"type":"STRING","description":"Exact current attributed user confirmation, after explaining this proposal version."}},"required":["approval_id","approved","version","confirmation_quote"]}},
     {"name": "get_pending_memories", "description": "Read pending memory proposals so you can ask the user about uncertain or sensitive memories.", "parameters":{"type":"OBJECT","properties":{}}},
     {"name": "save_memory_relationship", "description": "Link two recalled record IDs with supporting user evidence; do not invent causal claims.", "parameters":{"type":"OBJECT","properties":{"from_id":{"type":"STRING"},"to_id":{"type":"STRING"},"relationship_type":{"type":"STRING","enum":["enables","conflicts","supports","caused_by","related_to","implies"]},"evidence":{"type":"STRING"}},"required":["from_id","to_id","relationship_type"]}},
     {"name": "learn_memory", "description": "Record a user preference or pattern supported by a saved record and exact user evidence. This never changes permissions or code.", "parameters":{"type":"OBJECT","properties":{"learning_type":{"type":"STRING","enum":["new_fact_type","new_pattern","context_learning","preference_learning","state_change"]},"record_id":{"type":"STRING"},"evidence":{"type":"STRING"}},"required":["learning_type","record_id","evidence"]}},
@@ -224,10 +224,10 @@ for declaration in MEMORY_TOOL_DECLARATIONS+MEMORY_EVENT_TOOL_DECLARATIONS:
     props=declaration['parameters'].get('properties',{})
     if 'category' in props:props['category'].pop('enum',None)
     if declaration['name']=='propose_memories':props['proposals']['items']['properties']['category'].pop('enum',None)
-MEMORY_TOOL_DECLARATIONS.append({'name':'category_action','description':'Discover and organize the extensible memory category hierarchy. Create source-supported categories or subcategories, revise labels, merge compatible categories, retire and restore. Category organization is not a user fact and cannot weaken privacy or permissions.','parameters':{'type':'OBJECT','properties':{'action':{'type':'STRING','enum':['list','resolve','create','update','merge','retire','restore']},'category_id':{'type':'STRING'},'label':{'type':'STRING'},'parent_id':{'type':'STRING'},'policy_template':{'type':'STRING'},'description':{'type':'STRING'},'merge_id':{'type':'STRING'},'color_family':{'type':'STRING','enum':['blue','violet','red','orange']},'aliases':{'type':'ARRAY','items':{'type':'STRING'}},'source_refs':{'type':'ARRAY','items':{'type':'OBJECT','properties':{'record_id':{'type':'STRING'}},'required':['record_id']}},'expected_revision':{'type':'INTEGER'},'offset':{'type':'INTEGER'},'limit':{'type':'INTEGER'}},'required':['action']}})
+MEMORY_TOOL_DECLARATIONS.append({'name':'category_action','description':'Discover and organize the extensible memory category hierarchy. Create source-supported categories or subcategories, revise labels, merge compatible categories, retire and restore. Category organization is not a user fact and cannot weaken privacy or permissions.','parameters':{'type':'OBJECT','properties':{'action':{'type':'STRING','enum':['list','resolve','create','update','merge','retire','restore']},'category_id':{'type':'STRING'},'label':{'type':'STRING'},'parent_id':{'type':'STRING'},'policy_template':{'type':'STRING'},'description':{'type':'STRING'},'merge_id':{'type':'STRING'},'color_family':{'type':'STRING','enum':['blue','gray_blue','red','green','violet','pink','deep_red','deep_violet','orange','deep_blue','yellow']},'aliases':{'type':'ARRAY','items':{'type':'STRING'}},'source_refs':{'type':'ARRAY','items':{'type':'OBJECT','properties':{'record_id':{'type':'STRING'}},'required':['record_id']}},'expected_revision':{'type':'INTEGER'},'offset':{'type':'INTEGER'},'limit':{'type':'INTEGER'}},'required':['action']}})
 
 ACTION_TOOL_DECLARATIONS_EXTRA = [
- {'name':'research_action','description':'Manage durable sourced research: request research in the background while continuing conversation, list/read results, or pause/resume learning. Microphone mute does not cancel tasks. Only requested research gets a completion notice; proactive notes are used only when relevant.','parameters':{'type':'OBJECT','properties':{'action':{'type':'STRING','enum':['request','list','get','read','pause','resume']},'query':{'type':'STRING'},'research_id':{'type':'STRING'},'refresh':{'type':'BOOLEAN'}},'required':['action']}},
+ {'name':'research_action','description':'Manage durable sourced research: propose up to four focused subquestions for fan-out, or request research in the background while continuing conversation, list/read results, or pause/resume learning. Microphone mute does not cancel tasks. Only requested research gets a completion notice; proactive notes are used only when relevant.','parameters':{'type':'OBJECT','properties':{'action':{'type':'STRING','enum':['request','list','get','read','pause','resume']},'query':{'type':'STRING'},'research_id':{'type':'STRING'},'subquestions':{'type':'ARRAY','items':{'type':'STRING'}},'refresh':{'type':'BOOLEAN'}},'required':['action']}},
  {'name':'capability_action','description':'Discover and invoke verified learned tools, request a reusable helper, or stage a narrowly tested pure-function repair. New code is staged and isolated-tested before activation. Critical changes require human review; the model cannot approve its own changes.','parameters':{'type':'OBJECT','properties':{'action':{'type':'STRING','enum':['list','get','status','learn','invoke','validate','repair']},'tool_id':{'type':'STRING'},'purpose':{'type':'STRING'},'input_json':{'type':'STRING','description':'JSON input for the discovered helper; use its inspected examples. Never include credentials.'},'offset':{'type':'INTEGER'},'limit':{'type':'INTEGER'}},'required':['action']}},
  {'name':'open_website','description':'Open a website in the user browser only for a requested navigation task. Report browser-launch acceptance, not a claim that the page loaded.','parameters':{'type':'OBJECT','properties':{'url':{'type':'STRING'}},'required':['url']}}
 ]
@@ -282,13 +282,11 @@ async def execute_shared_memory_tool(manager, name, arguments, user_text="", ses
         filters.setdefault("profile_id",profile_id);filters.setdefault("project_id",project_id)
         return await asyncio.to_thread(getattr(manager,name),arguments.get("query",""),arguments.get("limit",5),**filters)
     if name == "get_pending_memories":
-        memory=await asyncio.to_thread(manager.load)
-        return {"status":"ok","proposals":list(memory.get("pending_approvals",{}).values())}
+        from astra_ai.memory.library import memory_approvals
+        proposals=await asyncio.to_thread(memory_approvals,manager,profile_id,project_id)
+        return {"status":"ok","proposals":[{**r['details'],'version':r['version'],'library_id':r['id']} for r in proposals if r['state']=='waiting']}
     if name == "approve_memory":
-        approved=arguments.get("approved") is True
-        pattern=r"\b(yes|approve|confirm|save it|si|sí|confirmo)\b" if approved else r"\b(no|reject|cancel|rechaza)\b"
-        if not re.search(pattern,user_text,re.I) or (approved and re.search(r"\b(no|not|don't|do not)\b",user_text,re.I)):return {"status":"rejected","reason":"explicit_confirmation_required"}
-        return await asyncio.to_thread(manager.approve,arguments.get("approval_id",""),approved)
+        return {"status":"rejected","reason":"contextual_library_confirmation_required"}
     if name == "save_memory_relationship":
         evidence=str(arguments.get("evidence",""))
         if not evidence or evidence.casefold() not in user_text.casefold():return {"status":"rejected","reason":"supporting_user_evidence_required"}
@@ -536,11 +534,16 @@ def _append_turn(memory_file: Path, session_id: str, user_text: str, assistant_t
 
 
 ACTION_TOOL_DECLARATIONS += [
-    {"name":"memory_view_action","description":"Navigate the memory interface, inspect a category, record or conversation, focus/zoom/pan, switch rails, or move presentation positions. Wait for the frontend acknowledgement.","parameters":{"type":"OBJECT","properties":{"action":{"type":"STRING","enum":["open","category","session","inspect","search","filter","focus","zoom","pan","reset","rail","move","entity","day","topic","expand","family"]},"focus_id":{"type":"STRING"},"family":{"type":"STRING","enum":["entity","memory","pattern","all"]},"category":{"type":"STRING"},"record_id":{"type":"STRING"},"session_id":{"type":"STRING"},"query":{"type":"STRING"},"rail":{"type":"STRING","enum":["conversation","library","sessions"]},"zoom":{"type":"NUMBER"},"x":{"type":"NUMBER"},"y":{"type":"NUMBER"},"z":{"type":"NUMBER"}},"required":["action"]}},
+    {"name":"memory_view_action","description":"Navigate the memory interface, inspect a category, record or conversation, focus/zoom/pan, switch rails, or move presentation positions. Wait for the frontend acknowledgement.","parameters":{"type":"OBJECT","properties":{"action":{"type":"STRING","enum":["open","category","session","inspect","search","filter","focus","zoom","pan","reset","rail","rotate","highlight","entity","day","topic","expand"]},"focus_id":{"type":"STRING"},"family":{"type":"STRING","enum":["entity","memory","pattern","all"]},"category":{"type":"STRING"},"record_id":{"type":"STRING"},"session_id":{"type":"STRING"},"query":{"type":"STRING"},"rail":{"type":"STRING","enum":["conversation","library","sessions","approvals","tasks"]},"guided":{"type":"BOOLEAN"},"record_ids":{"type":"ARRAY","items":{"type":"STRING"}},"yaw":{"type":"NUMBER"},"pitch":{"type":"NUMBER"},"zoom":{"type":"NUMBER"},"x":{"type":"NUMBER"},"y":{"type":"NUMBER"},"z":{"type":"NUMBER"}},"required":["action"]}},
     {"name":"run_action_batch","description":"Queue up to 100 explicitly requested registered actions with optional dependencies. Backend work continues while running; UI-dependent actions wait for reconnect. Returns a job ID.","parameters":{"type":"OBJECT","properties":{"actions":{"type":"ARRAY","items":{"type":"OBJECT","properties":{"name":{"type":"STRING"},"arguments":{"type":"OBJECT","properties":{}},"depends_on":{"type":"ARRAY","items":{"type":"INTEGER"}}},"required":["name"]}}},"required":["actions"]}},
     {"name":"job_action","description":"Inspect, list or cancel a requested background job.","parameters":{"type":"OBJECT","properties":{"action":{"type":"STRING","enum":["list","get","cancel"]},"job_id":{"type":"STRING"}},"required":["action"]}},
 ]
 
+ACTION_TOOL_DECLARATIONS_EXTRA.append({"name":"library_action","description":"List and explain existing approvals or tasks. Obtain the current version with get before a decision. Never approve your own proposal. A voice decision requires the exact complete current user utterance as confirmation_quote, referring to the explained proposal. If ambiguous, ask the user. Pause/resume/retry/cancel route to existing task services.","parameters":{"type":"OBJECT","properties":{"action":{"type":"STRING","enum":["list","get","decision","pause","resume","retry","cancel"]},"view":{"type":"STRING","enum":["approvals","tasks"]},"id":{"type":"STRING"},"version":{"type":"STRING"},"decision":{"type":"STRING","enum":["approved","rejected"]},"confirmation_quote":{"type":"STRING"},"query":{"type":"STRING"},"status":{"type":"STRING"},"offset":{"type":"INTEGER"},"limit":{"type":"INTEGER"}},"required":["action"]}})
+ACTION_TOOL_DECLARATIONS_EXTRA.extend([
+ {"name":"notice_action","description":"Choose whether a real pending operation notice is useful now. list/get inspect sourced notices. speak requests delivery after presence and conversation checks; defer postpones it. Never announce nonexistent results or idle chatter. On return, mention important completed work naturally; microphone mute only affects user capture.","parameters":{"type":"OBJECT","properties":{"action":{"type":"STRING","enum":["list","get","speak","defer"]},"notice_id":{"type":"STRING"},"reason":{"type":"STRING"}},"required":["action"]}},
+ {"name":"presence_action","description":"Inspect local person-presence availability for a pending useful notice, or request a single optional camera image when cloud image consent and configured model capability allow it. Presence is not identity or permission. Do not request camera access without a useful purpose.","parameters":{"type":"OBJECT","properties":{"action":{"type":"STRING","enum":["status","inspect","stop"]},"notice_id":{"type":"STRING"}},"required":["action"]}}
+])
 ACTION_TOOL_DECLARATIONS.extend(ACTION_TOOL_DECLARATIONS_EXTRA)
 
 class GeminiLiveSession:
@@ -594,6 +597,7 @@ class GeminiLiveSession:
         self._speech_active=False
         self._has_new_audio=False
         self._response_pending=False
+        self._notice_gate=False;self._internal_notice=False;self._notice_id=None
         self._interrupted_completion_pending=False
         self.guest=False
         self._speaker_context="Local account owner context; identity details come from saved user memory."
@@ -688,6 +692,7 @@ class GeminiLiveSession:
 
     async def begin_audio(self) -> None:
         if not self.connected or self._speech_active:return
+        self._notice_gate=False;self._internal_notice=False;self._notice_id=None
         self._speech_active=True;self._has_new_audio=True
         self._barge_pending=self._audio_started or bool(self._output_parts) or self._response_pending
         self._await_new_input=False;self._turn_interrupted=False
@@ -716,6 +721,14 @@ class GeminiLiveSession:
         await self._session.send_realtime_input(
             video=types.Blob(data=bytes(frame), mime_type=mime_type or "image/jpeg")
         )
+
+    async def review_notice(self,notice) -> None:
+        import json
+        if not self.connected or self._speech_active or self._audio_started or self._response_pending or self._input_parts or self._text_suspended:return
+        self._internal_notice=True;self._notice_gate=True;self._notice_id=None;self._response_pending=True
+        self._await_new_input=False;self._turn_interrupted=False;self._input_parts.clear();self._output_parts.clear()
+        self.audio_generation=uuid.uuid4().hex;self._audio_announced=False
+        await self._session.send_realtime_input(text="Application operation event, not a user request or user fact. Decide whether useful to mention by calling notice_action speak or defer. Audio is gated until notice_action authorizes delivery. Do not call memory-writing tools from this event. Source data: "+json.dumps(notice,ensure_ascii=False)[:5000])
 
     async def send_text(self, text: str) -> None:
         if not self.connected:
@@ -762,7 +775,7 @@ class GeminiLiveSession:
                     parts=getattr(getattr(content,"model_turn",None),"parts",None) or []
                     chunks=[part.inline_data.data for part in parts if getattr(part,"inline_data",None) and str(part.inline_data.mime_type).startswith("audio/")]
                     if not chunks and response.data: chunks=[response.data]
-                    if self._text_suspended or self._await_new_input or self._barge_pending or (content and content.interrupted): chunks=[]
+                    if self._notice_gate or self._text_suspended or self._await_new_input or self._barge_pending or (content and content.interrupted): chunks=[]
                     for chunk in chunks:
                         if not self._audio_announced:
                             await self.send_json({"type":"live_audio_generation","generation":self.audio_generation})
@@ -784,7 +797,7 @@ class GeminiLiveSession:
                                 })
 
                         output_tx = server_content.output_transcription
-                        if output_tx and output_tx.text and not (self._await_new_input or self._barge_pending or self._text_suspended):
+                        if output_tx and output_tx.text and not (self._notice_gate or self._await_new_input or self._barge_pending or self._text_suspended):
                             text = output_tx.text.strip()
                             if text:
                                 self._output_parts.append(text)
@@ -831,7 +844,11 @@ class GeminiLiveSession:
         if memory_tool: await self.send_json(activity(name,arguments,**refs))
         if name=="search_web": await self.send_json({"type":"research_status","phase":"searching","message":"Searching current information…"})
         try:
-            if memory_tool:
+            if self._internal_notice and (name not in {"notice_action","presence_action","library_action","memory_view_action","read_ui_context","get_system_status","recall_memory","recall_conversations","read_standing_rules","get_pending_memories"} or name=="library_action" and arguments.get("action") not in {"list","get"}):
+                result={"status":"rejected","reason":"notice_event_cannot_authorize_changes"}
+            elif name=="approve_memory" or name=="memory_action" and arguments.get("action") in {"approve","reject"}:
+                result=await self.operation_executor(name,arguments) if self.operation_executor else {"status":"rejected","reason":"contextual_approval_required"}
+            elif memory_tool:
                 result = await execute_shared_memory_tool(self.memory_manager,name,arguments," ".join(self._input_parts),self.session_id,str(call.id or ""),self.profile_id,self.project_id,self._turn_id,source="gemini_live")
             elif name == "get_system_status":
                 result = await self.status_provider() if self.status_provider else {
@@ -855,9 +872,10 @@ class GeminiLiveSession:
         )
 
     async def _complete_turn(self) -> None:
-        user_text = " ".join(self._input_parts).strip()
+        user_text = "" if self._internal_notice else " ".join(self._input_parts).strip()
         assistant_text = " ".join(self._output_parts).strip()
         memory_status = "ready"
+        if self._notice_id:await self.send_json({"type":"live_notice_complete","notice_id":self._notice_id})
         if (user_text or assistant_text) and not self._turn_interrupted:
             try:
                 await asyncio.to_thread(self.memory_manager.append_turn,user_text,assistant_text,self.session_id,self._turn_id,profile_id=self.profile_id,project_id=self.project_id)
@@ -880,6 +898,8 @@ class GeminiLiveSession:
         self.audio_generation=uuid.uuid4().hex; self._audio_announced=False
         self._turn_id = uuid.uuid4().hex
         self._has_new_audio=False;self._response_pending=False
+        if self._internal_notice:self._await_new_input=True
+        self._internal_notice=False;self._notice_id=None
         if self.operation_executor:
             await self.refresh_ui(await self.operation_executor("read_ui_context",{}))
         # Updating context does not start a response or run another memory model.

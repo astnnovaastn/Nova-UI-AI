@@ -51,6 +51,9 @@ def projection(manager, profile_id='', project_id=''):
             section={'event':'events','activity':'activity_history'}.get(r.get('kind'),'facts');raw[section].setdefault(r['category'],{})[rid]=r
         from .globe_topics import topics
         raw['visual_topics']=topics(records,{tid:t for tid,t in m.get('topic_groups',{}).items() if matches_scope(t,profile_id,project_id) and not t.get('private') and not t.get('private_session') and t.get('consent') not in {'denied','revoked','private','none'}})
+        from .category_registry import FAMILIES
+        for topic in raw['visual_topics']:
+            topic['palette']=palette({'id':topic['id'],'color_family':FAMILIES[int(stable(topic['id'])[:4],16)%len(FAMILIES)]})
         revision=stable('globe-2',profile_id,project_id,canonical(raw))
         result={'revision':revision,'raw':raw,'records':records}
         until=time.time()+1

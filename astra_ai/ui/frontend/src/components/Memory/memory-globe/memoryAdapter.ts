@@ -60,6 +60,8 @@ export interface Neighbor { id: string; sim: number; terms: string[] }
 
 /** Finds the existing memories that a memory is most related to. Works for bulk load and for live adds. */
 export class LinkIndex {
+  exportState(){return {docs:this.docs,post:this.post,df:this.df};}
+  restoreState(value:ReturnType<LinkIndex['exportState']>){this.docs=value.docs;this.post=value.post;this.df=value.df;}
   private docs = new Map<string, Doc>();
   private post = new Map<string, string[]>();
   private df = new Map<string, number>();
@@ -180,7 +182,7 @@ export function buildGraph(raw: RawMemoryFile): GraphData {
   const defs = raw.category_definitions ?? {};
   const ids = new Set<string>([...Object.keys(defs), ...counts.keys()]);
   const categories: GraphCategory[] = [...ids].sort().map((id) => ({
-    id, label: defs[id]?.label || prettify(id), description: defs[id]?.description ?? "", count: counts.get(id) ?? 0,
+    id, label: defs[id]?.label || prettify(id), description: defs[id]?.description ?? "", count: counts.get(id) ?? 0, totalCount: counts.get(id) ?? 0, palette: defs[id]?.palette,
   }));
 
   // Registry memberships are counted organization, never factual relationships.
@@ -194,9 +196,11 @@ export function buildGraph(raw: RawMemoryFile): GraphData {
     const members=topic.member_ids.filter(id=>recs.has(id)&&!placed.has(id));
     if(!members.length)continue;
     for(const id of members){recs.get(id)!.displayCategory=topic.id;placed.add(id);}
-    categories.push({id:topic.id,label:topic.label,description:topic.description,count:members.length});
+    categories.push({id:topic.id,label:topic.label,description:topic.description,count:members.length,palette:topic.palette});
   }
-  categories.forEach(c=>{if(!c.id.startsWith("topic:"))c.count=memories.filter(m=>(m.displayCategory??m.category)===c.id).length;});
+  const displayCounts=new Map<string,number>();
+  for(const m of memories){const cid=m.displayCategory??m.category;displayCounts.set(cid,(displayCounts.get(cid)||0)+1);}
+  categories.forEach(c=>{c.count=displayCounts.get(c.id)||0;if(c.totalCount===undefined)c.totalCount=c.count;});
   categories.sort((a,b)=>a.id.localeCompare(b.id));
 
   // entities

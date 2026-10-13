@@ -208,6 +208,9 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
     const dt = Math.min(t - prevT, 0.05);
     prevT = t;
 
+    // Memory has its own renderer; the hidden dashboard must not compete for GPU/audio visualization work.
+    if (document.hidden || document.body.classList.contains('memory-workspace-open')) return;
+
     // ── Demo expiry ──────────────────────────────────────────────────────────
     if (demoActive && t - demoStartTime >= DEMO_DURATION) {
       demoActive = false;

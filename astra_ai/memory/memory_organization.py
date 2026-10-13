@@ -21,7 +21,7 @@ def encode(data):
         name='facts' if r['kind']=='fact' else 'activity_history' if r['kind']=='activity' else 'events'
         group=r['category'] if name=='facts' else r.get('event_type','legacy_event')
         groups[name].setdefault(group,{})[rid]=r
-    keys=('category_registry','research_index','capability_index','category_definitions','relationships_v3','learning','conflicts','pending_approvals','catalog_relationships','organization_history','topic_groups','entity_graph','_meta')
+    keys=('category_registry','research_index','capability_index','category_definitions','relationships_v3','learning','conflicts','pending_approvals','approval_history','catalog_relationships','organization_history','topic_groups','entity_graph','_meta')
     clean={**groups,**{key:data[key] for key in keys if key in data}}
     clean.setdefault('_meta',{})['layout']='organized_v1'
     return clean

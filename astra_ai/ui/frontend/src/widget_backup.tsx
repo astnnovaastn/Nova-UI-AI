@@ -217,7 +217,7 @@ const Icon = ({ name }: { name: WidgetName }) => {
     strokeLinejoin: 'round' as const,
   };
 
-  const icons: Record<WidgetName, JSX.Element> = {
+  const icons: Record<WidgetName, React.JSX.Element> = {
     notes: (
       <svg {...common}>
         <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />

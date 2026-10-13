@@ -1,7 +1,11 @@
+import {conversationSnapshot} from '../../conversation';
+import {acquireCamera,releaseCamera} from '../../cameraBroker';
 import React, { useState, useRef, useEffect } from 'react';
 import './CameraWidget.css';
 
 const CameraWidget = ({ onClose }) => {
+  const [analysis,setAnalysis]=useState('');
+  const [cloudConsent,setCloudConsent]=useState(()=>localStorage.getItem('nova-camera-cloud-consent')==='true');
   const [cameraActive, setCameraActive] = useState(false);
   const [filter, setFilter] = useState('none');
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -13,16 +17,14 @@ const CameraWidget = ({ onClose }) => {
   useEffect(() => {
     return () => {
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+        releaseCamera('widget');
       }
     };
   }, []);
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { width: { ideal: 640 }, height: { ideal: 480 } } 
-      });
+      const stream = await acquireCamera('widget');
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
@@ -36,7 +38,7 @@ const CameraWidget = ({ onClose }) => {
 
   const stopCamera = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      releaseCamera('widget');
       setCameraActive(false);
     }
   };
@@ -46,7 +48,7 @@ const CameraWidget = ({ onClose }) => {
       const ctx = canvasRef.current.getContext('2d');
       ctx.drawImage(videoRef.current, 0, 0);
       const imageData = canvasRef.current.toDataURL('image/jpeg');
-      console.log('Photo captured:', imageData.substring(0, 50) + '...');
+      setAnalysis('Photo captured locally.');
     }
   };
 
@@ -56,25 +58,10 @@ const CameraWidget = ({ onClose }) => {
     setAnalyzing(true);
     
     try {
-      const imageData = canvasRef.current.toDataURL('image/jpeg');
-      // Send to Gemini API if configured
-      const geminiKey = process.env.REACT_APP_GEMINI_API_KEY;
-      if (geminiKey) {
-        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + geminiKey, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: 'What do you see in this image? Identify objects, describe the scene briefly.' },
-                { inline_data: { mime_type: 'image/jpeg', data: imageData.split(',')[1] } }
-              ]
-            }]
-          })
-        });
-        const data = await response.json();
-        console.log('AI Analysis:', data);
-      }
+      if(!cloudConsent){setAnalysis('Enable requested AI image checks first.');return;}
+      const canvas=canvasRef.current;canvas.width=320;canvas.height=240;canvas.getContext('2d').drawImage(videoRef.current,0,0,320,240);
+      const response=await fetch('/api/camera/inspect',{method:'POST',headers:{'Content-Type':'application/json','X-Nova-Client':conversationSnapshot().clientId},body:JSON.stringify({jpeg:canvas.toDataURL('image/jpeg',.65).split(',')[1],cloud_consent:true})});
+      const data=await response.json();setAnalysis(data.description||data.reason||'Image inspection unavailable.');
     } catch (err) {
       console.error('AI analysis error:', err);
     } finally {
@@ -152,6 +139,8 @@ const CameraWidget = ({ onClose }) => {
         </div>
 
         <div className="camera-controls">
+          <label><input type="checkbox" checked={cloudConsent} onChange={async e=>{if(!e.target.checked){setCloudConsent(false);localStorage.setItem('nova-camera-cloud-consent','false');return;}const r=await fetch('/api/camera/verify',{method:'POST',headers:{'X-Nova-Client':conversationSnapshot().clientId}});const d=await r.json();if(r.ok&&d.verified){setCloudConsent(true);localStorage.setItem('nova-camera-cloud-consent','true');setAnalysis('Requested AI image checks enabled.');}else setAnalysis(d.reason||'Image access is unavailable. Local presence still works.');}}/> Allow requested AI image checks</label>
+          {analysis&&<p role="status">{analysis}</p>
           <button 
             className="control-btn" 
             onClick={cameraActive ? stopCamera : startCamera}

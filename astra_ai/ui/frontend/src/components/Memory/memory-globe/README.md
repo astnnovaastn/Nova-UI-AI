@@ -1,3 +1,7 @@
+# Nova integration
+
+The supplied production globe is mounted in Settings → System Info → Memory. Nova uses the shared four-color category palette, scoped real-data snapshots, full detail retrieval, disabled idle pulses, and the existing conversation and library rails. See `docs/supplied_memory_globe_integration.md` at the repository root for the applied patches. The package documentation below describes its original standalone defaults.
+
 # Memory Globe
 
 A self-organizing 3D globe that shows everything the AI remembers about the user: dots are memories,
@@ -53,3 +57,8 @@ and note that hover shows labels only; full text appears only in the panel after
 
 ## Type check
 `tsc --strict --noEmit` passes for the engine, adapter, types and dev data. The React wrapper needs `@types/react`.
+
+## Category colours (obsidian theme)
+- Each category gets a colour family from `FAMILY_RULES` in `globeEngine.ts` (similar names share a colour, e.g. user data and user preferences are both blue). Unmatched categories get a stable colour from their id.
+- Hubs are gray while a category is empty and take the category colour once it holds a memory. A memory with no text is gray.
+- Light pulses travelling along strings take the colour of the category they deliver into.

@@ -31,7 +31,7 @@ SUBJECTS={
 }
 STOP=set(('about after again also always another around because before being between could currently different every everything first going great having image images inside itself just little looking memory messages really right should something sometimes still stuff thank their there these thing things think those through together under using very want wanted wants what when where which while will with would your yours user assistant nova aegis astra please okay need needs like make much more only have that this from they them then than into been were does doing said says know good look looks nice now all and for the not but can are was you has had new how why date time http https www com redacted fake fixture true false none null').split())
 
-def topics(records,stored):
+def topics(records,stored,limit=MAX_AUTO_TOPICS):
  groups=[];seen=set();blocked={normal(t.get('label','')) for t in stored.values() if t.get('state') in {'forgotten','superseded'}}
  def add(tid,label,members):
   members=sorted(set(members)&records.keys())
@@ -49,5 +49,5 @@ def topics(records,stored):
    if word not in STOP:words[word].add(rid)
  for word,ids in sorted(words.items(),key=lambda item:(-len(item[1]),item[0])):
   if len(ids)>=6 and len(ids)<=max(20,len(texts)*.22):add(stable('globe-word',word),word.capitalize(),ids)
-  if len(groups)>=len(stored)+MAX_AUTO_TOPICS:break
+  if limit is not None and len(groups)>=len(stored)+limit:break
  return groups

@@ -4,7 +4,7 @@ async def dispatch(name,args,context,operation_id,research,capabilities):
     action=args.get('action','list')
     if action in {'run','develop','develop_repair'} and not context.get('job_id'):return {'status':'rejected','reason':'durable_worker_context_required'}
     if name=='research_action':
-        if action=='request':return await asyncio.to_thread(research.request,args.get('query',''),context,operation_id,True,bool(args.get('refresh')))
+        if action=='request':return await asyncio.to_thread(research.request,args.get('query',''),context,operation_id,True,bool(args.get('refresh')),subquestions=args.get('subquestions'))
         if action=='run':return await research.run(args.get('research_id',''),context)
         if action=='list':return await asyncio.to_thread(research.listing,context)
         if action in {'get','read'}:return await asyncio.to_thread(research.get,args.get('research_id',''),context,action=='read')

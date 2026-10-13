@@ -223,3 +223,6 @@ astra_ai/ui/backend/speaker-model/
 **/transcription.txt
 **/*.pcm
 astra_ai/nova-memory-server/src/storage/backups
+
+# Optional isolated local camera decoder
+**/.venv_presence/

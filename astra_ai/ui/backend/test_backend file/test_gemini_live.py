@@ -51,7 +51,7 @@ def test_live_config_pins_requested_model_and_voice(tmp_path: Path):
     assert all(tool.google_search is None for tool in config.tools)
     declarations = next(tool.function_declarations for tool in config.tools if tool.function_declarations)
     assert {declaration.name for declaration in declarations} == {
-        "category_action", "research_action", "capability_action", "open_website", "save_memory", "forget_memory", "recall_conversations", "set_standing_rule", "read_standing_rules", "transcript_action", "memory_topic_action", "memory_view_action", "run_action_batch", "job_action",
+        "library_action", "notice_action", "presence_action", "category_action", "research_action", "capability_action", "open_website", "save_memory", "forget_memory", "recall_conversations", "set_standing_rule", "read_standing_rules", "transcript_action", "memory_topic_action", "memory_view_action", "run_action_batch", "job_action",
         "save_memory_event", "forget_memory_event", "recall_memory",
         "approve_memory", "get_pending_memories", "save_memory_relationship", "learn_memory", "memory_action", "propose_memories",
                     "read_ui_context", "get_system_status", "read_notes_context", "read_search_context", "read_calendar_context", "read_image_context", "notes_action", "calendar_create_event", "calendar_action", "image_action", "search_history_action",
@@ -253,3 +253,29 @@ def test_transcript_write_failure_does_not_end_live_session(tmp_path: Path, monk
     asyncio.run(session._complete_turn())
 
     assert sent[-1]["type"] == "live_turn_complete"
+
+def test_muting_capture_ends_user_activity_without_closing_output_session(tmp_path):
+ sent=[]
+ async def send_json(_):pass
+ async def send_bytes(_):pass
+ async def failed(*args):pass
+ async def realtime(**kwargs):sent.append(kwargs)
+ memory=tmp_path/'history.json'
+ session=GeminiLiveSession(api_key='fixture-key',memory_file=memory,memory_manager=_memory_manager(tmp_path,memory),send_json=send_json,send_bytes=send_bytes,on_failure=failed)
+ provider=SimpleNamespace(send_realtime_input=realtime)
+ session._session=provider;session._speech_active=True
+ asyncio.run(session.end_audio())
+ assert session._session is provider and not session._closed
+ assert session._response_pending and not session._speech_active
+ assert len(sent)==1 and 'activity_end' in sent[0]
+
+def test_internal_notices_cannot_write_memory_or_authorize_approval(tmp_path):
+ async def quiet(*args):pass
+ memory=tmp_path/'history.json'
+ manager=_memory_manager(tmp_path,memory)
+ session=GeminiLiveSession(api_key='fixture-key',memory_file=memory,memory_manager=manager,send_json=quiet,send_bytes=quiet,on_failure=quiet)
+ session._internal_notice=True
+ for tool in ('save_memory','approve_memory'):
+  result=asyncio.run(session._execute_memory_tool(SimpleNamespace(name=tool,args={},id='fixture')))
+  assert result.response['reason']=='notice_event_cannot_authorize_changes'
+ assert not manager.load()['records']

@@ -2205,6 +2205,7 @@ class ServerState:
     async def shutdown(self):
         """Cleanup server resources"""
         logger.info("[SHUTDOWN] Stopping AEGIS Server...")
+        await presence_worker.close()
 
         for websocket in list(self.live_sessions):
             await self.close_live_session(websocket)
@@ -5126,6 +5127,8 @@ async def memory_change_loop():
                 if old!=globe['revision']:
                     cache[client_id]=globe['revision'];ws_manager.globe_revisions=cache
                     await ws_manager.send_to_client(socket,{'type':'memory_globe_changed','revision':globe['revision']})
+            if int(time.time())%10==0:
+                for socket in list(ws_manager.connections):await check_operation_notices(socket)
             previous=snapshot
         except asyncio.CancelledError:raise
         except Exception:logger.warning("Memory change notifications temporarily unavailable")
@@ -5422,39 +5425,49 @@ async def _activate_legacy_voice(
 
 
 async def _memory_view_action(client_id,arguments):
-    allowed={"open","category","session","inspect","search","filter","focus","zoom","pan","reset","rail","move","entity","day","topic","expand","family"}
-    args=dict(arguments)
+    from astra_ai.memory.globe_projection import projection
+    from astra_ai.memory.category_registry import resolve
     import math
-    for field in ("x","y","z","zoom"):
+    socket=ws_manager.websocket_for(client_id)
+    if socket is None:return {'status':'waiting_for_ui'}
+    live=state.live_sessions.get(socket)
+    if live and live.guest:return {'status':'rejected','reason':'owner_view_required'}
+    profile=str(getattr(live,'profile_id',''));project=str(getattr(live,'project_id',''));args=dict(arguments)
+    allowed={'open','category','session','inspect','search','filter','focus','zoom','pan','rotate','highlight','reset','rail','entity','day','topic','expand'}
+    if args.get('action') not in allowed:return {'status':'rejected','reason':'unsupported_view_action'}
+    for field in ('x','y','zoom','yaw','pitch'):
         if field in args:
             try:args[field]=float(args[field])
-            except (TypeError,ValueError):return {"status":"rejected","reason":"invalid_coordinate"}
-            if not math.isfinite(args[field]) or abs(args[field])>1000:return {"status":"rejected","reason":"invalid_coordinate"}
-    if args.get("action") not in allowed:return {"status":"rejected","reason":"invalid_view_action"}
-    if args.get("category") and args["category"] not in {c.value for c in __import__("astra_ai.memory.memory_types",fromlist=["MemoryCategory"]).MemoryCategory}:return {"status":"rejected","reason":"invalid_category"}
-    if args.get("rail") and args["rail"] not in {"conversation","library","sessions"}:return {"status":"rejected","reason":"invalid_rail"}
-    if args.get("action")=="session" and args.get("session_id"):
-        found=await asyncio.to_thread(state.live_memory.transcript_action,"list",session_id=args["session_id"],limit=1)
-        if not found.get("total"):return {"status":"not_found","reason":"conversation_session_not_found"}
-    if args.get("action") in {"entity","day","topic","expand"} or args.get("focus_id"):
-        from astra_ai.memory.entity_graph import snapshot
-        graph=await asyncio.to_thread(snapshot,state.live_memory,level="detail",limit=1000)
-        candidates=[n for n in graph.get("nodes",[]) if n["id"]==args.get("focus_id") or n["id"]==args.get("record_id") or args.get("query") and n.get("label","").casefold()==str(args["query"]).casefold()]
-        if len(candidates)!=1:return {"status":"ambiguous" if candidates else "not_found","matches":[{"id":n["id"],"label":n.get("label")} for n in candidates]}
-        args["focus_id"]=candidates[0]["id"];args.pop("record_id",None);args["action"]="expand"
-    if args.get("record_id"):
-        found=await asyncio.to_thread(state.live_memory.memory_action,"get",record_id=args["record_id"])
-        if not found.get("record"):return found
-        args["record_id"]=found["record"]["id"];args.setdefault("category",found["record"]["category"])
-    if args.get("query") and args.get("action") in {"inspect","focus"} and not args.get("record_id"):
-        found=await asyncio.to_thread(state.live_memory.recall_memory,args["query"],5)
-        matches=found.get("matches",[])
-        if len(matches)!=1:return {"status":"ambiguous" if matches else "not_found","matches":[{"id":r["id"],"category":r.get("category"),"key":r.get("key")} for r in matches]}
-        args["record_id"]=matches[0]["id"];args["category"]=matches[0]["category"]
-    if not ws_manager.websocket_for(client_id):return {"status":"waiting_for_ui","reason":"frontend_not_connected"}
+            except (TypeError,ValueError):return {'status':'rejected','reason':'invalid_coordinate'}
+            if not math.isfinite(args[field]):return {'status':'rejected','reason':'invalid_coordinate'}
+    if args.get('rail') and args['rail'] not in {'conversation','library','sessions','approvals','tasks'}:return {'status':'rejected','reason':'invalid_rail'}
+    args.setdefault('guided',True)
+    if getattr(live,'_internal_notice',False):args['guided']=True
+    snap=await asyncio.to_thread(projection,state.live_memory,profile,project)
+    if args.get('category'):
+        category=await asyncio.to_thread(lambda:resolve(state.live_memory.load(),args['category'],profile,project,True))
+        topic=next((t for t in snap['raw']['visual_topics'] if t['id']==args['category']),None)
+        if not category and not topic:return {'status':'not_found','reason':'category_unavailable'}
+        args['category']=(category or topic)['id']
+    known=set(snap['records'])|{'cat:'+t['id'] for t in snap['raw']['visual_topics']}|{'cat:'+cid for cid in snap['raw']['category_definitions']}|{'ent:'+eid for eid in snap['raw']['entity_graph']['entities']}
+    def normalize(identifier):
+        if identifier.startswith('category:'):return 'cat:'+identifier[9:]
+        if identifier in snap['raw']['entity_graph']['entities']:return 'ent:'+identifier
+        return identifier
+    for field in ('record_id','focus_id'):
+        if args.get(field):
+            args[field]=normalize(str(args[field]))
+            if args[field] not in known:return {'status':'not_found','reason':'target_unavailable'}
+    if args.get('record_ids'):
+        if not isinstance(args['record_ids'],list) or len(args['record_ids'])>100 or any(not isinstance(i,str) or normalize(i) not in known for i in args['record_ids']):return {'status':'rejected','reason':'invalid_highlight_ids'}
+        args['record_ids']=[normalize(i) for i in args['record_ids']]
+    if args.get('query') and args['action'] in {'inspect','focus'} and not (args.get('record_id') or args.get('focus_id')):
+        matches=[r for r in snap['records'].values() if str(args['query']).casefold() in (str(r.get('key',''))+' '+str(r.get('value',''))).casefold()][:6]
+        if len(matches)!=1:return {'status':'ambiguous' if matches else 'not_found','matches':[{'id':r['id'],'label':r.get('key')} for r in matches]}
+        args['record_id']=matches[0]['id']
     request_id=uuid.uuid4().hex;state.register_widget_action(client_id,request_id)
-    await ws_manager.send_to_client_id(client_id,{"type":"memory_view_action","request_id":request_id,**args})
-    return await state.await_widget_action(client_id,request_id,timeout=5) or {"status":"failed","reason":"memory_view_not_acknowledged"}
+    await ws_manager.send_to_client_id(client_id,{'type':'memory_view_action','request_id':request_id,**args})
+    return await state.await_widget_action(client_id,request_id,timeout=5) or {'status':'failed','reason':'memory_view_not_acknowledged'}
 
 from astra_ai.ui.backend.speaker_recognition import SpeakerRecognition
 from astra_ai.memory.shared_memory import SharedMemory
@@ -5510,6 +5523,16 @@ async def _dispatch_aegis_tool(name,arguments,context,operation_id):
             return await asyncio.to_thread(action_jobs.cancel,jid)
         return await asyncio.to_thread(action_jobs.list,jid if action=="get" else "",context)
     if name=="memory_view_action":return await _memory_view_action(client_id,arguments)
+    if name in {'notice_action','presence_action'}:return await dispatch_notice(name,arguments,context)
+    if name=='approve_memory' or name=='memory_action' and arguments.get('action') in {'approve','reject'}:
+        return await get_library_service().decision('memory:'+str(arguments.get('approval_id','')),{'decision':'approved' if arguments.get('approved') is True or arguments.get('action')=='approve' else 'rejected','version':arguments.get('version'),'confirmation_quote':arguments.get('confirmation_quote')},context,voice=True)
+    if name=="library_action":
+        library=get_library_service();view=arguments.get('view','approvals');action=arguments.get('action','list')
+        if action=='list':return await asyncio.to_thread(library.listing,view,context,arguments.get('status',''),arguments.get('query',''),arguments.get('offset',0),arguments.get('limit',20))
+        if action=='get':return await asyncio.to_thread(library.detail,view,arguments.get('id',''),context)
+        if action=='decision':return await library.decision(arguments.get('id',''),arguments,context,voice=True)
+        if action in {'pause','resume','retry','cancel'}:return await library.control(arguments.get('id',''),action,context)
+        return {'status':'rejected','reason':'invalid_library_action'}
     if name=="get_system_status":return await health_check()
     if name in {'research_action','capability_action'}:
         if not learning_service or not capability_service:return {'status':'failed','reason':'learning_initializing'}
@@ -5604,6 +5627,9 @@ async def _notify_job_progress(client_id,event):
     current=(str(getattr(live,'profile_id','')),str(getattr(live,'project_id','')),bool(getattr(live,'guest',False)))
     expected=(scope.get('profile_id',''),scope.get('project_id',''),bool(scope.get('guest')))
     if current!=expected:return
+    if event.get('state') in {'completed','failed','waiting_for_retry'}:
+        if not scope.get('background') or event.get('state')=='failed':
+            await asyncio.to_thread(notice_store.enqueue,'job','job:'+str(event.get('job_id')),event.get('state'),event,scope)
     if scope.get('session_id')!=(getattr(live,'session_id',None) or CHAT_SESSIONS.get(client_id,'')):event.pop('notification',None);event.pop('research_id',None)
     await ws_manager.send_to_client_id(client_id,event)
 
@@ -5826,6 +5852,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     if binary.startswith(b"ASTR") and len(binary) > 5:
                         logger.info("Dropping disabled vision media frame")
                     else:
+                        if mic_states.get(ws_manager.client_id(websocket),True):continue
                         if websocket in speaker_buffers:
                             speaker_buffers[websocket].extend(binary)
                             if len(speaker_buffers[websocket])>=64000:await _finish_speaker_audio(websocket)
@@ -5887,9 +5914,26 @@ async def websocket_endpoint(websocket: WebSocket):
                     if changed and live and not live.guest and not live._audio_started and not live._input_parts:
                         if not live.guest:await live.refresh_ui(ui_context(ws_manager.client_id(websocket)))
                 elif msg_type == "live_start":
+                    mic_states[ws_manager.client_id(websocket)]=bool(message.get("muted",False))
                     sid=str(message.get("session_id") or "")
                     if re.fullmatch(r"[a-zA-Z0-9_-]{1,128}",sid): CHAT_SESSIONS[ws_manager.client_id(websocket)]=sid
                     await _start_gemini_voice(websocket,guest=speaker_recognition.status()["enabled"])
+                elif msg_type == "mic_state":
+                    client=ws_manager.client_id(websocket);mic_states[client]=bool(message.get('muted',True))
+                    live=state.live_sessions.get(websocket)
+                    if mic_states[client] and live:await live.end_audio()
+                elif msg_type == "presence_frame":
+                    asyncio.create_task(handle_presence_frame(websocket,message))
+                elif msg_type == "presence_status":
+                    client=ws_manager.client_id(websocket)
+                    if message.get('state') in {'off','denied','unavailable','error'}:
+                        await release_presence(client)
+                elif msg_type == "notice_delivered":
+                    client=ws_manager.client_id(websocket);live=state.live_sessions.get(websocket)
+                    if live and not live.guest:
+                        c={'client_id':client,'profile_id':live.profile_id,'project_id':live.project_id}
+                        await asyncio.to_thread(notice_store.acknowledge,str(message.get('notice_id','')),c)
+                        await release_presence(client,websocket)
                 elif msg_type == "live_stop":
                     await state.close_live_session(websocket)
                     await ws_manager.send_to_client(websocket, {
@@ -6005,6 +6049,8 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         speaker_buffers.pop(websocket,None)
         await state.close_live_session(websocket)
+        await release_presence(ws_manager.client_id(websocket))
+        mic_states.pop(ws_manager.client_id(websocket),None)
         ws_manager.disconnect(websocket)
 
 
@@ -8113,6 +8159,133 @@ async def global_exception_handler(request, exc):
 # ============================================================================
 # MAIN
 # ============================================================================
+
+
+from astra_ai.ui.backend.library_api import LibraryService,install as install_library
+_library_service=None
+def get_library_service():
+    global _library_service
+    if _library_service is None or _library_service.memory is not state.live_memory:
+        _library_service=LibraryService(state.live_memory,action_jobs,task_store,lambda:learning_service,lambda:capability_service,task_orchestrator.wake)
+    return _library_service
+install_library(app,get_library_service,_learning_context)
+
+
+from astra_ai.ui.backend.notices import Notices
+from astra_ai.ui.backend.presence import PresenceTracker,PresenceWorker
+notice_store=Notices(Path(__file__).resolve().parents[2]/'core'/'learned'/'notices.json')
+presence_worker=PresenceWorker()
+mic_states={};presence_trackers={};presence_purposes={};presence_inflight=set();notice_reviewed={}
+async def dispatch_notice(name,args,c):
+    client=c.get('client_id','');socket=ws_manager.websocket_for(client);live=state.live_sessions.get(socket)
+    if not socket or not live or live.guest:return {'status':'unavailable','reason':'owner_voice_session_required'}
+    if name=='presence_action':
+        if args.get('action')=='stop':
+            await release_presence(client,socket);return {'status':'stopped'}
+        if args.get('action')=='inspect':
+            identifier=args.get('notice_id','')
+            if not notice_store.get(identifier,c) or presence_purposes.get(client,{}).get('notice_id')!=identifier:return {'status':'rejected','reason':'pending_camera_purpose_required'}
+            if not presence_purposes[client].get('cloud_allowed'):return {'status':'rejected','reason':'cloud_camera_consent_required'}
+            if not camera_access.status()['verified']:return {'status':'unavailable','reason':'cloud_image_access_not_verified'}
+            future=asyncio.get_running_loop().create_future();camera_requests[(client,identifier)]=future
+            await ws_manager.send_to_client(socket,{'type':'presence_image_request','notice_id':identifier})
+            try:return await asyncio.wait_for(future,8)
+            except asyncio.TimeoutError:return {'status':'unavailable','reason':'camera_image_not_received'}
+            finally:camera_requests.pop((client,identifier),None)
+        tracker=presence_trackers.get(client)
+        return {'status':'ok','available':presence_worker.available(),'presence':tracker.status() if tracker else 'unknown','reason':presence_worker.reason}
+    action=args.get('action','list')
+    if action=='list':return {'status':'ok','items':await asyncio.to_thread(notice_store.listing,c)}
+    identifier=args.get('notice_id','');item=await asyncio.to_thread(notice_store.get,identifier,c)
+    if not item:return {'status':'not_found'}
+    if action=='get':return {'status':'ok','notice':item}
+    if action=='defer':return await asyncio.to_thread(notice_store.change,identifier,c,'deferred',next_review=time.time()+3600,reason=str(args.get('reason',''))[:300])
+    if action!='speak' or item['state'] in {'delivered','dismissed','offered'}:return {'status':'rejected','reason':'notice_not_pending'}
+    tracker=presence_trackers.get(client)
+    if mic_states.get(client,True) and (not tracker or tracker.status()!='present'):
+        await asyncio.to_thread(notice_store.change,identifier,c,'awaiting_presence',reason=str(args.get('reason',''))[:300])
+        if presence_worker.available() and client not in presence_purposes:
+            presence_purposes[client]={'notice_id':identifier,'cloud_allowed':False}
+            await ws_manager.send_to_client(socket,{'type':'presence_start','notice_id':identifier,'local_only':True})
+        return {'status':'waiting_for_presence','detector_available':presence_worker.available()}
+    if live._speech_active:return {'status':'deferred','reason':'user_speaking'}
+    await asyncio.to_thread(notice_store.change,identifier,c,'offered',offered_to=client,offered_at=now())
+    live._notice_gate=False;live._notice_id=identifier
+    await ws_manager.send_to_client(socket,{'type':'live_notice_begin','notice_id':identifier})
+    return {'status':'authorized','notice':item,'instruction':'Explain the sourced outcome naturally. Do not claim operations beyond these results.'}
+
+async def handle_presence_frame(socket,message):
+    client=ws_manager.client_id(socket);purpose=presence_purposes.get(client);live=state.live_sessions.get(socket)
+    if not purpose or not live or live.guest or message.get('notice_id')!=purpose['notice_id'] or client in presence_inflight:return
+    jpeg=message.get('jpeg');presence_inflight.add(client)
+    try:
+        purpose['cloud_allowed']=message.get('cloud_allowed') is True
+        if message.get('cloud_image'):
+            if not purpose['cloud_allowed'] or purpose.get('image_sent') or live._speech_active:return
+            result=await camera_access.inspect(jpeg);purpose['image_sent']=result['status']=='ok'
+            future=camera_requests.get((client,purpose['notice_id']))
+            if future and not future.done():future.set_result(result)
+            return
+        async with capability_service.cpu:
+            detected=await presence_worker.detect(jpeg)
+        tracker=presence_trackers.setdefault(client,PresenceTracker());status=tracker.observe(detected)
+        await ws_manager.send_to_client(socket,{'type':'presence_result','state':status,'reason':presence_worker.reason})
+    except Exception:
+        await ws_manager.send_to_client(socket,{'type':'presence_result','state':'unknown','reason':'detector_unavailable'})
+    finally:presence_inflight.discard(client)
+
+async def release_presence(client,socket=None):
+    presence_purposes.pop(client,None);presence_trackers.pop(client,None)
+    if socket:await ws_manager.send_to_client(socket,{'type':'presence_stop'})
+    if not presence_purposes:await presence_worker.close()
+
+async def check_operation_notices(socket):
+    client=ws_manager.client_id(socket);live=state.live_sessions.get(socket)
+    if live and (live.guest or live._speech_active or live._audio_started or live._response_pending or live._input_parts or live._text_suspended):return
+    if not live and speaker_recognition.status()['enabled']:return
+    c={'client_id':client,'profile_id':getattr(live,'profile_id',''),'project_id':getattr(live,'project_id',''),'session_id':getattr(live,'session_id',CHAT_SESSIONS.get(client,''))}
+    # Existing approvals are discoverable even when created by a background worker.
+    approvals=await asyncio.to_thread(get_library_service().approvals,c)
+    current_approvals={r['id']:r for r in approvals}
+    for approval in approvals:
+        if approval['state']=='waiting':
+            await asyncio.to_thread(notice_store.enqueue,'approval',approval['id'],approval['version'],{'title':approval['title'],'approval_id':approval['id']},c)
+    for work in await asyncio.to_thread(get_library_service().work,c):
+        if work['state'] in {'completed','failed','waiting_approval','waiting_input'} and (not work.get('background') or work['state']=='failed'):
+            await asyncio.to_thread(notice_store.enqueue,'job' if work['source']=='job' else 'task',work['id'],work['state'] if work['source']=='job' else work['version'],{'title':work['title'],'state':work['state'],'task_id':work['id']},c)
+    items=await asyncio.to_thread(notice_store.listing,c)
+    await ws_manager.send_to_client(socket,{'type':'operation_notices','items':[{k:r.get(k) for k in ('id','kind','target','state','created')} for r in items if r['state'] not in {'delivered','dismissed'}]})
+    for item in items:
+        if item['state'] in {'delivered','dismissed'}:continue
+        if item['kind']=='approval':
+            approval=current_approvals.get(item['target'])
+            if not approval or approval['state']!='waiting' or approval['version']!=item['version']:
+                await asyncio.to_thread(notice_store.change,item['id'],c,'dismissed',reason='proposal_no_longer_waiting')
+                if presence_purposes.get(client,{}).get('notice_id')==item['id']:await release_presence(client,socket)
+                continue
+        if item['state']=='offered':continue  # uncertain delivery is inspectable, never replayed automatically
+        if not live:continue # text availability does not open an unsolicited provider session
+        tracker=presence_trackers.get(client)
+        ready=item['state']=='awaiting_presence' and tracker and tracker.status()=='present'
+        eligible=item['state']=='pending' or item['state']=='deferred' and time.time()>=item.get('next_review',float('inf')) or ready
+        key=(client,item['id'],item['state'])
+        if eligible and time.time()-notice_reviewed.get(key,0)>3600:
+            notice_reviewed[key]=time.time()
+            while len(notice_reviewed)>1000:notice_reviewed.pop(next(iter(notice_reviewed)))
+            await live.review_notice(item);break
+
+from astra_ai.ui.backend.camera_access import CameraAccess
+camera_access=CameraAccess(lambda:state.gemini_api_key,lambda:background_budget)
+camera_requests={}
+@app.post('/api/camera/verify')
+async def verify_camera(request:Request):
+    _learning_context(request)
+    return await camera_access.verify()
+@app.post('/api/camera/inspect')
+async def inspect_camera(request:Request,payload:dict):
+    _learning_context(request)
+    if payload.get('cloud_consent') is not True:raise HTTPException(403,'Cloud image consent required')
+    return await camera_access.inspect(payload.get('jpeg'))
 
 if __name__ == "__main__":
     logger.info("="*70)

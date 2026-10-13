@@ -1,3 +1,4 @@
+import {PresenceCapture} from './presenceCapture';
 import {requestedResearchReady} from './taskNotices';
 import {conversationInterrupt,conversationState,conversationMessage,conversationSnapshot,conversationLoad,conversationReplace,updateUiContext,uiSnapshot} from "./conversation";
 import initMemoryWorkspace from './components/Memory/MemoryWorkspace.jsx';
@@ -246,7 +247,7 @@ function setupLegacyVoiceInput() {
         return;
       }
 
-      console.log("📤 [TRANSCRIPT] Sending user transcript to server:", cleaned);
+
       socket.send({
         type: "transcript",
         text: cleaned,
@@ -294,7 +295,7 @@ function setupLiveVoiceInput() {
 function startPreferredVoiceSession() {
   activeVoiceProvider = "gemini_live";
   setupLiveVoiceInput();
-  socket.send({ type: "live_start", session_id:conversationSnapshot().sessionId });
+  socket.send({ type: "live_start", muted:isMuted, session_id:conversationSnapshot().sessionId });
   voiceInput.start();
   transition("listening");
 }
@@ -310,11 +311,15 @@ audioPlayer.onFinished(() => {
   // Gemini Live owns end-of-turn detection; resume immediately when the
   // browser playback queue drains instead of adding an artificial delay.
   console.log("🎤 [AUDIO-FINISHED] Transitioning immediately to listening");
-  transition("listening");
+  transition(isMuted?"idle":"listening");
+  acknowledgeNotice();
 });
 
+const presenceCapture=new PresenceCapture(socket);
+let noticePlaying='',noticeComplete='';
+function acknowledgeNotice(){if(noticePlaying&&noticePlaying===noticeComplete&&!isAudioPlaying){socket.send({type:'notice_delivered',notice_id:noticePlaying});noticePlaying=noticeComplete='';}}
 socket.onBinary((pcm) => {
-  if (activeVoiceProvider !== "gemini_live" || isMuted || conversationSnapshot().textBusy || audioGeneration && audioGeneration===canceledGeneration) return;
+  if (activeVoiceProvider !== "gemini_live" || conversationSnapshot().textBusy || audioGeneration && audioGeneration===canceledGeneration) return;
   if (!isAudioPlaying) {
     isAudioPlaying = true;
     transition("speaking");
@@ -340,7 +345,14 @@ socket.onMessage((msg) => {
   if(type==='status'&&msg.client_id){conversationState({clientId:String(msg.client_id)});socket.send({type:'conversation_attach',session_id:conversationSnapshot().sessionId});void conversationLoad(conversationSnapshot().sessionId).catch(()=>{});}
   if(type==='memory_view_action'){window.dispatchEvent(new CustomEvent('nova-memory-view-action',{detail:msg}));return;}
   if(type==='jobs_snapshot'){conversationState({jobs:Array.isArray(msg.jobs)?msg.jobs as any:[]});return;}
-  if(type==='job_progress'){if(msg.notification&&msg.research_id)requestedResearchReady(String(msg.job_id),String(msg.research_id));const snap=conversationSnapshot();const jobs=[...snap.jobs];const i=jobs.findIndex(j=>j.id===msg.job_id);const row={id:String(msg.job_id),state:String(msg.state),completed:Number(msg.completed),total:Number(msg.total)};if(i>=0)jobs[i]=row;else jobs.unshift(row);conversationState({jobs});return;}
+  if(type==='job_progress'){window.dispatchEvent(new Event('nova-library-changed'));if(msg.notification&&msg.research_id)requestedResearchReady(String(msg.job_id),String(msg.research_id));const snap=conversationSnapshot();const jobs=[...snap.jobs];const i=jobs.findIndex(j=>j.id===msg.job_id);const row={id:String(msg.job_id),state:String(msg.state),completed:Number(msg.completed),total:Number(msg.total)};if(i>=0)jobs[i]=row;else jobs.unshift(row);conversationState({jobs});return;}
+  if(type==='presence_start'){void presenceCapture.start(String(msg.notice_id));return;}
+  if(type==='presence_stop'){presenceCapture.stop();return;}
+  if(type==='presence_image_request'){presenceCapture.requestImage(String(msg.notice_id));return;}
+  if(type==='presence_result'){presenceCapture.result(String(msg.state));return;}
+  if(type==='operation_notices'){window.dispatchEvent(new CustomEvent('nova-operation-notices',{detail:msg}));return;}
+  if(type==='live_notice_begin'){noticePlaying=String(msg.notice_id);noticeComplete='';return;}
+  if(type==='live_notice_complete'){noticeComplete=String(msg.notice_id);acknowledgeNotice();return;}
   if(type==='live_audio_generation'){audioGeneration=String(msg.generation||'');return;}
   if(type==='memory_globe_changed'){window.dispatchEvent(new CustomEvent('nova-memory-globe-changed',{detail:msg}));return;}
   if(type==='memory_activity'){window.dispatchEvent(new CustomEvent('nova-memory-activity',{detail:msg}));return;}
@@ -613,14 +625,14 @@ socket.onMessage((msg) => {
       transition("idle");
     }
     
-    if (msg.text) console.log(`📝 [LEGACY-TEXT]`, msg.text);
+
   } 
 
   // =========================================================================
   // TEXT FALLBACK - When TTS completely fails
   // =========================================================================
   else if (type === "text") {
-    console.log(`📄 [TEXT-FALLBACK] No audio available, displaying text:`, msg.text);
+
     isAudioPlaying = false;
     transition("idle");
   } 
@@ -815,14 +827,12 @@ btnMute.addEventListener("click", (e) => {
   btnMute.classList.toggle("muted", isMuted);
   soundWave.setMuted(isMuted);
   conversationState({muted:isMuted});
+  socket.send({type:'mic_state',muted:isMuted});
   if (isMuted) {
-    canceledGeneration=audioGeneration;
-    // Fully stop and destroy the voice input system
     if (voiceInput) voiceInput.stop();
-    socket.send({ type: "live_stop" });
-    audioPlayer.stop();
-    isAudioPlaying = false;
-    transition("idle");
+    if(!isAudioPlaying)transition("idle");
+  } else if(activeVoiceProvider==="gemini_live"){
+    voiceInput.start();transition(isAudioPlaying?"speaking":"listening");
   } else {
     startPreferredVoiceSession();
   }
