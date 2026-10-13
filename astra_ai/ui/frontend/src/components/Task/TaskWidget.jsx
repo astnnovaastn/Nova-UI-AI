@@ -38,7 +38,7 @@ const SMART_VIEW_ICONS = {
 
 const Icon = ({ name, size = 18 }) => {
   const paths = {
-    tasks: <><path d="M8 6h11M8 12h11M8 18h7"/><path d="m3 6 1 1 2-2m-3 7 1 1 2-2m-3 7 1 1 2-2"/></>,
+    tasks: <><rect x="4" y="4" width="16" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="m7 10 1 1 2-2m-3 7 1 1 2-2M13 10h4M13 16h4"/></>,
     overview: <><path d="M4 5h6v6H4zM14 5h6v3h-6zM14 12h6v7h-6zM4 15h6v4H4z"/></>,
     activity: <><path d="M3 12h4l2-6 4 12 2-6h6"/><path d="M4 21h16"/></>,
     plus: <path d="M12 5v14M5 12h14"/>,

@@ -32,7 +32,7 @@ except Exception as e:
 # Create configuration
 print("STEP 1: Creating Cartesia configuration...")
 config = CartesiaConfig(
-    api_key='sk_car_VqWy79RSCgcBda6TtbJW1A',
+    api_key='',
     voice_id='5ee9feff-1265-424a-9d7f-8e4d431a12c7',
     model_id='sonic-english',
     sample_rate=44100,

@@ -79,7 +79,7 @@ function ThemeCard({ theme, active, isDefault, onApply, onDefault, onEdit, onDup
 export default function ThemeWidget({ onClose, onMinimize }) {
   const fallback = Object.values(BUILTIN_THEMES);
   const [library, setLibrary] = useState({ builtins: fallback, custom: [], defaultThemeId: DEFAULT_THEME_ID, maxCustomThemes: 100 });
-  const [active, setActive] = useState(normalizeTheme(JSON.parse(localStorage.getItem('astra-active-theme-v2') || 'null')));
+  const [active, setActive] = useState(() => { try { const saved = JSON.parse(localStorage.getItem('astra-active-theme-v2') || 'null'); return normalizeTheme(saved && ['bg','fg','panel','border','accent'].every(key => /^#[0-9a-f]{6}$/i.test(saved.tokens?.[key] || '')) ? saved : null); } catch { return normalizeTheme(null); } });
   const [draft, setDraft] = useState(active);
   const [tab, setTab] = useState('themes');
   const [section, setSection] = useState('colors');
@@ -100,6 +100,9 @@ export default function ThemeWidget({ onClose, onMinimize }) {
   const [position, setPosition] = useState({ x: Math.max(12, window.innerWidth - 760), y: 24 });
   const [size, setSize] = useState({ width: Math.min(720, window.innerWidth - 24), height: Math.min(820, window.innerHeight - 48) });
   const shellRef = useRef(null), drag = useRef(null), resize = useRef(null), saveTimer = useRef(null), requestVersion = useRef(0), fileRef = useRef(null);
+  const pendingSave = useRef(null), saveQueue = useRef(Promise.resolve()), copies = useRef(new Map()), currentDraft = useRef(draft);
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const allThemes = useMemo(() => [...library.builtins, ...library.custom], [library]);
   const defaults = BUILTIN_THEMES[draft.baseThemeId || (draft.builtin ? draft.id : DEFAULT_THEME_ID)]?.tokens || BUILTIN_THEMES.dark.tokens;
   const filtered = allThemes.filter((theme) => theme.name.toLowerCase().includes(query.toLowerCase()));
@@ -147,60 +150,84 @@ export default function ThemeWidget({ onClose, onMinimize }) {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
-  const selectDraft = (theme) => { const normalized = normalizeTheme(theme); setActive(normalized); setDraft(clone(normalized)); applyTheme(normalized); };
+  const persist = (next, version) => {
+    const job = saveQueue.current.catch(() => {}).then(async () => {
+      const target = await ensureCustom(next);
+      const saved = await themeApi.update(target.id, { tokens: next.tokens, orb: next.orb, widgetOverrides: next.widgetOverrides });
+      await refresh();
+      if (version === requestVersion.current) {
+        currentDraft.current = saved; setDraft(saved); setActive(saved); applyTheme(saved); setStatus('saved');
+      }
+      return saved;
+    });
+    saveQueue.current = job;
+    job.catch(error => { setStatus(navigator.onLine ? 'error' : 'offline'); setNotice(`Save failed: ${error.message}. Your preview is retained; use Retry.`); });
+    return job;
+  };
+  const flushSave = async () => {
+    clearTimeout(saveTimer.current);
+    if (pendingSave.current) {
+      const item = pendingSave.current; pendingSave.current = null;
+      persist(item.next, item.version);
+    }
+    await saveQueue.current;
+  };
+  const selectDraft = async (theme) => {
+    try { await flushSave(); } catch { setNotice('Save failed. Retry your edits before switching themes.'); return; }
+    ++requestVersion.current;
+    const normalized = normalizeTheme(theme); currentDraft.current = normalized;
+    setActive(normalized); setDraft(clone(normalized)); setHistory([clone(normalized)]); setHistoryIndex(0); applyTheme(normalized);
+  };
   const applyAndTrack = (next) => {
-    const normalized = normalizeTheme(next); setDraft(normalized); if (!createMode) setActive(normalized); applyTheme(normalized);
-    setHistory((old) => [...old.slice(0, historyIndex + 1), clone(normalized)].slice(-40)); setHistoryIndex((index) => Math.min(index + 1, 39));
+    const normalized = normalizeTheme(next); currentDraft.current = normalized;
+    setDraft(normalized); if (!createMode) setActive(normalized); applyTheme(normalized);
+    setHistory(old => { const items = [...old.slice(0, historyIndex + 1), clone(normalized)].slice(-40); setHistoryIndex(items.length - 1); return items; });
     if (!createMode) scheduleSave(normalized); else setStatus('idle');
   };
-  const ensureCustom = async (source = draft) => {
+  const ensureCustom = async (source) => {
     if (!source.builtin) return source;
-    setStatus('saving');
-    const created = await themeApi.create({ name: uniqueName(source.name, allThemes), baseThemeId: source.id, tokens: source.tokens, orb: source.orb, widgetOverrides: source.widgetOverrides });
-    await refresh(); selectDraft(created); setStatus('saved'); return created;
+    if (!copies.current.has(source.id)) {
+      const promise = themeApi.create({ name: uniqueName(source.name, allThemes), baseThemeId: source.id, tokens: source.tokens, orb: source.orb, widgetOverrides: source.widgetOverrides });
+      copies.current.set(source.id, promise);
+      promise.catch(() => copies.current.delete(source.id));
+    }
+    return copies.current.get(source.id);
   };
   const scheduleSave = (next) => {
-    clearTimeout(saveTimer.current);
-    const version = ++requestVersion.current;
-    saveTimer.current = setTimeout(async () => {
-      try {
-        const target = await ensureCustom(next); setStatus('saving');
-        const saved = await themeApi.update(target.id, { tokens: next.tokens, orb: next.orb, widgetOverrides: next.widgetOverrides });
-        if (version === requestVersion.current) { setDraft(saved); setActive(saved); setStatus('saved'); await refresh(); }
-      } catch (error) { setStatus(navigator.onLine ? 'error' : 'offline'); setNotice(error.message); }
-    }, 250);
+    clearTimeout(saveTimer.current); setStatus('saving');
+    const item = { next, version: ++requestVersion.current }; pendingSave.current = item;
+    saveTimer.current = setTimeout(() => { pendingSave.current = null; persist(item.next, item.version); }, 250);
   };
-  const editTokens = async (patch) => {
-    let target = draft;
-    if (!createMode && target.builtin) { try { target = await ensureCustom(target); } catch (error) { setNotice(error.message); return; } }
-    applyAndTrack({ ...target, tokens: { ...target.tokens, ...patch } });
-  };
-  const editTheme = async (patch) => {
-    let target = draft;
-    if (!createMode && target.builtin) { try { target = await ensureCustom(target); } catch (error) { setNotice(error.message); return; } }
-    applyAndTrack({ ...target, ...patch });
+  const editTokens = (patch) => applyAndTrack({ ...currentDraft.current, tokens: { ...currentDraft.current.tokens, ...patch } });
+  const editTheme = (patch) => applyAndTrack({ ...currentDraft.current, ...patch });
+  useEffect(() => () => { void flushSave().catch(() => {}); }, []);
+  const action = async (callback) => {
+    if (busyRef.current) return;
+    busyRef.current = true; setBusy(true);
+    try { await flushSave(); await callback(); } catch (error) { setNotice(error.message); setStatus('error'); }
+    finally { busyRef.current = false; setBusy(false); }
   };
   const moveHistory = (delta) => {
     const index = historyIndex + delta; if (index < 0 || index >= history.length) return;
-    const item = clone(history[index]); setHistoryIndex(index); setDraft(item); if (!createMode) setActive(item); applyTheme(item); if (!createMode) scheduleSave(item);
+    const item = clone(history[index]); setHistoryIndex(index); currentDraft.current = item; setDraft(item); if (!createMode) setActive(item); applyTheme(item); if (!createMode) scheduleSave(item);
   };
-  const setDefault = async (theme) => { try { await themeApi.setDefault(theme.id); setLibrary((old) => ({ ...old, defaultThemeId: theme.id })); setNotice(`${theme.name} will load at startup.`); } catch (error) { setNotice(error.message); } };
-  const duplicate = async (theme) => { try { const item = await themeApi.duplicate(theme.id); await refresh(); selectDraft(item); setTab('customize'); } catch (error) { setNotice(error.message); } };
-  const rename = async (theme) => { const name = window.prompt('Theme name', theme.name)?.trim(); if (!name) return; try { await themeApi.update(theme.id, { name }); await refresh(); } catch (error) { setNotice(error.message); } };
+  const setDefault = (theme) => action(async () => { const id = theme.id; await themeApi.setDefault(id); const data = await themeApi.list(); setLibrary(data); const saved = [...data.builtins, ...data.custom].find(item => item.id === id); selectDraft(saved); setNotice(`${saved.name} applied and saved as startup default.`); });
+  const duplicate = async (theme) => { try { await flushSave(); const item = await themeApi.duplicate(theme.id); await refresh(); selectDraft(item); setTab('customize'); } catch (error) { setNotice(error.message); } };
+  const rename = async (theme) => { const name = window.prompt('Theme name', theme.name)?.trim(); if (!name) return; try { await flushSave(); const saved = await themeApi.update(theme.id, { name }); if (active.id === theme.id) selectDraft(saved); await refresh(); } catch (error) { setNotice(error.message); } };
   const remove = async (theme) => {
     const isDefault = library.defaultThemeId === theme.id;
     const prompt = isDefault ? `“${theme.name}” is your startup default. Delete it and use Dark as the new default?` : `Delete “${theme.name}”? This cannot be undone.`;
     if (!window.confirm(prompt)) return;
-    try { await themeApi.remove(theme.id, isDefault ? DEFAULT_THEME_ID : undefined); if (active.id === theme.id) selectDraft(BUILTIN_THEMES.dark); await refresh(); setNotice(isDefault ? 'Theme deleted. Dark is now the startup default.' : 'Theme deleted.'); } catch (error) { setNotice(error.message); }
+    try { await flushSave(); await themeApi.remove(theme.id, isDefault ? DEFAULT_THEME_ID : undefined); if (active.id === theme.id) selectDraft(BUILTIN_THEMES.dark); await refresh(); setNotice(isDefault ? 'Theme deleted. Dark is now the startup default.' : 'Theme deleted.'); } catch (error) { setNotice(error.message); }
   };
-  const exportTheme = async (theme) => { try { downloadJson(await themeApi.export(theme.id), `astra-${theme.name.toLowerCase().replace(/\W+/g, '-')}.json`); } catch (error) { setNotice(error.message); } };
+  const exportTheme = async (theme) => { try { await flushSave(); downloadJson(await themeApi.export(theme.id), `astra-${theme.name.toLowerCase().replace(/\W+/g, '-')}.json`); } catch (error) { setNotice(error.message); } };
   const importFile = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { await themeApi.import(JSON.parse(await file.text())); await refresh(); setNotice('Theme imported.'); } catch (error) { setNotice(`Import failed: ${error.message}`); } event.target.value = ''; };
   const onColor = (key, color) => { setRecent((values) => [color, ...values.filter((v) => v !== color)].slice(0, 12)); editTokens({ [key]: color }); };
-  const beginCreate = () => {
-    clearTimeout(saveTimer.current);
+  const beginCreate = async () => {
+    try { await flushSave(); } catch { return; }
     const source = clone(active); setCreateSource(source); setCreateName(''); setCreateMode(true); setStatus('idle');
     const next = normalizeTheme({ ...clone(source), id: 'unsaved-draft', name: 'Untitled theme', builtin: false, baseThemeId: source.builtin ? source.id : source.baseThemeId });
-    setDraft(next); setHistory([next]); setHistoryIndex(0); applyTheme(next); setTab('customize');
+    currentDraft.current = next; setDraft(next); setHistory([next]); setHistoryIndex(0); applyTheme(next); setTab('customize');
   };
   const cancelCreate = () => { if (createSource) selectDraft(createSource); setCreateMode(false); setCreateName(''); setCreateSource(null); setNotice('Unsaved theme discarded.'); };
   const saveCreate = async () => {
@@ -229,14 +256,14 @@ export default function ThemeWidget({ onClose, onMinimize }) {
       <nav className="studio-tabs" aria-label="Theme studio sections"><button className={tab === 'themes' ? 'active' : ''} onClick={() => setTab('themes')}>Theme library</button><button className={tab === 'customize' ? 'active' : ''} onClick={() => setTab('customize')}>Customize</button></nav>
       {notice && <div className="studio-notice" role="status"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Dismiss">×</button></div>}
       {tab === 'themes' ? <main className="studio-library">
-        <div className="studio-library-toolbar"><label><span className="sr-only">Search themes</span><input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search built-in and custom themes…" /></label><button className="studio-primary" onClick={beginCreate}>+ New theme</button><button onClick={() => fileRef.current.click()}>Import</button><button onClick={async () => downloadJson(await themeApi.export(), 'astra-themes.json')}>Export all</button><input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={importFile}/></div>
-        <div className="studio-library-meta"><span>{library.custom.length} / {library.maxCustomThemes} custom themes</span><span>Apply and startup default are separate</span></div>
-        <div className="studio-card-list">{filtered.map((theme) => <ThemeCard key={theme.id} theme={theme} active={active.id === theme.id} isDefault={library.defaultThemeId === theme.id} onApply={() => selectDraft(theme)} onDefault={() => setDefault(theme)} onEdit={() => { selectDraft(theme); setTab('customize'); }} onDuplicate={() => duplicate(theme)} onRename={() => rename(theme)} onExport={() => exportTheme(theme)} onDelete={() => remove(theme)} />)}</div>
+        <div className="studio-library-toolbar"><label><span className="sr-only">Search themes</span><input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search built-in and custom themes…" /></label><button className="studio-primary" onClick={beginCreate}>+ New theme</button><button onClick={() => fileRef.current.click()}>Import</button><button onClick={() => action(async () => downloadJson(await themeApi.export(), 'astra-themes.json'))}>Export all</button><input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={importFile}/></div>
+        <div className="studio-library-meta"><span>{library.custom.length} / {library.maxCustomThemes} custom themes</span><span>Set default applies now and at startup</span></div>
+        <div className="studio-card-list" aria-busy={busy} style={busy ? { pointerEvents: 'none', opacity: .8 } : undefined}>{filtered.map((theme) => <ThemeCard key={theme.id} theme={theme} active={active.id === theme.id} isDefault={library.defaultThemeId === theme.id} onApply={() => selectDraft(theme)} onDefault={() => setDefault(theme)} onEdit={() => { selectDraft(theme); setTab('customize'); }} onDuplicate={() => action(() => duplicate(theme))} onRename={() => action(() => rename(theme))} onExport={() => action(() => exportTheme(theme))} onDelete={() => action(() => remove(theme))} />)}</div>
       </main> : <main className="studio-editor">
         <aside className="studio-editor-nav"><div className="studio-current"><span>{createMode ? 'CREATING' : 'EDITING'}</span><strong>{createMode ? (createName || 'Untitled theme') : draft.name}</strong><small>{createMode ? 'Unsaved · preview only' : draft.builtin ? 'Preset · edits create a copy' : 'Custom · autosaved'}</small></div>{[['colors','Colors'],['layout','Layout'],['effects','Effects'],['orb','Orb'],['widgets','Widgets']].map(([id,label]) => <button key={id} className={section === id ? 'active' : ''} onClick={(event) => { setSection(id); event.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' }); }}>{label}</button>)}</aside>
         <section className="studio-editor-body">
           {createMode && <div className="studio-creator" role="region" aria-label="Create new theme"><div><span>CREATE NEW THEME</span><strong>Unsaved draft</strong><small>Based on {createSource?.name || 'current theme'} · no JSON exists yet</small></div><label><span>Name</span><input value={createName} maxLength={80} autoFocus onChange={(event) => setCreateName(event.target.value)} placeholder="My Astra theme" /></label><button type="button" className="studio-primary" onClick={saveCreate} disabled={createSaving}>{createSaving ? 'Saving…' : 'Save theme'}</button><button type="button" onClick={cancelCreate} disabled={createSaving}>Cancel</button></div>}
-          <div className="studio-editor-toolbar"><div><button onClick={() => moveHistory(-1)} disabled={historyIndex <= 0} aria-label="Undo"><Icon name="undo" /></button><button onClick={() => moveHistory(1)} disabled={historyIndex >= history.length - 1} aria-label="Redo"><Icon name="redo" /></button></div><button onClick={() => editTokens(defaults)}>Reset all</button></div>
+          <div className="studio-editor-toolbar"><div><button onClick={() => moveHistory(-1)} disabled={historyIndex <= 0} aria-label="Undo"><Icon name="undo" /></button><button onClick={() => moveHistory(1)} disabled={historyIndex >= history.length - 1} aria-label="Redo"><Icon name="redo" /></button></div><button onClick={() => editTheme({ tokens: { ...defaults }, orb: { ...(BUILTIN_THEMES[draft.baseThemeId]?.orb || BUILTIN_THEMES.dark.orb) }, widgetOverrides: {} })}>Reset all</button></div>
           <div className={`studio-preview preview-pattern-${draft.tokens.pattern}${previewActive ? ' is-actioned' : ''}`} style={{ '--preview-bg': draft.tokens.bg, '--preview-panel': draft.tokens.panel, '--preview-fg': draft.tokens.fg, '--preview-accent': draft.tokens.accent, '--preview-border': draft.tokens.border, '--preview-radius': `${draft.tokens.radius}px`, '--preview-pattern': draft.tokens.patternColor || draft.tokens.fg, '--preview-opacity': draft.tokens.panelOpacity }}><div className="preview-pattern-layer"/><div className="preview-rail"><i/><i/><i/></div><div className="preview-panel"><span>{previewActive ? 'ACTION CONFIRMED' : 'ASTRA'}</span><strong>Live interface preview</strong><p>{previewActive ? 'The local preview interaction is working.' : `${draft.tokens.pattern} atmosphere · ${draft.tokens.density} density`}</p><button type="button" aria-pressed={previewActive} onClick={() => setPreviewActive((value) => !value)}>{previewActive ? 'Reset demo' : 'Action'}</button></div><div className="preview-orb" title={`Orb preset: ${draft.orb.preset}`} /></div>
           {section === 'colors' && <div className="studio-section"><div className="studio-section-title"><div><span>01 / PALETTE</span><h3>Semantic colors</h3></div><div className={`studio-contrast ${contrast >= 4.5 ? 'pass' : 'fail'}`}><strong>{contrast.toFixed(2)}:1</strong><span>Text contrast</span>{contrast < 4.5 && <button onClick={() => editTokens({ fg: accessibleText(draft.tokens.bg) })}>Auto fix</button>}</div></div><div className="studio-harmony"><label>Harmony<select value={harmony.type} onChange={(e) => setHarmony((old) => ({ ...old, type: e.target.value }))}><option>complementary</option><option>analogous</option><option>triadic</option><option>monochromatic</option></select></label><label>Appearance<select value={harmony.appearance} onChange={(e) => setHarmony((old) => ({ ...old, appearance: e.target.value }))}><option>dark</option><option>light</option></select></label><button onClick={() => editTokens(generateHarmonyColors(draft.tokens.accent, harmony.type, harmony.appearance))}>Generate & apply</button></div><div className="studio-color-grid">{COLOR_FIELDS.map(([key,label]) => <ColorControl key={key} name={key} label={label} value={draft.tokens[key]} recent={recent} onChange={(color) => onColor(key,color)} onRecent={(color) => onColor(key,color)} onReset={() => editTokens({ [key]: defaults[key] })}/>)}</div></div>}
           {section === 'layout' && <div className="studio-section"><div className="studio-section-title"><div><span>02 / GEOMETRY</span><h3>Layout & typography</h3></div><button onClick={() => editTokens({ font: defaults.font, density: defaults.density, borderStyle: defaults.borderStyle, ...Object.fromEntries(RANGE_FIELDS.slice(0, 5).map(([key]) => [key, defaults[key]])) })}>Reset section</button></div><div className="studio-field-grid"><label>Typeface<select value={draft.tokens.font} onChange={(e) => editTokens({ font: e.target.value })}><optgroup label="Built in">{Object.keys(FONT_OPTIONS).map((font) => <option key={font}>{font}</option>)}</optgroup>{customFonts.length > 0 && <optgroup label="Custom fonts">{customFonts.map((font) => <option value={font.name} key={`${font.name}-${font.file}`}>{font.name}</option>)}</optgroup>}</select></label><label>Density<select value={draft.tokens.density} onChange={(e) => editTokens({ density: e.target.value })}><option>compact</option><option>comfortable</option><option>spacious</option></select></label><label>Border style<select value={draft.tokens.borderStyle} onChange={(e) => editTokens({ borderStyle: e.target.value })}><option>solid</option><option>dashed</option><option>double</option><option>none</option></select></label>{RANGE_FIELDS.slice(0,5).map(([key,label,suffix]) => <label key={key}>{label}<output>{draft.tokens[key]}{suffix}</output><input type="range" min={TOKEN_RANGES[key][0]} max={TOKEN_RANGES[key][1]} step={TOKEN_RANGES[key][2]} value={draft.tokens[key]} onChange={(e) => editTokens({ [key]: Number(e.target.value) })}/></label>)}</div></div>}

@@ -1,17 +1,17 @@
 {
-    "name": "astra-ai-root",
-    "version": "1.0.0",
-    "description": "Root controller for Nova AI System",
-    "scripts": {
-        "start": "start_integrated.bat",
-        "start:backend": "python server.py",
-        "start:frontend": "cd astra_ai/ui && npm start",
-        "setup": "pip install flask flask-cors watchdog && cd astra_ai/ui && npm install",
-        "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-        "dev:backend": "cd astra_ai/ui/backend && python server.py",
-        "dev:frontend": "cd astra_ai/ui/frontend && npm run dev"
-    },
-    "dependencies": {
-        "concurrently": "^9.2.1"
-    }
+  "name": "astra-ai-root",
+  "version": "1.0.0",
+  "description": "Root controller for Nova AI System",
+  "scripts": {
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\start_nova_ai.ps1",
+    "start:backend": ".\\.venv\\Scripts\\python.exe .\\scripts\\nova_runtime.py",
+    "start:frontend": "cd .\\astra_ai\\ui\\frontend && npm run dev -- --host 127.0.0.1",
+    "setup": ".\\.venv\\Scripts\\python.exe -m pip install -r astra_ai/ui/backend/requirements.txt",
+    "dev:all": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\start_nova_ai.ps1",
+    "dev:backend": ".\\.venv\\Scripts\\python.exe .\\scripts\\nova_runtime.py",
+    "dev:frontend": "cd .\\astra_ai\\ui\\frontend && npm run dev -- --host 127.0.0.1"
+  },
+  "dependencies": {
+    "concurrently": "^9.2.1"
+  }
 }

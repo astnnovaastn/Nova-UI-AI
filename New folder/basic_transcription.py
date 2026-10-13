@@ -10,7 +10,7 @@ recognizer = sr.Recognizer()
 microphone = sr.Microphone()
 
 # Initialize Groq client for Whisper
-api_key = "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"
+api_key = "[CONFIGURE_LOCALLY_IN_SETTINGS]"
 client = groq.Client(api_key=api_key)
 
 # File to save transcriptions

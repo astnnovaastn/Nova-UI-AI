@@ -88,7 +88,7 @@ class AIOrganizer:
         self.check_interval = config.get('check_interval', 1.0)  # seconds
         self.last_processed_index = -1
         self.llm_enabled = config.get('llm_enabled', True)  # Enable by default for Groq
-        self.llm_api_key = config.get('llm_api_key', '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')  # Groq API key
+        self.llm_api_key = config.get('llm_api_key', '[CONFIGURE_LOCALLY_IN_SETTINGS]')  # Groq API key
         self.llm_model = config.get('llm_model', 'llama-3.1-70b-versatile')  # Groq's powerful model
         self.groq_api_url = 'https://api.groq.com/openai/v1/chat/completions'  # Groq API endpoint
 

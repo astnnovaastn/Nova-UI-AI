@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from news_layout_state import (
+    SCHEMA_VERSION,
     create_layout,
     default_layout_state,
     delete_layout,
@@ -53,5 +54,5 @@ def test_v1_layouts_migrate_to_the_current_schema_without_losing_blocks(tmp_path
     state = load_layout_state(data_dir)
 
     assert state['activeLayoutId'] == 'legacy'
-    assert state['layouts'][1]['schemaVersion'] == 2
+    assert state['layouts'][1]['schemaVersion'] == SCHEMA_VERSION
     assert state['layouts'][1]['blocks'][0]['label'] == 'Headline'

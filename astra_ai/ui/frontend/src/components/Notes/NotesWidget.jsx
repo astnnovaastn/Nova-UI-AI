@@ -3,10 +3,12 @@ import './NotesWidget.css';
 
 const API_HOST = (import.meta.env.VITE_API_URL || 'http://localhost:8340').replace(/\/$/, '');
 
-const Icon = ({ name, size = 16, strokeWidth = 2 }) => {
+const Icon = ({ name, size = 16, strokeWidth = 1.8 }) => {
   const common = {
-    width: size,
-    height: size,
+    width: Math.max(size, 16),
+    height: Math.max(size, 16),
+    className: `notepad-icon notepad-icon-${name}`,
+    focusable: false,
     viewBox: '0 0 24 24',
     fill: 'none',
     stroke: 'currentColor',
@@ -17,16 +19,16 @@ const Icon = ({ name, size = 16, strokeWidth = 2 }) => {
   };
 
   const glyphs = {
-    note: (<><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="M9 13h6" /><path d="M9 17h4" /></>),
-    brain: (<><path d="M9.5 3.5a3.5 3.5 0 0 0-3.41 4.33A3.5 3.5 0 0 0 6 14.5V16a3 3 0 0 0 3 3h.5" /><path d="M14.5 3.5a3.5 3.5 0 0 1 3.41 4.33A3.5 3.5 0 0 1 18 14.5V16a3 3 0 0 1-3 3h-.5" /><path d="M12 7v10" /><path d="M9 14c.76.64 1.62 1 3 1s2.24-.36 3-1" /></>),
+    note: (<><rect x="5" y="3" width="15" height="18" rx="2" /><path d="M3 7h4M3 12h4M3 17h4M10 7h6M10 11h6M10 15h4" /></>),
+    brain: (<><path d="M12 5a3 3 0 0 0-5-2 3.5 3.5 0 0 0-3 5 4 4 0 0 0 0 7 3.5 3.5 0 0 0 3 5 3 3 0 0 0 5-2V5Zm0 0a3 3 0 0 1 5-2 3.5 3.5 0 0 1 3 5 4 4 0 0 1 0 7 3.5 3.5 0 0 1-3 5 3 3 0 0 1-5-2" /><path d="M7 8c2 0 2 2 2 3M17 8c-2 0-2 2-2 3M7 16c2 0 2-2 2-3M17 16c-2 0-2-2-2-3" /></>),
     plus: (<><path d="M12 5v14" /><path d="M5 12h14" /></>),
     minus: (<><path d="M5 12h14" /></>),
     copy: (<><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></>),
     edit: (<><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4z" /></>),
     trash: (<><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /></>),
-    import: (<><path d="M12 3v12" /><path d="M8 11l4 4 4-4" /><path d="M4 21h16" /></>),
+    import: (<><path d="M3 8V5h7l2 3h9v12H3v-4" /><path d="M2 12h11m-4-4 4 4-4 4" /></>),
     fileText: (<><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="M9 13h6" /><path d="M9 17h6" /></>),
-    download: (<><path d="M12 3v12" /><path d="M8 11l4 4 4-4" /><path d="M4 21h16" /></>),
+    download: (<><path d="M12 3v12m-4-4 4 4 4-4" /><path d="M4 16v5h16v-5" /></>),
     close: (<><path d="M18 6L6 18" /><path d="M6 6l12 12" /></>),
     bold: (<><path d="M7 5h6a3 3 0 0 1 0 6H7z" /><path d="M7 11h7a4 4 0 0 1 0 8H7z" /></>),
     italic: (<><path d="M14 4h-4" /><path d="M14 20h-4" /><path d="M15 4L9 20" /></>),

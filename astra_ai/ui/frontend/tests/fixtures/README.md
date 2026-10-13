@@ -1,0 +1,1 @@
+Public SpeechBrain ECAPA example1.wav converted to 16 kHz mono PCM. Source: https://huggingface.co/speechbrain/spkrec-ecapa-voxceleb/blob/0f99f2d0ebe89ac095bcc5903c4dd8f72b367286/example1.wav . Not user audio.

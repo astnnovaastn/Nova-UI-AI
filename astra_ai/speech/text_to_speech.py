@@ -334,7 +334,7 @@ if __name__ == "__main__":
     try:
         # Create configuration with optimized parameters
         cartesia_config = CartesiaConfig(
-            api_key="sk_car_5PdMH1dJjrc5jJhGTcec1i",
+            api_key="",
             voice_id="f114a467-c40a-4db8-964d-aaba89cd08fa",
             model_id="sonic-english",
             sample_rate=48000,

@@ -187,7 +187,7 @@ def main():
         'memory_file_path': memory_file_path,
         'check_interval': 0.5,
         'llm_enabled': True,
-        'llm_api_key': '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',
+        'llm_api_key': '[CONFIGURE_LOCALLY_IN_SETTINGS]',
         'llm_model': 'llama-3.3-70b-versatile'
     }
     

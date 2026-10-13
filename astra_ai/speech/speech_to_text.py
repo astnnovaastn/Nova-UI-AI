@@ -54,7 +54,7 @@ class SpeechToTextApp:
         self.processing_times = []
         
         # Initialize Groq client for Whisper
-        self.api_key = "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"  # Default key
+        self.api_key = "[CONFIGURE_LOCALLY_IN_SETTINGS]"  # Default key
         self.client = groq.Client(api_key=self.api_key)
 
     def listen_and_transcribe(self):

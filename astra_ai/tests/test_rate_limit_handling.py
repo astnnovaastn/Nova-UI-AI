@@ -10,7 +10,7 @@ def test_rate_limit_handling():
         'memory_file_path': 'test_memory.json',  # Use a test file
         'check_interval': 1.0,
         'llm_enabled': True,
-        'llm_api_key': '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',  # Groq API key
+        'llm_api_key': '[CONFIGURE_LOCALLY_IN_SETTINGS]',  # Groq API key
         'llm_model': 'llama-3.1-8b-instant'
     }
     

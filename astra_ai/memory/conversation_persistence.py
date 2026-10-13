@@ -8,7 +8,7 @@ import logging
 import os
 import json
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
@@ -256,78 +256,13 @@ def _make_backup(path: str = DEFAULT_MEMORY_PATH) -> None:
 
 
 def append_conversation_messages(messages: List[Dict[str, Any]], memory_path: str = DEFAULT_MEMORY_PATH) -> None:
-    """Append conversation messages to the memory file.
-
-    Each message should be a dict like: {"role": "user"|"assistant", "content": str, "timestamp": ISO8601, "session_id": str}
-    The function will conditionally create a backup based on configured strategy, load the JSON, append messages to `conversation`, and write the file.
-    It will also update `memory_events` with lightweight ADD events for traceability.
-    """
-    if not messages:
-        return
-
-    # Check if backup should be created based on strategy
-    backup_created = False
-    if should_backup():
-        _make_backup(memory_path)
-        backup_created = True
-
-    data = _load_memory(memory_path)
-
-    if 'conversation' not in data:
-        data['conversation'] = []
-    if 'memory_events' not in data:
-        data['memory_events'] = []
-
-    for msg in messages:
-        # normalize message
-        role = msg.get('role', 'user')
-        content = msg.get('content', '')
-        ts = msg.get('timestamp') or datetime.now(timezone.utc).isoformat()
-        session_id = msg.get('session_id')
-
-        conv_item = {
-            'role': role,
-            'content': content,
-            'timestamp': ts,
-        }
-        if session_id:
-            conv_item['session_id'] = session_id
-
-        data['conversation'].append(conv_item)
-
-        # Add a lightweight memory event to keep traceability
-        try:
-            add_evt = {
-                'type': 'ADD',
-                'summary': content if len(content) < 500 else content[:500] + '...',
-                'timestamp': ts,
-                'importance_score': 0.5,
-                'confidence': 0.5,
-                'category': None,
-                'provenance': {
-                    'source': 'conversation_persistence',
-                    'session_id': session_id,
-                    'role': role
-                }
-            }
-            data['memory_events'].append(add_evt)
-        except Exception:
-            # best-effort; don't abort the loop
-            pass
-
-    # Update message count for backup tracking
-    _backup_state.messages_since_backup += len(messages)
-    
-    # If backup was created, reset the counter (already done in _make_backup)
-    # If no backup was created, just save the updated state
-    if not backup_created:
-        save_backup_state()
-
-    # write back
-    tmp = memory_path + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    os.replace(tmp, memory_path)
+    """Use the same process-locked transcript writer as voice and text chat."""
+    from pathlib import Path
+    from astra_ai.memory.shared_memory import SharedMemory
+    transcript = Path(memory_path)
+    root = transcript.parent.parent / 'memory' if transcript.parent.name == 'Date' else transcript.parent
+    manager = SharedMemory(memory_path=root / 'long_term.json', transcript_path=transcript)
+    manager.append_messages(messages)
 
 
 def append_single_message(role: str, content: str, session_id: str = None, timestamp: str = None, memory_path: str = DEFAULT_MEMORY_PATH) -> None:

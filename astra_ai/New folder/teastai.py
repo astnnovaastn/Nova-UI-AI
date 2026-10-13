@@ -1987,7 +1987,7 @@ class AleChatBot:
             api_key: GROQ API key (optional - will look for environment variable if None)
         """
         # Set up API client
-        self.api_key = api_key or os.getenv('GROQ_API_KEY', "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")
+        self.api_key = api_key or os.getenv('GROQ_API_KEY', "[CONFIGURE_LOCALLY_IN_SETTINGS]")
         self.client = groq.Client(api_key=self.api_key)
         
         # Initialize helper classes

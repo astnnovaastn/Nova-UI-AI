@@ -12,7 +12,7 @@ try:
 except Exception:  # pragma: no cover - runtime dependency
     requests = None
 
-API_KEY = "4953751730bd4aec90411a1951cabce2"
+API_KEY = ""
 VOICE_ID = "6bf9194b81814fb59dc8006ef9ad39b3"  # Jarvis voice (example)
 TTS_ENDPOINT = "https://api.fish.audio/v1/text-to-speech"
 

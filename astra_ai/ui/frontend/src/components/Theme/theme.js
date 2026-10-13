@@ -1,8 +1,9 @@
+import { appearanceTokens, readable, mix, readableSurfaces, widgetSurfaces } from './appearance.js';
 import { startPatternEngine } from './patternEngine.js';
 import { orbThemes } from '../../orb-themes';
 
 export const THEME_SCHEMA_VERSION = 2;
-export const API_ROOT = (import.meta.env.VITE_API_URL || 'http://localhost:8340').replace(/\/$/, '');
+export const API_ROOT = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 export const THEME_CACHE_KEY = 'astra-theme-studio-cache-v2';
 export const ACTIVE_THEME_KEY = 'astra-active-theme-v2';
 export const LEGACY_KEYS = ['odysseus-theme', 'odysseus-custom-themes', 'odysseus-ui-scale'];
@@ -65,6 +66,9 @@ export function applyTheme(raw) {
   const t = theme.tokens;
   const root = document.documentElement;
   const vars = {
+    ...appearanceTokens(t),
+    '--theme-ui-scale': String(t.uiScale / 100),
+    '--theme-backdrop-blur': `${t.frosted ? t.blur : 0}px`,
     '--bg': t.bg, '--fg': t.fg, '--panel': t.panel, '--border': t.border, '--red': t.accent,
     '--theme-spacing': String(t.spacing), '--theme-radius': `${t.radius}px`, '--theme-border-width': `${t.borderWidth}px`,
     '--theme-border-style': t.borderStyle, '--theme-panel-opacity': String(t.panelOpacity), '--theme-blur': `${t.blur}px`,
@@ -81,18 +85,27 @@ export function applyTheme(raw) {
   if (t.pattern !== 'none') document.body.classList.add(`bg-pattern-${t.pattern}`);
   startPatternEngine(t.pattern, t);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t.bg);
-  const widgetSelectors = { search: '.search-widget', news: '.news-widget', weather: '.weather-display', task: '.task-widget', notes: '.notepad-widget', image: '.image-widget', calculator: '.calculator-widget', tictactoe: '.tictactoe-widget', chat: '.chat-widget' };
-  Object.entries(widgetSelectors).forEach(([id, selector]) => document.querySelectorAll(selector).forEach((element) => { if (!element.dataset.widgetId) element.dataset.widgetId = id; }));
+  const widgetSelectors = { search: '.search-widget:not(.news-widget)', news: '.news-widget', weather: '.weather-display', task: '.task-command-widget', notes: '.notepad-widget', image: '.image-widget', calculator: '.calculator-widget', tictactoe: '.tictactoe-widget', chat: '.chat-widget', calendar: '.calendar-widget' };
+  Object.entries(widgetSelectors).forEach(([id, selector]) => document.querySelectorAll(selector).forEach((element) => { element.dataset.widgetId = id; }));
   const applyWidgetOverrides = () => document.querySelectorAll('[data-widget-id]').forEach((element) => {
     const override = theme.widgetOverrides[element.dataset.widgetId];
-    ['accent', 'surface', 'border', 'text'].forEach((key) => element.style.removeProperty(`--widget-${key}`));
-    if (override) Object.entries(override).forEach(([key, value]) => element.style.setProperty(`--widget-${key}`, value));
+    ['accent', 'surface', 'border', 'text', 'muted', 'faint'].forEach((key) => element.style.removeProperty(`--widget-${key}`));
+    if (override) {
+      Object.entries(override).forEach(([key, value]) => element.style.setProperty(`--widget-${key}`, value));
+      const surface = override.surface || t.panel;
+      const surfaces = widgetSurfaces(t, surface, override.accent || t.accent);
+      const text = readableSurfaces(override.text || t.fg, surfaces);
+      element.style.setProperty('--widget-text', text);
+      element.style.setProperty('--widget-muted', readableSurfaces(mix(text, surface, .32), surfaces));
+      element.style.setProperty('--widget-faint', readableSurfaces(mix(text, surface, .46), surfaces));
+      element.style.setProperty('--widget-accent', readableSurfaces(override.accent || t.accent, surfaces));
+    }
   });
   applyWidgetOverrides();
   window.__astraWidgetThemeObserver?.disconnect();
-  window.__astraWidgetThemeObserver = new MutationObserver(() => { Object.entries(widgetSelectors).forEach(([id, selector]) => document.querySelectorAll(selector).forEach((element) => { element.dataset.widgetId ||= id; })); applyWidgetOverrides(); });
+  window.__astraWidgetThemeObserver = new MutationObserver(() => { Object.entries(widgetSelectors).forEach(([id, selector]) => document.querySelectorAll(selector).forEach((element) => { element.dataset.widgetId = id; })); applyWidgetOverrides(); });
   window.__astraWidgetThemeObserver.observe(document.getElementById('widget-overlay') || document.body, { childList: true, subtree: true });
-  localStorage.setItem(ACTIVE_THEME_KEY, JSON.stringify(theme));
+  if (theme.id !== 'unsaved-draft') { try { localStorage.setItem(ACTIVE_THEME_KEY, JSON.stringify(theme)); } catch {} }
   const preset = orbThemes.find((item) => item.name === theme.orb.preset);
   const orbColor = theme.orb.mode === 'custom' ? theme.orb.color : theme.orb.preset !== 'default' && preset?.orbColor ? preset.orbColor : t.accent;
   window.dispatchEvent(new CustomEvent('themechange', { detail: { theme, orbColor, orbPreset: theme.orb.preset } }));
@@ -100,14 +113,15 @@ export function applyTheme(raw) {
 }
 
 function parseCached() {
-  try { return JSON.parse(localStorage.getItem(THEME_CACHE_KEY) || 'null'); } catch { return null; }
+  try { const data = JSON.parse(localStorage.getItem(THEME_CACHE_KEY) || 'null'); return data && Array.isArray(data.builtins) && Array.isArray(data.custom) ? data : null; } catch { return null; }
 }
 
 export function applyCachedTheme() {
   const cache = parseCached();
   const active = (() => { try { return JSON.parse(localStorage.getItem(ACTIVE_THEME_KEY) || 'null'); } catch { return null; } })();
   const defaultTheme = cache && [...(cache.builtins || []), ...(cache.custom || [])].find((item) => item.id === cache.defaultThemeId);
-  return applyTheme(defaultTheme || active || BUILTIN_THEMES.dark);
+  const valid = defaultTheme && ['bg','fg','panel','border','accent'].every(key => /^#[0-9a-f]{6}$/i.test(defaultTheme.tokens?.[key] || ''));
+  return applyTheme(valid ? defaultTheme : BUILTIN_THEMES.dark);
 }
 
 async function request(path, options = {}) {
@@ -118,12 +132,12 @@ async function request(path, options = {}) {
 }
 
 export const themeApi = {
-  list: async () => { const data = await request('/api/themes'); localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(data)); return data; },
+  list: async () => { const data = await request('/api/themes'); try { localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(data)); } catch {} return data; },
   create: (body) => request('/api/themes', { method: 'POST', body: JSON.stringify(body) }),
   update: (id, body) => request(`/api/themes/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }),
   duplicate: (id, name) => request(`/api/themes/${encodeURIComponent(id)}/duplicate`, { method: 'POST', body: JSON.stringify(name ? { name } : {}) }),
   remove: (id, replacement) => request(`/api/themes/${encodeURIComponent(id)}${replacement ? `?replacement=${encodeURIComponent(replacement)}` : ''}`, { method: 'DELETE' }),
-  setDefault: (themeId) => request('/api/themes/default', { method: 'PUT', body: JSON.stringify({ themeId }) }),
+  setDefault: async (themeId) => { const result = await request('/api/themes/default', { method: 'PUT', body: JSON.stringify({ themeId }) }); await themeApi.list(); return result; },
   import: (body) => request('/api/themes/import', { method: 'POST', body: JSON.stringify(body) }),
   export: (id) => request(id ? `/api/themes/${encodeURIComponent(id)}/export` : '/api/themes/export'),
   fonts: () => request('/api/fonts/custom'),
@@ -211,9 +225,27 @@ export async function migrateLegacy() {
   localStorage.setItem('astra-theme-migrated-v2', 'true');
 }
 
-applyCachedTheme();
-themeApi.list().then((data) => {
-  const item = [...data.builtins, ...data.custom].find((theme) => theme.id === data.defaultThemeId);
-  if (item) applyTheme(item);
-  return migrateLegacy();
-}).catch(() => {});
+export const themeReady = (async () => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2000);
+  try {
+    const data = await request('/api/themes/startup', { signal: controller.signal });
+    applyTheme(data.theme);
+    const cache = parseCached() || { builtins: [], custom: [] };
+    const key = data.theme.builtin ? 'builtins' : 'custom';
+    cache[key] = [...(cache[key] || []).filter(item => item.id !== data.theme.id), data.theme];
+    cache.defaultThemeId = data.defaultThemeId;
+    try { localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(cache)); } catch {}
+  } catch {
+    applyCachedTheme();
+    const notice = document.createElement('div');
+    notice.textContent = 'Offline appearance: using the last saved default.';
+    notice.setAttribute('role', 'status');
+    notice.style.cssText = 'position:fixed;bottom:8px;left:8px;z-index:9999;background:var(--panel);color:var(--panel-text);padding:8px;border-radius:8px;font-size:12px';
+    document.body.append(notice);
+  } finally {
+    clearTimeout(timer);
+    document.documentElement.removeAttribute('data-theme-loading');
+  }
+  void migrateLegacy();
+})();

@@ -250,25 +250,12 @@ class AegisMemoryInterface:
         else:
             self.logger = None
         
-        # Try to use enhanced memory system first
+        # One authoritative core; enhanced vector writers are retired.
         self.use_enhanced = False
-        if ENHANCED_MEMORY_AVAILABLE:
-            try:
-                enhanced_file = memory_file.replace('.json', '_enhanced.json')
-                self.enhanced_memory = EnhancedAegisMemoryInterface(enhanced_file, enable_logging)
-                self.use_enhanced = True
-
-                if self.logger:
-                    self.logger.info(f"Enhanced memory system initialized: {enhanced_file}")
-
-            except Exception as e:
-                if self.logger:
-                    self.logger.warning(f"Enhanced memory system failed, using standard: {e}")
-                self.use_enhanced = False
 
         try:
             # Initialize the core memory system (fallback or primary)
-            self.memory_system = AegisMemoryAI(memory_file)
+            self.memory_system = AegisMemoryAI(None if memory_file == "nova_ai_memory.json" else memory_file)
             self.is_initialized = True
 
             if self.logger:

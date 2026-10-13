@@ -94,7 +94,7 @@ def read_json_file(filename):
 def main():
     """Main function"""
     # Configuration
-    API_KEY = 'sk_car_VqWy79RSCgcBda6TtbJW1A'
+    API_KEY = ''
     VOICE_ID = "5ee9feff-1265-424a-9d7f-8e4d431a12c7"
     JSON_FILE = "speech_input.json"
     

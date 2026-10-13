@@ -1,0 +1,23 @@
+import {test,expect} from '@playwright/test';
+test.use({channel:'msedge'});
+test('Shared memory conversation preserves drafts, context, sources and activity',async({page},info)=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));let fail=true,requests=[];
+ await page.addInitScript(()=>{window.__sent=[];window.WebSocket=class{static OPEN=1;readyState=1;constructor(){window.__socket=this;setTimeout(()=>{this.onopen?.();this.onmessage?.({data:JSON.stringify({type:'status',client_id:'fixture-client'})});},0);}send(data){if(typeof data==='string')window.__sent.push(JSON.parse(data));}close(){this.onclose?.();}addEventListener(){}removeEventListener(){}};});
+ const record={id:'fixture-memory',category:'task_project_tracking',kind:'fact',key:'fixture project',value:'Cobalt',revision:1};
+ await page.route('**/api/memory/**',route=>{const url=new URL(route.request().url());const body=route.request().method()==='POST'?route.request().postDataJSON():{};return route.fulfill({json:url.pathname.endsWith('categories')?{categories:[{category:'task_project_tracking',title:'Projects',counts:{active:1}}]}:url.pathname.endsWith('graph')?{nodes:[record],edges:[],total:1,revision:'1'}:body.action==='get'?{record}:{status:'ok',links:[],conflicts:[]}});});
+ await page.route('**/api/chat/stream',route=>{requests.push(route.request().postDataJSON());return route.fulfill({status:200,contentType:'application/x-ndjson',body:(fail?[{type:'error',message:'Provider unavailable'}]:[{type:'start'},{type:'text_delta',text:'Your fixture project is '},{type:'text_delta',text:'Cobalt.'},{type:'complete',response:'Your fixture project is Cobalt.',model:'gemini-3.8-flash'}]).map(e=>JSON.stringify(e)).join('\n')+'\n'});});
+ await page.goto('/');await page.locator('#btn-menu').click();await page.locator('#btn-settings').click();await page.locator('#btn-memory-workspace').click();
+ const canvas=page.locator('.memory-network-canvas');await expect(canvas).toHaveAttribute('data-orb-visible','true');
+ await expect.poll(async()=>Number(await canvas.getAttribute('data-signal-count'))).toBeGreaterThan(0);
+ const input=page.getByRole('textbox',{name:'Message Aegis'});await input.fill('What is my fixture project?');await page.getByRole('button',{name:'Send memory message'}).click();await expect(input).toHaveValue('What is my fixture project?');
+ if(info.project.name.includes('mobile'))await page.getByRole('button',{name:'Toggle conversation panel'}).click();
+ await expect(page.getByRole('complementary',{name:'Aegis conversation'})).toContainText('Provider unavailable');
+ fail=false;await page.getByRole('button',{name:'Send memory message'}).click();await expect(input).toHaveValue('');await expect(page.getByRole('log')).toContainText('Your fixture project is Cobalt.');expect(requests[1].client_id).toBe('fixture-client');
+ await input.fill('Unsent draft');await page.getByRole('button',{name:'Return to dashboard'}).click();await page.locator('#btn-menu').click();await page.locator('#btn-settings').click();await page.locator('#btn-memory-workspace').click();await expect(input).toHaveValue('Unsent draft');
+ await page.evaluate(()=>window.__socket.onmessage({data:JSON.stringify({type:'research_status',phase:'searching',message:'Searching current information…'})}));await expect(page.getByRole('complementary',{name:'Aegis conversation'})).toContainText('Searching current information');
+ await page.evaluate(()=>window.__socket.onmessage({data:JSON.stringify({type:'research_status',phase:'completed',sources:[{title:'Fixture source',url:'https://example.com/research'}]})}));await expect(page.getByRole('link',{name:'Fixture source ↗'})).toHaveAttribute('href','https://example.com/research');
+ await page.evaluate(()=>window.__socket.onmessage({data:JSON.stringify({type:'memory_activity',phase:'retrieval_results',operation_id:'op',record_ids:['fixture-memory'],expires_ms:4000})}));await expect(canvas).toHaveAttribute('data-activity-phase','retrieval_results');
+ await page.getByRole('button',{name:'Pause network motion'}).click();await expect(canvas).toHaveAttribute('data-signal-count','0');
+ await expect.poll(()=>page.evaluate(()=>window.__sent.filter(m=>m.type==='ui_context').at(-1)?.snapshot.view)).toBe('memory');
+ await page.screenshot({path:info.outputPath('memory-conversation.png')});expect(errors).toEqual([]);
+});

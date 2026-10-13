@@ -1,3 +1,6 @@
+import {requestedResearchReady} from './taskNotices';
+import {conversationInterrupt,conversationState,conversationMessage,conversationSnapshot,conversationLoad,conversationReplace,updateUiContext,uiSnapshot} from "./conversation";
+import initMemoryWorkspace from './components/Memory/MemoryWorkspace.jsx';
 /**
  * AEGIS — Main entry point.
  *
@@ -12,6 +15,7 @@ import { createSocket } from "./ws";
 import { openSettings, checkFirstTimeSetup, registerOrbThemeChangedHandler } from "./settings";
 import { initWidgets } from "./widgets";
 import "./style.css";
+import "./widget-appearance.css";
 import { SoundWaveController } from "./sound-wave";
 
 // ---------------------------------------------------------------------------
@@ -23,7 +27,6 @@ const errorEl = document.getElementById("error-text")!;
 const badgeEl = document.getElementById("connection-badge") as HTMLDivElement | null;
 const badgeLabelEl = badgeEl?.querySelector("#connection-label") as HTMLSpanElement | null;
 const API_HOST = (import.meta.env.VITE_API_URL || "http://localhost:8340").replace(/\/$/, "");
-const CLIENT_LOCATION_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // State machine & Audio Control
@@ -31,6 +34,8 @@ const CLIENT_LOCATION_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 
 type State = "idle" | "listening" | "thinking" | "speaking";
 let currentState: State = "idle";
+let audioGeneration="", canceledGeneration="";
+let userTranscript="", assistantTranscript="", userMessageId="", assistantMessageId="";
 // Persist microphone mute state in localStorage
 let isMuted = true;
 const MIC_MUTE_KEY = "aegisai_mic_muted";
@@ -61,10 +66,10 @@ function setConnected(ok: boolean): void {
 
 function updateStatus(state: State) {
   const labels: Record<State, string> = {
-    idle: "",
-    listening: "",
-    thinking: "",
-    speaking: "",
+    idle: isMuted ? "Click the microphone button to start talking" : "",
+    listening: "Listening...",
+    thinking: "Thinking...",
+    speaking: "Speaking...",
   };
   statusEl.textContent = labels[state];
 }
@@ -186,6 +191,8 @@ function transition(newState: State) {
   console.log(`🔄 [STATE] Transitioning: ${currentState} → ${newState}`);
   setTranscriptionVisual(false);
   currentState = newState;
+  conversationState({state:newState});
+  window.dispatchEvent(new CustomEvent("nova-ai-state", {detail:{state:newState}}));
   document.body.dataset.aiState = newState;
   orb.setState(newState as OrbState);
   updateStatus(newState);
@@ -215,7 +222,7 @@ function transition(newState: State) {
   }
   // Speaking is intentionally not a microphone lock: resume after the
   // legacy state branch so Gemini Live can receive a user barge-in.
-  if (newState === "speaking" && !isMuted) {
+  if (["speaking","thinking"].includes(newState) && !isMuted && activeVoiceProvider === "gemini_live") {
     voiceInput?.resume();
   }
 }
@@ -277,14 +284,17 @@ function setupLiveVoiceInput() {
         socket.sendBinary(pcm);
       }
     },
-    (message) => showError(message)
+    (message) => showError(message),
+    () => {socket.send({type:"live_speech_start"});if(isAudioPlaying&&!isMuted){canceledGeneration=audioGeneration;audioPlayer.stop();isAudioPlaying=false;transition("listening");}},
+    () => socket.send({type:"live_speech_end"}),
+    (pcm,end)=>audioPlayer.isPlaybackEcho(pcm,end)
   );
 }
 
 function startPreferredVoiceSession() {
   activeVoiceProvider = "gemini_live";
   setupLiveVoiceInput();
-  socket.send({ type: "live_start" });
+  socket.send({ type: "live_start", session_id:conversationSnapshot().sessionId });
   voiceInput.start();
   transition("listening");
 }
@@ -304,7 +314,7 @@ audioPlayer.onFinished(() => {
 });
 
 socket.onBinary((pcm) => {
-  if (activeVoiceProvider !== "gemini_live") return;
+  if (activeVoiceProvider !== "gemini_live" || isMuted || conversationSnapshot().textBusy || audioGeneration && audioGeneration===canceledGeneration) return;
   if (!isAudioPlaying) {
     isAudioPlaying = true;
     transition("speaking");
@@ -314,7 +324,9 @@ socket.onBinary((pcm) => {
 
 socket.onOpen(() => {
   setConnected(true);
+  conversationState({connected:true,status:""});socket.send({type:"ui_context",snapshot:uiSnapshot()});
   if (!isMuted) startPreferredVoiceSession();
+  else { transition("idle"); updateStatus("idle"); }
 });
 
 // ---------------------------------------------------------------------------
@@ -323,10 +335,26 @@ socket.onOpen(() => {
 
 socket.onMessage((msg) => {
   const type = msg.type as string;
+  if(type==='conversation_switched'){if(msg.status==='ok'){const switchingId=String(msg.session_id);conversationReplace((Array.isArray(msg.messages)?msg.messages:[]).map((m:any)=>({id:m.id,role:m.role,text:m.content,status:m.status||'completed'})),switchingId);void conversationLoad(switchingId).catch(e=>showError(e.message)).finally(()=>conversationState({sessionSwitching:false,status:''}));}else{conversationState({sessionSwitching:false,status:String(msg.reason||'Conversation switch failed')});showError(String(msg.reason||'Conversation switch failed'));}if(!isMuted)voiceInput.resume();return;}
+  if(type==='speaker_status'){const wasGuest=conversationSnapshot().guest;conversationState({guest:msg.guest===true,status:msg.state==='matched'?(msg.owner?'Main user confirmed · existing memories connected':'Speaker confirmed · separate memories'):'Guest conversation · speaker not confirmed'});if(msg.guest&&!wasGuest)conversationReplace([],conversationSnapshot().sessionId);if(!msg.guest&&wasGuest)void conversationLoad(conversationSnapshot().sessionId).catch(()=>{});return;}
+  if(type==='status'&&msg.client_id){conversationState({clientId:String(msg.client_id)});socket.send({type:'conversation_attach',session_id:conversationSnapshot().sessionId});void conversationLoad(conversationSnapshot().sessionId).catch(()=>{});}
+  if(type==='memory_view_action'){window.dispatchEvent(new CustomEvent('nova-memory-view-action',{detail:msg}));return;}
+  if(type==='jobs_snapshot'){conversationState({jobs:Array.isArray(msg.jobs)?msg.jobs as any:[]});return;}
+  if(type==='job_progress'){if(msg.notification&&msg.research_id)requestedResearchReady(String(msg.job_id),String(msg.research_id));const snap=conversationSnapshot();const jobs=[...snap.jobs];const i=jobs.findIndex(j=>j.id===msg.job_id);const row={id:String(msg.job_id),state:String(msg.state),completed:Number(msg.completed),total:Number(msg.total)};if(i>=0)jobs[i]=row;else jobs.unshift(row);conversationState({jobs});return;}
+  if(type==='live_audio_generation'){audioGeneration=String(msg.generation||'');return;}
+  if(type==='memory_globe_changed'){window.dispatchEvent(new CustomEvent('nova-memory-globe-changed',{detail:msg}));return;}
+  if(type==='memory_activity'){window.dispatchEvent(new CustomEvent('nova-memory-activity',{detail:msg}));return;}
+  if(type==='research_status'){conversationState({status:msg.phase==='searching'?'Searching current information…':msg.phase==='failed'?'Current-information search unavailable.':'',sources:Array.isArray(msg.sources)?msg.sources.map((s:any)=>({title:String(s.title||''),url:String(s.url||'')})):[]});window.dispatchEvent(new CustomEvent('nova-research-status',{detail:msg}));return;}
+
+  if (type === "memory_changed") { window.dispatchEvent(new CustomEvent("nova-memory-changed", { detail: msg })); return; }
 
   if (type === "live_status") {
     const provider = String(msg.provider || "gemini_live");
+    if(msg.model)conversationState({model:String(msg.model)});
     const liveState = String(msg.state || "idle");
+    recoveryVoiceState = liveState;
+    recoveryVoiceReason = String(msg.reason || 'AI voice session failed.');
+    recoveryVoiceRetryable = msg.retryable !== false;
     if (badgeLabelEl && provider !== "none") {
       badgeLabelEl.textContent = provider === "legacy" ? "legacy fallback" : "Gemini Live";
     }
@@ -340,34 +368,51 @@ socket.onMessage((msg) => {
     }
     if (liveState === "connecting") transition("thinking");
     else if (liveState === "listening" && !isMuted && !isAudioPlaying) transition("listening");
-    else if (liveState === "error") showError("No AI voice provider is available.");
+    else if (liveState === "error") {
+      const reason = String(msg.reason || 'No AI voice provider is available.');
+      showError(reason);
+      if (msg.retryable === true) recoverTransient(reason);
+    }
   }
 
   else if (type === "live_input_transcript") {
-    console.log("[GEMINI-LIVE] User:", String(msg.text || ""));
+    if(conversationSnapshot().textBusy)return;
+    userTranscript+=(userTranscript?' ':'')+String(msg.text||'');
+    userMessageId=conversationMessage('user',userTranscript,'streaming',userMessageId||undefined);
   }
 
   else if (type === "live_output_transcript") {
+    if(conversationSnapshot().textBusy)return;
     const text = String(msg.text || "");
-    console.log("[GEMINI-LIVE] Aegis:", text);
+    assistantTranscript+=(assistantTranscript?' ':'')+text;
+    assistantMessageId=conversationMessage('assistant',assistantTranscript,'streaming',assistantMessageId||undefined);
     if (/thank|great|awesome|perfect|good|excellent|nice/i.test(text)) setOrbMood("good");
     else if (/sorry|error|fail|problem|issue/i.test(text)) setOrbMood("error");
     else setOrbMood("neutral");
   }
 
   else if (type === "live_turn_complete") {
+    if(conversationSnapshot().textBusy)return;
+    if(userMessageId)conversationMessage('user',String(msg.input_text||userTranscript),'completed',userMessageId);
+    if(assistantMessageId)conversationMessage('assistant',String(msg.output_text||assistantTranscript),'completed',assistantMessageId);
+    userTranscript=assistantTranscript=userMessageId=assistantMessageId='';
     audioPlayer.finishPcmTurn();
     if (!isAudioPlaying && !isMuted) transition("listening");
   }
 
   else if (type === "live_interrupted") {
+    canceledGeneration=String(msg.generation||audioGeneration);
+    if(assistantMessageId)conversationMessage('assistant',assistantTranscript,'interrupted',assistantMessageId);
+    userTranscript=assistantTranscript=userMessageId=assistantMessageId='';
+    window.dispatchEvent(new CustomEvent('nova-memory-activity',{detail:{phase:'clear'}}));
     audioPlayer.stop();
     isAudioPlaying = false;
-    if (!isMuted) transition("listening");
+    if (!isMuted && !conversationSnapshot().textBusy) transition("listening");
   }
 
   else if (type === "live_error") {
     showError(String(msg.message || "Gemini Live error"));
+    recoverTransient(String(msg.message || "Gemini Live error"));
   }
 
   else if (type === 'typed_transcript_status') {
@@ -641,15 +686,6 @@ console.log("✅ [INIT] Frontend initialization complete!");
 
 // Initialize React widgets
 initWidgets();
-syncClientLocation(true);
-window.setInterval(() => {
-  syncClientLocation(false);
-}, CLIENT_LOCATION_SYNC_INTERVAL_MS);
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    syncClientLocation(false);
-  }
-});
 
 window.addEventListener('aegisWidgetActionResult', (event: Event) => {
   const detail = (event as CustomEvent).detail || {};
@@ -753,6 +789,7 @@ window.addEventListener('orbWidgetStateChange', (ev: Event) => {
       soundWaveEl.classList.toggle("shifted-right", hasAny);
     }
     transcriptionDots.classList.toggle("shifted-right", hasAny);
+    statusEl.classList.toggle("shifted-right", hasAny);
   } catch (e) {
     console.warn('[ORB-EVENT] Failed to handle orbWidgetStateChange', e);
   }
@@ -763,6 +800,8 @@ window.addEventListener('orbWidgetStateChange', (ev: Event) => {
 // ---------------------------------------------------------------------------
 
 const btnMute = document.getElementById("btn-mute")!;
+btnMute.title = isMuted ? "Start voice chat" : "Mute microphone";
+btnMute.setAttribute("aria-label", btnMute.title);
 const btnMenu = document.getElementById("btn-menu")!;
 const menuDropdown = document.getElementById("menu-dropdown")!;
 const btnRestart = document.getElementById("btn-restart")!;
@@ -770,10 +809,14 @@ const btnRestart = document.getElementById("btn-restart")!;
 btnMute.addEventListener("click", (e) => {
   e.stopPropagation();
   isMuted = !isMuted;
+  btnMute.title = isMuted ? "Start voice chat" : "Mute microphone";
+  btnMute.setAttribute("aria-label", btnMute.title);
   localStorage.setItem(MIC_MUTE_KEY, isMuted ? "true" : "false");
   btnMute.classList.toggle("muted", isMuted);
   soundWave.setMuted(isMuted);
+  conversationState({muted:isMuted});
   if (isMuted) {
+    canceledGeneration=audioGeneration;
     // Fully stop and destroy the voice input system
     if (voiceInput) voiceInput.stop();
     socket.send({ type: "live_stop" });
@@ -803,17 +846,79 @@ document.addEventListener("click", () => {
   menuDropdown.style.display = "none";
 });
 
-btnRestart.addEventListener("click", async (e) => {
-  e.stopPropagation();
-  menuDropdown.style.display = "none";
-  statusEl.textContent = "restarting...";
-  try {
-    await fetch("/api/restart", { method: "POST" });
-    // Wait a few seconds then reload
-    setTimeout(() => window.location.reload(), 4000);
-  } catch {
-    statusEl.textContent = "restart failed";
+let runtimeOperation: Promise<void> | null = null;
+let recoveryVoiceState = 'idle';
+let recoveryVoiceReason = '';
+let recoveryVoiceRetryable = true;
+let autoRecoveryUsed = false;
+let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+async function runtimeRequest(path: string, method = 'GET') {
+  const response = await fetch(`/api/runtime/${path}`, { method, headers: { 'X-Nova-Control': '1' }, signal: AbortSignal.timeout(5000) });
+  const result = await response.json().catch(() => ({ error: 'Runtime controller unavailable. Start Nova with start_nova_ai.ps1.' }));
+  if (!response.ok) throw new Error(result.error || 'Runtime controller unavailable. Start Nova with its launcher.');
+  return result;
+}
+async function waitForRuntime() {
+  const deadline = Date.now() + 55000;
+  while (Date.now() < deadline) {
+    const result = await runtimeRequest('status');
+    if (result.state === 'failed') throw new Error(result.error || 'Backend startup failed.');
+    if (result.state === 'ready' && result.healthy) return;
+    await delay(350);
   }
+  throw new Error('Backend readiness timed out. Check the backend logs.');
+}
+async function recoverRuntime(forceRestart = false) {
+  if (runtimeOperation) return runtimeOperation;
+  runtimeOperation = (async () => {
+    statusEl.textContent = forceRestart ? 'restarting backend…' : 'recovering connection…';
+    audioPlayer.stop(); isAudioPlaying = false;
+    await runtimeRequest(forceRestart ? 'restart' : 'recover', 'POST');
+    await waitForRuntime();
+    const connectSession = async () => {
+      recoveryVoiceState = 'connecting';
+      socket.reconnect();
+      const deadline = Date.now() + 12000;
+      while (Date.now() < deadline) {
+        if (socket.isConnected() && (isMuted || recoveryVoiceState === 'listening')) return;
+        if (!isMuted && recoveryVoiceState === 'error') throw new Error(recoveryVoiceReason);
+        await delay(100);
+      }
+      throw new Error('The AI connection could not be restored.');
+    };
+    try { await connectSession(); } catch (error) {
+      if (forceRestart || !recoveryVoiceRetryable || /key|quota|auth|permission|429|401|403|invalid/i.test(String(error))) throw error;
+      statusEl.textContent = 'restarting backend for recovery…';
+      await runtimeRequest('restart', 'POST'); await waitForRuntime(); await connectSession();
+    }
+    statusEl.textContent = isMuted ? 'muted' : 'listening';
+  })().catch(error => { showError(error.message); statusEl.textContent = 'recovery failed'; }).finally(() => { runtimeOperation = null; });
+  return runtimeOperation;
+}
+function recoverTransient(message: string) {
+  if (/api.?key|auth|permission|credential|quota|rate.?limit|429|401|403|invalid|billing/i.test(message)) return;
+  if (autoRecoveryUsed || runtimeOperation) return;
+  autoRecoveryUsed = true;
+  void recoverRuntime();
+}
+socket.onClose(() => {
+  setConnected(false); conversationState({sessionSwitching:false,connected:false,status:"Reconnecting…"});canceledGeneration=audioGeneration;window.dispatchEvent(new CustomEvent("nova-memory-activity",{detail:{phase:"clear"}})); audioPlayer.stop(); isAudioPlaying = false;
+  statusEl.textContent = 'reconnecting…';
+  if (recoveryTimer) clearTimeout(recoveryTimer);
+  recoveryTimer = setTimeout(() => { if (!socket.isConnected()) recoverTransient('connection unavailable'); }, 2500);
+});
+socket.onOpen(() => {
+  if (recoveryTimer) clearTimeout(recoveryTimer);
+  recoveryTimer = null;
+});
+btnRestart.addEventListener('click', e => {
+  e.stopPropagation(); menuDropdown.style.display = 'none';
+  void recoverRuntime(true);
+});
+document.getElementById('btn-fix-self')?.addEventListener('click', e => {
+  e.stopPropagation(); menuDropdown.style.display = 'none';
+  autoRecoveryUsed = false; void recoverRuntime();
 });
 
 // Settings button
@@ -856,3 +961,55 @@ btnSettings.addEventListener("click", (e) => {
 setTimeout(() => {
   checkFirstTimeSetup();
 }, 2000);
+
+
+
+
+initMemoryWorkspace({getAnalyser: () => audioPlayer.getAnalyser()});
+
+// Component-owned, allowlisted UI state; no credential or document scraping.
+let uiTimer:ReturnType<typeof setTimeout>|null=null;
+window.addEventListener('nova-ui-context',()=>{if(uiTimer)clearTimeout(uiTimer);uiTimer=setTimeout(()=>socket.send({type:'ui_context',snapshot:uiSnapshot()}),120);});
+window.addEventListener('orbWidgetStateChange',(event:Event)=>{const d=(event as CustomEvent).detail||{};updateUiContext({widgets:Object.entries(d).filter(([,v])=>v===true).map(([k])=>k).slice(0,12)});});
+window.addEventListener('nova-chat-microphone',()=>btnMute.click());
+let memoryChatBusy=false;
+let chatAbort:AbortController|null=null;
+window.addEventListener('nova-chat-cancel',()=>chatAbort?.abort());
+window.addEventListener('nova-memory-view-result',(event:Event)=>{socket.send({type:'widget_action_result',...(event as CustomEvent).detail,widget:'memory'});});
+window.addEventListener('nova-job-cancel',async(event:Event)=>{const id=String((event as CustomEvent).detail?.job_id||'');if(id){const headers={'X-Nova-Client':conversationSnapshot().clientId};await fetch('/api/jobs/'+encodeURIComponent(id)+'/cancel',{method:'POST',headers});const r=await fetch('/api/jobs',{headers});if(r.ok){const data=await r.json();conversationState({jobs:data.jobs||[]});}}});
+
+window.addEventListener('nova-chat-send',async(event:Event)=>{
+ const d=(event as CustomEvent).detail||{},text=String(d.text||'').trim();if(!text||memoryChatBusy||conversationSnapshot().sessionSwitching)return;
+ if(!socket.isConnected()){conversationState({status:'Aegis is offline. Your draft is preserved.'});return;}
+ const wasUnmuted=!isMuted;
+ if(wasUnmuted){canceledGeneration=audioGeneration;audioPlayer.stop();voiceInput?.pause();socket.send({type:'live_text_suspend'});}
+ memoryChatBusy=true;chatAbort=new AbortController();conversationState({state:'thinking',status:'',textBusy:true,sources:[]});window.dispatchEvent(new CustomEvent('nova-ai-state',{detail:{state:'thinking'}}));
+ const id=conversationMessage('user',text,'sending',d.request_id),assistantId='reply:'+d.request_id;let answer='',accepted=false,finished=false;
+ try{
+  const snapshot=conversationSnapshot();
+  const response=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},signal:chatAbort.signal,body:JSON.stringify({text,operation_id:d.request_id,session_id:snapshot.sessionId,client_id:snapshot.clientId})});
+  if(!response.ok||!response.body)throw new Error('Aegis could not start the reply. Check connection and provider access.');
+  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
+  const consume=(line:string)=>{
+   if(!line.trim())return;const event=JSON.parse(line);
+   if(event.request_id&&event.request_id!==d.request_id)return;
+   if(event.type==='text_delta'){answer+=String(event.text||'');conversationMessage('assistant',answer,'streaming',assistantId);}
+   if(event.type==='tool_progress')conversationState({status:event.phase==='started'?'Working · '+String(event.name).replace(/_/g,' '):''});
+   if(event.type==='error')throw new Error(event.message||'Aegis could not complete the reply.');
+   if(event.type==='complete'){
+    finished=true;conversationMessage('user',text,'completed',id);conversationMessage('assistant',event.response||answer,'completed',assistantId);conversationState({model:event.model||snapshot.model,status:event.memory_status==='failed'?'Reply complete; memory storage failed.':''});
+    window.dispatchEvent(new CustomEvent('nova-chat-accepted',{detail:{request_id:d.request_id}}));accepted=true;
+   }
+  };
+  while(true){const result=await reader.read();buffer+=decoder.decode(result.value||new Uint8Array(),{stream:!result.done});const lines=buffer.split('\n');buffer=lines.pop()||'';for(const line of lines)consume(line);if(result.done){consume(buffer);break;}}
+  if(!finished)throw new Error('Connection ended before completion. Your draft is preserved; the message was not resent.');
+ }catch(error){const canceled=error instanceof DOMException&&error.name==='AbortError';conversationMessage('user',text,canceled?'interrupted':'failed',id);if(answer)conversationMessage('assistant',answer,canceled?'interrupted':'failed',assistantId);conversationState({status:canceled?'Reply stopped. Partial text preserved.':error instanceof Error?error.message:'Aegis unavailable. Draft preserved.'});}
+ finally{
+  memoryChatBusy=false;chatAbort=null;conversationState({state:wasUnmuted&&!isMuted?'listening':'idle',textBusy:false});window.dispatchEvent(new CustomEvent('nova-ai-state',{detail:{state:wasUnmuted&&!isMuted?'listening':'idle'}}));
+  if(wasUnmuted&&!isMuted){socket.send({type:'live_text_resume'});voiceInput?.resume();}
+ }
+});
+
+window.addEventListener('nova-conversation-switch',((e:CustomEvent)=>{if(conversationSnapshot().textBusy||conversationSnapshot().sessionSwitching||!conversationSnapshot().connected)return;conversationState({sessionSwitching:true,status:'Opening conversation…'});conversationInterrupt();audioPlayer.stop();isAudioPlaying=false;voiceInput?.pause();userTranscript=assistantTranscript=userMessageId=assistantMessageId='';socket.send({type:'conversation_switch',session_id:e.detail.session_id});}) as EventListener);
+
+window.addEventListener('nova-voice-enrollment',((e:CustomEvent)=>{if(e.detail.active){canceledGeneration=audioGeneration;audioPlayer.stop();voiceInput?.pause();socket.send({type:'live_text_suspend'});}else if(!isMuted){socket.send({type:'live_text_resume'});voiceInput?.resume();}}) as EventListener);

@@ -74,7 +74,7 @@ class WhisperSpeechToTextApp:
         # Initialize Groq client for Whisper
         self.api_key = api_key or os.getenv('GROQ_API_KEY')
         if not self.api_key:
-            self.api_key = "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"  # Default key if not provided
+            self.api_key = "[CONFIGURE_LOCALLY_IN_SETTINGS]"  # Default key if not provided
         self.client = groq.Client(api_key=self.api_key)
         
         # Application state
@@ -1094,7 +1094,7 @@ def main():
         
     try:
         # Use the Groq API key directly
-        api_key = "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"
+        api_key = "[CONFIGURE_LOCALLY_IN_SETTINGS]"
         
         # Create and run the application
         app = WhisperSpeechToTextApp(api_key=api_key)

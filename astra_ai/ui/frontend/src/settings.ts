@@ -1,3 +1,4 @@
+import {initVoiceEnrollment} from './voiceEnrollment';
 /**
  * AEGIS — Settings Panel
  *
@@ -13,6 +14,7 @@ import { orbThemes, type OrbTheme } from "./orb-themes";
 
 interface StatusResponse {
   aegis_ai_connected: boolean;
+  models?:Record<string,{preferred:string;effective:string|null;verified:boolean;fallback_reason:string|null}>;
   google_calendar_accessible: boolean;
   google_mail_accessible: boolean;
   memory_count: number;
@@ -20,6 +22,7 @@ interface StatusResponse {
   server_port: number;
   uptime_seconds: number;
   env_keys_set: {
+    gemini: boolean;
     groq: boolean;
     elevenlabs: boolean;
     elevenlabs_voice_id: boolean;
@@ -50,7 +53,9 @@ let orbThemeChangeHandler: ((themeName: string) => void) | null = null;
 
 async function apiGet<T>(url: string): Promise<T> {
   const res = await fetch(url);
-  return res.json();
+  const data = await res.json().catch(() => ({ error: 'Backend unavailable. Start Nova with start_nova_ai.ps1.' }));
+  if (!res.ok) throw new Error(data.error || `Settings request failed (${res.status}).`);
+  return data;
 }
 
 async function apiPost<T>(url: string, body: unknown): Promise<T> {
@@ -59,7 +64,9 @@ async function apiPost<T>(url: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  return res.json();
+  const data = await res.json().catch(() => ({ error: 'Backend unavailable. Start Nova with start_nova_ai.ps1.' }));
+  if (!res.ok) throw new Error(data.error || `Settings request failed (${res.status}).`);
+  return data;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +91,14 @@ function buildPanelHTML(): string {
         <!-- API Keys -->
         <section class="settings-section" id="section-api-keys">
           <h3>API Keys</h3>
+          <div class="settings-field">
+            <label for="input-gemini-key">Gemini API Key (voice and AI)</label>
+            <div class="settings-input-row">
+              <input type="password" id="input-gemini-key" placeholder="Google AI Studio API key" autocomplete="off" />
+              <span class="status-dot" id="status-gemini"></span>
+            </div>
+            <p id="gemini-key-status">Save your key to enable Gemini conversations.</p>
+          </div>
 
           <div class="settings-field">
             <label>Groq API Key</label>
@@ -119,6 +134,7 @@ function buildPanelHTML(): string {
         <!-- Connection Status -->
         <section class="settings-section" id="section-status">
           <h3>Connection Status</h3>
+          <div class="settings-model-status" id="settings-model-status"></div>
           <div class="status-grid">
             <div class="status-row"><span class="status-dot" id="status-claude-cli"></span><span>Aegis AI</span></div>
             <div class="status-row"><span class="status-dot" id="status-calendar"></span><span>Google Calendar</span></div>
@@ -165,7 +181,7 @@ function buildPanelHTML(): string {
         <section class="settings-section" id="section-sysinfo">
           <h3>System Info</h3>
           <div class="sysinfo-grid">
-            <div class="sysinfo-row"><span class="sysinfo-label">Memory entries</span><span id="sysinfo-memory">--</span></div>
+            <button type="button" id="btn-memory-workspace" class="sysinfo-row memory-entry-button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18 M5 6.5c4 3 10 3 14 0 M5 17.5c4-3 10-3 14 0"/></svg><span><strong>Memory</strong><small>Explore your connected memories</small></span><span id="sysinfo-memory">--</span><span aria-hidden="true">›</span></button>
             <div class="sysinfo-row"><span class="sysinfo-label">Tasks</span><span id="sysinfo-tasks">--</span></div>
             <div class="sysinfo-row"><span class="sysinfo-label">Server port</span><span id="sysinfo-port">--</span></div>
             <div class="sysinfo-row"><span class="sysinfo-label">Uptime</span><span id="sysinfo-uptime">--</span></div>
@@ -275,10 +291,16 @@ async function loadStatus() {
     const serverDetail = document.getElementById("status-server-detail");
     if (serverDetail) serverDetail.textContent = `port ${status.server_port} | up ${formatUptime(status.uptime_seconds)}`;
     // API key status dots (in the API Keys section)
+    const geminiConfigured = status.env_keys_set?.gemini === true;
+    setDotStatus("status-gemini", geminiConfigured ? "green" : "red");
+    const geminiStatus = document.getElementById("gemini-key-status");
+    if (geminiStatus) geminiStatus.textContent = geminiConfigured ? "Gemini key configured. Start a conversation to check access." : "Save your key to enable Gemini conversations.";
     const groqConnected = status.env_keys_set?.groq === true;
     setDotStatus("status-groq", groqConnected ? "green" : "red");
     const elevenlabsConnected = status.env_keys_set?.elevenlabs === true;
     setDotStatus("status-fish", elevenlabsConnected ? "green" : "red");
+    const modelStatus=document.getElementById('settings-model-status');
+    if(modelStatus){modelStatus.replaceChildren();for(const [kind,model] of Object.entries(status.models||{})){const row=document.createElement('p');row.textContent=`${kind==='voice'?'Voice':'Text'} · ${model.effective||model.preferred}${model.verified?'':' · access not checked'}${model.fallback_reason?' · '+model.fallback_reason:''}`;modelStatus.append(row);}}
     // System info
     const memEl = document.getElementById("sysinfo-memory");
     if (memEl) memEl.textContent = String(status.memory_count || 0);
@@ -318,11 +340,18 @@ async function loadPreferences() {
 
 function wireEvents() {
   // Close
+  document.getElementById("btn-memory-workspace")?.addEventListener("click", () => { closeSettings(); window.dispatchEvent(new Event("nova-open-memory")); });
   document.getElementById("settings-close")?.addEventListener("click", closeSettings);
   document.getElementById("settings-backdrop")?.addEventListener("click", closeSettings);
 
   // Save keys
   document.getElementById("btn-save-keys")?.addEventListener("click", async () => {
+    const geminiInput = document.getElementById("input-gemini-key") as HTMLInputElement;
+    const geminiKey = geminiInput.value.trim();
+    if (geminiKey) {
+      await apiPost("/api/settings/keys", { key_name: "GEMINI_API_KEY", key_value: geminiKey });
+      geminiInput.value = "";
+    }
     const groqKey = (document.getElementById("input-groq-key") as HTMLInputElement).value.trim();
     const elevenlabsKey = (document.getElementById("input-fish-key") as HTMLInputElement).value.trim();
     const elevenlabsVoiceId = (document.getElementById("input-fish-voice-id") as HTMLInputElement).value.trim();
@@ -386,8 +415,22 @@ function wireEvents() {
     const user_name = (document.getElementById("input-user-name") as HTMLInputElement).value.trim();
     const honorific = (document.getElementById("input-honorific") as HTMLSelectElement).value;
     const calendar_accounts = (document.getElementById("input-calendar-accounts") as HTMLTextAreaElement).value.trim();
-    await apiPost("/api/settings/preferences", { user_name, honorific, calendar_accounts });
-    await loadStatus();
+    const button = document.getElementById("btn-save-prefs") as HTMLButtonElement;
+    let status = document.getElementById("preferences-save-status");
+    if (!status) {
+      status = document.createElement("p");
+      status.id = "preferences-save-status";
+      status.setAttribute("role", "status");
+      button.insertAdjacentElement("afterend", status);
+    }
+    button.disabled = true;
+    try {
+      await apiPost("/api/settings/preferences", { user_name, honorific, calendar_accounts });
+      status.textContent = "Preferences saved.";
+      await loadStatus();
+    } catch {
+      status.textContent = "Could not save preferences. Your entries are still here; reconnect and try again.";
+    } finally { button.disabled = false; }
   });
 
   // Setup next button
@@ -468,6 +511,7 @@ export async function openSettings() {
     wireEvents();
   }
 
+  initVoiceEnrollment();
   panelEl.style.display = "block";
 
   // Trigger animation

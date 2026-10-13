@@ -11,13 +11,14 @@
     "build": "tsc && vite build",
     "test:calendar": "node --test src/components/Calendar/calendarUtils.test.mjs src/components/Calendar/calendarApi.test.mjs",
     "test:calendar:e2e": "playwright test tests/calendar-controls.spec.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:memory-globe": "node tests/memory-globe/run.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@tauri-apps/cli": "^2.11.4",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^4.3.3",
     "concurrently": "^8.2.2",
     "typescript": "^5.7.0",
@@ -26,8 +27,9 @@
   "dependencies": {
     "@types/three": "^0.183.1",
     "leaflet": "^1.9.4",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "onnxruntime-web": "^1.23.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "three": "^0.183.2"
   }
 }

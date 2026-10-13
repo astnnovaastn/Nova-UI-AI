@@ -1,0 +1,135 @@
+/* Theme Studio is the single appearance source; widget geometry remains local. */
+:root {
+  --text-primary: var(--fg);
+  --panel-text: var(--fg);
+  --panel-text-muted: var(--fg);
+  --panel-text-faint: var(--fg);
+  --accent-readable: var(--red);
+  --canvas-accent-readable: var(--red);
+  --theme-highlight: white;
+  --theme-shade: black;
+}
+:is(.notepad-widget, .search-widget, .image-widget, .weather-display, .task-command-widget, .calendar-widget, .theme-studio-shell, .calculator-widget, .tictactoe-widget, .chat-widget) {
+  --widget-accent: var(--accent-readable);
+  --widget-surface: var(--panel);
+  --widget-border: var(--border);
+  --widget-text: var(--panel-text);
+  --widget-muted: var(--panel-text-muted);
+  --widget-faint: var(--panel-text-faint);
+  --widget-text-soft: var(--widget-muted);
+  --widget-border-soft: color-mix(in srgb, var(--widget-border) 55%, transparent);
+  --widget-raised: color-mix(in srgb, var(--widget-surface) 96%, var(--widget-text) 4%);
+  --widget-accent-soft: color-mix(in srgb, var(--widget-accent) 12%, transparent);
+  --widget-shadow: 0 18px calc(70px * var(--theme-shadow-strength)) color-mix(in srgb, var(--theme-shade) calc(var(--theme-shadow-strength) * 100%), transparent), 0 0 calc(40px * var(--theme-glow-strength)) color-mix(in srgb, var(--widget-accent) 15%, transparent);
+  color: var(--widget-text);
+  font-family: var(--font-family) !important;
+  font-size: calc(12px * var(--theme-ui-scale, 1));
+  border-color: var(--widget-border) !important;
+  border-width: var(--theme-border-width) !important;
+  border-style: var(--theme-border-style) !important;
+  border-radius: var(--theme-radius) !important;
+  box-shadow: var(--widget-shadow) !important;
+  backdrop-filter: blur(var(--theme-backdrop-blur, 0px)) !important;
+}
+:is(.notepad-widget, .search-widget, .image-widget, .weather-display, .task-command-widget, .calendar-widget) {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--widget-surface) 96%, var(--widget-accent) 4%), color-mix(in srgb, var(--widget-surface) 96%, var(--bg) 4%)) !important;
+  background-color: var(--widget-surface) !important;
+}
+body.theme-frosted :is(.notepad-widget, .search-widget, .image-widget, .weather-display, .task-command-widget, .calendar-widget) {
+  background: color-mix(in srgb, var(--widget-surface) calc(var(--theme-panel-opacity) * 100%), transparent) !important;
+}
+:is(.notepad-widget, .search-widget, .image-widget, .weather-display, .task-command-widget, .calendar-widget) :is(input, textarea, select, button) { font-family: var(--font-family); }
+:is(.notepad-widget, .search-widget, .image-widget, .weather-display, .task-command-widget, .calendar-widget) :is(input, textarea, select) { color: var(--widget-text); caret-color: var(--widget-accent); }
+:is(.notepad-widget, .search-widget, .image-widget, .weather-display, .task-command-widget, .calendar-widget) :is(input, textarea)::placeholder { color: var(--widget-muted); opacity: 1; }
+:is(.notepad-widget, .search-widget, .image-widget, .weather-display, .task-command-widget, .calendar-widget) :is(button, input, textarea, select, a):focus-visible { outline: 2px solid var(--widget-accent); outline-offset: 3px; }
+.search-widget { --search-panel: var(--widget-surface); --search-panel-raised: var(--widget-raised); --search-text: var(--widget-text); --search-muted: var(--widget-muted); --search-accent: var(--widget-accent); --search-line: var(--widget-border); --search-mono: var(--font-family); }
+.news-widget { --news-live-accent: var(--widget-accent); }
+.weather-display { --weather-bg-main: var(--widget-surface); --weather-bg-panel: var(--widget-surface); --weather-bg-card: var(--widget-raised); --weather-text-main: var(--widget-text); --weather-text-muted: var(--widget-muted); --weather-accent-coral: var(--widget-accent); --weather-accent-blue: var(--widget-accent); --weather-border: var(--widget-border); --radius-main: var(--theme-radius); --radius-card: var(--theme-radius); --radius-button: min(10px, var(--theme-radius)); }
+.task-command-widget { --task-bg: var(--widget-surface); --task-surface: var(--widget-surface); --task-surface-raised: var(--widget-raised); --task-text: var(--widget-text); --task-muted: var(--widget-muted); --task-faint: var(--widget-faint); --task-accent: var(--widget-accent); --task-signal: var(--widget-accent); --task-border: var(--widget-border); --task-radius-panel: var(--theme-radius); --task-radius-control: min(10px, var(--theme-radius)); --task-radius-row: min(9px, var(--theme-radius)); }
+.calendar-widget { --cal-panel: var(--widget-surface); --cal-panel-deep: var(--widget-surface); --cal-text: var(--widget-text); --cal-muted: var(--widget-muted); --cal-faint: var(--widget-faint); --cal-accent: var(--widget-accent); --cal-line: var(--widget-border); }
+#status-text { color: var(--text-primary); }
+#app-brand, #controls, #menu-dropdown { color: var(--text-primary); }
+.sound-wave { --wave-color: var(--red); --wave-color-bottom: color-mix(in srgb, var(--red) 75%, var(--bg)); }
+.sound-wave.thinking, .sound-wave.speaking { --wave-color: var(--red); --wave-color-bottom: color-mix(in srgb, var(--red) 75%, var(--bg)); }
+.settings-panel-inner { color: var(--panel-text); }
+.settings-field label, .settings-section h3, .sysinfo-label { color: var(--panel-text-muted); }
+.widget-launcher-item, .widget-launcher-item .widget-launcher-copy { color: var(--text-primary); }
+
+/* Internal surfaces and controls use the same readable foreground contract. */
+:is(.notepad-widget, .image-widget) :is(h1, h2, h3, h4, p, label, input, textarea, select) { color: var(--widget-text); }
+:is(.notepad-widget, .search-widget, .image-widget, .weather-display, .task-command-widget, .calendar-widget) :is(button, input, textarea, select) { border-radius: min(10px, var(--theme-radius)); }
+:is(.notepad-widget, .search-widget, .image-widget, .weather-display, .task-command-widget, .calendar-widget) :is(input, textarea, select) { background-color: var(--widget-raised); }
+.theme-studio { color: var(--panel-text); }
+.theme-studio :is(input, textarea, select) { color: var(--panel-text); }
+.theme-studio .studio-library-toolbar input, .theme-studio .studio-field-grid select { background: var(--panel); }
+
+:is(.notepad-widget, .search-widget, .image-widget, .weather-display, .task-command-widget, .calendar-widget) .widget-control-btn {
+  color: var(--widget-text) !important;
+  background: var(--widget-raised) !important;
+  border-color: var(--widget-border) !important;
+  box-shadow: none !important;
+}
+:is(.notepad-widget, .search-widget, .image-widget, .weather-display, .task-command-widget, .calendar-widget) .widget-control-btn:hover { color: var(--widget-accent) !important; border-color: var(--widget-accent) !important; }
+.widget-corner { border-color: var(--widget-border); }
+.resize-handle { background: linear-gradient(135deg, transparent 50%, var(--widget-accent) 50%); }
+.resize-handle:hover { background: linear-gradient(135deg, transparent 50%, var(--widget-text) 50%); }
+
+:is(.notepad-widget, .search-widget, .image-widget, .weather-display, .task-command-widget, .calendar-widget) :is(h1, h2, h3, h4, p, label, small, span, input, textarea, select, button) { font-family: var(--font-family) !important; }
+.theme-studio-shell { filter: none; }
+.theme-studio { box-shadow: var(--widget-shadow); backdrop-filter: blur(var(--theme-backdrop-blur, 0px)); }
+
+.widget-launcher-tooltip, #menu-dropdown, .settings-panel {
+  background: var(--panel) !important; color: var(--panel-text) !important;
+  border-color: var(--accent-readable) !important;
+}
+#menu-dropdown button, .settings-panel :is(input,select,button) {
+  background: var(--panel) !important; color: var(--panel-text) !important;
+  border-color: var(--accent-readable) !important;
+}
+.settings-panel :is(label,p,small), .widget-launcher-tooltip :is(strong,span,small) { color: var(--panel-text-muted); }
+:is(.settings-panel,#menu-dropdown,.theme-studio) :is(button,input,select,a):focus-visible { outline: 2px solid var(--accent-readable); outline-offset: 2px; }
+.theme-studio :is(.studio-primary,.studio-mark,.studio-badges em,.studio-current>span,.studio-header p,.studio-section-title span) { color: var(--accent-readable) !important; }
+.studio-mark svg { stroke: var(--accent-readable); }
+:is(.notepad-widget,.search-widget,.image-widget,.weather-display,.task-command-widget,.calendar-widget) button:disabled { opacity:1; color:var(--widget-muted); cursor:not-allowed; border-style:dashed; }
+
+/* Internal widget icons: clear shapes, readable strokes, no launcher changes. */
+:is(.notepad-widget,.news-widget,.image-widget,.weather-display,.task-command-widget,.calendar-widget) button svg {
+  flex-shrink: 0;
+  min-width: 16px;
+  min-height: 16px;
+  opacity: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.notepad-nav-tab svg { width:16px; height:16px; }
+:is(.notepad-logo,.task-brand-mark,.cal-brand-mark,.news-brand-mark) {
+  color:var(--widget-accent) !important;
+  background:var(--widget-surface) !important;
+  border:1px solid var(--widget-accent) !important;
+  text-shadow:none;
+}
+.notepad-logo::before { display:none; }
+:is(.notepad-logo,.task-brand-mark,.cal-brand-mark,.news-brand-mark) svg { width:22px; height:22px; opacity:1; }
+.image-header-brand>svg { width:22px; height:22px; color:var(--widget-accent); }
+:is(.notepad-nav-tab,.notepad-action-btn,.notepad-header-close,.notepad-footer button,.notepad-toolbar button) {
+  color:var(--widget-text);
+}
+:is(.notepad-nav-tab,.notepad-action-btn,.notepad-header-close,.notepad-footer button,.notepad-toolbar button):is(:hover,:focus-visible) { color:var(--widget-accent); }
+
+/* Settings keeps its side-panel layout with calm grouped surfaces. */
+#settings-container .settings-panel{border-radius:24px 0 0 24px;box-shadow:-20px 0 70px #0003;font-family:system-ui,sans-serif}
+#settings-container .settings-header{border-bottom:0;padding:26px 25px 15px}
+#settings-container .settings-body{padding:0 18px 24px}
+#settings-container .settings-section{border-bottom:0;margin:0 0 12px;padding:18px;border:1px solid color-mix(in srgb,var(--panel-text) 12%,transparent);border-radius:18px;background:color-mix(in srgb,var(--panel) 95%,var(--panel-text) 5%)}
+#settings-container .settings-section h3{font-size:12px;letter-spacing:.06em;margin:0 0 17px}
+#settings-container .settings-input-row input{border-radius:10px}
+#settings-container .memory-entry-button{display:flex;align-items:center;gap:12px;width:100%;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--panel);text-align:left;cursor:pointer;color:var(--panel-text)}
+.memory-entry-button svg{width:27px;height:27px;fill:none;stroke:var(--accent-readable);stroke-width:1.2;flex-shrink:0}.memory-entry-button>span:nth-child(2){flex:1}.memory-entry-button strong{font-size:14px;display:block}.memory-entry-button small{display:block;font-size:10px;color:var(--panel-text-muted);margin-top:5px}.settings-model-status p{font-size:10px;color:var(--panel-text-muted);overflow-wrap:anywhere;line-height:1.6}
+
+/* A single contained Settings scroller preserves rounded panel boundaries. */
+#settings-container .settings-panel{display:flex;flex-direction:column;overflow:hidden;max-height:100dvh;isolation:isolate}
+#settings-container .settings-header{flex:0 0 auto;position:relative;background:var(--panel);z-index:1}
+#settings-container .settings-body{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+#settings-container .settings-section{min-width:0;overflow-wrap:anywhere}
+#settings-container .settings-section :is(input,select,textarea){max-width:100%;min-width:0;box-sizing:border-box}
+#settings-container .settings-input-row{min-width:0}

@@ -9,6 +9,8 @@ export interface AegisSocket {
   onMessage(handler: MessageHandler): void;
   onBinary(handler: BinaryHandler): void;
   onOpen(handler: () => void): void;
+  onClose(handler: () => void): void;
+  reconnect(): void;
   close(): void;
   isConnected(): boolean;
 }
@@ -18,16 +20,23 @@ export function createSocket(url: string): AegisSocket {
   const handlers: MessageHandler[] = [];
   const binaryHandlers: BinaryHandler[] = [];
   const openHandlers: Array<() => void> = [];
+  const closeHandlers: Array<() => void> = [];
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let generation = 0;
   let reconnectDelay = 1000;
   let closed = false;
   let connected = false;
 
   function connect() {
     if (closed) return;
+    const epoch = ++generation;
+    if (timer) clearTimeout(timer); timer = null;
     ws = new WebSocket(url);
+    const current = ws;
     ws.binaryType = "arraybuffer";
 
     ws.onopen = () => {
+      if (epoch !== generation) return;
       connected = true;
       reconnectDelay = 1000;
       console.log("[WS] Connected to server");
@@ -35,6 +44,7 @@ export function createSocket(url: string): AegisSocket {
     };
 
     ws.onmessage = (event) => {
+      if (epoch !== generation) return;
       if (event.data instanceof ArrayBuffer) {
         for (const handler of binaryHandlers) handler(event.data);
         return;
@@ -48,14 +58,16 @@ export function createSocket(url: string): AegisSocket {
     };
 
     ws.onclose = () => {
+      if (epoch !== generation) return;
       connected = false;
+      for (const handler of closeHandlers) handler();
       if (!closed) {
-        setTimeout(connect, reconnectDelay);
+        timer = setTimeout(connect, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 2, 30000);
       }
     };
 
-    ws.onerror = () => ws?.close();
+    ws.onerror = () => current.close();
   }
 
   connect();
@@ -77,8 +89,17 @@ export function createSocket(url: string): AegisSocket {
       openHandlers.push(handler);
       if (connected) handler();
     },
+    onClose(handler) { closeHandlers.push(handler); },
+    reconnect() {
+      if (closed) return;
+      ++generation; connected = false;
+      if (timer) clearTimeout(timer);
+      ws?.close(); connect();
+    },
     close() {
-      closed = true;
+      closed = true; ++generation;
+      connected = false;
+      if (timer) clearTimeout(timer);
       ws?.close();
     },
     isConnected() {

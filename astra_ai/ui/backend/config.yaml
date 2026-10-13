@@ -14,18 +14,18 @@ ai:
       max_tokens: 4000
       model: claude-3-sonnet-20240229
     google:
-      api_key: 'AIzaSyBs-7NxlKNjBs2wzxDxyDT6hhEAC3g433U'
+      api_key: ""
       enabled: true
       max_tokens: 4000
       model: gemini-3.1-flash-live-preview
       fallback_model: ''
     groq:
-      api_key: ''
+      api_key: ""
       enabled: true
       max_tokens: 4000
       model: mixtral-8x7b-32768
     openai:
-      api_key: ''
+      api_key: ""
       enabled: false
       max_tokens: 4000
       model: gpt-4

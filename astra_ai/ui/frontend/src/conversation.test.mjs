@@ -1,0 +1,8 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+function harness(){let resolve;const storage=new Map([['nova-conversation-session','current']]);const context={exports:{},crypto:{randomUUID:()=> 'id'},sessionStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},window:{dispatchEvent(){}},CustomEvent:class{},Event:class{},fetch:()=>new Promise(r=>resolve=d=>r({ok:true,json:async()=>d}))};vm.runInNewContext(ts.transpileModule(readFileSync(new URL('./conversation.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,context);return {api:context.exports,resolve:d=>resolve(d)};}
+test('late history hydration retains a newly submitted turn and streaming reply',async()=>{const h=harness(),pending=h.api.conversationLoad('current');h.api.conversationMessage('user','New question','sending','new-user');h.api.conversationMessage('assistant','New answer','streaming','new-ai');h.resolve({status:'ok',messages:[{id:'old',role:'user',content:'Old topic'}]});await pending;assert.deepEqual(Array.from(h.api.conversationSnapshot().messages,m=>m.id),['old','new-user','new-ai']);});
+test('different session hydration does not mix previous session messages',async()=>{const h=harness(),pending=h.api.conversationLoad('other');h.api.conversationMessage('user','Old draft','sending','old-user');h.resolve({status:'ok',messages:[{id:'other',role:'user',content:'Selected chat'}]});await pending;assert.deepEqual(Array.from(h.api.conversationSnapshot().messages,m=>m.id),['other']);});

@@ -1,0 +1,8 @@
+import {chromium} from '@playwright/test';
+const browser=await chromium.launch({headless:true,channel:'chrome'});
+for(const width of (process.argv.includes('--desktop')?[1440]:[1440,390])){
+ const page=await browser.newPage({viewport:{width,height:width===1440?900:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:5173');await page.waitForTimeout(1000);await page.evaluate(()=>window.dispatchEvent(new Event('nova-open-memory')));await page.waitForSelector('.memory-globe-canvas');
+ if(await page.locator('.memory-conversation').isHidden())await page.getByRole('button',{name:'Toggle conversation panel',exact:true}).click();await page.locator('.memory-conversation').getByRole('button',{name:'History',exact:true}).click();
+ await page.getByText('Europe/Madrid · days run until 4 AM',{exact:true}).waitFor();await page.locator('.memory-history-session').first().waitFor();await page.locator('.memory-history-session').first().click();await page.locator('.memory-history .memory-chat-message').first().waitFor();const count=await page.locator('.memory-history .memory-chat-message').count();await page.locator('.memory-history .memory-chat-message details').first().locator('summary').click();await page.getByText('Original session:',{exact:false}).first().waitFor();
+ await page.getByRole('button',{name:'All days',exact:true}).click();await page.locator('.memory-history-session').first().waitFor();console.log(JSON.stringify({width,dailyTimeline:true,originalSources:true,messagesOnPage:count,errors}));if(errors.length)throw Error('History browser error');await page.close();
+}await browser.close();

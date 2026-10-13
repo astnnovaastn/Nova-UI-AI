@@ -1,0 +1,6 @@
+# Current desktop web runtime (Python 3.12).
+-r astra_ai/ui/backend/requirements.txt
+numpy>=2,<3
+httpx>=0.28,<1
+# Regression runner; provider checks are opt-in.
+pytest>=9,<10

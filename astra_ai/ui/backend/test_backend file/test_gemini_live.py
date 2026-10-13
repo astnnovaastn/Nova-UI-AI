@@ -41,17 +41,20 @@ def test_live_config_pins_requested_model_and_voice(tmp_path: Path):
     )
     config = session._config()
 
-    assert LIVE_MODEL == "gemini-3.1-flash-live-preview"
+    assert LIVE_MODEL == "gemini-3.8-live"
+    assert config.thinking_config is None
     assert config.response_modalities == ["AUDIO"]
     assert config.input_audio_transcription is not None
+    assert config.input_audio_transcription.language_codes == ["en-US"]
     assert config.output_audio_transcription is not None
     assert config.speech_config.voice_config.prebuilt_voice_config.voice_name == VOICE_NAME == "Puck"
     assert all(tool.google_search is None for tool in config.tools)
     declarations = next(tool.function_declarations for tool in config.tools if tool.function_declarations)
     assert {declaration.name for declaration in declarations} == {
-        "save_memory", "forget_memory", "recall_conversations",
+        "category_action", "research_action", "capability_action", "open_website", "save_memory", "forget_memory", "recall_conversations", "set_standing_rule", "read_standing_rules", "transcript_action", "memory_topic_action", "memory_view_action", "run_action_batch", "job_action",
         "save_memory_event", "forget_memory_event", "recall_memory",
-                    "get_system_status", "read_notes_context", "read_search_context", "read_calendar_context", "read_image_context", "notes_action", "calendar_create_event", "calendar_action", "image_action", "search_history_action",
+        "approve_memory", "get_pending_memories", "save_memory_relationship", "learn_memory", "memory_action", "propose_memories",
+                    "read_ui_context", "get_system_status", "read_notes_context", "read_search_context", "read_calendar_context", "read_image_context", "notes_action", "calendar_create_event", "calendar_action", "image_action", "search_history_action",
             "ui_action", "search_web", "search_widget_action", "recall_search_memory", "save_search_memory",
         "update_search_memory", "delete_search_memory", "create_file", "read_file",
         "edit_file", "append_file", "list_tracked_files", "delete_file", "move_file", "file_status",
@@ -176,6 +179,7 @@ def test_memory_tool_calls_are_correlated_and_persist(tmp_path: Path):
         on_failure=failed,
     )
 
+    session._input_parts = ["My lighthouse project Uses cobalt."]
     saved = asyncio.run(session._execute_memory_tool(SimpleNamespace(
         id="call-save",
         name="save_memory",
@@ -186,11 +190,13 @@ def test_memory_tool_calls_are_correlated_and_persist(tmp_path: Path):
         name="recall_conversations",
         args={"query": "lighthouse cobalt", "limit": 2},
     )))
+    session._input_parts = ["Forget the lighthouse project."]
     forgotten = asyncio.run(session._execute_memory_tool(SimpleNamespace(
         id="call-forget",
         name="forget_memory",
         args={"category": "projects", "key": "lighthouse"},
     )))
+    session._input_parts = ["Remember: Use concise replies."]
     event_saved = asyncio.run(session._execute_memory_tool(SimpleNamespace(
         id="call-event-save", name="save_memory_event",
         args={"event_type": "speaking_rule", "key": "avoid_example", "content": "Use concise replies."},
@@ -199,6 +205,7 @@ def test_memory_tool_calls_are_correlated_and_persist(tmp_path: Path):
         id="call-event-recall", name="recall_memory",
         args={"query": "concise replies", "limit": 2},
     )))
+    session._input_parts = ["Forget the avoid_example speaking rule."]
     event_forgotten = asyncio.run(session._execute_memory_tool(SimpleNamespace(
         id="call-event-forget", name="forget_memory_event",
         args={"event_id": event_saved.response["id"]},
@@ -232,7 +239,7 @@ def test_transcript_write_failure_does_not_end_live_session(tmp_path: Path, monk
     def fail_write(*_args):
         raise PermissionError("simulated Windows file lock")
 
-    monkeypatch.setattr(gemini_live, "_append_turn", fail_write)
+    monkeypatch.setattr(LiveMemoryManager, "append_turn", fail_write)
     session = GeminiLiveSession(
         api_key="test-key",
         memory_file=transcript,

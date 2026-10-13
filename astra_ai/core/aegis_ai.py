@@ -3318,8 +3318,7 @@ class AleChatBot:
                             self.data = {}
 
                         def save_memory(self):
-                            # mem0 agent persists via its client; no-op fallback
-                            pass
+                            return self._agent.memory_system.flush()
 
                     return _Shim(self.agent)
 
@@ -3737,7 +3736,7 @@ EXAMPLES:
 
 CONVERSATION RULES:
 1. MAXIMUM 1 sentence for simple acknowledgments
-2. MAXIMUM 2 sentences for complex responses
+2. Use enough detail to answer the question naturally, without padding
 3. NEVER ask open-ended questions like "What else is on your mind?"
 4. NEVER prompt to continue conversation
 5. NEVER offer unnecessary follow-up assistance
@@ -4427,7 +4426,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
                     })
 
                     # Store updated data
-                    memory_system.memory_system.data["memory_categories"]["search_external_info"] = search_data
+                    memory_system.memory_system.set_category("search_external_info", search_data)
                     memory_system.memory_system.save_memory()
 
                     logger.debug(f"Stored search results in comprehensive memory: {user_message}")
@@ -4494,7 +4493,7 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
         memory_info = ""
         if memory_context:
             # Add session context if available
-            session_context = memory_context.get("session_context", "")
+            session_context = memory_context.get("memory_context") or memory_context.get("session_context", "")
             if session_context:
                 memory_info = f"\n\nPAST CONVERSATION CONTEXT:\n{session_context}\nUse this context to continue the conversation naturally and remember previous interactions."
             
@@ -4525,12 +4524,12 @@ FINAL REMINDER: BREVITY IS ESSENTIAL. ONE CLEAR SENTENCE IS BETTER THAN TWO RAMB
         widget_context = self.widget_controller.assistant_context() if self.widget_controller else ""
 
         # Create dynamic system prompt with emphasis on brevity
-        system_prompt = f"""You are Aegis, a helpful, witty, and friendly AI with a {style} personality. Keep responses VERY BRIEF and engaging.{memory_info}
+        system_prompt = f"""You are Aegis, a helpful, witty, and friendly AI with a {style} personality. Follow the ongoing discussion naturally and answer at the length it needs.{memory_info}
 
         {widget_context}
 
         RESPONSE RULES:
-        • Keep answers extremely concise - MAXIMUM 1 sentence for simple questions, 2 sentences max for complex ones
+        • Follow the latest exchange; resolve follow-ups in context. Avoid repeated greetings, "I am here", and unsolicited service offers. Be warm, direct, and honest about being AI.
         • Give the key answer FIRST, then only essential details if absolutely needed
         • Be conversational and friendly, not robotic
         • {follow_up_hint}
@@ -5148,6 +5147,13 @@ AI: {response}
         - Includes organizer daily summaries from previous sessions
         """
         try:
+            # Active shared memory already supplies scoped, bounded context.
+            # Old organizer summaries remain below for legacy reference paths.
+            if self.mem0_memory_agent:
+                from astra_ai.memory.shared_memory import SharedMemory
+                core = getattr(self.mem0_memory_agent, "memory_system", self.mem0_memory_agent)
+                if isinstance(core, SharedMemory):
+                    return await asyncio.to_thread(self.mem0_memory_agent.get_memory_context, user_message)
             base_context = {}
             
             # Add organizer context from previous sessions
@@ -6620,7 +6626,7 @@ AI: {response}
             if len(current_data["task_creation_history"]) > 100:
                 current_data["task_creation_history"] = current_data["task_creation_history"][-100:]
 
-            self.memory_integration.memory_system.data["memory_categories"]["task_project_tracking"] = current_data
+            self.memory_integration.memory_system.set_category("task_project_tracking", current_data)
             self.memory_integration.memory_system.save_memory()
 
         except Exception as e:
@@ -6923,7 +6929,7 @@ AI: {response}
             if len(current_data["interaction_history"]) > 50:
                 current_data["interaction_history"] = current_data["interaction_history"][-50:]
 
-            self.memory_integration.memory_system.data["memory_categories"]["visual_experiences"] = current_data
+            self.memory_integration.memory_system.set_category("visual_experiences", current_data)
             self.memory_integration.memory_system.save_memory()
 
         except Exception as e:
@@ -7043,7 +7049,7 @@ AI: {response}
                 search_data["knowledge_cache"] = dict(sorted_entries[-50:])
 
             # Store updated data
-            memory_system.memory_system.data["memory_categories"]["search_external_info"] = search_data
+            memory_system.memory_system.set_category("search_external_info", search_data)
             memory_system.memory_system.save_memory()
 
             logger.debug(f"Stored knowledge search results for: {topic}")
@@ -7154,7 +7160,7 @@ AI: {response}
                 timezone_data["preferred_locations"][location_lower]["last_query"] = timezone_record["timestamp"]
 
                 # Store updated data
-                memory_system.memory_system.data["memory_categories"]["timezone_preferences"] = timezone_data
+                memory_system.memory_system.set_category("timezone_preferences", timezone_data)
                 memory_system.memory_system.save_memory()
 
                 logger.debug(f"Stored timezone query in memory: {location}")
@@ -7250,7 +7256,7 @@ AI: {response}
                 })
 
                 # Store updated data
-                memory_system.memory_system.data["memory_categories"]["news_weather_history"] = news_data
+                memory_system.memory_system.set_category("news_weather_history", news_data)
                 memory_system.memory_system.save_memory()
 
                 logger.debug(f"Stored weather results in memory: {location}")

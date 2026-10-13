@@ -1,0 +1,4 @@
+import {spawnSync} from 'node:child_process';import {mkdirSync,writeFileSync} from 'node:fs';import {fileURLToPath} from 'node:url';import path from 'node:path';
+const here=path.dirname(fileURLToPath(import.meta.url)),root=path.resolve(here,'../..'),out=path.join(here,'.compiled');mkdirSync(out,{recursive:true});writeFileSync(path.join(out,'package.json'),' {"type":"commonjs"}');
+const compile=spawnSync(process.execPath,[path.join(root,'node_modules/typescript/bin/tsc'),'--target','ES2020','--module','commonjs','--strict','--skipLibCheck','--outDir',out,path.join(root,'src/components/Memory/memory-globe/globeEngine.ts')],{stdio:'inherit'});if(compile.status)process.exit(compile.status);
+const result=spawnSync(process.execPath,['--test',path.join(here,'engine.test.cjs'),path.join(here,'adapter.test.cjs')],{stdio:'inherit'});process.exit(result.status||0);

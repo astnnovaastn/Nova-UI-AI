@@ -50,7 +50,7 @@ BUILTIN_EFFECTS = {
     "organs": ("rain", "#451616", .65, 1, False), "ume": ("petals", "#f5a0c0", .4, 1, False), "cute": ("sparkles", "#ff8cb8", .4, 1, False),
     "copper": ("none", "", .4, 1, False), "lavender": ("none", "", .4, 1, True), "gpt": ("none", "", .4, 1, False), "claude": ("none", "", .4, 1, False),
 }
-SUPPORTED_WIDGET_IDS = {"search", "news", "weather", "task", "notes", "image", "calculator", "tictactoe", "chat"}
+SUPPORTED_WIDGET_IDS = {"search", "news", "weather", "task", "notes", "image", "calculator", "tictactoe", "chat", "calendar"}
 
 
 class ThemeStateError(ValueError):
@@ -190,7 +190,7 @@ class ThemeStore:
             data = json.loads(self.settings_path.read_text(encoding="utf-8"))
         except Exception:
             data = {"schemaVersion": SCHEMA_VERSION, "defaultThemeId": "dark"}
-        return {"schemaVersion": SCHEMA_VERSION, "defaultThemeId": str(data.get("defaultThemeId", "dark"))}
+        return {"schemaVersion": SCHEMA_VERSION, "defaultThemeId": str(data.get("defaultThemeId", "dark")) if isinstance(data, dict) else "dark"}
 
     def _read_custom(self) -> tuple[List[Dict[str, Any]], List[str]]:
         themes, errors = [], []
@@ -225,7 +225,7 @@ class ThemeStore:
             raise ThemeStateError("baseThemeId must identify a built-in theme")
         return {"schemaVersion": SCHEMA_VERSION, "id": theme_id, "name": name, "slug": _slug(name), "builtin": False,
                 "baseThemeId": base_theme_id,
-                "createdAt": str(raw.get("createdAt") or now), "updatedAt": now, "tokens": tokens,
+                "createdAt": str(raw.get("createdAt") or now), "updatedAt": str(raw.get("updatedAt") or now), "tokens": tokens,
                 "orb": _validate_orb(raw.get("orb"), tokens["accent"]),
                 "widgetOverrides": _validate_overrides(raw.get("widgetOverrides"))}
 
@@ -273,6 +273,7 @@ class ThemeStore:
                     merged[key] = ({**merged[key], **raw[key]} if key in {"tokens", "orb"} and isinstance(raw[key], dict) else raw[key])
             item = self._validate_document(merged, expected_id=theme_id)
             item["createdAt"] = current["createdAt"]
+            item["updatedAt"] = _now()
             _atomic_json(self.themes_dir / f"{theme_id}.json", item)
             return item
 
@@ -299,19 +300,44 @@ class ThemeStore:
                 self.set_default(replacement)
             (self.themes_dir / f"{theme_id}.json").unlink()
 
+    def startup(self) -> Dict[str, Any]:
+        import hashlib
+        with self.lock:
+            theme_id = self._settings()["defaultThemeId"]
+            try:
+                theme = self.get(theme_id)
+            except (ThemeStateError, ValueError, OSError):
+                theme = self.get("dark")
+            revision = hashlib.sha256(json.dumps(theme, sort_keys=True).encode()).hexdigest()[:16]
+            return {"theme": theme, "defaultThemeId": theme["id"], "revision": revision}
+
     def import_items(self, payload: Any) -> List[Dict[str, Any]]:
         raw_items = payload.get("themes") if isinstance(payload, dict) and isinstance(payload.get("themes"), list) else [payload]
-        if not raw_items or len(raw_items) > MAX_CUSTOM_THEMES:
-            raise ThemeStateError("import contains an invalid number of themes")
-        created = []
-        for raw in raw_items:
-            if not isinstance(raw, dict):
-                raise ThemeStateError("imported theme is invalid")
-            normalized = deepcopy(raw)
-            normalized.pop("id", None)
-            normalized.pop("builtin", None)
-            created.append(self.create(normalized))
-        return created
+        with self.lock:
+            custom, _ = self._read_custom()
+            if not raw_items or len(custom) + len(raw_items) > MAX_CUSTOM_THEMES:
+                raise ThemeStateError("import exceeds the custom theme limit")
+            created = []
+            for raw in raw_items:
+                if not isinstance(raw, dict):
+                    raise ThemeStateError("imported theme is invalid")
+                normalized = deepcopy(raw)
+                normalized.pop("id", None)
+                normalized.pop("builtin", None)
+                base = self.get(str(normalized.get("baseThemeId") or "dark"))
+                normalized["baseThemeId"] = base["id"] if base.get("builtin") else base["baseThemeId"]
+                created.append(self._validate_document(normalized, base_tokens=base["tokens"]))
+            written = []
+            try:
+                for item in created:
+                    path = self.themes_dir / f"{item['id']}.json"
+                    _atomic_json(path, item)
+                    written.append(path)
+            except Exception:
+                for path in written:
+                    path.unlink(missing_ok=True)
+                raise
+            return created
 
     def export_all(self) -> Dict[str, Any]:
         custom, _ = self._read_custom()

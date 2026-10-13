@@ -704,3 +704,25 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
     },
   };
 }
+
+
+// Compact memory renderer: the same particle/filament language and voice states,
+// using the graph canvas to avoid a second WebGL/audio lifecycle.
+export function renderCompactOrb(ctx:CanvasRenderingContext2D,x:number,y:number,radius:number,state:OrbState,energy:number,time:number,color:string,paused:boolean){
+ const activity=state==='thinking'?1.4:state==='speaking'?1.2:state==='listening'?.8:.4;
+ const t=paused?0:time;const particles:Array<{x:number;y:number}>=[];
+ ctx.save();ctx.translate(x,y);
+ for(let i=0;i<36;i++){
+  const angle=i*2.399963+t*.09*activity,spread=.15+.7*((i*17%37)/37),r=radius*spread*(1+Math.sin(t*.65+i)*.04+energy*.14);
+  particles.push({x:Math.cos(angle)*r,y:Math.sin(angle)*r*(.7+.2*Math.cos(i+t*.07))});
+ }
+ ctx.strokeStyle=color;ctx.lineWidth=.45;
+ for(let i=0;i<particles.length;i++)for(let j=i+1;j<particles.length;j++){
+  const a=particles[i],b=particles[j],distance=Math.hypot(a.x-b.x,a.y-b.y);
+  if(distance>radius*.65)continue;ctx.globalAlpha=(1-distance/(radius*.65))*.32;
+  ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+ }
+ ctx.fillStyle=color;
+ for(const p of particles){ctx.globalAlpha=.7;ctx.beginPath();ctx.arc(p.x,p.y,.55+energy*.5,0,Math.PI*2);ctx.fill();}
+ ctx.shadowColor=color;ctx.shadowBlur=5;ctx.globalAlpha=.85;ctx.beginPath();ctx.arc(0,0,1.2+energy,0,Math.PI*2);ctx.fill();ctx.restore();
+}

@@ -10,6 +10,15 @@ Core Concept:
 System Architecture: User ↔ Nova (Main AI) ↔ Memory AI ↔ JSON Storage
 """
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+from .unified_memory_adapters import NovaMemoryAI as _SharedNovaMemoryAI
+from .unified_memory_adapters import AdvancedMemoryAgent as _SharedAdvancedMemoryAgent
+# Preserve the original implementations below. Public classes inherit the
+# validated shared core; their prior implementations remain under _previous_.
+# Retired vector dependencies are available for source inspection only.
+SKLEARN_AVAILABLE = SENTENCE_TRANSFORMERS_AVAILABLE = FAISS_AVAILABLE = False
+
 import os
 import json
 import re
@@ -23,7 +32,8 @@ from dataclasses import dataclass, asdict, field
 from enum import Enum
 from collections import defaultdict, Counter
 import hashlib
-import numpy as np
+if TYPE_CHECKING:
+    import numpy as np
 
 # Import AI Organizer
 from astra_ai.memory.Mem0_ai_organizer import AIOrganizer, ORGANIZER_CONFIG
@@ -38,15 +48,17 @@ from astra_ai.memory.memory_data_models import EmotionalContext, SemanticContext
 from astra_ai.memory.memory_processing_pipeline import MemoryProcessingPipeline
 
 # Import libraries for vector operations
-import numpy as np
-try:
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.metrics.pairwise import cosine_similarity
-    SKLEARN_AVAILABLE = True
-except ImportError:
-    TfidfVectorizer = None
-    cosine_similarity = None
-    SKLEARN_AVAILABLE = False
+if TYPE_CHECKING:
+    import numpy as np
+if TYPE_CHECKING:
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+        SKLEARN_AVAILABLE = True
+    except ImportError:
+        TfidfVectorizer = None
+        cosine_similarity = None
+        SKLEARN_AVAILABLE = False
 from typing import Iterable, Optional, List, Dict, Tuple
 import logging
 
@@ -54,17 +66,19 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-try:
-    from sentence_transformers import SentenceTransformer
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    SENTENCE_TRANSFORMERS_AVAILABLE = False
+if TYPE_CHECKING:
+    try:
+        from sentence_transformers import SentenceTransformer
+        SENTENCE_TRANSFORMERS_AVAILABLE = True
+    except ImportError:
+        SENTENCE_TRANSFORMERS_AVAILABLE = False
 
-try:
-    import faiss
-    FAISS_AVAILABLE = True
-except ImportError:
-    FAISS_AVAILABLE = False
+if TYPE_CHECKING:
+    try:
+        import faiss
+        FAISS_AVAILABLE = True
+    except ImportError:
+        FAISS_AVAILABLE = False
 
 # Ensure all required classes are properly defined and exported
 __all__ = ['NovaMemoryAI', 'MemoryEventType', 'AdvancedMemoryAgent', 'AdvancedClusterEngine', 'MemoryCategory']
@@ -3946,7 +3960,7 @@ class MemoryEventType(Enum):
     CONFIRM = "CONFIRM"
     FORGET = "FORGET"
 
-class NovaMemoryAI:
+class _EarlierNovaMemoryAI:
     """
     Enhanced Nova Memory AI System that works alongside Nova to provide persistent memory capabilities.
 
@@ -7599,7 +7613,7 @@ class SerpAPISearchEngine:
         return suggestions[:3]  # Limit to 3 suggestions
 
 
-class NovaMemoryAI:
+class NovaMemoryAI(_SharedNovaMemoryAI):
     """
     Nova Memory AI System - A dedicated memory agent that works alongside Nova
 
@@ -7609,7 +7623,23 @@ class NovaMemoryAI:
     - Feeds missing info back automatically - Transparent to the user
     """
 
-    def __init__(self, storage_file: str = os.path.join(os.path.dirname(__file__), '..', 'Date', 'nova_ai_memory.json')):
+    def __init__(self, storage_file=None, **kwargs):
+        """Use the shared JSON service; retain previous methods below for reference."""
+        super().__init__(storage_file, **kwargs)
+
+    def save_fact(self, category, key, value, **metadata):
+        if "conflict_type" in metadata:
+            metadata["conflict_type"] = getattr(metadata["conflict_type"], "value", metadata["conflict_type"])
+        return super().save_fact(getattr(category, "value", category), key, value, **metadata)
+
+    def link(self, from_id, to_id, relationship_type, evidence="", approved=False):
+        return super().link(from_id, to_id, getattr(relationship_type, "value", relationship_type), evidence, approved)
+
+    def learn(self, learning_type, record_id, evidence, confidence=1):
+        return super().learn(getattr(learning_type, "value", learning_type), record_id, evidence, confidence)
+
+
+    def _previous___init__(self, storage_file: str = os.path.join(os.path.dirname(__file__), '..', 'Date', 'nova_ai_memory.json')):
         """Initialize the Nova Memory AI System"""
         # Set up logging to file
         log_file = os.path.join(os.path.dirname(storage_file), 'memory_system.log')
@@ -8089,7 +8119,7 @@ class NovaMemoryAI:
         self.memory_pipeline.start_processing()
         print("[MEMORY-PIPELINE] Started 15-minute memory processing pipeline")
     
-    def start_organizer_monitoring(self):
+    def _previous_start_organizer_monitoring(self):
         """
         Start the AI Organizer in a separate thread to continuously monitor and process ADD events.
         This ensures the AI Organizer runs alongside the memory system.
@@ -8106,7 +8136,7 @@ class NovaMemoryAI:
         else:
             print("AI Organizer is disabled or not initialized.")
 
-    def ensure_organizer_processes_all_messages(self):
+    def _previous_ensure_organizer_processes_all_messages(self):
         """Ensure organizer immediately processes any pending messages."""
         if hasattr(self, 'organizer') and self.organizer and self.organizer.organizer_enabled:
             try:
@@ -8115,7 +8145,7 @@ class NovaMemoryAI:
             except Exception as e:
                 logger.warning(f"[ENSURE-PROCESSED] Error: {e}")
 
-    def send_new_conversations_to_organizer(self) -> Dict[str, Any]:
+    def _previous_send_new_conversations_to_organizer(self) -> Dict[str, Any]:
         """
         Send all unsent conversations to the organizer and mark them as sent.
         This ensures the organizer always has the latest conversations.
@@ -8157,7 +8187,7 @@ class NovaMemoryAI:
             logger.error(f"[SEND-CONVERSATIONS] Error: {e}")
             return {"status": "error", "error": str(e)}
 
-    def load_daily_organizer_summaries(self, target_date: str = None) -> Dict[str, Any]:
+    def _previous_load_daily_organizer_summaries(self, target_date: str = None) -> Dict[str, Any]:
         """
         Load organizer summaries for a specific date or default to today/yesterday.
         
@@ -8207,7 +8237,7 @@ class NovaMemoryAI:
             logger.error(f"[LOAD-SUMMARIES] Error loading summaries: {e}")
             return {"status": "error", "error": str(e)}
 
-    def get_organizer_summaries_for_context(self, days_back: int = 3) -> Dict[str, Any]:
+    def _previous_get_organizer_summaries_for_context(self, days_back: int = 3) -> Dict[str, Any]:
         """
         Get organizer summaries from previous days to provide context.
         This is useful for when a user returns on a new day.
@@ -8257,7 +8287,7 @@ class NovaMemoryAI:
             logger.error(f"[GET-CONTEXT] Error retrieving context summaries: {e}")
             return {"status": "error", "error": str(e)}
 
-    def provide_session_context_from_organizer(self) -> str:
+    def _previous_provide_session_context_from_organizer(self) -> str:
         """
         Build a context string from organizer summaries to provide to Nova AI.
         This helps the AI understand previous conversations when starting a new session.
@@ -8297,7 +8327,7 @@ class NovaMemoryAI:
             logger.error(f"[PROVIDE-CONTEXT] Error building context: {e}")
             return ""
 
-    def _process_structured_metadata(self, metadata: Dict) -> Dict:
+    def _previous__process_structured_metadata(self, metadata: Dict) -> Dict:
         """Process and validate structured metadata for JSON serialization"""
         if not metadata:
             return {}
@@ -8309,7 +8339,7 @@ class NovaMemoryAI:
 
         return processed
 
-    def _serialize_structured_value(self, value: Any) -> Any:
+    def _previous__serialize_structured_value(self, value: Any) -> Any:
         """Serialize complex structured data for JSON compatibility"""
         if value is None:
             return None
@@ -8326,13 +8356,13 @@ class NovaMemoryAI:
             # Convert to string for unsupported types
             return str(value)
 
-    def _deserialize_structured_value(self, value: Any) -> Any:
+    def _previous__deserialize_structured_value(self, value: Any) -> Any:
         """Deserialize structured data from JSON storage"""
         # For now, return as-is since JSON loading handles basic types
         # This method can be extended for custom deserialization logic
         return value
 
-    def query_structured_data(self, category: str, query_filter: Dict = None) -> List[Dict]:
+    def _previous_query_structured_data(self, category: str, query_filter: Dict = None) -> List[Dict]:
         """Query structured data with complex filtering"""
         if category not in self.data["memory_categories"]:
             return []
@@ -8371,7 +8401,7 @@ class NovaMemoryAI:
 
         return results
 
-    def _deep_match(self, item_value: Dict, filter_value: Dict) -> bool:
+    def _previous__deep_match(self, item_value: Dict, filter_value: Dict) -> bool:
         """Deep comparison for nested dictionary structures"""
         for key, value in filter_value.items():
             if key not in item_value:
@@ -8383,7 +8413,7 @@ class NovaMemoryAI:
                 return False
         return True
 
-    def store_memory_item(self, category: str, subcategory: str, key: str, value: Any, metadata: Dict = None) -> bool:
+    def _previous_store_memory_item(self, category: str, subcategory: str, key: str, value: Any, metadata: Dict = None) -> bool:
         """Store a memory item in the appropriate category with full metadata and structured data support"""
         try:
             if category not in self.data["memory_categories"]:
@@ -8461,7 +8491,7 @@ class NovaMemoryAI:
             return False
 
     # ---------------------- New Structured Helpers ----------------------
-    def store_user_conversation_context(self, context: Dict[str, Any]) -> bool:
+    def _previous_store_user_conversation_context(self, context: Dict[str, Any]) -> bool:
         """Store structured conversation context provided explicitly by the user.
 
         Example context:
@@ -8499,7 +8529,7 @@ class NovaMemoryAI:
             print(f"Error storing conversation context: {e}")
             return False
 
-    def store_collaborator_relationship(self, rel_type: str, name: str) -> bool:
+    def _previous_store_collaborator_relationship(self, rel_type: str, name: str) -> bool:
         """Store or update a named collaborator relationship.
 
         rel_type examples: 'best_friend' -> stored under collaborator_relationships.best_friend
@@ -8527,7 +8557,7 @@ class NovaMemoryAI:
             print(f"Error storing collaborator relationship: {e}")
             return False
 
-    def store_long_term_goal(self, goal_type: str, value: str, target_date: Optional[str] = None) -> bool:
+    def _previous_store_long_term_goal(self, goal_type: str, value: str, target_date: Optional[str] = None) -> bool:
         """Store a structured long-term goal with optional target date.
 
         goal_type examples: 'career_goal', 'skill_goal'
@@ -8555,7 +8585,7 @@ class NovaMemoryAI:
             print(f"Error storing long term goal: {e}")
             return False
 
-    def retrieve_memory_by_category(self, category: str, subcategory: str = None) -> Dict[str, Any]:
+    def _previous_retrieve_memory_by_category(self, category: str, subcategory: str = None) -> Dict[str, Any]:
         """Retrieve memory items from a specific category"""
         if category not in self.data["memory_categories"]:
             return {}
@@ -8572,7 +8602,7 @@ class NovaMemoryAI:
 
         return category_data
 
-    def get_comprehensive_user_profile(self) -> Dict[str, Any]:
+    def _previous_get_comprehensive_user_profile(self) -> Dict[str, Any]:
         """Generate a comprehensive user profile across all 22 categories"""
         profile = {
             "user_id": self.data["user"]["user_id"],
@@ -8594,7 +8624,7 @@ class NovaMemoryAI:
 
         return profile
 
-    def _update_category_relationships(self, category: str, relationships: List[str]):
+    def _previous__update_category_relationships(self, category: str, relationships: List[str]):
         """Update cross-category relationships"""
         if category not in self.data["category_relationships"]:
             self.data["category_relationships"][category] = []
@@ -8609,7 +8639,7 @@ class NovaMemoryAI:
             if category not in self.data["category_relationships"][related_category]:
                 self.data["category_relationships"][related_category].append(category)
 
-    def _summarize_category(self, category: str, data: Dict) -> Dict[str, Any]:
+    def _previous__summarize_category(self, category: str, data: Dict) -> Dict[str, Any]:
         """Generate a summary for a specific category"""
         summary = {
             "total_items": len(data),
@@ -8637,7 +8667,7 @@ class NovaMemoryAI:
 
         return summary
 
-    def _generate_behavioral_insights(self) -> Dict[str, Any]:
+    def _previous__generate_behavioral_insights(self) -> Dict[str, Any]:
         """Generate behavioral insights from stored memory"""
         insights = {
             "communication_style": self._analyze_communication_style(),
@@ -8648,7 +8678,7 @@ class NovaMemoryAI:
 
         return insights
 
-    def _analyze_communication_style(self) -> Dict[str, Any]:
+    def _previous__analyze_communication_style(self) -> Dict[str, Any]:
         """Analyze user's communication style from stored preferences"""
         prefs = self.data["memory_categories"].get(MemoryCategory.PERSONAL_PREFERENCES.value, {})
         boundaries = self.data["memory_categories"].get(MemoryCategory.COMMUNICATION_BOUNDARIES.value, {})
@@ -8687,7 +8717,7 @@ class NovaMemoryAI:
 
         return style
 
-    def _analyze_activity_patterns(self) -> Dict[str, Any]:
+    def _previous__analyze_activity_patterns(self) -> Dict[str, Any]:
         """Analyze user's activity patterns from stored behavior data"""
         behavior = self.data["memory_categories"].get(MemoryCategory.ACTIVITY_BEHAVIOR.value, {})
 
@@ -8709,7 +8739,7 @@ class NovaMemoryAI:
 
         return patterns
 
-    def _analyze_learning_preferences(self) -> Dict[str, Any]:
+    def _previous__analyze_learning_preferences(self) -> Dict[str, Any]:
         """Analyze user's learning preferences from development data"""
         development = self.data["memory_categories"].get(MemoryCategory.PERSONAL_DEVELOPMENT.value, {})
 
@@ -8733,7 +8763,7 @@ class NovaMemoryAI:
 
         return preferences
 
-    def _analyze_goal_orientation(self) -> Dict[str, Any]:
+    def _previous__analyze_goal_orientation(self) -> Dict[str, Any]:
         """Analyze user's goal orientation from long-term goals"""
         goals = self.data["memory_categories"].get(MemoryCategory.LONG_TERM_GOALS.value, {})
 
@@ -8758,7 +8788,7 @@ class NovaMemoryAI:
 
         return orientation
 
-    def _create_comprehensive_memory_event(self, operation: Dict, timestamp: str, emotional_context) -> Optional[MemoryEvent]:
+    def _previous__create_comprehensive_memory_event(self, operation: Dict, timestamp: str, emotional_context) -> Optional[MemoryEvent]:
         """Create a comprehensive memory event for the 22-category framework"""
         try:
             # Create enhanced summary with category information
@@ -8798,7 +8828,7 @@ class NovaMemoryAI:
             print(f"Error creating comprehensive memory event: {e}")
             return None
 
-    def _process_operation_with_vector_similarity(self, operation: Dict) -> Dict:
+    def _previous__process_operation_with_vector_similarity(self, operation: Dict) -> Dict:
         """
         Process an operation with vector-based similarity detection to determine if it should be an ADD or UPDATE.
         
@@ -8990,7 +9020,7 @@ class NovaMemoryAI:
             # No similar or duplicate events found, return original operation as ADD
             return operation
 
-    def create_update_event(self, previous_event_id: str, summary: str, timestamp: str, 
+    def _previous_create_update_event(self, previous_event_id: str, summary: str, timestamp: str, 
                            emotional_context: Dict, semantic_context: Dict, 
                            importance_score: float, confidence: float, category: str, 
                            subcategory: str, previous_value: str, current_value: str,
@@ -9062,7 +9092,7 @@ class NovaMemoryAI:
         
         return update_event
 
-    def calculate_importance_score(self, event_content: str, category: str, emotional_context: Dict = None, 
+    def _previous_calculate_importance_score(self, event_content: str, category: str, emotional_context: Dict = None, 
                                   access_frequency: int = 0, recency_score: float = 0.0, 
                                   emotional_weight: float = 0.0, cross_reference_count: int = 0) -> float:
         """
@@ -9135,7 +9165,7 @@ class NovaMemoryAI:
         # Ensure score is between 0.0 and 1.0
         return max(0.0, min(1.0, base_score))
 
-    def classify_category_and_subcategory(self, text: str) -> Tuple[str, str]:
+    def _previous_classify_category_and_subcategory(self, text: str) -> Tuple[str, str]:
         """
         Classify incoming text into appropriate category and subcategory.
         
@@ -9201,7 +9231,7 @@ class NovaMemoryAI:
         else:
             return MemoryCategory.USER_IDENTITY.value, 'general'  # Default category
 
-    def create_add_event(self, user_id: str, name: str, created_at: str, status: str, total_sessions: int, 
+    def _previous_create_add_event(self, user_id: str, name: str, created_at: str, status: str, total_sessions: int, 
                         last_seen: str, relationship_established: bool, memory_events: List[Dict], 
                         vector_index: Dict, clusters: Dict, update_log: List[Dict], fact_history: Dict,
                         current_session: str, greeting_completed: bool, introduction_phase: bool,
@@ -9277,7 +9307,7 @@ class NovaMemoryAI:
             }
         }
 
-    def _extract_semantic_features(self, text: str, emotional_context: Dict = None, category: str = None) -> Dict[str, float]:
+    def _previous__extract_semantic_features(self, text: str, emotional_context: Dict = None, category: str = None) -> Dict[str, float]:
         """Extract semantic features from text with context awareness."""
         text_lower = text.lower() if text else ""
         features = {}
@@ -9342,7 +9372,7 @@ class NovaMemoryAI:
 
         return features
 
-    def _create_embedding_vector(self, text: str, emotional_context: Optional[Dict] = None,
+    def _previous__create_embedding_vector(self, text: str, emotional_context: Optional[Dict] = None,
                                 category: Optional[str] = None, event: Optional[Dict] = None) -> List[float]:
         """
         Create an embedding vector for the given text using enhanced semantic features.
@@ -9517,7 +9547,7 @@ class NovaMemoryAI:
         # Ensure we return exactly 8 dimensions to match the specification
         return vector[:8]
 
-    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+    def _previous__cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
         """
         Calculate cosine similarity between two vectors.
         Returns a value between -1 and 1, where 1 means identical direction.
@@ -9541,7 +9571,7 @@ class NovaMemoryAI:
         
         return dot_product / (magnitude1 * magnitude2)
 
-    def _format_vector_horizontal(self, vector: List[float], precision: int = 2) -> str:
+    def _previous__format_vector_horizontal(self, vector: List[float], precision: int = 2) -> str:
         """
         Format a vector as a horizontal string representation, ensuring it displays as a single line.
         
@@ -9558,7 +9588,7 @@ class NovaMemoryAI:
         formatted_values = [f"{val:.{precision}f}" for val in vector]
         return f"[{', '.join(formatted_values)}]"
 
-    def _cosine_similarity_improved(self, vec1: List[float], vec2: List[float]) -> float:
+    def _previous__cosine_similarity_improved(self, vec1: List[float], vec2: List[float]) -> float:
         """Enhanced cosine similarity with robustness checks."""
         if not vec1 or not vec2:
             return 0.0
@@ -9579,7 +9609,7 @@ class NovaMemoryAI:
 
         return dot_product / (magnitude1 * magnitude2)
 
-    def display_vector_index_horizontal(self) -> str:
+    def _previous_display_vector_index_horizontal(self) -> str:
         """
         Display the vector index data with vectors formatted as single horizontal lines.
         
@@ -9600,7 +9630,7 @@ class NovaMemoryAI:
         lines.append("}")
         return "\n".join(lines)
 
-    def get_vector_index_json_format(self) -> str:
+    def _previous_get_vector_index_json_format(self) -> str:
         """
         Get the vector index in JSON format that maintains vectors as horizontal arrays,
         matching the format in New_memory_event.json.
@@ -9616,7 +9646,7 @@ class NovaMemoryAI:
         # Use compact separators to ensure horizontal formatting
         return json.dumps(vector_index, indent=2, separators=(',', ': '))
 
-    def _determine_update_type(self, old_value: str, new_value: str) -> str:
+    def _previous__determine_update_type(self, old_value: str, new_value: str) -> str:
         """
         Determine the type of update based on semantic analysis of old and new values.
         
@@ -9666,7 +9696,7 @@ class NovaMemoryAI:
         # Default to refinement (gradual or detailed evolution)
         return "refinement"
 
-    def _create_update_log_entry(self, operation: Dict, replaced_fact_id: str, 
+    def _previous__create_update_log_entry(self, operation: Dict, replaced_fact_id: str, 
                                 similarity_score: float, update_type: str):
         """
         Create an entry in the update log for tracking how preferences evolve.
@@ -9702,7 +9732,7 @@ class NovaMemoryAI:
         
         self.data["memory_engine"]["memory_events"].append(update_event)
 
-    def _initialize_session(self):
+    def _previous__initialize_session(self):
         """Initialize or reuse a daily conversation session
         
         Creates one session per calendar day. If an active session for today already exists,
@@ -9792,7 +9822,7 @@ class NovaMemoryAI:
         
         self.data["user"]["last_seen"] = current_time
     
-    def _get_today_session_id(self) -> Optional[str]:
+    def _previous__get_today_session_id(self) -> Optional[str]:
         """Get the active session ID for today if it exists"""
         today_date = datetime.now().isoformat().split('T')[0]
 
@@ -9804,7 +9834,7 @@ class NovaMemoryAI:
 
         return None
     
-    def _calculate_current_duration(self, start_time: str) -> str:
+    def _previous__calculate_current_duration(self, start_time: str) -> str:
         """Calculate duration from start_time to now"""
         try:
             start = datetime.fromisoformat(start_time)
@@ -9822,7 +9852,7 @@ class NovaMemoryAI:
         except:
             return "unknown"
 
-    def _end_current_session(self):
+    def _previous__end_current_session(self):
         """End the current conversation session and finalize all metadata"""
         if self.data["current_session"]:
             session_id = self.data["current_session"]
@@ -9853,7 +9883,7 @@ class NovaMemoryAI:
             # Clear current session
             self.data["current_session"] = None
 
-    def _format_duration(self, duration: timedelta) -> str:
+    def _previous__format_duration(self, duration: timedelta) -> str:
         """Format duration for human readability"""
         total_seconds = int(duration.total_seconds())
 
@@ -9870,7 +9900,7 @@ class NovaMemoryAI:
             else:
                 return f"{hours} hours"
 
-    def _extract_session_topics(self, session_id: str) -> List[str]:
+    def _previous__extract_session_topics(self, session_id: str) -> List[str]:
         """Extract main topics discussed in a session"""
         topics = set()
 
@@ -9914,7 +9944,7 @@ class NovaMemoryAI:
         
         return list(topics)
 
-    def _get_relevant_sessions(self, limit: int = 3, hours_back: int = 72) -> List[Dict[str, Any]]:
+    def _previous__get_relevant_sessions(self, limit: int = 3, hours_back: int = 72) -> List[Dict[str, Any]]:
         """Retrieve relevant past sessions prioritized by recency and importance
         
         Args:
@@ -9960,7 +9990,7 @@ class NovaMemoryAI:
         # Return top sessions
         return [item["session"] for item in relevant_sessions[:limit]]
 
-    def _score_session_importance(self, session: Dict[str, Any]) -> float:
+    def _previous__score_session_importance(self, session: Dict[str, Any]) -> float:
         """Score a session's importance based on multiple factors
         
         Importance factors:
@@ -10016,7 +10046,7 @@ class NovaMemoryAI:
         
         return min(score, 10.0)  # Cap at 10.0
 
-    def _reconstruct_session_conversation(self, session_id: str) -> List[Dict[str, str]]:
+    def _previous__reconstruct_session_conversation(self, session_id: str) -> List[Dict[str, str]]:
         """Reconstruct full conversation from session by matching messages with session_id
         
         Args:
@@ -10037,7 +10067,7 @@ class NovaMemoryAI:
         # Return simplified conversation format for readability
         return session_messages
 
-    def _summarize_session_for_context(self, session: Dict[str, Any], message_limit: int = 6) -> str:
+    def _previous__summarize_session_for_context(self, session: Dict[str, Any], message_limit: int = 6) -> str:
         """Summarize a session into a concise context string for the AI
         
         Args:
@@ -10084,7 +10114,7 @@ class NovaMemoryAI:
         
         return summary
 
-    def get_past_session_context(self, limit: int = 3, hours_back: int = 72) -> str:
+    def _previous_get_past_session_context(self, limit: int = 3, hours_back: int = 72) -> str:
         """Get synthesized context from past sessions for the AI to use
         
         This method retrieves relevant past conversation sessions and creates
@@ -10148,7 +10178,7 @@ class NovaMemoryAI:
         
         return context
 
-    def get_current_session_context(self) -> str:
+    def _previous_get_current_session_context(self) -> str:
         """Get the past session context for the current session
         
         Returns the synthesized context from past sessions that was generated
@@ -10171,7 +10201,7 @@ class NovaMemoryAI:
         # Return the past context that was generated at session initialization
         return session.get("past_context", "")
 
-    def get_session_info(self) -> Dict[str, Any]:
+    def _previous_get_session_info(self) -> Dict[str, Any]:
         """Get information about conversation sessions"""
         sessions = self.data.get("sessions", {})
 
@@ -10212,7 +10242,7 @@ class NovaMemoryAI:
             "last_duration": last_session.get("session_duration", "unknown")
         }
 
-    def get_conversation_state(self) -> Dict[str, Any]:
+    def _previous_get_conversation_state(self) -> Dict[str, Any]:
         """Get current conversation state for AI response generation"""
         state = self.data.get("conversation_state", {})
         user_info = self.data.get("user", {})
@@ -10228,7 +10258,7 @@ class NovaMemoryAI:
             "conversation_context": self._get_conversation_context_hints()
         }
 
-    def _get_conversation_context_hints(self) -> Dict[str, Any]:
+    def _previous__get_conversation_context_hints(self) -> Dict[str, Any]:
         """Get context hints for natural conversation continuation"""
         facts = self.data.get("current_facts", {})
         recent_topics = []
@@ -10248,7 +10278,7 @@ class NovaMemoryAI:
             "should_avoid_introductions": not self.data.get("conversation_state", {}).get("introduction_phase", True)
         }
 
-    def mark_greeting_completed(self):
+    def _previous_mark_greeting_completed(self):
         """Mark that greeting has been completed in current session"""
         if "conversation_state" not in self.data:
             self.data["conversation_state"] = {}
@@ -10261,7 +10291,7 @@ class NovaMemoryAI:
             self.data["conversation_state"]["established_user"] = True
             self.data["user"]["relationship_established"] = True
     
-    def _check_and_end_inactive_sessions(self):
+    def _previous__check_and_end_inactive_sessions(self):
         """Check for inactive sessions and end them automatically after timeout"""
         current_time = datetime.now()
         timeout_duration = timedelta(minutes=self.session_timeout_minutes)
@@ -10285,7 +10315,7 @@ class NovaMemoryAI:
                     except Exception as e:
                         print(f"Error checking session timeout: {e}")
 
-    def set_session_timeout(self, minutes: int):
+    def _previous_set_session_timeout(self, minutes: int):
         """Set the session timeout duration in minutes"""
         if minutes > 0:
             self.session_timeout_minutes = minutes
@@ -10293,7 +10323,7 @@ class NovaMemoryAI:
         else:
             print("Invalid timeout value. Must be greater than 0.")
 
-    def _is_meaningful_message(self, user_message: str) -> bool:
+    def _previous__is_meaningful_message(self, user_message: str) -> bool:
         """
         Determine if a user message is meaningful enough to create a memory event.
         Filters out simple greetings and other meaningless inputs.
@@ -10328,7 +10358,7 @@ class NovaMemoryAI:
             
         return False
 
-    def process_conversation(self, user_message: str, ai_response: str, session_id: str = None) -> Dict[str, Any]:
+    def _previous_process_conversation(self, user_message: str, ai_response: str, session_id: str = None) -> Dict[str, Any]:
         """Enhanced conversation processing with advanced memory features"""
         timestamp = datetime.now().isoformat()
         memory_events = []
@@ -10727,7 +10757,7 @@ class NovaMemoryAI:
             'operations': memory_events  # Return the actual events created
         }
 
-    def _detect_and_resolve_conflicts(self, memory_events: List[MemoryEvent]):
+    def _previous__detect_and_resolve_conflicts(self, memory_events: List[MemoryEvent]):
         """Detect and resolve conflicts in memory"""
         for event in memory_events:
             if hasattr(event, 'summary') and isinstance(event.summary, str):
@@ -10789,7 +10819,7 @@ class NovaMemoryAI:
         # This method should not process user input - that's handled elsewhere
         # This method only detects and resolves conflicts in existing memory events
 
-    def _check_and_update_user_name(self, user_message: str):
+    def _previous__check_and_update_user_name(self, user_message: str):
         """
         Check if user is providing their name and update all references.
         
@@ -10839,7 +10869,7 @@ class NovaMemoryAI:
             if current_session_id and current_session_id in self.data["sessions"]:
                 self.data["sessions"][current_session_id]["user_name"] = current_name
 
-    def _update_conversation_references(self, user_name: str):
+    def _previous__update_conversation_references(self, user_name: str):
         """
         Update conversation history to replace "user" references with actual name.
         """
@@ -10851,7 +10881,7 @@ class NovaMemoryAI:
                     updated_content = re.sub(r'\buser\b', user_name, content, flags=re.IGNORECASE)
                     message["text"] = updated_content
 
-    def _update_fact_references(self, user_name: str):
+    def _previous__update_fact_references(self, user_name: str):
         """
         Update existing facts to replace "user" references with actual name.
         """
@@ -10878,7 +10908,7 @@ class NovaMemoryAI:
                         if updated_value != fact_value["value"]:
                             fact_value["value"] = updated_value
 
-    def _execute_operation(self, operation: Dict, timestamp: str) -> Optional[MemoryEvent]:
+    def _previous__execute_operation(self, operation: Dict, timestamp: str) -> Optional[MemoryEvent]:
         """Execute a memory operation with historical tracking"""
         op_type = operation['type']
         fact_type = operation['fact_type']
@@ -11030,7 +11060,7 @@ class NovaMemoryAI:
 
         return None
 
-    def _check_for_contradiction(self, fact_type: str, new_value: Any, existing_value: Any) -> Optional[str]:
+    def _previous__check_for_contradiction(self, fact_type: str, new_value: Any, existing_value: Any) -> Optional[str]:
         """Check if new value contradicts existing value"""
         if existing_value is None:
             return None
@@ -11060,7 +11090,7 @@ class NovaMemoryAI:
             
         return None
 
-    def _execute_enhanced_operation(self, operation: Dict, timestamp: str, emotional_context: EmotionalContext) -> Optional[MemoryEvent]:
+    def _previous__execute_enhanced_operation(self, operation: Dict, timestamp: str, emotional_context: EmotionalContext) -> Optional[MemoryEvent]:
         """Execute operation with enhanced semantic and emotional processing"""
         op_type = operation['type']
         fact_type = operation['fact_type']
@@ -11264,7 +11294,7 @@ class NovaMemoryAI:
 
         return None
 
-    def _calculate_fact_importance(self, fact_type: str, value: str) -> float:
+    def _previous__calculate_fact_importance(self, fact_type: str, value: str) -> float:
         """Calculate importance score for a fact"""
         importance = 0.5  # Base importance
 
@@ -11282,7 +11312,7 @@ class NovaMemoryAI:
 
         return min(importance, 1.0)
 
-    def _detect_and_merge_overlapping_facts(self):
+    def _previous__detect_and_merge_overlapping_facts(self):
         """Detect and merge overlapping or duplicate facts across different fact types."""
         # Create a mapping of fact values to their fact types
         fact_value_mapping = defaultdict(list)
@@ -11322,7 +11352,7 @@ class NovaMemoryAI:
                     if "fact_history" in self.data and dup['fact_type'] in self.data["fact_history"]:
                         del self.data["fact_history"][dup['fact_type']]
     
-    def _normalize_fact_value(self, fact_value) -> Optional[str]:
+    def _previous__normalize_fact_value(self, fact_value) -> Optional[str]:
         """Normalize fact value for comparison."""
         if not fact_value:
             return None
@@ -11340,7 +11370,7 @@ class NovaMemoryAI:
         
         return normalized if normalized else None
     
-    def _calculate_fact_confidence(self, fact_type: str, fact_value) -> float:
+    def _previous__calculate_fact_confidence(self, fact_type: str, fact_value) -> float:
         """Calculate confidence score for a fact based on various factors."""
         base_confidence = 0.5
         
@@ -11390,7 +11420,7 @@ class NovaMemoryAI:
         
         return min(base_confidence, 1.0)
 
-    def _update_memory_relationships(self):
+    def _previous__update_memory_relationships(self):
         """Update relationships between facts"""
         # Use fact_history instead of current_facts
         if "fact_history" not in self.data:
@@ -11414,7 +11444,7 @@ class NovaMemoryAI:
                                 'created_at': datetime.now().isoformat()
                             }
 
-    def _update_importance_scores(self):
+    def _previous__update_importance_scores(self):
         """Update importance scores for all facts"""
         # Use fact_history instead of current_facts
         if "fact_history" not in self.data:
@@ -11436,7 +11466,7 @@ class NovaMemoryAI:
                 'final_importance': (access_count * 0.3 + recency_score * 0.7)
             }
 
-    def _detect_memory_patterns(self):
+    def _previous__detect_memory_patterns(self):
         """Detect patterns in memory evolution"""
         # Simple pattern detection for career progression
         occupation_history = self.data.get("fact_history", {}).get("occupation", [])
@@ -11453,7 +11483,7 @@ class NovaMemoryAI:
                 self.patterns.append(pattern)
                 print(f"Pattern detected: Career progression from {occupation_history[0]['value']} to {occupation_history[-1]['value']}")
 
-    def get_semantic_insights(self) -> Dict[str, Any]:
+    def _previous_get_semantic_insights(self) -> Dict[str, Any]:
         """Get semantic insights about user's information"""
         insights = {
             'related_concepts': {},
@@ -11478,7 +11508,7 @@ class NovaMemoryAI:
 
         return insights
 
-    def get_emotional_timeline(self) -> List[Dict[str, Any]]:
+    def _previous_get_emotional_timeline(self) -> List[Dict[str, Any]]:
         """Get emotional timeline of memories"""
         emotional_events = []
 
@@ -11494,7 +11524,7 @@ class NovaMemoryAI:
 
         return emotional_events
 
-    def end_session(self):
+    def _previous_end_session(self):
         """End the current conversation session and notify persistence layer"""
         self._end_current_session()
         self.save_memory()
@@ -11506,7 +11536,7 @@ class NovaMemoryAI:
             # Silently fail if persistence layer not available
             pass
 
-    def _add_to_history(self, fact_type: str, value: Any, timestamp: str, status: str):
+    def _previous__add_to_history(self, fact_type: str, value: Any, timestamp: str, status: str):
         """Add a value to the historical tracking"""
         if fact_type not in self.data["fact_history"]:
             self.data["fact_history"][fact_type] = []
@@ -11520,7 +11550,7 @@ class NovaMemoryAI:
 
         self.data["fact_history"][fact_type].append(historical_value)
 
-    def _mark_as_previous(self, fact_type: str, value: Any):
+    def _previous__mark_as_previous(self, fact_type: str, value: Any):
         """Mark existing values as previous in history"""
         if fact_type in self.data["fact_history"]:
             for historical_value in self.data["fact_history"][fact_type]:
@@ -11528,7 +11558,7 @@ class NovaMemoryAI:
                     historical_value["status"] = "previous"
                     break
 
-    def _normalize_summary_length(self, summary: str, max_length: int = 100) -> str:
+    def _previous__normalize_summary_length(self, summary: str, max_length: int = 100) -> str:
         """Normalize summary length to avoid overly detailed summaries."""
         if len(summary) <= max_length:
             return summary
@@ -11550,7 +11580,7 @@ class NovaMemoryAI:
         truncated = summary[:max_length-3].rsplit(' ', 1)[0]  # Try to break at word boundary
         return truncated + "..."
         
-    def _create_add_summary(self, fact_type: str, value: str) -> str:
+    def _previous__create_add_summary(self, fact_type: str, value: str) -> str:
         """Create summary for ADD operations"""
         if fact_type == 'name':
             return f"User's name is {value}."
@@ -11566,7 +11596,7 @@ class NovaMemoryAI:
             summary = f"User's {fact_type} is {value}."
             return self._normalize_summary_length(summary)
 
-    def _create_update_summary(self, fact_type: str, old_value: str, new_value: str) -> str:
+    def _previous__create_update_summary(self, fact_type: str, old_value: str, new_value: str) -> str:
         """Create summary for UPDATE operations"""
         if fact_type == 'name':
             previous = f"User's name was {old_value}." if old_value else "User's name was unknown."
@@ -11594,7 +11624,7 @@ class NovaMemoryAI:
             summary = f"Updated {fact_type}: {previous} → {updated}"
             return self._normalize_summary_length(summary)
 
-    def _display_memory_operations(self, operations: List[MemoryEvent]) -> None:
+    def _previous__display_memory_operations(self, operations: List[MemoryEvent]) -> None:
         """Display comprehensive memory operations in real-time with detailed tracking"""
         # Comment out the display for now to avoid Unicode issues
         # if not operations:
@@ -11659,7 +11689,7 @@ class NovaMemoryAI:
         # print()  # Add spacing after memory operations
         pass  # Disable display for now
 
-    def recall_historical_information(self, query: str) -> Dict[str, Any]:
+    def _previous_recall_historical_information(self, query: str) -> Dict[str, Any]:
         """Recall historical information based on natural language queries"""
         query_lower = query.lower()
         results = []
@@ -11702,7 +11732,7 @@ class NovaMemoryAI:
             'query': query
         }
 
-    def _get_historical_values(self, fact_type: str, status_filter: str = 'all') -> List[Dict]:
+    def _previous__get_historical_values(self, fact_type: str, status_filter: str = 'all') -> List[Dict]:
         """Get historical values for a specific fact type"""
         results = []
 
@@ -11721,7 +11751,7 @@ class NovaMemoryAI:
 
         return results
 
-    def _get_all_changes(self) -> List[Dict]:
+    def _previous__get_all_changes(self) -> List[Dict]:
         """Get all changes made to facts over time, including recent memory events"""
         changes = []
 
@@ -11772,7 +11802,7 @@ class NovaMemoryAI:
 
         return all_changes
 
-    def _get_timeline(self) -> List[Dict]:
+    def _previous__get_timeline(self) -> List[Dict]:
         """Get a chronological timeline of all changes"""
         timeline = []
 
@@ -11790,7 +11820,7 @@ class NovaMemoryAI:
         timeline.sort(key=lambda x: x["timestamp"])
         return timeline
 
-    def _get_conversation_summary(self, query_lower: str) -> List[Dict]:
+    def _previous__get_conversation_summary(self, query_lower: str) -> List[Dict]:
         """Get conversation history summary based on query"""
         results = []
         conversations = self.data.get('conversation', [])
@@ -11854,7 +11884,7 @@ class NovaMemoryAI:
 
         return results
 
-    def get_dynamic_conversation_context(self) -> Dict[str, Any]:
+    def _previous_get_dynamic_conversation_context(self) -> Dict[str, Any]:
         """Get comprehensive dynamic context for authentic response generation"""
         context = {
             'user_profile': self.data.get('user', {}),
@@ -11871,7 +11901,7 @@ class NovaMemoryAI:
 
         return context
 
-    def _build_relationship_timeline(self) -> List[Dict[str, Any]]:
+    def _previous__build_relationship_timeline(self) -> List[Dict[str, Any]]:
         """Build timeline of relationship development from actual data"""
         timeline = []
 
@@ -11900,7 +11930,7 @@ class NovaMemoryAI:
         timeline.sort(key=lambda x: x.get('timestamp', ''))
         return timeline
 
-    def _extract_conversation_themes(self) -> List[str]:
+    def _previous__extract_conversation_themes(self) -> List[str]:
         """Extract main themes from actual conversation history"""
         themes = set()
         conversations = self.data.get('conversation', [])
@@ -11925,7 +11955,7 @@ class NovaMemoryAI:
 
         return list(themes)
 
-    def _analyze_interaction_patterns(self) -> Dict[str, Any]:
+    def _previous__analyze_interaction_patterns(self) -> Dict[str, Any]:
         """Analyze patterns in actual interactions"""
         conversations = self.data.get('conversation', [])
 
@@ -11954,7 +11984,7 @@ class NovaMemoryAI:
             'session_count': len(sessions)
         }
 
-    def _format_timestamp(self, timestamp: str) -> str:
+    def _previous__format_timestamp(self, timestamp: str) -> str:
         """Format timestamp for human readability"""
         try:
             dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
@@ -11976,7 +12006,7 @@ class NovaMemoryAI:
         except:
             return timestamp
     
-    def retrieve_fact(self, query: str) -> Optional[Dict[str, Any]]:
+    def _previous_retrieve_fact(self, query: str) -> Optional[Dict[str, Any]]:
         """Retrieve specific fact when Nova forgets - On-demand lookup"""
         query_lower = query.lower()
 
@@ -12006,7 +12036,7 @@ class NovaMemoryAI:
 
         return None
 
-    def get_user_context(self, context_type: str = "basic") -> Dict[str, Any]:
+    def _previous_get_user_context(self, context_type: str = "basic") -> Dict[str, Any]:
         """Get user context for Nova - Feeds missing info back automatically"""
         context = {
             'user_id': self.user_id,
@@ -12047,7 +12077,7 @@ class NovaMemoryAI:
 
         return context
 
-    def get_user_context_for_nova(self) -> str:
+    def _previous_get_user_context_for_nova(self) -> str:
         """Get formatted user context to inject into Nova's system prompt
         
         Returns:
@@ -12055,7 +12085,7 @@ class NovaMemoryAI:
         """
         return self.user_context_provider.get_context_for_system_prompt()
     
-    def get_user_awareness_statement(self) -> str:
+    def _previous_get_user_awareness_statement(self) -> str:
         """Get a statement about what Nova remembers/knows about the user
         
         Returns:
@@ -12066,7 +12096,7 @@ class NovaMemoryAI:
             return f"Remember: {context}"
         return ""
     
-    def has_sufficient_user_context(self) -> bool:
+    def _previous_has_sufficient_user_context(self) -> bool:
         """Check if we have enough user information to mention in responses
         
         Returns:
@@ -12074,7 +12104,7 @@ class NovaMemoryAI:
         """
         return self.user_context_provider.has_user_info()
 
-    def query_memory(self, question: str) -> Dict[str, Any]:
+    def _previous_query_memory(self, question: str) -> Dict[str, Any]:
         """Query memory for specific information - When Nova needs help"""
         question_lower = question.lower()
         results = []
@@ -12106,7 +12136,7 @@ class NovaMemoryAI:
             'total_facts': len(self.facts_storage)
         }
 
-    def optimize_memory(self):
+    def _previous_optimize_memory(self):
         """Optimize memory storage - Compression and consolidation"""
         # Remove old conversation logs (keep last 30 days)
         cutoff_date = (datetime.now() - timedelta(days=30)).date()
@@ -12131,7 +12161,7 @@ class NovaMemoryAI:
     # MEMORY PROCESSING PIPELINE
     # ============================================================================
     
-    def _process_current_session_with_organizer(self) -> bool:
+    def _previous__process_current_session_with_organizer(self) -> bool:
         """Process current session with organizer if not yet processed
         
         Collects all messages for the current day and sends to organizer for incremental updates.
@@ -12246,7 +12276,7 @@ class NovaMemoryAI:
             logger.warning(f"Error in organizer processing: {e}")
             return False
     
-    def _get_session_organized_summary(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def _previous__get_session_organized_summary(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Read the organized summary for a session from organizer output
         
         Args:
@@ -12276,7 +12306,7 @@ class NovaMemoryAI:
             logger.warning(f"Error reading organizer summary: {e}")
             return None
     
-    def _get_processed_daily_memory_context(self) -> Dict[str, Any]:
+    def _previous__get_processed_daily_memory_context(self) -> Dict[str, Any]:
         """Build memory context for current daily session
         
         For the current session (today):
@@ -12330,7 +12360,7 @@ class NovaMemoryAI:
             logger.warning(f"Error building processed memory context: {e}")
             return self.get_memory_context("")
 
-    def get_user_identity_description(self) -> str:
+    def _previous_get_user_identity_description(self) -> str:
         """Get the user identity description from memory_categories"""
         try:
             memory_categories = self.data.get("memory_categories", {})
@@ -12341,7 +12371,7 @@ class NovaMemoryAI:
             logger.debug(f"Error getting user identity description: {e}")
             return ""
 
-    def get_today_organizer_summary(self) -> Dict[str, Any]:
+    def _previous_get_today_organizer_summary(self) -> Dict[str, Any]:
         """Get the organizer daily summary for today"""
         try:
             from datetime import datetime
@@ -12363,7 +12393,7 @@ class NovaMemoryAI:
             logger.debug(f"Error getting organizer summary: {e}")
             return {}
 
-    def get_memory_context(self, query: str = "") -> Dict[str, Any]:
+    def _previous_get_memory_context(self, query: str = "") -> Dict[str, Any]:
         """Get memory context for AI response generation including user identity and organizer summary"""
         context = {
             'user_info': self.data["user"],
@@ -12386,7 +12416,7 @@ class NovaMemoryAI:
         
         return context
 
-    def get_full_memory_json(self) -> Dict[str, Any]:
+    def _previous_get_full_memory_json(self) -> Dict[str, Any]:
         """Get the complete memory in enhanced JSON format with historical data"""
         return {
             "user": self.data["user"],
@@ -12396,7 +12426,7 @@ class NovaMemoryAI:
             "fact_history": self.data["fact_history"]
         }
 
-    def get_memory_stats(self) -> Dict[str, Any]:
+    def _previous_get_memory_stats(self) -> Dict[str, Any]:
         """Get memory statistics"""
         return {
             'total_facts': len(self.data["fact_history"]),
@@ -12409,7 +12439,7 @@ class NovaMemoryAI:
             }
         }
 
-    def load_memory(self):
+    def _previous_load_memory(self):
         """Load memory from storage file and migrate to historical structure"""
         try:
             if os.path.exists(self.storage_file):
@@ -12477,7 +12507,7 @@ class NovaMemoryAI:
             # Silently handle memory loading error
             pass
 
-    def _check_for_contradictions_and_updates(self, operations, user_message: str, context: Dict):
+    def _previous__check_for_contradictions_and_updates(self, operations, user_message: str, context: Dict):
         """
         Check for contradictions in new operations and convert ADD operations to UPDATE operations when appropriate.
         
@@ -12579,7 +12609,7 @@ class NovaMemoryAI:
         
         return updated_operations
 
-    def _are_preferences_opposing(self, old_value: str, new_value: str) -> bool:
+    def _previous__are_preferences_opposing(self, old_value: str, new_value: str) -> bool:
         """Check if two preference values are opposing/contradictory."""
         old_lower = old_value.lower()
         new_lower = new_value.lower()
@@ -12601,7 +12631,7 @@ class NovaMemoryAI:
                     return True
         return False
 
-    def _are_preferences_related(self, old_value: str, new_value: str) -> bool:
+    def _previous__are_preferences_related(self, old_value: str, new_value: str) -> bool:
         """Check if two preferences are related (about same topic)."""
         old_lower = old_value.lower()
         new_lower = new_value.lower()
@@ -12613,7 +12643,7 @@ class NovaMemoryAI:
                 return True
         return False
         
-    def _get_previous_value_for_update(self, operation: Dict, user_message: str) -> str:
+    def _previous__get_previous_value_for_update(self, operation: Dict, user_message: str) -> str:
         """Get the previous value that should be updated based on the operation."""
         category = operation.get('category', '')
         subcategory = operation.get('subcategory', '')
@@ -12643,7 +12673,7 @@ class NovaMemoryAI:
         
         return None
 
-    def _migrate_existing_facts_to_history(self):
+    def _previous__migrate_existing_facts_to_history(self):
         """Migrate existing facts to historical structure if they don't have history"""
         current_time = datetime.now().isoformat()
 
@@ -12651,7 +12681,7 @@ class NovaMemoryAI:
         # All facts should already be in fact_history
         pass
 
-    def search_external_information(self, query: str, auto_store: bool = True) -> Dict[str, Any]:
+    def _previous_search_external_information(self, query: str, auto_store: bool = True) -> Dict[str, Any]:
         """
         Search for external information using SerpAPI with user preferences
 
@@ -12706,7 +12736,7 @@ class NovaMemoryAI:
                 "results": []
             }
 
-    def _extract_search_preferences(self, search_category: Dict) -> Dict[str, Any]:
+    def _previous__extract_search_preferences(self, search_category: Dict) -> Dict[str, Any]:
         """Extract user's search preferences from stored memory"""
         preferences = {
             "search_depth": "moderate",
@@ -12727,7 +12757,7 @@ class NovaMemoryAI:
 
         return preferences
 
-    def _extract_source_preferences(self, search_category: Dict) -> Dict[str, List[str]]:
+    def _previous__extract_source_preferences(self, search_category: Dict) -> Dict[str, List[str]]:
         """Extract user's preferred and disliked sources"""
         sources = {
             "preferred_sources": [],
@@ -12745,7 +12775,7 @@ class NovaMemoryAI:
 
         return sources
 
-    def _should_perform_search(self, query: str, search_category: Dict) -> bool:
+    def _previous__should_perform_search(self, query: str, search_category: Dict) -> bool:
         """Determine if we should perform a new search or use cached results"""
         # Check for recent identical searches (within last hour)
         current_time = datetime.now()
@@ -12770,7 +12800,7 @@ class NovaMemoryAI:
 
         return True
 
-    def _get_recent_search_result(self, query: str, search_category: Dict) -> Optional[Dict]:
+    def _previous__get_recent_search_result(self, query: str, search_category: Dict) -> Optional[Dict]:
         """Get recent search result for the same query"""
         for item in search_category.values():
             if item.get("subcategory") == "search_history":
@@ -12782,7 +12812,7 @@ class NovaMemoryAI:
 
         return None
 
-    def _store_search_results(self, query: str, search_results: Dict):
+    def _previous__store_search_results(self, query: str, search_results: Dict):
         """Store search results and update user preferences"""
         timestamp = datetime.now().isoformat()
 
@@ -12810,7 +12840,7 @@ class NovaMemoryAI:
         # Update search patterns and preferences based on results
         self._learn_from_search_behavior(query, search_results)
 
-    def _learn_from_search_behavior(self, query: str, search_results: Dict):
+    def _previous__learn_from_search_behavior(self, query: str, search_results: Dict):
         """Learn from search behavior to improve future searches"""
         # Detect search topics for news tracking
         if any(word in query.lower() for word in ["news", "latest", "recent", "update"]):
@@ -12824,7 +12854,7 @@ class NovaMemoryAI:
                     metadata={"confidence": 0.8, "source": "search_behavior"}
                 )
 
-    def _display_search_operation(self, query: str, search_results: Dict):
+    def _previous__display_search_operation(self, query: str, search_results: Dict):
         """Display search operation in real-time memory format"""
         print(f"\n[Search] Search Operation:")
         print(f"search_query = \"{query}\"")
@@ -12833,7 +12863,7 @@ class NovaMemoryAI:
         print(f"Memory log: \"Searched for: {query}\"")
         print()
 
-    def detect_and_store_search_preferences(self, message: str, context: Dict = None) -> List[Dict]:
+    def _previous_detect_and_store_search_preferences(self, message: str, context: Dict = None) -> List[Dict]:
         """
         Detect and store intelligent search behavior preferences from natural conversation.
         Handles search depth, source filtering, news delivery, and quality preferences.
@@ -12879,7 +12909,7 @@ class NovaMemoryAI:
 
         return detected_preferences
 
-    def _detect_search_depth_preferences(self, message: str, message_lower: str) -> List[Dict]:
+    def _previous__detect_search_depth_preferences(self, message: str, message_lower: str) -> List[Dict]:
         """Detect user preferences for search depth and detail level"""
         preferences = []
 
@@ -12930,7 +12960,7 @@ class NovaMemoryAI:
 
         return preferences
 
-    def _detect_source_preferences(self, message: str, message_lower: str) -> List[Dict]:
+    def _previous__detect_source_preferences(self, message: str, message_lower: str) -> List[Dict]:
         """Detect user preferences for source filtering and constraints"""
         preferences = []
 
@@ -12985,7 +13015,7 @@ class NovaMemoryAI:
 
         return preferences
 
-    def _detect_news_preferences(self, message: str, message_lower: str) -> List[Dict]:
+    def _previous__detect_news_preferences(self, message: str, message_lower: str) -> List[Dict]:
         """Detect user preferences for news delivery format and frequency"""
         preferences = []
 
@@ -13042,7 +13072,7 @@ class NovaMemoryAI:
 
         return preferences
 
-    def _detect_search_quality_feedback(self, message: str, message_lower: str) -> List[Dict]:
+    def _previous__detect_search_quality_feedback(self, message: str, message_lower: str) -> List[Dict]:
         """Detect user feedback about search result quality"""
         preferences = []
 
@@ -13074,7 +13104,7 @@ class NovaMemoryAI:
 
         return preferences
 
-    def _display_behavioral_adaptation(self, preference: Dict):
+    def _previous__display_behavioral_adaptation(self, preference: Dict):
         """Display behavioral adaptation in real-time memory format"""
         print(f"\n[Brain] Search Behavior Adaptation:")
 
@@ -13089,7 +13119,7 @@ class NovaMemoryAI:
         print(f"Memory log: \"Learned search preference: {subcategory}.{key} = {value}\"")
         print()
 
-    def apply_search_preferences_to_query(self, query: str, search_category: Dict) -> Dict[str, Any]:
+    def _previous_apply_search_preferences_to_query(self, query: str, search_category: Dict) -> Dict[str, Any]:
         """
         Apply learned search preferences to modify search behavior for a specific query.
         Returns enhanced search parameters based on stored preferences.
@@ -13137,7 +13167,7 @@ class NovaMemoryAI:
 
         return enhanced_params
 
-    def log_search_session_behavior(self, query: str, search_results: Dict, user_interaction: str = None):
+    def _previous_log_search_session_behavior(self, query: str, search_results: Dict, user_interaction: str = None):
         """Log search behavior summary in session memory for continuous learning"""
         session_log = {
             "query": query,
@@ -13170,7 +13200,7 @@ class NovaMemoryAI:
             }
         )
 
-    def _analyze_user_satisfaction(self, user_interaction: str) -> Dict[str, Any]:
+    def _previous__analyze_user_satisfaction(self, user_interaction: str) -> Dict[str, Any]:
         """Analyze user interaction to determine satisfaction with search results"""
         interaction_lower = user_interaction.lower()
 
@@ -13198,7 +13228,7 @@ class NovaMemoryAI:
 
         return satisfaction
 
-    def get_accumulated_preferences(self, preference_type: str = None) -> Dict[str, Any]:
+    def _previous_get_accumulated_preferences(self, preference_type: str = None) -> Dict[str, Any]:
         """
         Retrieve accumulated preferences with timestamps.
         
@@ -13226,7 +13256,7 @@ class NovaMemoryAI:
         
         return result
 
-    def _json_default(self, o: Any):
+    def _previous__json_default(self, o: Any):
         """Custom JSON serializer for dataclasses and other types."""
         if isinstance(o, (datetime, date)):
             return o.isoformat()
@@ -13239,7 +13269,7 @@ class NovaMemoryAI:
         except Exception:
             return f"<unserializable type: {type(o).__name__}>"
 
-    def synchronize_memory_events_and_fact_history(self):
+    def _previous_synchronize_memory_events_and_fact_history(self):
         """
         Ensure all memory_events have corresponding entries in fact_history.
         This fixes synchronization issues where events exist in memory_events but not in fact_history.
@@ -13813,7 +13843,7 @@ class NovaMemoryAI:
             
         return fixed_count
 
-    def validate_memory_consistency(self):
+    def _previous_validate_memory_consistency(self):
         """
         Validate synchronization between memory_events and fact_history.
         Returns True if consistent, False otherwise.
@@ -13851,7 +13881,7 @@ class NovaMemoryAI:
         
         return True
 
-    def remove_duplicate_memory_events(self):
+    def _previous_remove_duplicate_memory_events(self):
         """
         Remove duplicate memory events that have the same event_id.
         This fixes the duplication issue where identical events were being stored.
@@ -13905,7 +13935,7 @@ class NovaMemoryAI:
             
         return duplicates_removed
 
-    def save_memory(self):
+    def _previous_save_memory(self):
         """Save memory to storage file"""
         try:
             # Ensure instance variables point to the current data structures
@@ -14163,7 +14193,7 @@ class NovaMemoryAI:
             except:
                 pass  # Ignore cleanup errors in error handler
 
-    def transform_fact_history_to_unified_format(self):
+    def _previous_transform_fact_history_to_unified_format(self):
         """
         Transform the fact_history to unified, short, clean format with all personal preferences
         consolidated under personal_preferences with subcategories following New_memory_event.json format.
@@ -14304,7 +14334,7 @@ class NovaMemoryAI:
         
         return new_fact_history
 
-    def _process_preference_item(self, item: Dict[str, Any], subcategory: str) -> Optional[Dict[str, Any]]:
+    def _previous__process_preference_item(self, item: Dict[str, Any], subcategory: str) -> Optional[Dict[str, Any]]:
         """
         Process a single preference item to extract 'item', 'added', 'updated', and 'score'.
         
@@ -14389,7 +14419,7 @@ class NovaMemoryAI:
             "updated": updated_date
         }
 
-    def _extract_date_from_timestamp(self, timestamp: str) -> str:
+    def _previous__extract_date_from_timestamp(self, timestamp: str) -> str:
         """
         Extract date in YYYY-MM-DD format from ISO timestamp.
         
@@ -14411,7 +14441,7 @@ class NovaMemoryAI:
             # If parsing fails, return today's date
             return datetime.now().strftime('%Y-%m-%d')
 
-    def _convert_added_preferences_to_unified_format(self, memory_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _previous__convert_added_preferences_to_unified_format(self, memory_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Convert Added_preference fields from memory_events to unified fact_history format.
         This method ensures all Added_preference_* fields are properly stored in fact_history.personal_preferences
@@ -14547,7 +14577,7 @@ class NovaMemoryAI:
         
         return memory_data
 
-    def _are_preferences_similar(self, pref1: str, pref2: str) -> bool:
+    def _previous__are_preferences_similar(self, pref1: str, pref2: str) -> bool:
         """
         Check if two preferences are similar enough to be considered duplicates.
         Uses fuzzy matching to identify similar meanings despite different phrasing.
@@ -14610,7 +14640,7 @@ class NovaMemoryAI:
         
         return False
 
-    def transform_fact_history_to_unified_format(self):
+    def _previous_transform_fact_history_to_unified_format(self):
         """
         Transform the fact_history to unified, short, clean format with all personal preferences
         consolidated under personal_preferences with subcategories.
@@ -14768,7 +14798,7 @@ class NovaMemoryAI:
         
         return new_fact_history
 
-    def add_event(self, user_id: str, text: str, session_id: str) -> str:
+    def _previous_add_event(self, user_id: str, text: str, session_id: str) -> str:
         """
         Create ADD event, embed, update vector_index, assign to cluster, update fact_history.
         After creating the event, triggers the AI Organizer to process it.
@@ -15038,7 +15068,7 @@ class NovaMemoryAI:
             # Re-raise the original exception
             raise e
 
-    def process_input(self, user_id: str, text: str, session_id: str) -> dict:
+    def _previous_process_input(self, user_id: str, text: str, session_id: str) -> dict:
         """
         Full pipeline: embed, compare, choose ADD/UPDATE, persist, return created event.
         
@@ -15114,7 +15144,7 @@ class NovaMemoryAI:
                 "type": "ADD"
             }
 
-    def _create_complete_update_event(self, previous_event_id: str, summary: str, timestamp: str, 
+    def _previous__create_complete_update_event(self, previous_event_id: str, summary: str, timestamp: str, 
                                      emotional_context: Dict, semantic_context: Dict, 
                                      importance_score: float, confidence: float, category: str, 
                                      subcategory: str, previous_value: str, current_value: str,
@@ -15229,7 +15259,7 @@ class NovaMemoryAI:
         
         return update_event
 
-    def update_event(self, source_event_id: str, new_text: str) -> str:
+    def _previous_update_event(self, source_event_id: str, new_text: str) -> str:
         """
         Create UPDATE event linked to source_event_id and update clusters & fact_history.
         
@@ -15432,7 +15462,7 @@ class NovaMemoryAI:
 
         return event_id
 
-    def get_fact_history(self, user_id: str) -> dict:
+    def _previous_get_fact_history(self, user_id: str) -> dict:
         """
         Return fact_history with proper update_item where applicable.
         
@@ -15445,7 +15475,7 @@ class NovaMemoryAI:
         fact_history = self.data.get("fact_history", {})
         return fact_history
 
-    def recompute_clusters(self) -> None:
+    def _previous_recompute_clusters(self) -> None:
         """
         Recalculate centroids and coherence scores for all clusters.
         """
@@ -15493,7 +15523,7 @@ class NovaMemoryAI:
             # Log the recompute operation
             self._log_cluster_update('recompute', reason=f"Recomputed all {len(self.data['memory_engine']['clusters'])} clusters")
 
-    def _calculate_cluster_coherence(self, vectors: List[List[float]]) -> float:
+    def _previous__calculate_cluster_coherence(self, vectors: List[List[float]]) -> float:
         """
         Calculate coherence score for a cluster based on how close vectors are to centroid.
         This version is for batch operations where only vectors are provided.
@@ -15524,7 +15554,7 @@ class NovaMemoryAI:
 
         return min(1.0, coherence)
 
-    def _euclidean_distance(self, vec1: List[float], vec2: List[float]) -> float:
+    def _previous__euclidean_distance(self, vec1: List[float], vec2: List[float]) -> float:
         """
         Calculate Euclidean distance between two vectors.
         
@@ -15540,13 +15570,13 @@ class NovaMemoryAI:
         
         return math.sqrt(sum((a - b) ** 2 for a, b in zip(vec1, vec2)))
 
-    def persist_memory(self):
+    def _previous_persist_memory(self):
         """
         Save entire memory_state to memory_state.json.
         """
         self.save_memory()
 
-    def load_memory(self):
+    def _previous_load_memory(self):
         """
         Load entire memory_state from memory_state.json.
         """
@@ -15613,7 +15643,7 @@ class NovaMemoryAI:
             # Silently handle memory loading error
             pass
 
-    def cosine_similarity(self, vec_a: List[float], vec_b: List[float]) -> float:
+    def _previous_cosine_similarity(self, vec_a: List[float], vec_b: List[float]) -> float:
         """
         Helper utility for vector comparisons.
         
@@ -15626,7 +15656,7 @@ class NovaMemoryAI:
         """
         return self._cosine_similarity(vec_a, vec_b)
 
-    def _synchronize_vector_index_and_clusters(self):
+    def _previous__synchronize_vector_index_and_clusters(self):
         """
         Synchronize vector_index and clusters between root level and memory_engine
         to ensure both locations have the same data as per New_memory_event.json template.
@@ -15675,7 +15705,7 @@ class NovaMemoryAI:
             self.data["memory_engine"]["clusters"] = self.clusters
             # Removed duplicate storage at root level to match New_memory_event.json format
 
-    def _synchronize_personal_preferences_to_memory_categories(self):
+    def _previous__synchronize_personal_preferences_to_memory_categories(self):
         """
         Synchronize personal preferences from fact_history to memory_categories.personal_preferences
         to ensure both locations have the same data (no duplicates).
@@ -15722,7 +15752,7 @@ class NovaMemoryAI:
                             # Store in memory_categories
                             self.data["memory_categories"][MemoryCategory.PERSONAL_PREFERENCES.value][key] = memory_item
 
-    def _validate_preference_entry(self, entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _previous__validate_preference_entry(self, entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Validate a preference entry to ensure it has all required fields with proper values.
         
@@ -15774,7 +15804,7 @@ class NovaMemoryAI:
             "updated": updated
         }
     
-    def _is_valid_iso_date(self, date_str: str) -> bool:
+    def _previous__is_valid_iso_date(self, date_str: str) -> bool:
         """
         Check if a date string is a valid ISO 8601 date (YYYY-MM-DD format).
         
@@ -15794,7 +15824,7 @@ class NovaMemoryAI:
         except ValueError:
             return False
 
-    def remove_duplicate_memory_events(self):
+    def _previous_remove_duplicate_memory_events(self):
         """
         Remove duplicate memory events that have the same event_id.
         This fixes the duplication issue where identical events were being stored.
@@ -15850,7 +15880,7 @@ class NovaMemoryAI:
         
         return duplicates_removed
 
-    def _process_preference_item(self, item: Any, subcategory: str) -> Optional[Dict[str, Any]]:
+    def _previous__process_preference_item(self, item: Any, subcategory: str) -> Optional[Dict[str, Any]]:
         """
         Process a single preference item to extract 'item', 'added', 'updated', and 'score'.
         
@@ -15954,7 +15984,7 @@ class NovaMemoryAI:
                 "updated": datetime.now().strftime('%Y-%m-%d')
             }
 
-    def remove_current_facts(self):
+    def _previous_remove_current_facts(self):
         """
         Remove the 'current_facts' section entirely while preserving 'fact_history'.
         This addresses the specific request to only keep fact_history.
@@ -15976,7 +16006,7 @@ class NovaMemoryAI:
 
     # ==================== VECTOR-BASED SIMILARITY & CLUSTERING METHODS ====================
     
-    def _create_embedding_vector(self, text: str, emotional_context: Optional[Dict] = None,
+    def _previous__create_embedding_vector(self, text: str, emotional_context: Optional[Dict] = None,
                                 category: Optional[str] = None, event: Optional[Dict] = None) -> List[float]:
         """
         Create an embedding vector for the given text using enhanced semantic features.
@@ -16151,7 +16181,7 @@ class NovaMemoryAI:
         # Ensure we return exactly 8 dimensions to match the specification
         return vector[:8]
 
-    def _create_complete_add_event(self, user_id: str, text: str, session_id: str) -> Dict[str, Any]:
+    def _previous__create_complete_add_event(self, user_id: str, text: str, session_id: str) -> Dict[str, Any]:
         """
         Create a complete ADD event with all required fields from the specification.
         After creating the event, triggers the AI Organizer to process it.
@@ -16313,7 +16343,7 @@ class NovaMemoryAI:
         
         return add_event
 
-    def _create_complete_update_event(self, previous_event_id: str, summary: str, timestamp: str, 
+    def _previous__create_complete_update_event(self, previous_event_id: str, summary: str, timestamp: str, 
                                      emotional_context: Dict, semantic_context: Dict, 
                                      importance_score: float, confidence: float, category: str, 
                                      subcategory: str, previous_value: str, current_value: str,
@@ -16390,7 +16420,7 @@ class NovaMemoryAI:
 
         return update_event
 
-    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+    def _previous__cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
         """
         Calculate cosine similarity between two vectors.
         Returns a value between -1 and 1, where 1 means identical direction.
@@ -16414,7 +16444,7 @@ class NovaMemoryAI:
         
         return dot_product / (magnitude1 * magnitude2)
 
-    def _find_similar_events(self, new_text: str, threshold: float = 0.75) -> List[Tuple[str, float]]:
+    def _previous__find_similar_events(self, new_text: str, threshold: float = 0.75) -> List[Tuple[str, float]]:
         """
         Find events that are similar to the new text based on embedding similarity.
         
@@ -16440,7 +16470,7 @@ class NovaMemoryAI:
         similar_events.sort(key=lambda x: x[1], reverse=True)
         return similar_events
 
-    def _create_cluster(self, topic_label: str, initial_event_id: str) -> str:
+    def _previous__create_cluster(self, topic_label: str, initial_event_id: str) -> str:
         """
         Create a new cluster for related events.
         
@@ -16487,7 +16517,7 @@ class NovaMemoryAI:
         
         return cluster_id
 
-    def _add_event_to_cluster(self, cluster_id: str, event_id: str):
+    def _previous__add_event_to_cluster(self, cluster_id: str, event_id: str):
         """
         Add an event to an existing cluster and update the cluster centroid using incremental methods.
 
@@ -16556,7 +16586,7 @@ class NovaMemoryAI:
         # Ensure synchronization after cluster update
         self._synchronize_vector_index_and_clusters()
 
-    def _calculate_cluster_coherence(self, cluster_id: str, weight_by_confidence: bool = True,
+    def _previous__calculate_cluster_coherence(self, cluster_id: str, weight_by_confidence: bool = True,
                                    apply_temporal_decay: bool = True) -> float:
         """
         Calculate coherence score for a cluster based on how closely member vectors
@@ -16707,7 +16737,7 @@ class NovaMemoryAI:
 
         return min(1.0, coherence)
 
-    def _create_embedding_vector(self, text: str, emotional_context: Optional[Dict] = None,
+    def _previous__create_embedding_vector(self, text: str, emotional_context: Optional[Dict] = None,
                                 category: Optional[str] = None, event: Optional[Dict] = None) -> List[float]:
         """
         Create an embedding vector for the given text using enhanced semantic features.
@@ -16882,7 +16912,7 @@ class NovaMemoryAI:
         # Ensure we return exactly 8 dimensions to match the specification
         return vector[:8]
 
-    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+    def _previous__cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
         """
         Calculate cosine similarity between two vectors.
         Returns a value between -1 and 1, where 1 means identical direction.
@@ -16906,7 +16936,7 @@ class NovaMemoryAI:
         
         return dot_product / (magnitude1 * magnitude2)
 
-    def _find_similar_events(self, new_text: str, threshold: float = 0.75) -> List[Tuple[str, float]]:
+    def _previous__find_similar_events(self, new_text: str, threshold: float = 0.75) -> List[Tuple[str, float]]:
         """
         Find events that are similar to the new text based on embedding similarity.
         
@@ -16932,7 +16962,7 @@ class NovaMemoryAI:
         similar_events.sort(key=lambda x: x[1], reverse=True)
         return similar_events
 
-    def _create_cluster(self, topic_label: str, initial_event_id: str) -> str:
+    def _previous__create_cluster(self, topic_label: str, initial_event_id: str) -> str:
         """
         Create a new cluster for related events.
         
@@ -16979,7 +17009,7 @@ class NovaMemoryAI:
         
         return cluster_id
 
-    def _add_event_to_cluster(self, cluster_id: str, event_id: str):
+    def _previous__add_event_to_cluster(self, cluster_id: str, event_id: str):
         """
         Add an event to an existing cluster and update the cluster centroid using incremental methods.
 
@@ -17060,7 +17090,7 @@ class NovaMemoryAI:
             except:
                 pass
 
-    def _create_complete_update_event(self, previous_event_id: str, summary: str, timestamp: str, 
+    def _previous__create_complete_update_event(self, previous_event_id: str, summary: str, timestamp: str, 
                                      emotional_context: Dict, semantic_context: Dict, 
                                      importance_score: float, confidence: float, category: str, 
                                      subcategory: str, previous_value: str, current_value: str,
@@ -17158,7 +17188,7 @@ class NovaMemoryAI:
 
         return update_event
 
-    def _determine_update_type(self, old_value: str, new_value: str) -> str:
+    def _previous__determine_update_type(self, old_value: str, new_value: str) -> str:
         """
         Determine the type of update based on semantic analysis of old and new values.
         
@@ -17208,7 +17238,7 @@ class NovaMemoryAI:
         # Default to refinement (gradual or detailed evolution)
         return "refinement"
 
-    def _create_update_log_entry(self, source_event_id: str, replaced_event_id: str, 
+    def _previous__create_update_log_entry(self, source_event_id: str, replaced_event_id: str, 
                                 similarity_score: float, update_type: str):
         """
         Create an entry in the update log for tracking how preferences evolve.
@@ -17244,7 +17274,7 @@ class NovaMemoryAI:
         
         self.data["memory_engine"]["memory_events"].append(update_event)
 
-    def _update_clusters_for_event(self, event_id: str, event_data: Dict):
+    def _previous__update_clusters_for_event(self, event_id: str, event_data: Dict):
         """
         Update clusters to reflect a new event, either by adding to existing cluster or creating new one.
 
@@ -17304,7 +17334,7 @@ class NovaMemoryAI:
 
             self._log_cluster_update('create', cluster_id, [event_id], f"Created new cluster for event")
 
-    def _create_cluster_with_enhanced_metadata(self, topic: str, initial_event_id: str, event_data: Dict) -> str:
+    def _previous__create_cluster_with_enhanced_metadata(self, topic: str, initial_event_id: str, event_data: Dict) -> str:
         """
         Create a new cluster with enhanced metadata following the New_memory_event.json schema.
         """
@@ -17354,7 +17384,7 @@ class NovaMemoryAI:
 
         return cluster_id
 
-    def _log_cluster_update(self, operation: str, cluster_id: str = None, event_ids: List[str] = None,
+    def _previous__log_cluster_update(self, operation: str, cluster_id: str = None, event_ids: List[str] = None,
                            reason: str = "", pre_metrics: Dict = None, post_metrics: Dict = None):
         """
         Log cluster update operations to the update_log for observability.
@@ -17379,7 +17409,7 @@ class NovaMemoryAI:
         # Note: Removed addition to memory_events to keep clean separation between user events and system logs
         # as per New_memory_event.json reference format
 
-    def _extract_dominant_tags(self, event_data: Dict) -> List[str]:
+    def _previous__extract_dominant_tags(self, event_data: Dict) -> List[str]:
         """
         Extract dominant tags from event data for cluster metadata.
         """
@@ -17406,7 +17436,7 @@ class NovaMemoryAI:
 
         return list(set(tags))  # Remove duplicates
 
-    def _extract_keywords_from_content(self, content: str) -> List[str]:
+    def _previous__extract_keywords_from_content(self, content: str) -> List[str]:
         """
         Extract relevant keywords from content to use as tags.
         """
@@ -17431,7 +17461,7 @@ class NovaMemoryAI:
 
         return keywords
 
-    def _infer_primary_pattern(self, topic: str) -> str:
+    def _previous__infer_primary_pattern(self, topic: str) -> str:
         """
         Infer primary pattern from topic and content.
         """
@@ -17450,7 +17480,7 @@ class NovaMemoryAI:
         else:
             return "general_pattern"
 
-    def _infer_emotional_tone(self, emotional_context: Dict) -> str:
+    def _previous__infer_emotional_tone(self, emotional_context: Dict) -> str:
         """
         Infer emotional tone from emotional context data.
         """
@@ -17469,7 +17499,7 @@ class NovaMemoryAI:
         else:
             return f"{sentiment}_tone"
 
-    def _calculate_temporal_relevance(self, event_timestamp: str, cluster: Dict) -> float:
+    def _previous__calculate_temporal_relevance(self, event_timestamp: str, cluster: Dict) -> float:
         """
         Calculate temporal relevance score for an event to a cluster.
         """
@@ -17492,7 +17522,7 @@ class NovaMemoryAI:
         except:
             return 0.5  # Default neutral relevance
 
-    def _infer_cluster_topic_from_content(self, content: str, category: str) -> str:
+    def _previous__infer_cluster_topic_from_content(self, content: str, category: str) -> str:
         """
         Infer an appropriate cluster topic from the content of the event.
         
@@ -17535,7 +17565,7 @@ class NovaMemoryAI:
             # Default to category-based topic
             return category.replace('_', ' ').title()
 
-    def _get_contextual_similarity_threshold(self, event_category: str, event_type: str) -> float:
+    def _previous__get_contextual_similarity_threshold(self, event_category: str, event_type: str) -> float:
         """
         Determine dynamic similarity threshold based on event category and type.
         
@@ -17567,7 +17597,7 @@ class NovaMemoryAI:
         
         return min(0.95, max(0.5, threshold))  # Keep in reasonable range
 
-    def _calculate_semantic_compatibility(self, event_summary: str, cluster_topic: str) -> float:
+    def _previous__calculate_semantic_compatibility(self, event_summary: str, cluster_topic: str) -> float:
         """
         Calculate semantic compatibility score between an event and a cluster topic.
         
@@ -17612,7 +17642,7 @@ class NovaMemoryAI:
         # Normalize to 0.0-1.0 range
         return min(1.0, score)
 
-    def _infer_cluster_topic_from_content(self, content: str, category: str) -> str:
+    def _previous__infer_cluster_topic_from_content(self, content: str, category: str) -> str:
         """
         Infer a meaningful topic name from the content for cluster labeling.
         
@@ -17653,7 +17683,7 @@ class NovaMemoryAI:
         # Default to category-based topic
         return category.replace('_', ' ').title()
 
-    def _update_clusters_with_new_event(self, event_data: Dict):
+    def _previous__update_clusters_with_new_event(self, event_data: Dict):
         """
         Update clusters to incorporate a new event, either by adding to existing cluster or creating new one.
         Creates vectors if they don't exist and uses the AdvancedClusterEngine for immediate updates.
@@ -17722,7 +17752,7 @@ class NovaMemoryAI:
 
         print(f"[DEBUG] Final cluster count: {len(self.clusters) if hasattr(self, 'clusters') else 'No clusters attr'}")
 
-    def _update_cluster_centroids(self, cluster_ids: List[str] = None):
+    def _previous__update_cluster_centroids(self, cluster_ids: List[str] = None):
         """Recalculate cluster centroid vectors based on current events."""
         clusters_to_update = self.data["memory_engine"]["clusters"]
         if cluster_ids:
@@ -17801,7 +17831,7 @@ class NovaMemoryAI:
 
             cluster["last_updated"] = datetime.now().isoformat()
 
-    def reorganize_clusters(self, cohesion_threshold: float = 0.6, min_cluster_size: int = 3,
+    def _previous_reorganize_clusters(self, cohesion_threshold: float = 0.6, min_cluster_size: int = 3,
                            max_cluster_size: int = 20, merge_threshold: float = 0.8,
                            split_variance_threshold: float = 0.7) -> Dict[str, int]:
         """
@@ -17886,7 +17916,7 @@ class NovaMemoryAI:
         print(f"[CLUSTER-REORG] Reorganization completed: {stats}")
         return stats
 
-    def _should_merge_clusters(self, cluster_id1: str, cluster_id2: str, threshold: float) -> bool:
+    def _previous__should_merge_clusters(self, cluster_id1: str, cluster_id2: str, threshold: float) -> bool:
         """
         Determine if two clusters should be merged based on similarity and compatibility.
 
@@ -17923,7 +17953,7 @@ class NovaMemoryAI:
 
         return True
 
-    def _perform_cluster_merge(self, target_cluster_id: str, source_cluster_id: str) -> bool:
+    def _previous__perform_cluster_merge(self, target_cluster_id: str, source_cluster_id: str) -> bool:
         """
         Perform the actual merge of two clusters.
 
@@ -17982,7 +18012,7 @@ class NovaMemoryAI:
 
         return True
 
-    def _attempt_cluster_split(self, cluster_id: str, variance_threshold: float) -> bool:
+    def _previous__attempt_cluster_split(self, cluster_id: str, variance_threshold: float) -> bool:
         """
         Attempt to split a cluster if it's too incoherent.
 
@@ -18074,7 +18104,7 @@ class NovaMemoryAI:
 
         return False
 
-    def _calculate_coherence_for_events(self, event_ids: List[str]) -> float:
+    def _previous__calculate_coherence_for_events(self, event_ids: List[str]) -> float:
         """
         Calculate coherence for a specific set of events.
 
@@ -18107,7 +18137,7 @@ class NovaMemoryAI:
         avg_similarity = total_similarity / len(vectors)
         return avg_similarity
 
-    def _fallback_divisive_split(self, cluster_id: str) -> bool:
+    def _previous__fallback_divisive_split(self, cluster_id: str) -> bool:
         """
         Fallback divisive clustering approach for splitting clusters.
 
@@ -18195,7 +18225,7 @@ class NovaMemoryAI:
 
         return False
 
-    def _find_best_cluster_for_event(self, event_id: str) -> str:
+    def _previous__find_best_cluster_for_event(self, event_id: str) -> str:
         """
         Find the best cluster to assign an event to based on similarity.
 
@@ -18223,7 +18253,7 @@ class NovaMemoryAI:
 
         return best_cluster_id
 
-    def _create_cluster_with_events(self, cluster_id: str, topic: str, event_ids: List[str]):
+    def _previous__create_cluster_with_events(self, cluster_id: str, topic: str, event_ids: List[str]):
         """
         Create a new cluster with specified events.
 
@@ -18284,7 +18314,7 @@ class NovaMemoryAI:
             self.clusters = {}
         self.clusters[cluster_id] = cluster_data
 
-    def _calculate_average_confidence_for_events(self, event_ids: List[str]) -> float:
+    def _previous__calculate_average_confidence_for_events(self, event_ids: List[str]) -> float:
         """
         Calculate average confidence score for a list of events.
         """
@@ -18303,7 +18333,7 @@ class NovaMemoryAI:
 
         return total_conf / count if count > 0 else 0.8
 
-    def _extract_dominant_tags_for_events(self, event_ids: List[str]) -> List[str]:
+    def _previous__extract_dominant_tags_for_events(self, event_ids: List[str]) -> List[str]:
         """
         Extract dominant tags from a list of events.
         """
@@ -18327,7 +18357,7 @@ class NovaMemoryAI:
 
         return list(all_tags)[:10]  # Limit to 10 tags
 
-    def _infer_cluster_type_for_events(self, event_ids: List[str]) -> str:
+    def _previous__infer_cluster_type_for_events(self, event_ids: List[str]) -> str:
         """
         Infer cluster type based on events in the cluster.
         """
@@ -18347,7 +18377,7 @@ class NovaMemoryAI:
         else:
             return 'general'
 
-    def _calculate_temporal_span_for_events(self, event_ids: List[str]) -> str:
+    def _previous__calculate_temporal_span_for_events(self, event_ids: List[str]) -> str:
         """
         Calculate temporal span of events in the cluster.
         """
@@ -18371,7 +18401,7 @@ class NovaMemoryAI:
         time_span = max(timestamps) - min(timestamps)
         return f"{time_span.days} days"
 
-    def _infer_primary_pattern_for_events(self, event_ids: List[str]) -> str:
+    def _previous__infer_primary_pattern_for_events(self, event_ids: List[str]) -> str:
         """
         Infer the primary pattern from events in the cluster.
         """
@@ -18409,7 +18439,7 @@ class NovaMemoryAI:
         else:
             return "general_pattern"
 
-    def _infer_emotional_tone_for_events(self, event_ids: List[str]) -> str:
+    def _previous__infer_emotional_tone_for_events(self, event_ids: List[str]) -> str:
         """
         Infer emotional tone based on events in the cluster.
         """
@@ -18439,7 +18469,7 @@ class NovaMemoryAI:
         else:
             return "neutral_tone"
 
-    def _calculate_frequency_for_events(self, event_ids: List[str]) -> str:
+    def _previous__calculate_frequency_for_events(self, event_ids: List[str]) -> str:
         """
         Calculate frequency pattern for events in the cluster.
         """
@@ -18482,7 +18512,7 @@ class NovaMemoryAI:
 
             return "irregular_pattern"
 
-    def _extract_content_tags_realtime(self, content: str) -> List[str]:
+    def _previous__extract_content_tags_realtime(self, content: str) -> List[str]:
         """
         Extract relevant tags from content.
         """
@@ -18507,7 +18537,7 @@ class NovaMemoryAI:
 
         return tags[:5]  # Limit to 5 tags
 
-    def _calculate_semantic_coherence(self, cluster: Dict) -> float:
+    def _previous__calculate_semantic_coherence(self, cluster: Dict) -> float:
         """
         Calculate semantic coherence by analyzing the relatedness of content in the cluster.
         
@@ -18549,7 +18579,7 @@ class NovaMemoryAI:
         else:
             return 1.0
 
-    def _calculate_content_similarity(self, content1: str, content2: str) -> float:
+    def _previous__calculate_content_similarity(self, content1: str, content2: str) -> float:
         """
         Calculate semantic similarity between two content strings.
         
@@ -18596,7 +18626,7 @@ class NovaMemoryAI:
         combined_similarity = (jaccard_similarity + domain_match_score) / 2.0
         return min(1.0, combined_similarity)  # Ensure it stays in [0,1] range
 
-    def _reorganize_clusters(self, min_coherence: float = 0.7, max_cluster_size: int = 20, split_threshold: float = 0.6,
+    def _previous__reorganize_clusters(self, min_coherence: float = 0.7, max_cluster_size: int = 20, split_threshold: float = 0.6,
                            merge_threshold: float = 0.85) -> Dict[str, int]:
         """
         Reorganize clusters based on coherence scores and other factors.
@@ -18666,7 +18696,7 @@ class NovaMemoryAI:
 
         return stats
 
-    def _should_merge_clusters(self, cluster_id1: str, cluster_id2: str, threshold: float = 0.85) -> bool:
+    def _previous__should_merge_clusters(self, cluster_id1: str, cluster_id2: str, threshold: float = 0.85) -> bool:
         """
         Determine if two clusters should be merged based on centroid similarity and other factors.
         """
@@ -18695,7 +18725,7 @@ class NovaMemoryAI:
 
         return True
 
-    def _merge_clusters(self, target_cluster_id: str, source_cluster_id: str):
+    def _previous__merge_clusters(self, target_cluster_id: str, source_cluster_id: str):
         """
         Merge source cluster into target cluster and remove source cluster.
         """
@@ -18747,7 +18777,7 @@ class NovaMemoryAI:
                                 source_cluster.get('event_ids', []),
                                 f"Merged cluster {source_cluster_id} into {target_cluster_id}")
 
-    def _prune_cluster(self, cluster_id: str):
+    def _previous__prune_cluster(self, cluster_id: str):
         """
         Remove a cluster that doesn't meet quality standards.
         Move any events to a lost_and_found cluster or reassign to similar clusters.
@@ -18790,7 +18820,7 @@ class NovaMemoryAI:
 
         self._log_cluster_update('prune', cluster_id, event_ids, f"Pruned low-quality cluster")
 
-    def find_clusters_by_similarity(self, query_vector: List[float], threshold: float = 0.6, max_results: int = 5) -> List[Dict]:
+    def _previous_find_clusters_by_similarity(self, query_vector: List[float], threshold: float = 0.6, max_results: int = 5) -> List[Dict]:
         """
         Find clusters that are similar to a query vector.
         
@@ -18826,7 +18856,7 @@ class NovaMemoryAI:
         # Limit results
         return matches[:max_results]
 
-    def _detect_contradicting_events(self, cluster_id: str) -> List[Dict]:
+    def _previous__detect_contradicting_events(self, cluster_id: str) -> List[Dict]:
         """
         Detect potentially contradicting events within a cluster based on semantic analysis.
         
@@ -18877,7 +18907,7 @@ class NovaMemoryAI:
         
         return contradicting_pairs
     
-    def _check_for_contradiction(self, content_1: str, content_2: str) -> str:
+    def _previous__check_for_contradiction(self, content_1: str, content_2: str) -> str:
         """
         Check if two content strings contradict each other.
         
@@ -18914,7 +18944,7 @@ class NovaMemoryAI:
         
         return None
 
-    def search_memory_by_clusters(self, query_text: str, top_k_clusters: int = 3, top_k_events_per_cluster: int = 5) -> Dict:
+    def _previous_search_memory_by_clusters(self, query_text: str, top_k_clusters: int = 3, top_k_events_per_cluster: int = 5) -> Dict:
         """
         Search memory by first finding relevant clusters, then retrieving events within those clusters.
         This is more efficient than searching all events individually.
@@ -19005,7 +19035,7 @@ class NovaMemoryAI:
 
         return results
 
-    def audit_clusters_for_contradictions(self) -> Dict:
+    def _previous_audit_clusters_for_contradictions(self) -> Dict:
         """
         Audit all clusters to detect contradicting events and take appropriate action.
 
@@ -19076,7 +19106,7 @@ class NovaMemoryAI:
 
         return audit_results
 
-    def _detect_contradicting_events(self, cluster_id: str) -> List[Dict]:
+    def _previous__detect_contradicting_events(self, cluster_id: str) -> List[Dict]:
         """
         Detect potentially contradicting events within a cluster based on semantic analysis.
 
@@ -19124,7 +19154,7 @@ class NovaMemoryAI:
 
         return contradicting_pairs
 
-    def _check_for_contradiction(self, event1: Dict, event2: Dict) -> Dict:
+    def _previous__check_for_contradiction(self, event1: Dict, event2: Dict) -> Dict:
         """
         Check if two events contradict each other.
 
@@ -19190,7 +19220,7 @@ class NovaMemoryAI:
 
         return None  # No contradiction detected
 
-    def rebuild_clusters_from_events(self):
+    def _previous_rebuild_clusters_from_events(self):
         """
         Rebuild all clusters from existing memory events. This is useful when clustering
         wasn't properly applied initially or when restoring from a state where clusters
@@ -19253,7 +19283,7 @@ class NovaMemoryAI:
         print(f"  - Total events in memory: {events_count}, vectors available: {vector_count}")
         return len(self.data['memory_engine']['clusters'])
 
-    def ensure_cluster_integrity(self):
+    def _previous_ensure_cluster_integrity(self):
         """
         Ensure that all events are assigned to appropriate clusters and there are no orphaned events.
         This method re-evaluates all events and makes sure they're properly clustered.
@@ -19282,7 +19312,7 @@ class NovaMemoryAI:
                 # Call the clustering method to assign to appropriate cluster
                 self._update_clusters_for_event(event_id, event_data)
 
-    def _attempt_cluster_split(self, cluster_id: str, split_threshold: float = 0.6, min_members: int = 4,
+    def _previous__attempt_cluster_split(self, cluster_id: str, split_threshold: float = 0.6, min_members: int = 4,
                               accept_ratio: float = 0.95) -> bool:
         """
         Attempt to split a cluster into more coherent sub-clusters based on vector similarity.
@@ -19384,7 +19414,7 @@ class NovaMemoryAI:
             success = self._simple_divisive_split(cluster_id, split_threshold)
             return success
 
-    def _simple_divisive_split(self, cluster_id: str, split_threshold: float = 0.6) -> bool:
+    def _previous__simple_divisive_split(self, cluster_id: str, split_threshold: float = 0.6) -> bool:
         """
         Simple divisive clustering as fallback method.
         """
@@ -19466,7 +19496,7 @@ class NovaMemoryAI:
 
         return False
 
-    def _calculate_cluster_coherence_for_events(self, event_ids: List[str]) -> float:
+    def _previous__calculate_cluster_coherence_for_events(self, event_ids: List[str]) -> float:
         """
         Calculate coherence for a specific set of events without modifying the cluster.
         """
@@ -19496,7 +19526,7 @@ class NovaMemoryAI:
         else:
             return 1.0
 
-    def _update_cluster_counts(self):
+    def _previous__update_cluster_counts(self):
         """
         Update any cluster-related counts or metadata after structural changes.
         """
@@ -19510,7 +19540,7 @@ class NovaMemoryAI:
             if 'metadata' in cluster:
                 cluster['metadata']['member_count'] = len(cluster.get('event_ids', []))
 
-    def _update_cluster_metadata(self, cluster_id: str = None):
+    def _previous__update_cluster_metadata(self, cluster_id: str = None):
         """
         Update cluster metadata based on current events and characteristics.
         If cluster_id is None, updates all clusters.
@@ -19566,7 +19596,7 @@ class NovaMemoryAI:
                     time_span = max(timestamps) - min(timestamps)
                     cluster['metadata']['temporal_span'] = f"{time_span.days} days"
 
-    def _create_cluster_with_events(self, cluster_id: str, topic: str, event_ids: List[str]):
+    def _previous__create_cluster_with_events(self, cluster_id: str, topic: str, event_ids: List[str]):
         """
         Create a cluster with specified events following the exact schema from New_memory_event.json.
 
@@ -19629,7 +19659,7 @@ class NovaMemoryAI:
             self.clusters = {}
         self.clusters[cluster_id] = cluster_data
 
-    def _calculate_enhanced_cluster_metadata(self, event_ids: List[str], topic: str) -> Dict:
+    def _previous__calculate_enhanced_cluster_metadata(self, event_ids: List[str], topic: str) -> Dict:
         """
         Calculate enhanced metadata for a cluster following New_memory_event.json schema.
         """
@@ -19688,7 +19718,7 @@ class NovaMemoryAI:
 
         return metadata
 
-    def _calculate_cluster_insights(self, event_ids: List[str], coherence: float) -> Dict:
+    def _previous__calculate_cluster_insights(self, event_ids: List[str], coherence: float) -> Dict:
         """
         Calculate insights for a cluster following New_memory_event.json schema.
         """
@@ -19754,7 +19784,7 @@ class NovaMemoryAI:
 
         return insights
 
-    def _remove_duplicate_events(self):
+    def _previous__remove_duplicate_events(self):
         """
         Remove duplicate events from memory_events based on exact content match.
         This method runs after events are added to ensure only unique events remain.
@@ -19804,7 +19834,7 @@ class NovaMemoryAI:
         # Update the memory events with only unique ones
         self.data["memory_engine"]["memory_events"] = unique_events
 
-    def _check_and_merge_similar_events(self):
+    def _previous__check_and_merge_similar_events(self):
         """
         Check for events that are very similar and merge them to avoid redundancy.
         This runs after new events are added to find and combine similar entries.
@@ -19851,7 +19881,7 @@ class NovaMemoryAI:
         # Update the memory events with merged list
         self.data["memory_engine"]["memory_events"] = merged_events
 
-    def _calculate_text_similarity(self, text1: str, text2: str, use_lemmatization: bool = True) -> float:
+    def _previous__calculate_text_similarity(self, text1: str, text2: str, use_lemmatization: bool = True) -> float:
         """
         Calculate similarity between two text strings using multiple techniques:
         normalized token sets, lemmatization, weighted n-gram matching, and fuzzy matching fallback.
@@ -19907,7 +19937,7 @@ class NovaMemoryAI:
 
         return combined_sim
 
-    def _process_text_for_similarity(self, text: str, use_lemmatization: bool = True) -> str:
+    def _previous__process_text_for_similarity(self, text: str, use_lemmatization: bool = True) -> str:
         """
         Process text for similarity calculation, with optional lemmatization.
         """
@@ -19940,7 +19970,7 @@ class NovaMemoryAI:
         else:
             return normalized
 
-    def _calculate_jaccard_similarity(self, set1: set, set2: set) -> float:
+    def _previous__calculate_jaccard_similarity(self, set1: set, set2: set) -> float:
         """
         Calculate Jaccard similarity between two sets.
         """
@@ -19948,7 +19978,7 @@ class NovaMemoryAI:
         union = len(set1.union(set2))
         return intersection / union if union > 0 else 0.0
 
-    def _calculate_ngram_similarity(self, text1: str, text2: str, n: int = 2) -> float:
+    def _previous__calculate_ngram_similarity(self, text1: str, text2: str, n: int = 2) -> float:
         """
         Calculate similarity based on n-gram overlap.
         """
@@ -19970,7 +20000,7 @@ class NovaMemoryAI:
         # Weighted combination of bigrams and trigrams
         return 0.7 * bigram_sim + 0.3 * trigram_sim
 
-    def _calculate_length_normalized_similarity(self, text1: str, text2: str) -> float:
+    def _previous__calculate_length_normalized_similarity(self, text1: str, text2: str) -> float:
         """
         Calculate similarity considering the length ratio to handle short vs long texts.
         """
@@ -19995,7 +20025,7 @@ class NovaMemoryAI:
         # Combine length and word count similarity
         return (length_ratio + word_count_ratio) / 2.0
 
-    def _select_most_appropriate_operation(self, operations: List[Dict], user_message: str) -> Dict:
+    def _previous__select_most_appropriate_operation(self, operations: List[Dict], user_message: str) -> Dict:
         """
         Select the most appropriate operation from multiple operations that represent
         the same user input to prevent duplicate events.
@@ -20046,7 +20076,7 @@ class NovaMemoryAI:
         best_operation = max(scored_operations, key=lambda x: x[1])
         return best_operation[0]
 
-    def _determine_update_type(self, old_value: str, new_value: str) -> str:
+    def _previous__determine_update_type(self, old_value: str, new_value: str) -> str:
         """
         Determine the type of update based on semantic analysis of old and new values.
         
@@ -20096,7 +20126,7 @@ class NovaMemoryAI:
         # Default to refinement (gradual or detailed evolution)
         return "refinement"
 
-    def transform_add_event_to_schema(self, event: Dict) -> Dict:
+    def _previous_transform_add_event_to_schema(self, event: Dict) -> Dict:
         """
         Transform an ADD event to match the required schema format.
         
@@ -20210,7 +20240,7 @@ class NovaMemoryAI:
 
         return transformed_event
 
-    def _contains_preference(self, text: str) -> bool:
+    def _previous__contains_preference(self, text: str) -> bool:
         """
         Check if the text contains preference-related keywords.
         """
@@ -20234,7 +20264,7 @@ class NovaMemoryAI:
 
         return False
 
-    def _extract_preference_type_and_value(self, text: str) -> tuple:
+    def _previous__extract_preference_type_and_value(self, text: str) -> tuple:
         """
         Extract preference type and value from text.
         Returns a tuple of (preference_type, preference_value)
@@ -20288,7 +20318,7 @@ class NovaMemoryAI:
         # Default case if no specific preference type is detected
         return ("general", text)
 
-class AdvancedMemoryAgent:
+class AdvancedMemoryAgent(_SharedAdvancedMemoryAgent):
     """
     Nova Memory AI Agent - Interface wrapper for compatibility
 
@@ -20298,27 +20328,32 @@ class AdvancedMemoryAgent:
     - Maintains conversation logs for context
     """
 
-    def __init__(self, storage_file: str = os.path.join(os.path.dirname(__file__), '..', 'Date', 'nova_ai_memory.json')):
+    def __init__(self, storage_file=None, **kwargs):
+        """Nova and Aegis use the same repaired implementation."""
+        self.memory_system = NovaMemoryAI(storage_file, **kwargs)
+
+
+    def _previous___init__(self, storage_file: str = os.path.join(os.path.dirname(__file__), '..', 'Date', 'nova_ai_memory.json')):
         self.memory_system = NovaMemoryAI(storage_file)
         # Silently initialized Nova Memory AI Agent
 
-    def process_conversation(self, user_message: str, ai_response: str, session_id: str = None) -> Dict[str, Any]:
+    def _previous_process_conversation(self, user_message: str, ai_response: str, session_id: str = None) -> Dict[str, Any]:
         """Process conversation with Mem0-style memory analysis"""
         return self.memory_system.process_conversation(user_message, ai_response, session_id)
 
-    def get_memory_context(self, query: str = "") -> Dict[str, Any]:
+    def _previous_get_memory_context(self, query: str = "") -> Dict[str, Any]:
         """Get memory context for AI response generation"""
         return self.memory_system.get_memory_context(query)
 
-    def get_user_identity_description(self) -> str:
+    def _previous_get_user_identity_description(self) -> str:
         """Get the user identity description from memory_categories"""
         return self.memory_system.get_user_identity_description()
 
-    def get_today_organizer_summary(self) -> Dict[str, Any]:
+    def _previous_get_today_organizer_summary(self) -> Dict[str, Any]:
         """Get the organizer daily summary for today"""
         return self.memory_system.get_today_organizer_summary()
 
-    def get_user_profile(self) -> Dict[str, Any]:
+    def _previous_get_user_profile(self) -> Dict[str, Any]:
         """
         Get user profile without relying on current_facts.
         """
@@ -20327,19 +20362,19 @@ class AdvancedMemoryAgent:
             'facts': {}  # Return empty dict since we're removing current_facts
         }
 
-    def get_memory_stats(self) -> Dict[str, Any]:
+    def _previous_get_memory_stats(self) -> Dict[str, Any]:
         """Get memory statistics"""
         return self.memory_system.get_memory_stats()
 
-    def get_session_info(self) -> Dict[str, Any]:
+    def _previous_get_session_info(self) -> Dict[str, Any]:
         """Get conversation session information for intelligent greetings"""
         return self.memory_system.get_session_info()
 
-    def end_session(self):
+    def _previous_end_session(self):
         """End the current conversation session"""
         self.memory_system.end_session()
 
-    def get_conversation_context(self) -> Dict[str, Any]:
+    def _previous_get_conversation_context(self) -> Dict[str, Any]:
         """Get context about previous conversations"""
         session_info = self.get_session_info()
 
@@ -20362,7 +20397,7 @@ class AdvancedMemoryAgent:
 
         return context
 
-    def _generate_greeting_message(self, session_info: Dict[str, Any]) -> str:
+    def _previous__generate_greeting_message(self, session_info: Dict[str, Any]) -> str:
         """Generate appropriate greeting message based on session history"""
         if session_info["is_first_time"]:
             return "Hi there! I'm Nova, your AI memory companion. What's your name?"
@@ -20391,18 +20426,18 @@ class AdvancedMemoryAgent:
 
         return greeting
 
-    def get_conversation_state(self) -> Dict[str, Any]:
+    def _previous_get_conversation_state(self) -> Dict[str, Any]:
         """Get conversation state for AI response filtering"""
         return self.memory_system.get_conversation_state()
 
-    def should_avoid_introductions(self) -> bool:
+    def _previous_should_avoid_introductions(self) -> bool:
         """Check if AI should avoid introduction-style responses"""
         state = self.get_conversation_state()
         return (state.get("is_established_user", False) or
                 not state.get("is_introduction_phase", True) or
                 state.get("relationship_established", False))
 
-    def get_ai_context_instructions(self) -> str:
+    def _previous_get_ai_context_instructions(self) -> str:
         """Get context instructions for AI to avoid inappropriate greeting patterns"""
         state = self.get_conversation_state()
 
@@ -20434,21 +20469,21 @@ class AdvancedMemoryAgent:
             return ("This appears to be a new user. You may ask introductory questions "
                    "to get to know them better.")
 
-    def mark_greeting_completed(self):
+    def _previous_mark_greeting_completed(self):
         """Mark greeting as completed"""
         self.memory_system.mark_greeting_completed()
 
-    def recall_history(self, query: str) -> Dict[str, Any]:
+    def _previous_recall_history(self, query: str) -> Dict[str, Any]:
         """Recall historical information based on natural language queries"""
         return self.memory_system.recall_historical_information(query)
 
-    def get_conversation_history(self) -> List[Dict[str, Any]]:
+    def _previous_get_conversation_history(self) -> List[Dict[str, Any]]:
         """Get conversation history for historical queries"""
         return self.memory_system.data.get('conversation', [])
 
-    def get_dynamic_conversation_context(self) -> Dict[str, Any]:
+    def _previous_get_dynamic_conversation_context(self) -> Dict[str, Any]:
         """Get comprehensive dynamic context for response generation"""
-    def _create_emotional_context(self, text: str) -> Dict[str, Any]:
+    def _previous__create_emotional_context(self, text: str) -> Dict[str, Any]:
         """
         Create emotional context for a text using semantic analysis.
         Enhanced to preserve original intent, emotion, and emphasis from user input.
@@ -20674,7 +20709,7 @@ class AdvancedMemoryAgent:
             "confidence": 0.7
         }
 
-    def _create_semantic_context(self, text: str, related_facts: List[str] = None) -> Dict[str, Any]:
+    def _previous__create_semantic_context(self, text: str, related_facts: List[str] = None) -> Dict[str, Any]:
         """
         Create semantic context for a text using deep contextual understanding.
         Enhanced to analyze the full context of user input, not just keywords.
@@ -20739,7 +20774,7 @@ class AdvancedMemoryAgent:
             "similarity_hash": similarity_hash
         }
 
-    def _create_provenance_info(self, text: str, source_type: str = "conversation") -> Dict[str, Any]:
+    def _previous__create_provenance_info(self, text: str, source_type: str = "conversation") -> Dict[str, Any]:
         """
         Create provenance information for a text with enhanced context.
         
@@ -20764,35 +20799,35 @@ class AdvancedMemoryAgent:
             "source_conversation_timestamp": timestamp
         }
 
-    def get_timeline(self) -> List[Dict]:
+    def _previous_get_timeline(self) -> List[Dict]:
         """Get chronological timeline of all changes"""
         return self.memory_system._get_timeline()
 
-    def get_fact_history(self, fact_type: str) -> List[Dict]:
+    def _previous_get_fact_history(self, fact_type: str) -> List[Dict]:
         """Get complete history for a specific fact type"""
         return self.memory_system._get_historical_values(fact_type, 'all')
 
-    def get_semantic_insights(self) -> Dict[str, Any]:
+    def _previous_get_semantic_insights(self) -> Dict[str, Any]:
         """Get semantic insights about user's information"""
         return self.memory_system.get_semantic_insights()
 
-    def get_emotional_timeline(self) -> List[Dict[str, Any]]:
+    def _previous_get_emotional_timeline(self) -> List[Dict[str, Any]]:
         """Get emotional timeline of memories"""
         return self.memory_system.get_emotional_timeline()
 
-    def detect_memory_patterns(self) -> List[Dict[str, Any]]:
+    def _previous_detect_memory_patterns(self) -> List[Dict[str, Any]]:
         """Get detected memory patterns"""
         return [asdict(pattern) for pattern in self.memory_system.patterns]
 
-    def get_relationship_graph(self) -> Dict[str, Any]:
+    def _previous_get_relationship_graph(self) -> Dict[str, Any]:
         """Get memory relationship graph"""
         return self.memory_system.memory_graph
 
-    def get_importance_scores(self) -> Dict[str, Any]:
+    def _previous_get_importance_scores(self) -> Dict[str, Any]:
         """Get fact importance scores"""
         return self.memory_system.importance_scores
 
-    def consolidate_memories(self, timeframe_days: int = 30) -> Dict[str, Any]:
+    def _previous_consolidate_memories(self, timeframe_days: int = 30) -> Dict[str, Any]:
         """Consolidate memories within timeframe"""
         cutoff_date = datetime.now() - timedelta(days=timeframe_days)
 
@@ -20820,7 +20855,7 @@ class AdvancedMemoryAgent:
             'status': 'completed'
         }
 
-    def suggest_memory_queries(self, context: str = "") -> List[str]:
+    def _previous_suggest_memory_queries(self, context: str = "") -> List[str]:
         """Suggest relevant memory queries based on context"""
         suggestions = []
         # Use fact_history instead of current_facts
@@ -20863,7 +20898,7 @@ class AdvancedMemoryAgent:
 
         return suggestions[:5]  # Return top 5 suggestions
 
-    def analyze_memory_health(self) -> Dict[str, Any]:
+    def _previous_analyze_memory_health(self) -> Dict[str, Any]:
         """Analyze the health and quality of memory system"""
         # Use fact_history instead of current_facts
         facts = {}
@@ -20913,7 +20948,7 @@ class AdvancedMemoryAgent:
             'recommendations': self._get_health_recommendations(health_score)
         }
 
-    def _get_health_recommendations(self, health_score: float) -> List[str]:
+    def _previous__get_health_recommendations(self, health_score: float) -> List[str]:
         """Get recommendations for improving memory health"""
         recommendations = []
 
@@ -20938,11 +20973,11 @@ class AdvancedMemoryAgent:
 
         return recommendations
 
-    def get_accumulated_preferences(self, preference_type: str = None) -> Dict[str, Any]:
+    def _previous_get_accumulated_preferences(self, preference_type: str = None) -> Dict[str, Any]:
         """Get accumulated preferences with timestamps"""
         return self.memory_system.get_accumulated_preferences(preference_type)
 
-    def ensure_proper_cluster_structure(self):
+    def _previous_ensure_proper_cluster_structure(self):
         """
         Make sure the cluster structure is properly initialized and synchronized.
         This method addresses the issue where clusters appear empty in nova_ai_memory.json
@@ -20995,6 +21030,19 @@ class AdvancedMemoryAgent:
 
 
 # Factory function for backward compatibility
-def create_memory_agent(storage_file: str = os.path.join(os.path.dirname(__file__), '..', 'Date', 'nova_ai_memory.json')) -> AdvancedMemoryAgent:
+def _previous_create_memory_agent(storage_file: str = os.path.join(os.path.dirname(__file__), '..', 'Date', 'nova_ai_memory.json')) -> AdvancedMemoryAgent:
     """Factory function to create a memory agent with default configuration"""
     return AdvancedMemoryAgent(storage_file)
+
+# Nova and Aegis intentionally share the same persistence and recall interface.
+AegisMemoryAI = NovaMemoryAI
+
+def create_memory_agent(storage_file=None, **kwargs):
+    """Create the shared memory agent while preserving the established entry point."""
+    return AdvancedMemoryAgent(storage_file, **kwargs)
+
+__all__ = [
+    "NovaMemoryAI", "AegisMemoryAI", "AdvancedMemoryAgent",
+    "MemoryCategory", "ConflictType", "RelationshipType", "AdaptiveLearningType",
+    "MemoryEventType", "create_memory_agent",
+]

@@ -74,7 +74,7 @@ def test_news_briefing_returns_distinct_source_coverage_and_grouped_media():
     assert primary is not None
     assert len(primary["sourceCoverage"]) == 2
     assert primary["sourceCoverage"] != stories
-    assert primary["mediaGroups"][0]["items"][0]["relatedSectionId"] == "primary-media"
+    assert primary["mediaGroups"][0]["items"][0]["relatedSectionId"] == primary["briefingSections"][0]["id"]
 
 
 def test_news_briefing_returns_an_editorial_media_plan_with_nonduplicated_slots():
@@ -90,4 +90,5 @@ def test_news_briefing_returns_an_editorial_media_plan_with_nonduplicated_slots(
     assert plan["supportingMedia"]
     planned_urls = [item["url"] for values in plan.values() for item in values if isinstance(values, list)]
     assert len(planned_urls) == len(set(planned_urls))
-    assert {section["title"] for section in primary["briefingSections"]} >= {"Market Context", "Latest Developments", "Analysis", "Why It Matters", "What To Watch Next"}
+    assert {section["id"] for section in primary["briefingSections"]} == {"current-picture", "reported-developments", "signals-and-implications", "next-signals"}
+    assert all(section["body"] and section["sourceIds"] for section in primary["briefingSections"])

@@ -222,7 +222,7 @@ class ConversationAnalytics:
                 analytics_data["sessions"] = analytics_data["sessions"][-100:]
             
             # Store updated data
-            memory_system.memory_system.data["memory_categories"]["conversation_analytics"] = analytics_data
+            memory_system.memory_system.save_event("session_analytics", "session_"+str(session_data["session_id"]).replace("-","_")[:40], "Completed conversation session", attributes=session_data, source="legacy")
 
             # Save to file
             memory_system.memory_system.save_memory()

@@ -1,3 +1,5 @@
+import {SpeechGate} from './speechGate.mjs';
+import {EchoGuard} from './echoGuard.mjs';
 /**
  * Voice input (Web Speech API) and audio output (AudioContext) for Aegis AI.
  * 
@@ -843,6 +845,7 @@ function createLegacyGroqVoiceInput(
 // ---------------------------------------------------------------------------
 
 export interface AudioPlayer {
+  isPlaybackEcho(pcm:Int16Array,end:number):boolean;
   enqueue(base64: string): Promise<void>;
   enqueuePcm(data: ArrayBuffer, sampleRate?: number): Promise<void>;
   finishPcmTurn(): void;
@@ -860,8 +863,13 @@ interface TranscriptionResponse {
 /** Stream microphone PCM to Gemini Live without browser-side transcription. */
 export function createLiveVoiceInput(
   onPcm: (data: ArrayBuffer) => void,
-  onError: (msg: string) => void
+  onError: (msg: string) => void,
+  onSpeechStart?: () => void,
+  onSpeechEnd?: () => void,
+  isPlaybackEcho?: (pcm:Int16Array,end:number) => boolean
 ): VoiceInput {
+  let detector:Worker|null=null,ready=false,detectionEpoch=0;
+  const gate=new SpeechGate({onFrame:(frame:ArrayBuffer)=>{if(shouldListen&&!paused)onPcm(frame);},onStart:onSpeechStart,onEnd:onSpeechEnd});
   let shouldListen = false;
   let paused = false;
   let opening: Promise<void> | null = null;
@@ -872,6 +880,7 @@ export function createLiveVoiceInput(
   let silentGain: GainNode | null = null;
 
   function release(): void {
+    if(detector)detector.onmessage=null;detector?.terminate();detector=null;ready=false;gate.reset();
     worklet?.disconnect();
     source?.disconnect();
     silentGain?.disconnect();
@@ -901,6 +910,9 @@ export function createLiveVoiceInput(
           media.getTracks().forEach((track) => track.stop());
           return;
         }
+        detector=new Worker(new URL('./speech-worker.ts',import.meta.url),{type:'module'});
+        detector.postMessage({type:'reset',epoch:detectionEpoch});
+        detector.onmessage=e=>{if(e.data.type==='ready')ready=true;else if(e.data.type==='score'&&e.data.epoch===detectionEpoch&&shouldListen&&!paused){const pcm=new Int16Array(e.data.pcm),echo=isPlaybackEcho?.(pcm,e.data.capturedAt||performance.now());gate.push(echo?new Int16Array(pcm.length):pcm,echo?0:e.data.probability);}else if(e.data.type==='error'){ready=false;onError('Speech detector unavailable. Reconnect the microphone to retry.');}};
         stream = media;
         context = new AudioContext();
         await context.audioWorklet.addModule("/pcm-capture-worklet.js");
@@ -911,7 +923,9 @@ export function createLiveVoiceInput(
         silentGain = context.createGain();
         silentGain.gain.value = 0;
         worklet.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
-          if (shouldListen && !paused) onPcm(event.data);
+          if (shouldListen && !paused) {
+            if(ready&&detector)detector.postMessage({pcm:event.data,epoch:detectionEpoch,capturedAt:performance.now()},[event.data]);
+          }
         };
         source.connect(worklet);
         worklet.connect(silentGain);
@@ -939,7 +953,7 @@ export function createLiveVoiceInput(
       release();
     },
     pause() {
-      paused = true;
+      paused = true;gate.reset();detector?.postMessage({type:"reset",epoch:++detectionEpoch});onSpeechEnd?.();
     },
     resume() {
       if (!shouldListen) return;
@@ -1292,6 +1306,7 @@ export function createGroqVoiceInput(
 }
 
 export function createAudioPlayer(): AudioPlayer {
+  const echoGuard=new EchoGuard();
   const audioCtx = new AudioContext();
   const analyser = audioCtx.createAnalyser();
   analyser.fftSize = 256;
@@ -1305,6 +1320,7 @@ export function createAudioPlayer(): AudioPlayer {
   const pcmSources = new Set<AudioBufferSourceNode>();
   let nextPcmStart = 0;
   let pcmTurnOpen = false;
+  let playbackEpoch = 0;
 
   function playNext() {
     if (queue.length === 0) {
@@ -1330,11 +1346,13 @@ export function createAudioPlayer(): AudioPlayer {
       }
     };
 
+    echoGuard.add(buffer.getChannelData(0),buffer.sampleRate,performance.now());
     source.start();
   }
 
   return {
     async enqueue(base64: string) {
+      const epoch=playbackEpoch;
       // Resume audio context (browser autoplay policy)
       if (audioCtx.state === "suspended") {
         console.log(" [AUDIO] Resuming AudioContext (autoplay policy)");
@@ -1350,6 +1368,7 @@ export function createAudioPlayer(): AudioPlayer {
         }
         
         const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer.slice(0));
+        if(epoch!==playbackEpoch)return;
         console.log(` [AUDIO] Decoded successfully (${audioBuffer.duration.toFixed(2)}s)`);
         
         queue.push(audioBuffer);
@@ -1368,7 +1387,9 @@ export function createAudioPlayer(): AudioPlayer {
 
     async enqueuePcm(data: ArrayBuffer, sampleRate = 24000) {
       if (data.byteLength < 2) return;
+      const epoch=playbackEpoch;
       if (audioCtx.state === "suspended") await audioCtx.resume();
+      if(epoch!==playbackEpoch)return;
       pcmTurnOpen = true;
       const samples = new Int16Array(data);
       const buffer = audioCtx.createBuffer(1, samples.length, sampleRate);
@@ -1389,6 +1410,7 @@ export function createAudioPlayer(): AudioPlayer {
           finishedCallback?.();
         }
       };
+      echoGuard.add(channel,sampleRate,performance.now()+(startAt-audioCtx.currentTime)*1000);
       source.start(startAt);
     },
 
@@ -1401,6 +1423,8 @@ export function createAudioPlayer(): AudioPlayer {
     },
 
     stop() {
+      echoGuard.stop(performance.now());
+      playbackEpoch++;
       console.log("  [AUDIO] Stopping playback");
       queue.length = 0;
       if (currentSource) {
@@ -1420,6 +1444,7 @@ export function createAudioPlayer(): AudioPlayer {
       nextPcmStart = 0;
     },
 
+    isPlaybackEcho(pcm,end) {return echoGuard.isEcho(pcm,end);},
     getAnalyser() {
       return analyser;
     },

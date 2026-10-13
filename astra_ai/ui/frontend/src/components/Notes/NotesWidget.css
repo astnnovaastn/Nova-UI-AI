@@ -8,14 +8,14 @@
     transform: none;
     min-width: 400px;
     max-width: none;
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.15) 0%, rgba(0, 200, 120, 0.1) 100%);
-    border: 1px solid rgba(0, 255, 136, 0.4);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 15%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 10%, transparent) 100%);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 40%, transparent);
     border-radius: 12px;
     font-family: 'Orbitron', monospace;
-    color: white;
+    color: var(--widget-text);
     box-shadow:
-        0 0 20px rgba(0, 255, 136, 0.3),
-        inset 0 0 15px rgba(0, 255, 136, 0.1);
+        0 0 20px color-mix(in srgb, var(--widget-accent) 30%, transparent),
+        inset 0 0 15px color-mix(in srgb, var(--widget-accent) 10%, transparent);
     backdrop-filter: blur(8px);
     animation: notepadGlow 4s ease-in-out infinite;
     z-index: 1000;
@@ -27,11 +27,11 @@
 }
 
 .notepad-widget.ai-connected {
-    border-color: rgba(255, 196, 0, 0.55);
+    border-color: var(--widget-accent);
     box-shadow:
-        0 0 26px rgba(255, 196, 0, 0.18),
-        0 0 0 1px rgba(255, 196, 0, 0.18),
-        inset 0 0 15px rgba(0, 255, 136, 0.08);
+        0 0 26px color-mix(in srgb, var(--widget-accent) 18%, transparent),
+        0 0 0 1px color-mix(in srgb, var(--widget-accent) 18%, transparent),
+        inset 0 0 15px color-mix(in srgb, var(--widget-accent) 8%, transparent);
 }
 
 /* Header Section */
@@ -40,7 +40,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 16px 24px 12px 24px;
-    border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+    border-bottom: 1px solid color-mix(in srgb, var(--widget-accent) 30%, transparent);
     position: relative;
     flex-shrink: 0;
 }
@@ -54,18 +54,18 @@
 .notepad-logo {
     width: 32px;
     height: 32px;
-    background: linear-gradient(135deg, #00FF88 0%, #00CC66 100%);
+    background: linear-gradient(135deg, var(--widget-accent) 0%, var(--widget-accent) 100%);
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 900;
     font-size: 16px;
-    color: #041529;
-    text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+    color: var(--widget-accent);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--theme-highlight) 80%, transparent);
     box-shadow:
-        0 0 10px rgba(0, 255, 136, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        0 0 10px color-mix(in srgb, var(--widget-accent) 40%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--theme-highlight) 30%, transparent);
     position: relative;
     overflow: hidden;
 }
@@ -77,7 +77,7 @@
     left: 2px;
     right: 2px;
     bottom: 2px;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-text) 20%, transparent) 0%, transparent 50%);
     border-radius: 6px;
     pointer-events: none;
 }
@@ -85,16 +85,16 @@
 .notepad-logo i {
     position: relative;
     z-index: 2;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+    filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--theme-shade) 30%, transparent));
 }
 
 .notepad-brand {
     font-size: 18px;
     font-weight: 700;
     letter-spacing: 2px;
-    color: white;
+    color: var(--widget-text);
     text-transform: uppercase;
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+    text-shadow: 0 0 10px color-mix(in srgb, var(--theme-highlight) 60%, transparent);
 }
 
 .notepad-status {
@@ -111,17 +111,17 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #00FF88;
+    background: var(--widget-accent);
     animation: pulse 2s infinite;
-    box-shadow: 0 0 8px #00FF88;
+    box-shadow: 0 0 8px var(--widget-accent);
 }
 
 /* Navigation Tabs */
 .notepad-nav {
     display: flex;
     padding: 0 24px;
-    border-bottom: 1px solid rgba(0, 255, 136, 0.2);
-    background: rgba(0, 255, 136, 0.05);
+    border-bottom: 1px solid color-mix(in srgb, var(--widget-accent) 20%, transparent);
+    background: color-mix(in srgb, var(--widget-accent) 5%, transparent);
     flex-shrink: 0;
 }
 
@@ -134,19 +134,19 @@
     cursor: pointer;
     border-bottom: 2px solid transparent;
     transition: all 0.3s ease;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--widget-muted);
 }
 
 .notepad-nav-tab:hover {
-    color: rgba(0, 255, 136, 0.9);
-    background: rgba(0, 255, 136, 0.1);
+    color: var(--widget-accent);
+    background: color-mix(in srgb, var(--widget-accent) 10%, transparent);
 }
 
 .notepad-nav-tab.active {
-    color: #00FF88;
-    border-bottom-color: #00FF88;
-    background: rgba(0, 255, 136, 0.1);
-    text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+    color: var(--widget-accent);
+    border-bottom-color: var(--widget-accent);
+    background: color-mix(in srgb, var(--widget-accent) 10%, transparent);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--widget-accent) 60%, transparent);
 }
 
 /* Content Area */
@@ -175,16 +175,16 @@
 .notepad-item {
     margin-bottom: 10px;
     padding: 11px 13px;
-    border: 1px solid rgba(0, 255, 136, 0.2);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 20%, transparent);
     border-radius: 8px;
-    background: rgba(0, 255, 136, 0.05);
+    background: color-mix(in srgb, var(--widget-accent) 5%, transparent);
     animation: slideIn 0.5s ease-out;
     transition: all 0.3s ease;
 }
 
 .notepad-item:hover {
-    background: rgba(0, 255, 136, 0.1);
-    border-color: rgba(0, 255, 136, 0.3);
+    background: color-mix(in srgb, var(--widget-accent) 10%, transparent);
+    border-color: var(--widget-accent);
     transform: translateY(-2px);
 }
 
@@ -198,34 +198,34 @@
     align-items: center;
     margin-bottom: 12px;
     font-size: 10px;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--widget-muted);
     text-transform: uppercase;
     letter-spacing: 1px;
 }
 
 .notepad-id {
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.4) 0%, rgba(0, 200, 120, 0.3) 100%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 40%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 30%, transparent) 100%);
     padding: 3px 8px;
     border-radius: 12px;
     font-weight: 700;
     font-size: 8px;
-    border: 1px solid rgba(0, 255, 136, 0.5);
-    color: #FFF;
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 50%, transparent);
+    color: var(--widget-text);
 }
 
 .notepad-time {
     font-weight: 500;
     font-size: 10px;
-    color: rgba(0, 255, 136, 0.8);
-    text-shadow: 0 0 4px rgba(0, 255, 136, 0.4);
+    color: var(--widget-accent);
+    text-shadow: 0 0 4px color-mix(in srgb, var(--widget-accent) 40%, transparent);
 }
 
 .notepad-preview {
     font-size: 12px;
     line-height: 1.5;
-    color: rgba(255, 255, 255, 0.85);
+    color: var(--widget-muted);
     margin-bottom: 10px;
-    text-shadow: 0 0 4px rgba(255, 255, 255, 0.2);
+    text-shadow: 0 0 4px color-mix(in srgb, var(--theme-highlight) 20%, transparent);
 }
 
 .notepad-actions {
@@ -245,15 +245,15 @@
     width: 100%;
     max-width: 720px;
     padding: 18px;
-    border: 1px solid rgba(0, 255, 136, 0.28);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 28%, transparent);
     border-radius: 10px;
-    background: rgba(0, 255, 136, 0.06);
+    background: color-mix(in srgb, var(--widget-accent) 6%, transparent);
 }
 
 .notepad-review-content {
     white-space: pre-wrap;
     line-height: 1.65;
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--widget-muted);
     padding: 16px 0 20px;
 }
 
@@ -265,10 +265,10 @@
 }
 
 .notepad-action-btn {
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.3) 0%, rgba(0, 200, 120, 0.2) 100%);
-    border: 1px solid rgba(0, 255, 136, 0.4);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 30%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 20%, transparent) 100%);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 40%, transparent);
     border-radius: 4px;
-    color: white;
+    color: var(--widget-text);
     padding: 4px 8px;
     cursor: pointer;
     font-size: 10px;
@@ -278,38 +278,38 @@
 }
 
 .notepad-action-btn:hover {
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.5) 0%, rgba(0, 200, 120, 0.3) 100%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 50%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 30%, transparent) 100%);
     transform: translateY(-1px);
-    box-shadow: 0 0 8px rgba(0, 255, 136, 0.4);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--widget-accent) 40%, transparent);
 }
 
 .notepad-action-btn.active {
-    box-shadow: 0 0 10px rgba(255, 136, 0, 0.35);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--widget-accent) 35%, transparent);
 }
 
 .notepad-action-btn.danger {
-    background: linear-gradient(135deg, rgba(255, 100, 100, 0.3) 0%, rgba(255, 50, 50, 0.2) 100%);
-    border-color: rgba(255, 100, 100, 0.4);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 30%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 20%, transparent) 100%);
+    border-color: var(--widget-accent);
 }
 
 .notepad-action-btn.danger:hover {
-    background: linear-gradient(135deg, rgba(255, 100, 100, 0.5) 0%, rgba(255, 50, 50, 0.3) 100%);
-    border-color: rgba(255, 100, 100, 0.6);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 50%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 30%, transparent) 100%);
+    border-color: var(--widget-accent);
 }
 
 .notepad-action-btn.summarize-single-btn {
-    background: linear-gradient(135deg, rgba(255, 136, 0, 0.3) 0%, rgba(255, 100, 0, 0.2) 100%);
-    border-color: rgba(255, 136, 0, 0.4);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 30%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 20%, transparent) 100%);
+    border-color: var(--widget-accent);
 }
 
 .notepad-action-btn.summarize-single-btn:hover {
-    background: linear-gradient(135deg, rgba(255, 136, 0, 0.5) 0%, rgba(255, 100, 0, 0.3) 100%);
-    border-color: rgba(255, 136, 0, 0.6);
-    box-shadow: 0 0 8px rgba(255, 136, 0, 0.4);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 50%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 30%, transparent) 100%);
+    border-color: var(--widget-accent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--widget-accent) 40%, transparent);
 }
 
 .notepad-action-btn.summarize-single-btn.loading {
-    background: linear-gradient(135deg, rgba(255, 136, 0, 0.6) 0%, rgba(255, 100, 0, 0.4) 100%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 60%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 40%, transparent) 100%);
     animation: summarizeLoading 1.5s ease-in-out infinite;
     pointer-events: none;
 }
@@ -320,9 +320,9 @@
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 9px;
-    background: rgba(0, 200, 255, 0.2);
-    border: 1px solid rgba(0, 200, 255, 0.4);
-    color: rgba(0, 200, 255, 0.9);
+    background: color-mix(in srgb, var(--widget-accent) 20%, transparent);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 40%, transparent);
+    color: var(--widget-accent);
     margin-right: 6px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -335,18 +335,18 @@
 .notepad-input-label {
     display: block;
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--widget-muted);
     margin-bottom: 4px;
     text-transform: uppercase;
 }
 
 .notepad-text-input {
     width: 100%;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(0, 255, 136, 0.3);
+    background: color-mix(in srgb, var(--widget-surface) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 30%, transparent);
     border-radius: 6px;
     padding: 8px 12px;
-    color: white;
+    color: var(--widget-text);
     font-family: 'Orbitron', monospace;
     font-size: 12px;
 }
@@ -356,8 +356,8 @@
     display: flex;
     gap: 4px;
     padding: 6px;
-    background: rgba(0, 255, 136, 0.1);
-    border: 1px solid rgba(0, 255, 136, 0.2);
+    background: color-mix(in srgb, var(--widget-accent) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 20%, transparent);
     border-bottom: none;
     border-radius: 8px 8px 0 0;
 }
@@ -366,15 +366,15 @@
     padding: 4px 8px;
     background: transparent;
     border: 1px solid transparent;
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--widget-muted);
     cursor: pointer;
     font-size: 12px;
     border-radius: 4px;
 }
 
 .markdown-btn:hover {
-    background: rgba(0, 255, 136, 0.2);
-    color: #fff;
+    background: color-mix(in srgb, var(--widget-accent) 20%, transparent);
+    color: var(--widget-text);
 }
 
 
@@ -382,19 +382,19 @@
 .notepad-empty {
     text-align: center;
     padding: 40px 20px;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--widget-muted);
 }
 
 .notepad-empty i {
     font-size: 48px;
     margin-bottom: 16px;
-    color: rgba(0, 255, 136, 0.4);
+    color: var(--widget-accent);
 }
 
 .notepad-empty h3 {
     font-size: 16px;
     margin-bottom: 8px;
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--widget-muted);
 }
 
 .notepad-empty p {
@@ -405,8 +405,8 @@
 /* Add Note Form */
 .notepad-add-note-form {
     padding: 20px;
-    border-top: 1px solid rgba(0, 255, 136, 0.2);
-    background: rgba(0, 255, 136, 0.05);
+    border-top: 1px solid color-mix(in srgb, var(--widget-accent) 20%, transparent);
+    background: color-mix(in srgb, var(--widget-accent) 5%, transparent);
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -419,10 +419,10 @@
     flex: 1;
     min-height: 0;
     /* Allow shrinking */
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(0, 255, 136, 0.3);
+    background: color-mix(in srgb, var(--widget-surface) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 30%, transparent);
     border-radius: 8px;
-    color: white !important;
+    color: var(--widget-text) !important;
     font-family: 'Segoe UI', system-ui, sans-serif;
     font-size: 14px;
     line-height: 1.5;
@@ -438,21 +438,21 @@
 
 .notepad-add-note-textarea:focus {
     outline: none !important;
-    border-color: rgba(0, 255, 136, 0.6) !important;
+    border-color: var(--widget-accent) !important;
     box-shadow:
-        0 0 15px rgba(0, 255, 136, 0.4),
-        inset 0 0 5px rgba(0, 255, 136, 0.1) !important;
-    background: rgba(0, 0, 0, 0.4) !important;
+        0 0 15px color-mix(in srgb, var(--widget-accent) 40%, transparent),
+        inset 0 0 5px color-mix(in srgb, var(--widget-accent) 10%, transparent) !important;
+    background: color-mix(in srgb, var(--widget-surface) 40%, transparent) !important;
     transform: scale(1.01);
 }
 
 .notepad-add-note-textarea:hover {
-    border-color: rgba(0, 255, 136, 0.5);
-    box-shadow: 0 0 8px rgba(0, 255, 136, 0.2);
+    border-color: var(--widget-accent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--widget-accent) 20%, transparent);
 }
 
 .notepad-add-note-textarea::placeholder {
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--widget-muted);
 }
 
 .notepad-add-note-controls {
@@ -462,10 +462,10 @@
 }
 
 .notepad-add-note-btn {
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.6) 0%, rgba(0, 200, 120, 0.7) 100%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 60%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 70%, transparent) 100%);
     border: none;
     border-radius: 6px;
-    color: #041529;
+    color: var(--widget-accent);
     font-weight: 700;
     padding: 10px 20px;
     cursor: pointer;
@@ -477,28 +477,28 @@
 
 .notepad-add-note-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+    box-shadow: 0 0 15px color-mix(in srgb, var(--widget-accent) 50%, transparent);
 }
 
 .notepad-char-count {
     font-size: 10px;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--widget-muted);
 }
 
 /* Footer Controls */
 .notepad-footer {
     padding: 12px 24px;
-    border-top: 1px solid rgba(0, 255, 136, 0.3);
+    border-top: 1px solid color-mix(in srgb, var(--widget-accent) 30%, transparent);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: rgba(0, 255, 136, 0.05);
+    background: color-mix(in srgb, var(--widget-accent) 5%, transparent);
     flex-shrink: 0;
 }
 
 .notepad-count {
     font-size: 10px;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--widget-muted);
     font-weight: 500;
 }
 
@@ -510,10 +510,10 @@
 .notepad-control-btn {
     width: 28px;
     height: 28px;
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.3) 0%, rgba(0, 200, 120, 0.2) 100%);
-    border: 1px solid rgba(0, 255, 136, 0.4);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 30%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 20%, transparent) 100%);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 40%, transparent);
     border-radius: 4px;
-    color: white;
+    color: var(--widget-text);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -524,44 +524,44 @@
 }
 
 .notepad-control-btn:hover {
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.5) 0%, rgba(0, 200, 120, 0.3) 100%);
-    box-shadow: 0 0 12px rgba(0, 255, 136, 0.4);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 50%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 30%, transparent) 100%);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--widget-accent) 40%, transparent);
     transform: translateY(-1px);
 }
 
 .notepad-control-btn.export-btn {
-    background: linear-gradient(135deg, rgba(0, 200, 255, 0.3) 0%, rgba(0, 150, 255, 0.2) 100%);
-    border-color: rgba(0, 200, 255, 0.4);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 30%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 20%, transparent) 100%);
+    border-color: var(--widget-accent);
 }
 
 .notepad-control-btn.export-btn:hover {
-    background: linear-gradient(135deg, rgba(0, 200, 255, 0.5) 0%, rgba(0, 150, 255, 0.3) 100%);
-    box-shadow: 0 0 12px rgba(0, 200, 255, 0.4);
-    border-color: rgba(0, 200, 255, 0.6);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 50%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 30%, transparent) 100%);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--widget-accent) 40%, transparent);
+    border-color: var(--widget-accent);
     transform: translateY(-1px) scale(1.05);
 }
 
 .notepad-control-btn.import-btn {
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(22, 163, 74, 0.2) 100%);
-    border-color: rgba(34, 197, 94, 0.4);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 30%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 20%, transparent) 100%);
+    border-color: var(--widget-accent);
 }
 
 .notepad-control-btn.import-btn:hover {
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.5) 0%, rgba(22, 163, 74, 0.3) 100%);
-    box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
-    border-color: rgba(34, 197, 94, 0.6);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 50%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 30%, transparent) 100%);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--widget-accent) 40%, transparent);
+    border-color: var(--widget-accent);
     transform: translateY(-1px) scale(1.05);
 }
 
 .notepad-control-btn.export-txt-btn {
-    background: linear-gradient(135deg, rgba(168, 85, 247, 0.3) 0%, rgba(147, 51, 234, 0.2) 100%);
-    border-color: rgba(168, 85, 247, 0.4);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 30%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 20%, transparent) 100%);
+    border-color: var(--widget-accent);
 }
 
 .notepad-control-btn.export-txt-btn:hover {
-    background: linear-gradient(135deg, rgba(168, 85, 247, 0.5) 0%, rgba(147, 51, 234, 0.3) 100%);
-    box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
-    border-color: rgba(168, 85, 247, 0.6);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 50%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 30%, transparent) 100%);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--widget-accent) 40%, transparent);
+    border-color: var(--widget-accent);
     transform: translateY(-1px) scale(1.05);
 }
 
@@ -584,7 +584,7 @@
 .notepad-access-icon {
     width: 40px;
     height: 40px;
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(0, 200, 120, 0.05) 100%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 10%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 5%, transparent) 100%);
     border-radius: 0 8px 8px 0;
     display: flex;
     align-items: center;
@@ -592,35 +592,35 @@
     cursor: pointer;
     opacity: 0.2;
     transition: all 0.3s ease;
-    border: 1px solid rgba(0, 255, 136, 0.2);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 20%, transparent);
     border-left: none;
     box-shadow:
-        0 0 10px rgba(0, 255, 136, 0.1),
-        inset 0 0 5px rgba(0, 255, 136, 0.05);
+        0 0 10px color-mix(in srgb, var(--widget-accent) 10%, transparent),
+        inset 0 0 5px color-mix(in srgb, var(--widget-accent) 5%, transparent);
 }
 
 .notepad-access-icon i {
-    color: #00FF88;
+    color: var(--widget-accent);
     font-size: 18px;
-    filter: drop-shadow(0 0 5px rgba(0, 255, 136, 0.5));
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--widget-accent) 50%, transparent));
     opacity: 0.8;
     transition: all 0.3s ease;
 }
 
 .notepad-access-icon:hover {
     opacity: 1;
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.3) 0%, rgba(0, 200, 120, 0.2) 100%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 30%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 20%, transparent) 100%);
     box-shadow:
-        0 0 15px rgba(0, 255, 136, 0.3),
-        inset 0 0 8px rgba(0, 255, 136, 0.1);
+        0 0 15px color-mix(in srgb, var(--widget-accent) 30%, transparent),
+        inset 0 0 8px color-mix(in srgb, var(--widget-accent) 10%, transparent);
     transform: translateX(3px);
-    border-color: rgba(0, 255, 136, 0.4);
+    border-color: var(--widget-accent);
 }
 
 .notepad-access-icon:hover i {
     opacity: 1;
     transform: scale(1.1);
-    filter: drop-shadow(0 0 8px rgba(0, 255, 136, 0.8));
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--widget-accent) 80%, transparent));
 }
 
 .notepad-access-icon:active {
@@ -635,13 +635,13 @@
     left: 0;
     right: 0;
     background: linear-gradient(135deg,
-            rgba(0, 255, 136, 0.95) 0%,
-            rgba(0, 200, 120, 0.9) 100%);
-    border: 1px solid rgba(0, 255, 136, 0.6);
+            color-mix(in srgb, var(--widget-accent) 95%, transparent) 0%,
+            color-mix(in srgb, var(--widget-accent) 90%, transparent) 100%);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 60%, transparent);
     border-radius: 8px 8px 0 0;
     box-shadow:
-        0 4px 20px rgba(0, 255, 136, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        0 4px 20px color-mix(in srgb, var(--widget-accent) 40%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--theme-highlight) 20%, transparent);
     z-index: 1000;
     transform: translateY(-100%);
     opacity: 0;
@@ -656,39 +656,39 @@
 
 .notepad-notification.success {
     background: linear-gradient(135deg,
-            rgba(0, 255, 136, 0.95) 0%,
-            rgba(0, 200, 120, 0.9) 100%);
-    border-color: rgba(0, 255, 136, 0.6);
+            color-mix(in srgb, var(--widget-accent) 95%, transparent) 0%,
+            color-mix(in srgb, var(--widget-accent) 90%, transparent) 100%);
+    border-color: var(--widget-accent);
 }
 
 .notepad-notification.error {
     background: linear-gradient(135deg,
-            rgba(255, 68, 68, 0.95) 0%,
-            rgba(220, 38, 38, 0.9) 100%);
-    border-color: rgba(255, 68, 68, 0.6);
+            color-mix(in srgb, var(--widget-accent) 95%, transparent) 0%,
+            color-mix(in srgb, var(--widget-accent) 90%, transparent) 100%);
+    border-color: var(--widget-accent);
     box-shadow:
-        0 4px 20px rgba(255, 68, 68, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        0 4px 20px color-mix(in srgb, var(--widget-accent) 40%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--theme-highlight) 20%, transparent);
 }
 
 .notepad-notification.warning {
     background: linear-gradient(135deg,
-            rgba(255, 136, 0, 0.95) 0%,
-            rgba(245, 101, 0, 0.9) 100%);
-    border-color: rgba(255, 136, 0, 0.6);
+            color-mix(in srgb, var(--widget-accent) 95%, transparent) 0%,
+            color-mix(in srgb, var(--widget-accent) 90%, transparent) 100%);
+    border-color: var(--widget-accent);
     box-shadow:
-        0 4px 20px rgba(255, 136, 0, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        0 4px 20px color-mix(in srgb, var(--widget-accent) 40%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--theme-highlight) 20%, transparent);
 }
 
 .notepad-notification.info {
     background: linear-gradient(135deg,
-            rgba(0, 150, 255, 0.95) 0%,
-            rgba(0, 120, 220, 0.9) 100%);
-    border-color: rgba(0, 150, 255, 0.6);
+            color-mix(in srgb, var(--widget-accent) 95%, transparent) 0%,
+            color-mix(in srgb, var(--widget-accent) 90%, transparent) 100%);
+    border-color: var(--widget-accent);
     box-shadow:
-        0 4px 20px rgba(0, 150, 255, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        0 4px 20px color-mix(in srgb, var(--widget-accent) 40%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--theme-highlight) 20%, transparent);
 }
 
 .notification-content {
@@ -704,26 +704,26 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.2);
+    background: color-mix(in srgb, var(--widget-text) 20%, transparent);
     border-radius: 50%;
-    color: white;
+    color: var(--widget-text);
     font-size: 12px;
     flex-shrink: 0;
 }
 
 .notification-message {
     flex: 1;
-    color: white;
+    color: var(--widget-text);
     font-size: 13px;
     font-weight: 600;
     font-family: 'Orbitron', monospace;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    text-shadow: 0 1px 2px color-mix(in srgb, var(--theme-shade) 30%, transparent);
 }
 
 .notification-close {
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--widget-muted);
     font-size: 14px;
     cursor: pointer;
     padding: 4px;
@@ -733,8 +733,8 @@
 }
 
 .notification-close:hover {
-    color: white;
-    background: rgba(255, 255, 255, 0.1);
+    color: var(--widget-text);
+    background: color-mix(in srgb, var(--widget-text) 10%, transparent);
 }
 
 .notification-progress {
@@ -742,7 +742,7 @@
     bottom: 0;
     left: 0;
     height: 3px;
-    background: rgba(255, 255, 255, 0.6);
+    background: color-mix(in srgb, var(--widget-text) 60%, transparent);
     border-radius: 0 0 8px 8px;
     transform-origin: left;
     animation: notificationProgress 4s linear forwards;
@@ -771,8 +771,8 @@
 /* Dual Pane */
 .notepad-dual-pane {
     padding: 16px 24px;
-    border-top: 1px solid rgba(0, 255, 136, 0.3);
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.05) 0%, rgba(0, 200, 120, 0.03) 100%);
+    border-top: 1px solid color-mix(in srgb, var(--widget-accent) 30%, transparent);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 5%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 3%, transparent) 100%);
     animation: dualPaneSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
@@ -788,13 +788,13 @@
     align-items: center;
     margin-bottom: 16px;
     padding-bottom: 8px;
-    border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+    border-bottom: 1px solid color-mix(in srgb, var(--widget-accent) 20%, transparent);
 }
 
 .dual-pane-title {
     font-size: 14px;
     font-weight: 600;
-    color: #00FF88;
+    color: var(--widget-accent);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -803,7 +803,7 @@
 .dual-pane-close {
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--widget-muted);
     font-size: 16px;
     cursor: pointer;
     padding: 4px;
@@ -812,8 +812,8 @@
 }
 
 .dual-pane-close:hover {
-    color: #00FF88;
-    background: rgba(0, 255, 136, 0.1);
+    color: var(--widget-accent);
+    background: color-mix(in srgb, var(--widget-accent) 10%, transparent);
 }
 
 .dual-pane-content {
@@ -835,16 +835,16 @@
 .pane-label {
     font-size: 12px;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--widget-muted);
     margin-bottom: 8px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 6px;
     padding: 6px 12px;
-    background: rgba(0, 255, 136, 0.1);
+    background: color-mix(in srgb, var(--widget-accent) 10%, transparent);
     border-radius: 6px;
-    border: 1px solid rgba(0, 255, 136, 0.2);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 20%, transparent);
     flex-shrink: 0;
 }
 
@@ -855,10 +855,10 @@
 }
 
 .ai-summary-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: color-mix(in srgb, var(--widget-text) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--widget-border) 20%, transparent);
     border-radius: 4px;
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--widget-muted);
     padding: 4px 6px;
     font-size: 10px;
     cursor: pointer;
@@ -869,34 +869,34 @@
 }
 
 .ai-summary-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.4);
-    color: white;
+    background: color-mix(in srgb, var(--widget-text) 20%, transparent);
+    border-color: color-mix(in srgb, var(--widget-border) 40%, transparent);
+    color: var(--widget-text);
     transform: scale(1.05);
 }
 
 .dual-pane-left .pane-label {
-    background: rgba(0, 150, 255, 0.1);
-    border-color: rgba(0, 150, 255, 0.2);
-    color: rgba(0, 200, 255, 0.9);
+    background: color-mix(in srgb, var(--widget-accent) 10%, transparent);
+    border-color: var(--widget-accent);
+    color: var(--widget-accent);
 }
 
 .dual-pane-right .pane-label {
-    background: rgba(255, 136, 0, 0.1);
-    border-color: rgba(255, 136, 0, 0.2);
-    color: rgba(255, 180, 0, 0.9);
+    background: color-mix(in srgb, var(--widget-accent) 10%, transparent);
+    border-color: var(--widget-accent);
+    color: var(--widget-accent);
 }
 
 .pane-content {
     flex: 1;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(0, 255, 136, 0.2);
+    background: color-mix(in srgb, var(--widget-surface) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 20%, transparent);
     border-radius: 8px;
     padding: 12px;
     overflow-y: auto;
     font-size: 12px;
     line-height: 1.5;
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--widget-muted);
     scroll-behavior: smooth;
     white-space: pre-wrap;
 }
@@ -904,11 +904,11 @@
 .dual-pane-divider {
     width: 2px;
     background: linear-gradient(180deg,
-            rgba(0, 255, 136, 0.3) 0%,
-            rgba(0, 255, 136, 0.6) 50%,
-            rgba(0, 255, 136, 0.3) 100%);
+            color-mix(in srgb, var(--widget-accent) 30%, transparent) 0%,
+            color-mix(in srgb, var(--widget-accent) 60%, transparent) 50%,
+            color-mix(in srgb, var(--widget-accent) 30%, transparent) 100%);
     border-radius: 1px;
-    box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--widget-accent) 30%, transparent);
     flex-shrink: 0;
 }
 
@@ -932,14 +932,14 @@
     0%,
     100% {
         box-shadow:
-            0 0 20px rgba(0, 255, 136, 0.3),
-            inset 0 0 15px rgba(0, 255, 136, 0.1);
+            0 0 20px color-mix(in srgb, var(--widget-accent) 30%, transparent),
+            inset 0 0 15px color-mix(in srgb, var(--widget-accent) 10%, transparent);
     }
 
     50% {
         box-shadow:
-            0 0 35px rgba(0, 255, 136, 0.5),
-            inset 0 0 20px rgba(0, 255, 136, 0.2);
+            0 0 35px color-mix(in srgb, var(--widget-accent) 50%, transparent),
+            inset 0 0 20px color-mix(in srgb, var(--widget-accent) 20%, transparent);
     }
 }
 
@@ -950,7 +950,7 @@
     position: absolute;
     width: 16px;
     height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.9);
+    border: 2px solid color-mix(in srgb, var(--widget-border) 90%, transparent);
     z-index: 1;
     pointer-events: none;
 }
@@ -975,7 +975,7 @@
     right: -6px;
     width: 16px;
     height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.9);
+    border: 2px solid color-mix(in srgb, var(--widget-border) 90%, transparent);
     border-left: none;
     border-bottom: none;
     z-index: 1;
@@ -988,7 +988,7 @@
     left: -6px;
     width: 16px;
     height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.9);
+    border: 2px solid color-mix(in srgb, var(--widget-border) 90%, transparent);
     border-right: none;
     border-top: none;
     z-index: 1;
@@ -998,16 +998,16 @@
 /* Search Bar */
 .notepad-search {
     padding: 12px 24px;
-    border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+    border-bottom: 1px solid color-mix(in srgb, var(--widget-accent) 20%, transparent);
     flex-shrink: 0;
 }
 
 .notepad-search-input {
     width: 100%;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(0, 255, 136, 0.3);
+    background: color-mix(in srgb, var(--widget-surface) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 30%, transparent);
     border-radius: 6px;
-    color: white;
+    color: var(--widget-text);
     font-size: 12px;
     padding: 8px 12px;
     box-sizing: border-box;
@@ -1015,12 +1015,12 @@
 
 .notepad-search-input:focus {
     outline: none;
-    border-color: rgba(0, 255, 136, 0.5);
-    box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+    border-color: var(--widget-accent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--widget-accent) 30%, transparent);
 }
 
 .notepad-search-input::placeholder {
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--widget-muted);
 }
 
 /* Widget Controls (Draggable/Resizable) */
@@ -1031,13 +1031,13 @@
     right: 8px;
     display: none;
     gap: 6px;
-    background: rgba(12, 41, 79, 0.9);
+    background: color-mix(in srgb, var(--widget-accent) 90%, transparent);
     padding: 6px;
     border-radius: 8px;
-    border: 1px solid rgba(0, 255, 136, 0.3);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 30%, transparent);
     backdrop-filter: blur(10px);
     z-index: 100;
-    box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+    box-shadow: 0 0 15px color-mix(in srgb, var(--widget-accent) 30%, transparent);
 }
 
 .notepad-widget:hover .widget-controls {
@@ -1066,9 +1066,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 200, 120, 0.1));
-    border: 1px solid rgba(0, 255, 136, 0.4);
-    color: #00FF88;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 20%, transparent), color-mix(in srgb, var(--widget-accent) 10%, transparent));
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 40%, transparent);
+    color: var(--widget-accent);
     cursor: pointer;
     border-radius: 6px;
     font-size: 14px;
@@ -1077,21 +1077,21 @@
 }
 
 .widget-control-btn[title="Make Bigger"] {
-    background: linear-gradient(135deg, rgba(0, 100, 50, 0.9) 0%, rgba(0, 150, 75, 0.95) 100%);
-    border-color: rgba(0, 255, 150, 0.6);
-    color: rgba(0, 255, 150, 1);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 90%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 95%, transparent) 100%);
+    border-color: var(--widget-accent);
+    color: var(--widget-accent);
 }
 
 .widget-control-btn[title="Make Smaller"] {
-    background: linear-gradient(135deg, rgba(100, 50, 0, 0.9) 0%, rgba(150, 75, 0, 0.95) 100%);
-    border-color: rgba(255, 150, 0, 0.6);
-    color: rgba(255, 180, 0, 1);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 90%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 95%, transparent) 100%);
+    border-color: var(--widget-accent);
+    color: var(--widget-accent);
 }
 
 .widget-control-btn[title="Close"] {
-    background: linear-gradient(135deg, rgba(100, 20, 20, 0.9) 0%, rgba(150, 30, 30, 0.95) 100%);
-    border-color: rgba(255, 80, 80, 0.6);
-    color: rgba(255, 100, 100, 1);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 90%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 95%, transparent) 100%);
+    border-color: var(--widget-accent);
+    color: var(--widget-accent);
 }
 
 .resize-handle {
@@ -1101,8 +1101,8 @@
     width: 24px;
     height: 24px;
     background: repeating-linear-gradient(45deg,
-            rgba(0, 255, 136, 0.3),
-            rgba(0, 255, 136, 0.3) 2px,
+            color-mix(in srgb, var(--widget-accent) 30%, transparent),
+            color-mix(in srgb, var(--widget-accent) 30%, transparent) 2px,
             transparent 2px,
             transparent 4px);
     cursor: se-resize;
@@ -1124,35 +1124,35 @@
     right: 4px;
     width: 6px;
     height: 6px;
-    background: #00FF88;
+    background: var(--widget-accent);
     opacity: 0.7;
     border-radius: 50%;
 }
 
 /* Frontend Notes Widget Overrides */
 .notepad-widget {
-    --note-accent: #facc15;
-    --note-accent-strong: #eab308;
-    --note-accent-soft: rgba(250, 204, 21, 0.16);
-    --note-accent-border: rgba(250, 204, 21, 0.34);
-    --note-accent-glow: rgba(250, 204, 21, 0.28);
-    --note-panel: rgba(28, 23, 8, 0.92);
+    --note-accent: var(--widget-accent);
+    --note-accent-strong: var(--widget-accent);
+    --note-accent-soft: color-mix(in srgb, var(--widget-accent) 16%, transparent);
+    --note-accent-border: color-mix(in srgb, var(--widget-accent) 34%, transparent);
+    --note-accent-glow: color-mix(in srgb, var(--widget-accent) 28%, transparent);
+    --note-panel: color-mix(in srgb, var(--widget-surface) 92%, transparent);
     min-width: 440px;
     min-height: 420px;
-    background: linear-gradient(180deg, rgba(17, 15, 8, 0.98), rgba(12, 11, 7, 0.96));
-    border-color: rgba(250, 204, 21, 0.24);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--widget-surface) 98%, transparent), color-mix(in srgb, var(--widget-surface) 96%, transparent));
+    border-color: var(--widget-accent);
     box-shadow:
-        0 16px 40px rgba(0, 0, 0, 0.62),
-        0 0 0 1px rgba(250, 204, 21, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        0 16px 40px color-mix(in srgb, var(--theme-shade) 62%, transparent),
+        0 0 0 1px color-mix(in srgb, var(--widget-accent) 12%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--theme-highlight) 3%, transparent);
 }
 
 .notepad-widget.ai-connected {
-    border-color: rgba(250, 204, 21, 0.5);
+    border-color: var(--widget-accent);
     box-shadow:
-        0 16px 40px rgba(0, 0, 0, 0.62),
-        0 0 0 1px rgba(250, 204, 21, 0.18),
-        0 0 28px rgba(250, 204, 21, 0.18);
+        0 16px 40px color-mix(in srgb, var(--theme-shade) 62%, transparent),
+        0 0 0 1px color-mix(in srgb, var(--widget-accent) 18%, transparent),
+        0 0 28px color-mix(in srgb, var(--widget-accent) 18%, transparent);
 }
 
 .notepad-header,
@@ -1161,7 +1161,7 @@
 .notepad-search,
 .notepad-add-note-form,
 .dual-pane-header {
-    background: linear-gradient(180deg, rgba(33, 28, 10, 0.96), rgba(18, 16, 8, 0.92));
+    background: linear-gradient(180deg, color-mix(in srgb, var(--widget-surface) 96%, transparent), color-mix(in srgb, var(--widget-surface) 92%, transparent));
 }
 
 .notepad-header,
@@ -1184,15 +1184,15 @@
 }
 
 .notepad-logo {
-    background: linear-gradient(135deg, #facc15 0%, #eab308 100%);
-    color: #1a1606;
+    background: linear-gradient(135deg, var(--widget-accent) 0%, var(--widget-accent) 100%);
+    color: var(--widget-text);
     box-shadow:
-        0 0 16px rgba(250, 204, 21, 0.25),
-        inset 0 1px 0 rgba(255, 255, 255, 0.28);
+        0 0 16px color-mix(in srgb, var(--widget-accent) 25%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--theme-highlight) 28%, transparent);
 }
 
 .notepad-brand {
-    color: #fff8d6;
+    color: var(--widget-accent);
     letter-spacing: 1.4px;
 }
 
@@ -1211,9 +1211,9 @@
     width: 30px;
     height: 30px;
     border-radius: 9px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.04);
-    color: #f3f4f6;
+    border: 1px solid color-mix(in srgb, var(--widget-border) 8%, transparent);
+    background: color-mix(in srgb, var(--widget-text) 4%, transparent);
+    color: var(--widget-text);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1222,43 +1222,43 @@
 }
 
 .notepad-header-close:hover {
-    background: rgba(250, 204, 21, 0.12);
-    border-color: rgba(250, 204, 21, 0.32);
-    color: #fde68a;
+    background: color-mix(in srgb, var(--widget-accent) 12%, transparent);
+    border-color: var(--widget-accent);
+    color: var(--widget-accent);
 }
 
 .notepad-nav-tab:hover,
 .notepad-nav-tab.active {
-    color: #fde68a;
+    color: var(--widget-accent);
     border-bottom-color: var(--note-accent);
-    background: rgba(250, 204, 21, 0.08);
-    text-shadow: 0 0 10px rgba(250, 204, 21, 0.22);
+    background: color-mix(in srgb, var(--widget-accent) 8%, transparent);
+    text-shadow: 0 0 10px color-mix(in srgb, var(--widget-accent) 22%, transparent);
 }
 
 .notepad-item {
-    background: rgba(255, 255, 255, 0.025);
+    background: color-mix(in srgb, var(--widget-text) 2.5%, transparent);
 }
 
 .notepad-item:hover {
-    background: rgba(250, 204, 21, 0.05);
-    border-color: rgba(250, 204, 21, 0.24);
+    background: color-mix(in srgb, var(--widget-accent) 5%, transparent);
+    border-color: var(--widget-accent);
 }
 
 .notepad-time,
 .notepad-count {
-    color: #fcd34d;
+    color: var(--widget-accent);
     text-shadow: none;
 }
 
 .notepad-id {
-    background: linear-gradient(135deg, rgba(250, 204, 21, 0.34) 0%, rgba(234, 179, 8, 0.24) 100%);
-    border-color: rgba(250, 204, 21, 0.4);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 34%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 24%, transparent) 100%);
+    border-color: var(--widget-accent);
 }
 
 .notepad-tag {
-    background: rgba(250, 204, 21, 0.12);
-    border-color: rgba(250, 204, 21, 0.32);
-    color: #fde68a;
+    background: color-mix(in srgb, var(--widget-accent) 12%, transparent);
+    border-color: var(--widget-accent);
+    color: var(--widget-accent);
 }
 
 .notepad-action-btn,
@@ -1267,71 +1267,71 @@
 .markdown-btn,
 .widget-control-btn,
 .ai-summary-btn {
-    color: #f8fafc;
+    color: var(--widget-text);
 }
 
 .notepad-action-btn,
 .notepad-control-btn,
 .widget-control-btn {
-    background: linear-gradient(135deg, rgba(250, 204, 21, 0.18) 0%, rgba(234, 179, 8, 0.12) 100%);
-    border-color: rgba(250, 204, 21, 0.28);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 18%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 12%, transparent) 100%);
+    border-color: var(--widget-accent);
 }
 
 .notepad-action-btn:hover,
 .notepad-control-btn:hover,
 .widget-control-btn:hover {
-    background: linear-gradient(135deg, rgba(250, 204, 21, 0.28) 0%, rgba(234, 179, 8, 0.18) 100%);
-    box-shadow: 0 0 12px rgba(250, 204, 21, 0.18);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 28%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 18%, transparent) 100%);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--widget-accent) 18%, transparent);
 }
 
 .notepad-add-note-btn {
-    background: linear-gradient(135deg, rgba(250, 204, 21, 0.9) 0%, rgba(234, 179, 8, 0.96) 100%);
-    color: #1a1606;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 90%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 96%, transparent) 100%);
+    color: var(--widget-text);
 }
 
 .notepad-add-note-btn:hover {
-    box-shadow: 0 0 15px rgba(250, 204, 21, 0.28);
+    box-shadow: 0 0 15px color-mix(in srgb, var(--widget-accent) 28%, transparent);
 }
 
 .notepad-search-input,
 .notepad-text-input,
 .notepad-add-note-textarea {
-    background: rgba(12, 12, 12, 0.34);
+    background: color-mix(in srgb, var(--widget-surface) 34%, transparent);
 }
 
 .notepad-search-input:focus,
 .notepad-text-input:focus,
 .notepad-add-note-textarea:focus {
-    border-color: rgba(250, 204, 21, 0.5) !important;
-    box-shadow: 0 0 12px rgba(250, 204, 21, 0.18) !important;
+    border-color: var(--widget-accent) !important;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--widget-accent) 18%, transparent) !important;
 }
 
 .widget-controls {
-    background: rgba(30, 25, 10, 0.96);
-    border-color: rgba(250, 204, 21, 0.26);
-    box-shadow: 0 0 18px rgba(250, 204, 21, 0.12);
+    background: color-mix(in srgb, var(--widget-surface) 96%, transparent);
+    border-color: var(--widget-accent);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--widget-accent) 12%, transparent);
 }
 
 .widget-control-btn[title="Make Bigger"],
 .widget-control-btn[title="Make Smaller"],
 .widget-control-btn[title="Close"] {
-    background: linear-gradient(135deg, rgba(250, 204, 21, 0.18) 0%, rgba(234, 179, 8, 0.12) 100%);
-    border-color: rgba(250, 204, 21, 0.28);
-    color: #fde68a;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 18%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 12%, transparent) 100%);
+    border-color: var(--widget-accent);
+    color: var(--widget-accent);
 }
 
 .notepad-empty-icon {
     width: 56px;
     height: 56px;
     margin: 0 auto 16px;
-    color: rgba(250, 204, 21, 0.45);
+    color: var(--widget-accent);
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 
 .notepad-empty-icon.summary {
-    color: rgba(245, 158, 11, 0.5);
+    color: var(--widget-accent);
 }
 
 .notepad-widget,
@@ -1343,20 +1343,20 @@
     min-width: 500px;
     min-height: 480px;
     background:
-        radial-gradient(circle at top left, rgba(250, 204, 21, 0.12), transparent 28%),
-        linear-gradient(180deg, rgba(20, 17, 7, 0.98), rgba(12, 10, 6, 0.97));
-    border-color: rgba(250, 204, 21, 0.28);
+        radial-gradient(circle at top left, color-mix(in srgb, var(--widget-accent) 12%, transparent), transparent 28%),
+        linear-gradient(180deg, color-mix(in srgb, var(--widget-surface) 98%, transparent), color-mix(in srgb, var(--widget-surface) 97%, transparent));
+    border-color: var(--widget-accent);
     box-shadow:
-        0 18px 42px rgba(0, 0, 0, 0.62),
-        0 0 0 1px rgba(250, 204, 21, 0.14),
-        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        0 18px 42px color-mix(in srgb, var(--theme-shade) 62%, transparent),
+        0 0 0 1px color-mix(in srgb, var(--widget-accent) 14%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--theme-highlight) 4%, transparent);
 }
 
 .notepad-widget::before,
 .notepad-widget::after,
 .corner-top-right,
 .corner-bottom-left {
-    border-color: rgba(254, 240, 138, 0.95);
+    border-color: var(--widget-accent);
 }
 
 .notepad-header,
@@ -1373,7 +1373,7 @@
 .markdown-toolbar,
 .pane-content,
 .pane-label {
-    border-color: rgba(250, 204, 21, 0.24) !important;
+    border-color: var(--widget-accent) !important;
 }
 
 .notepad-header,
@@ -1382,7 +1382,7 @@
 .notepad-footer,
 .notepad-add-note-form,
 .dual-pane-header {
-    background: linear-gradient(180deg, rgba(34, 29, 11, 0.96), rgba(18, 15, 7, 0.92));
+    background: linear-gradient(180deg, color-mix(in srgb, var(--widget-surface) 96%, transparent), color-mix(in srgb, var(--widget-surface) 92%, transparent));
 }
 
 .notepad-nav-tab,
@@ -1416,11 +1416,11 @@
 }
 
 .notepad-ai-panel {
-    background: rgba(250, 204, 21, 0.06);
+    background: color-mix(in srgb, var(--widget-accent) 6%, transparent);
     padding: 12px;
     border-radius: 10px;
     margin-bottom: 16px;
-    border: 1px solid rgba(250, 204, 21, 0.18);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 18%, transparent);
 }
 
 .notepad-ai-options {
@@ -1440,7 +1440,7 @@
 
 .notepad-ai-length-label {
     font-size: 10px;
-    color: #fef3c7;
+    color: var(--widget-accent);
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
@@ -1487,28 +1487,28 @@
 .notepad-text-input,
 .notepad-add-note-textarea,
 .pane-content {
-    color: #fff8dc;
+    color: var(--widget-accent);
 }
 
 .notepad-text-input::placeholder,
 .notepad-search-input::placeholder,
 .notepad-add-note-textarea::placeholder {
-    color: rgba(255, 248, 220, 0.42);
+    color: var(--widget-accent);
 }
 
 .notepad-status span,
 .notepad-count,
 .notepad-char-count,
 .notepad-input-label {
-    color: rgba(255, 244, 196, 0.8);
+    color: var(--widget-accent);
 }
 
 .notepad-search-input:focus,
 .notepad-text-input:focus,
 .notepad-add-note-textarea:focus,
 .pane-content:focus {
-    border-color: rgba(250, 204, 21, 0.5) !important;
-    box-shadow: 0 0 12px rgba(250, 204, 21, 0.18) !important;
+    border-color: var(--widget-accent) !important;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--widget-accent) 18%, transparent) !important;
 }
 
 .dual-pane-title,
@@ -1518,42 +1518,42 @@
 .notepad-time,
 .notepad-count,
 .notepad-brand {
-    color: #fde68a;
+    color: var(--widget-accent);
 }
 
 .pane-label,
 .dual-pane-left .pane-label,
 .dual-pane-right .pane-label {
-    background: rgba(250, 204, 21, 0.1);
-    color: #fde68a;
+    background: color-mix(in srgb, var(--widget-accent) 10%, transparent);
+    color: var(--widget-accent);
 }
 
 .dual-pane-divider {
     background: linear-gradient(180deg,
-            rgba(250, 204, 21, 0.22) 0%,
-            rgba(250, 204, 21, 0.55) 50%,
-            rgba(250, 204, 21, 0.22) 100%);
-    box-shadow: 0 0 8px rgba(250, 204, 21, 0.28);
+            color-mix(in srgb, var(--widget-accent) 22%, transparent) 0%,
+            color-mix(in srgb, var(--widget-accent) 55%, transparent) 50%,
+            color-mix(in srgb, var(--widget-accent) 22%, transparent) 100%);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--widget-accent) 28%, transparent);
 }
 
 .widget-controls {
-    background: rgba(31, 27, 11, 0.96);
+    background: color-mix(in srgb, var(--widget-surface) 96%, transparent);
 }
 
 .widget-control-btn {
-    color: #fde68a;
+    color: var(--widget-accent);
 }
 
 .resize-handle {
     background: repeating-linear-gradient(45deg,
-            rgba(250, 204, 21, 0.3),
-            rgba(250, 204, 21, 0.3) 2px,
+            color-mix(in srgb, var(--widget-accent) 30%, transparent),
+            color-mix(in srgb, var(--widget-accent) 30%, transparent) 2px,
             transparent 2px,
             transparent 4px);
 }
 
 .resize-handle::before {
-    background: #facc15;
+    background: var(--widget-accent);
 }
 
 .summary-actions {
@@ -1570,9 +1570,9 @@
 .notes-ai-chat-card,
 .notes-ai-updated-note,
 .notes-ai-saved-summaries {
-    border: 1px solid rgba(250, 204, 21, 0.2);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 20%, transparent);
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.03);
+    background: color-mix(in srgb, var(--widget-text) 3%, transparent);
     padding: 14px;
 }
 
@@ -1582,7 +1582,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    color: #fde68a;
+    color: var(--widget-accent);
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -1599,7 +1599,7 @@
 
 .notes-ai-context-body {
     white-space: pre-wrap;
-    color: #fff8dc;
+    color: var(--widget-accent);
     font-size: 13px;
     line-height: 1.6;
 }
@@ -1620,21 +1620,21 @@
 .notes-ai-message {
     border-radius: 10px;
     padding: 10px 12px;
-    border: 1px solid rgba(250, 204, 21, 0.18);
-    background: rgba(19, 16, 8, 0.86);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 18%, transparent);
+    background: color-mix(in srgb, var(--widget-surface) 86%, transparent);
 }
 
 .notes-ai-message.user {
-    background: rgba(69, 53, 10, 0.44);
+    background: color-mix(in srgb, var(--widget-accent) 44%, transparent);
 }
 
 .notes-ai-message.assistant {
-    background: rgba(37, 32, 12, 0.88);
+    background: color-mix(in srgb, var(--widget-surface) 88%, transparent);
 }
 
 .notes-ai-message-role {
     font-size: 10px;
-    color: #fcd34d;
+    color: var(--widget-accent);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     margin-bottom: 6px;
@@ -1642,16 +1642,16 @@
 
 .notes-ai-message-body {
     white-space: pre-wrap;
-    color: #fff8dc;
+    color: var(--widget-accent);
     font-size: 13px;
     line-height: 1.55;
 }
 
 .notes-ai-placeholder {
-    border: 1px dashed rgba(250, 204, 21, 0.18);
+    border: 1px dashed color-mix(in srgb, var(--widget-accent) 18%, transparent);
     border-radius: 10px;
     padding: 14px;
-    color: rgba(255, 248, 220, 0.68);
+    color: var(--widget-accent);
     font-size: 12px;
     line-height: 1.5;
 }
@@ -1666,17 +1666,17 @@
 }
 
 .notepad-notification.success {
-    background: linear-gradient(135deg, rgba(250, 204, 21, 0.96) 0%, rgba(234, 179, 8, 0.9) 100%);
-    border-color: rgba(250, 204, 21, 0.62);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 96%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 90%, transparent) 100%);
+    border-color: var(--widget-accent);
     box-shadow:
-        0 4px 20px rgba(250, 204, 21, 0.34),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        0 4px 20px color-mix(in srgb, var(--widget-accent) 34%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--theme-highlight) 20%, transparent);
 }
 
 .notepad-notification.success .notification-message,
 .notepad-notification.success .notification-icon,
 .notepad-notification.success .notification-close {
-    color: #1a1606;
+    color: var(--widget-text);
 }
 
 .notepad-control-btn.import-btn,
@@ -1685,10 +1685,10 @@
 .notepad-control-btn.import-btn:hover,
 .notepad-control-btn.export-txt-btn:hover,
 .notepad-control-btn.export-btn:hover {
-    background: linear-gradient(135deg, rgba(250, 204, 21, 0.18) 0%, rgba(234, 179, 8, 0.12) 100%);
-    border-color: rgba(250, 204, 21, 0.28);
-    box-shadow: 0 0 12px rgba(250, 204, 21, 0.18);
-    color: #f8fafc;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 18%, transparent) 0%, color-mix(in srgb, var(--widget-accent) 12%, transparent) 100%);
+    border-color: var(--widget-accent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--widget-accent) 18%, transparent);
+    color: var(--widget-text);
 }
 
 .notepad-control-btn:hover {
@@ -1696,17 +1696,17 @@
 }
 
 .notepad-widget {
-    --note-accent: var(--red, #facc15);
-    --note-accent-strong: color-mix(in srgb, var(--red, #facc15) 82%, #ffb84d 18%);
-    --note-accent-soft: color-mix(in srgb, var(--red, #facc15) 16%, transparent);
-    --note-accent-border: color-mix(in srgb, var(--border, #355a66) 44%, var(--red, #facc15) 22%);
-    --note-accent-glow: color-mix(in srgb, var(--red, #facc15) 24%, transparent);
-    --note-panel: color-mix(in srgb, var(--panel, #111111) 90%, var(--bg, #282c34) 10%);
+    --note-accent: var(--widget-accent, #facc15);
+    --note-accent-strong: color-mix(in srgb, var(--widget-accent, #facc15) 82%, var(--widget-accent) 18%);
+    --note-accent-soft: color-mix(in srgb, var(--widget-accent, #facc15) 16%, transparent);
+    --note-accent-border: color-mix(in srgb, var(--widget-border, #355a66) 44%, var(--widget-accent, #facc15) 22%);
+    --note-accent-glow: color-mix(in srgb, var(--widget-accent, #facc15) 24%, transparent);
+    --note-panel: color-mix(in srgb, var(--widget-surface, #111111) 90%, var(--bg, #282c34) 10%);
     background:
         radial-gradient(circle at top left, color-mix(in srgb, var(--note-accent) 14%, transparent), transparent 28%),
-        linear-gradient(180deg, color-mix(in srgb, var(--note-panel) 96%, black 4%), color-mix(in srgb, var(--bg, #282c34) 94%, black 6%));
+        linear-gradient(180deg, color-mix(in srgb, var(--note-panel) 96%, var(--widget-surface) 4%), color-mix(in srgb, var(--bg, #282c34) 94%, var(--widget-surface) 6%));
     border-color: var(--note-accent-border);
-    color: var(--fg, #9cdef2);
+    color: var(--widget-text, #9cdef2);
 }
 
 .notepad-brand,
@@ -1715,7 +1715,7 @@
 .notepad-count,
 .notepad-nav-tab:hover,
 .notepad-nav-tab.active {
-    color: color-mix(in srgb, var(--fg, #9cdef2) 92%, var(--note-accent) 8%);
+    color: color-mix(in srgb, var(--widget-text, #9cdef2) 92%, var(--note-accent) 8%);
 }
 
 .notepad-header,
@@ -1725,12 +1725,12 @@
 .markdown-toolbar,
 .notepad-item {
     border-color: var(--note-accent-border);
-    background: color-mix(in srgb, var(--panel, #111111) 88%, var(--bg, #282c34) 12%);
+    background: color-mix(in srgb, var(--widget-surface, #111111) 88%, var(--bg, #282c34) 12%);
 }
 
 .notepad-item:hover {
-    background: color-mix(in srgb, var(--note-accent) 10%, var(--panel, #111111) 90%);
-    border-color: color-mix(in srgb, var(--note-accent) 28%, var(--border, #355a66));
+    background: color-mix(in srgb, var(--note-accent) 10%, var(--widget-surface, #111111) 90%);
+    border-color: color-mix(in srgb, var(--note-accent) 28%, var(--widget-border, #355a66));
 }
 
 .notepad-logo,
@@ -1739,17 +1739,17 @@
 .notepad-control-btn,
 .notepad-add-note-btn,
 .notepad-tag {
-    background: color-mix(in srgb, var(--note-accent) 14%, var(--panel, #111111) 86%);
-    border-color: color-mix(in srgb, var(--note-accent) 28%, var(--border, #355a66));
-    color: color-mix(in srgb, var(--fg, #9cdef2) 92%, white 8%);
+    background: color-mix(in srgb, var(--note-accent) 14%, var(--widget-surface, #111111) 86%);
+    border-color: color-mix(in srgb, var(--note-accent) 28%, var(--widget-border, #355a66));
+    color: color-mix(in srgb, var(--widget-text, #9cdef2) 92%, var(--widget-text) 8%);
     text-shadow: none;
 }
 
 .notepad-logo {
-    color: color-mix(in srgb, var(--bg, #282c34) 84%, black 16%);
+    color: color-mix(in srgb, var(--bg, #282c34) 84%, var(--widget-text) 16%);
     box-shadow:
         0 0 12px color-mix(in srgb, var(--note-accent) 28%, transparent),
-        inset 0 1px 0 color-mix(in srgb, white 28%, transparent);
+        inset 0 1px 0 color-mix(in srgb, var(--theme-highlight) 28%, transparent);
 }
 
 .notepad-status-indicator {
@@ -1769,9 +1769,9 @@
 .notepad-text-input,
 .notepad-add-note-textarea,
 .notes-ai-input {
-    background: color-mix(in srgb, var(--input-bg, #111111) 90%, black 10%);
+    background: color-mix(in srgb, var(--input-bg, #111111) 90%, var(--widget-surface) 10%);
     border-color: var(--input-border, rgba(255,255,255,0.1));
-    color: color-mix(in srgb, var(--fg, #9cdef2) 92%, white 8%) !important;
+    color: color-mix(in srgb, var(--widget-text, #9cdef2) 92%, var(--widget-text) 8%) !important;
 }
 
 .notepad-text-input::placeholder,
@@ -1780,11 +1780,11 @@
 }
 
 .notepad-add-note-textarea:focus {
-    border-color: color-mix(in srgb, var(--note-accent) 36%, var(--border-strong, #355a66)) !important;
+    border-color: color-mix(in srgb, var(--note-accent) 36%, var(--widget-border-strong, #355a66)) !important;
     box-shadow:
         0 0 15px color-mix(in srgb, var(--note-accent) 20%, transparent),
         inset 0 0 5px color-mix(in srgb, var(--note-accent) 10%, transparent) !important;
-    background: color-mix(in srgb, var(--input-bg, #111111) 96%, black 4%) !important;
+    background: color-mix(in srgb, var(--input-bg, #111111) 96%, var(--widget-surface) 4%) !important;
     transform: none;
 }
 
@@ -1793,7 +1793,7 @@
     gap: 8px;
     padding: 10px 16px;
     border-bottom: 1px solid color-mix(in srgb, var(--note-accent) 22%, transparent);
-    background: color-mix(in srgb, var(--panel-bg, #0d161a) 88%, var(--note-accent) 12%);
+    background: color-mix(in srgb, var(--widget-surface-bg, #0d161a) 88%, var(--note-accent) 12%);
     overflow-x: auto;
     scrollbar-width: thin;
 }
@@ -1830,8 +1830,8 @@
     margin-bottom: 9px;
     padding: 12px 14px;
     border-radius: 10px;
-    background: color-mix(in srgb, var(--panel-bg, #0d161a) 90%, var(--note-accent) 10%);
-    box-shadow: 0 5px 16px rgba(0,0,0,.12);
+    background: color-mix(in srgb, var(--widget-surface-bg, #0d161a) 90%, var(--note-accent) 10%);
+    box-shadow: 0 5px 16px color-mix(in srgb, var(--theme-shade) 12%, transparent);
 }
 
 .notepad-item:hover {
@@ -1876,8 +1876,8 @@
 
 .notepad-review-card {
     border-color: color-mix(in srgb, var(--note-accent) 42%, transparent);
-    background: linear-gradient(145deg, color-mix(in srgb, var(--note-accent) 10%, transparent), color-mix(in srgb, var(--panel-bg, #0d161a) 94%, transparent));
-    box-shadow: 0 10px 28px rgba(0,0,0,.18);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--note-accent) 10%, transparent), color-mix(in srgb, var(--widget-surface-bg, #0d161a) 94%, transparent));
+    box-shadow: 0 10px 28px color-mix(in srgb, var(--theme-shade) 18%, transparent);
 }
 
 .notepad-review-content {
@@ -1898,8 +1898,8 @@
    yellow connected-state panel. */
 .notepad-widget,
 .notepad-widget.ai-connected {
-    background: linear-gradient(155deg, color-mix(in srgb, var(--bg, #05080d) 91%, transparent), color-mix(in srgb, var(--panel, #111923) 96%, black 4%));
-    border-color: color-mix(in srgb, var(--border, #355a66) 80%, var(--note-accent) 20%);
+    background: linear-gradient(155deg, color-mix(in srgb, var(--bg, #05080d) 91%, transparent), color-mix(in srgb, var(--widget-surface, #111923) 96%, var(--widget-surface) 4%));
+    border-color: color-mix(in srgb, var(--widget-border, #355a66) 80%, var(--note-accent) 20%);
 }
 
 .notepad-header,
@@ -1908,18 +1908,18 @@
 .notepad-search,
 .notepad-add-note-form,
 .dual-pane-header {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--panel, #111923) 96%, white 2%), color-mix(in srgb, var(--bg, #05080d) 92%, black 8%)) !important;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--widget-surface, #111923) 96%, var(--widget-text) 2%), color-mix(in srgb, var(--bg, #05080d) 92%, var(--widget-surface) 8%)) !important;
 }
 
 .notepad-nav,
 .notepad-search,
 .notepad-search-input {
-    border-color: color-mix(in srgb, var(--border, #355a66) 78%, transparent) !important;
+    border-color: color-mix(in srgb, var(--widget-border, #355a66) 78%, transparent) !important;
 }
 
 .notepad-search-input {
-    background: color-mix(in srgb, var(--panel, #111923) 94%, black 6%) !important;
-    color: var(--fg, #d8f7ff) !important;
+    background: color-mix(in srgb, var(--widget-surface, #111923) 94%, var(--widget-surface) 6%) !important;
+    color: var(--widget-text, #d8f7ff) !important;
 }
 
 /* Compact navigation: all sections stay visible without sideways scrolling. */
@@ -1929,7 +1929,7 @@
     gap: 4px;
     padding: 6px 10px;
     overflow: hidden;
-    background: var(--panel, #111923) !important;
+    background: var(--widget-surface, #111923) !important;
     border-radius: 0;
 }
 
@@ -1942,7 +1942,7 @@
     font-size: 9px;
     letter-spacing: .35px;
     overflow: hidden;
-    background: var(--panel, #111923) !important;
+    background: var(--widget-surface, #111923) !important;
     box-shadow: none !important;
 }
 
@@ -1955,7 +1955,7 @@
 
 .notepad-nav-tab:hover,
 .notepad-nav-tab.active {
-    background: color-mix(in srgb, var(--note-accent) 12%, var(--panel, #111923)) !important;
+    background: color-mix(in srgb, var(--note-accent) 12%, var(--widget-surface, #111923)) !important;
 }
 
 /* Search-history-sized saved-note cards. */
@@ -1986,7 +1986,7 @@
     width: 25px;
     height: 25px;
     border-radius: 7px;
-    background: color-mix(in srgb, var(--note-accent) 12%, var(--panel, #111923));
+    background: color-mix(in srgb, var(--note-accent) 12%, var(--widget-surface, #111923));
     color: var(--note-accent);
     font: 700 8px/1 var(--note-mono, 'Orbitron', monospace);
 }
@@ -2014,7 +2014,7 @@
 }
 
 .notepad-history-title-row strong {
-    color: var(--fg, #d8f7ff);
+    color: var(--widget-text, #d8f7ff);
     font-size: 10px;
 }
 
@@ -2066,10 +2066,10 @@
     max-height: 122px;
     margin-bottom: 10px;
     padding: 12px 13px;
-    border: 1px solid color-mix(in srgb, var(--note-accent, #00ff88) 24%, var(--border, #355a66));
+    border: 1px solid color-mix(in srgb, var(--note-accent, #00ff88) 24%, var(--widget-border, #355a66));
     border-radius: 9px;
-    background: color-mix(in srgb, var(--note-accent, #00ff88) 5%, var(--panel, #111923));
-    box-shadow: 0 5px 16px rgba(0, 0, 0, .12);
+    background: color-mix(in srgb, var(--note-accent, #00ff88) 5%, var(--widget-surface, #111923));
+    box-shadow: 0 5px 16px color-mix(in srgb, var(--theme-shade) 12%, transparent);
     transition: transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
 }
 
@@ -2098,9 +2098,9 @@
 
 .notepad-item.notepad-history-card:hover {
     transform: translateY(-2px);
-    border-color: color-mix(in srgb, var(--note-accent, #00ff88) 48%, var(--border, #355a66));
-    background: color-mix(in srgb, var(--note-accent, #00ff88) 9%, var(--panel, #111923));
-    box-shadow: 0 8px 20px rgba(0, 0, 0, .18), 0 0 14px color-mix(in srgb, var(--note-accent, #00ff88) 12%, transparent);
+    border-color: color-mix(in srgb, var(--note-accent, #00ff88) 48%, var(--widget-border, #355a66));
+    background: color-mix(in srgb, var(--note-accent, #00ff88) 9%, var(--widget-surface, #111923));
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--theme-shade) 18%, transparent), 0 0 14px color-mix(in srgb, var(--note-accent, #00ff88) 12%, transparent);
 }
 
 .notepad-item.notepad-history-card:last-child {
@@ -2113,7 +2113,7 @@
 
 .notepad-history-index {
     border: 1px solid color-mix(in srgb, var(--note-accent, #00ff88) 35%, transparent);
-    background: color-mix(in srgb, var(--note-accent, #00ff88) 14%, var(--panel, #111923));
+    background: color-mix(in srgb, var(--note-accent, #00ff88) 14%, var(--widget-surface, #111923));
     box-shadow: inset 0 0 10px color-mix(in srgb, var(--note-accent, #00ff88) 8%, transparent);
 }
 
@@ -2125,14 +2125,14 @@
 
 .notepad-history-title-row time {
     flex: 0 1 auto;
-    color: color-mix(in srgb, var(--note-accent, #00ff88) 78%, var(--fg, #d8f7ff));
+    color: color-mix(in srgb, var(--note-accent, #00ff88) 78%, var(--widget-text, #d8f7ff));
     font-family: var(--note-mono, 'Orbitron', monospace);
     text-transform: uppercase;
 }
 
 .notepad-history-preview {
     max-width: 58ch;
-    text-shadow: 0 0 4px color-mix(in srgb, var(--fg, #d8f7ff) 12%, transparent);
+    text-shadow: 0 0 4px color-mix(in srgb, var(--widget-text, #d8f7ff) 12%, transparent);
 }
 
 .notepad-history-copy small {
@@ -2186,7 +2186,7 @@
     justify-content: space-between;
     gap: 12px;
     min-width: 0;
-    color: color-mix(in srgb, var(--note-accent, #00ff88) 82%, var(--fg, #d8f7ff));
+    color: color-mix(in srgb, var(--note-accent, #00ff88) 82%, var(--widget-text, #d8f7ff));
     font: 600 9px/1.2 var(--note-mono, 'Orbitron', monospace);
     letter-spacing: .08em;
     text-transform: uppercase;
@@ -2203,8 +2203,8 @@
     padding: 3px 9px;
     border: 1px solid color-mix(in srgb, var(--note-accent, #00ff88) 58%, transparent);
     border-radius: 999px;
-    color: var(--fg, #d8f7ff);
-    background: color-mix(in srgb, var(--note-accent, #00ff88) 20%, var(--panel, #111923));
+    color: var(--widget-text, #d8f7ff);
+    background: color-mix(in srgb, var(--note-accent, #00ff88) 20%, var(--widget-surface, #111923));
     font-size: 8px;
     letter-spacing: .05em;
 }
@@ -2222,7 +2222,7 @@
 
 .notepad-history-category {
     overflow: hidden;
-    color: color-mix(in srgb, var(--fg, #d8f7ff) 86%, var(--note-accent, #00ff88));
+    color: color-mix(in srgb, var(--widget-text, #d8f7ff) 86%, var(--note-accent, #00ff88));
     font-size: 10px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2231,7 +2231,7 @@
 .notepad-history-preview {
     max-width: none;
     min-height: 32px;
-    color: color-mix(in srgb, var(--fg, #d8f7ff) 88%, transparent);
+    color: color-mix(in srgb, var(--widget-text, #d8f7ff) 88%, transparent);
     font-size: 12px;
     line-height: 1.45;
     -webkit-line-clamp: 2;
@@ -2272,23 +2272,23 @@
 
 /* Blue card variant: the saved-note card intentionally stays independent of theme accent colors. */
 .notepad-item.notepad-history-card {
-    --history-blue: #38bdf8;
-    --history-blue-bright: #7dd3fc;
-    --history-blue-soft: rgba(56, 189, 248, .14);
-    border-color: rgba(56, 189, 248, .30);
-    background: linear-gradient(145deg, rgba(15, 53, 75, .94), rgba(8, 27, 43, .96));
-    box-shadow: 0 8px 22px rgba(2, 12, 24, .24), inset 0 0 18px rgba(56, 189, 248, .035);
+    --history-blue: var(--widget-surface);
+    --history-blue-bright: var(--widget-surface);
+    --history-blue-soft: color-mix(in srgb, var(--widget-surface) 14%, transparent);
+    border-color: var(--widget-accent);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--widget-accent) 94%, transparent), color-mix(in srgb, var(--widget-accent) 96%, transparent));
+    box-shadow: 0 8px 22px color-mix(in srgb, var(--theme-shade) 24%, transparent), inset 0 0 18px color-mix(in srgb, var(--widget-accent) 3.5%, transparent);
 }
 
 .notepad-item.notepad-history-card::before {
     background: var(--history-blue);
-    box-shadow: 0 0 10px rgba(56, 189, 248, .45);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--widget-accent) 45%, transparent);
 }
 
 .notepad-item.notepad-history-card:hover {
-    border-color: rgba(125, 211, 252, .58);
-    background: linear-gradient(145deg, rgba(17, 65, 91, .96), rgba(8, 31, 50, .98));
-    box-shadow: 0 10px 24px rgba(2, 12, 24, .30), 0 0 16px rgba(56, 189, 248, .10);
+    border-color: var(--widget-accent);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--widget-accent) 96%, transparent), color-mix(in srgb, var(--widget-accent) 98%, transparent));
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--theme-shade) 30%, transparent), 0 0 16px color-mix(in srgb, var(--widget-accent) 10%, transparent);
 }
 
 .notepad-history-meta {
@@ -2306,7 +2306,7 @@
     max-width: 18ch;
     overflow: hidden;
     padding: 3px 7px;
-    border: 1px solid rgba(56, 189, 248, .42);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 42%, transparent);
     border-radius: 4px;
     color: var(--history-blue-bright);
     background: var(--history-blue-soft);
@@ -2316,17 +2316,17 @@
 }
 
 .notepad-history-id {
-    border-color: rgba(56, 189, 248, .62);
-    color: #e0f2fe;
-    background: rgba(30, 64, 175, .46);
+    border-color: var(--widget-accent);
+    color: var(--widget-text);
+    background: color-mix(in srgb, var(--widget-accent) 46%, transparent);
 }
 
 .notepad-history-category {
-    color: #dbeafe;
+    color: var(--widget-accent);
 }
 
 .notepad-history-preview {
-    color: #dbeafe;
+    color: var(--widget-accent);
 }
 
 .notepad-history-actions {
@@ -2340,9 +2340,9 @@
     height: 48px;
     min-height: 48px;
     padding: 5px 8px;
-    border-color: rgba(56, 189, 248, .42);
-    background: linear-gradient(145deg, rgba(37, 99, 235, .34), rgba(30, 64, 175, .38));
-    color: #e0f2fe;
+    border-color: var(--widget-accent);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--widget-accent) 34%, transparent), color-mix(in srgb, var(--widget-accent) 38%, transparent));
+    color: var(--widget-text);
     font-size: 8px;
     line-height: 1;
     letter-spacing: .08em;
@@ -2356,19 +2356,19 @@
 
 .notepad-history-actions .notepad-action-btn:hover:not(:disabled) {
     border-color: var(--history-blue-bright);
-    background: rgba(37, 99, 235, .58);
-    box-shadow: 0 0 12px rgba(56, 189, 248, .16);
+    background: color-mix(in srgb, var(--widget-accent) 58%, transparent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--widget-accent) 16%, transparent);
 }
 
 .notepad-history-actions .notepad-action-btn.summarize-single-btn {
-    border-color: rgba(96, 165, 250, .62);
-    background: linear-gradient(145deg, rgba(37, 99, 235, .52), rgba(30, 64, 175, .42));
+    border-color: var(--widget-accent);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--widget-accent) 52%, transparent), color-mix(in srgb, var(--widget-accent) 42%, transparent));
 }
 
 .notepad-history-actions .notepad-action-btn.danger {
     margin-left: auto;
-    border-color: rgba(147, 197, 253, .48);
-    background: linear-gradient(145deg, rgba(30, 64, 175, .48), rgba(30, 58, 138, .40));
+    border-color: var(--widget-accent);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--widget-accent) 48%, transparent), color-mix(in srgb, var(--widget-accent) 40%, transparent));
 }
 
 @media (max-width: 560px) {
@@ -2416,14 +2416,14 @@
 
 /* Canonical theme contract shared with Search cards and Theme Studio. */
 .notepad-widget {
-    --note-surface: var(--panel-overlay);
-    --note-surface-raised: var(--panel-elevated);
-    --note-line: var(--border);
-    --note-line-soft: var(--border-soft);
-    --note-line-strong: var(--border-strong);
-    --note-accent: var(--accent-strong);
+    --note-surface: var(--widget-surface-overlay);
+    --note-surface-raised: var(--widget-surface-elevated);
+    --note-line: var(--widget-border);
+    --note-line-soft: var(--widget-border-soft);
+    --note-line-strong: var(--widget-border-strong);
+    --note-accent: var(--widget-accent);
     --note-accent-secondary: var(--accent-secondary);
-    --note-text: var(--fg);
+    --note-text: var(--widget-text);
     --note-muted: var(--text-muted);
     --note-faint: var(--text-faint);
     --note-button: var(--button-bg);

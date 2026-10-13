@@ -1,15 +1,15 @@
 .weather-display {
-    --weather-bg-main: color-mix(in srgb, var(--bg, #282c34) 86%, black 14%);
-    --weather-bg-panel: color-mix(in srgb, var(--panel, #111111) 90%, var(--bg, #282c34) 10%);
-    --weather-bg-card: color-mix(in srgb, var(--panel, #111111) 82%, var(--bg, #282c34) 18%);
-    --weather-border: color-mix(in srgb, var(--border, #355a66) 72%, white 12%);
-    --weather-border-soft: color-mix(in srgb, var(--border, #355a66) 34%, transparent);
-    --weather-text-main: color-mix(in srgb, var(--fg, #9cdef2) 92%, white 8%);
-    --weather-text-muted: color-mix(in srgb, var(--fg, #9cdef2) 58%, transparent);
-    --weather-accent-coral: var(--red, #e06c75);
-    --weather-accent-blue: color-mix(in srgb, var(--fg, #9cdef2) 80%, var(--red, #e06c75) 20%);
-    --weather-success: color-mix(in srgb, var(--red, #e06c75) 35%, #66ffb3 65%);
-    --weather-warning: color-mix(in srgb, var(--red, #e06c75) 60%, #ffd166 40%);
+    --weather-bg-main: color-mix(in srgb, var(--bg, #282c34) 86%, var(--widget-surface) 14%);
+    --weather-bg-panel: color-mix(in srgb, var(--widget-surface, #111111) 90%, var(--bg, #282c34) 10%);
+    --weather-bg-card: color-mix(in srgb, var(--widget-surface, #111111) 82%, var(--bg, #282c34) 18%);
+    --weather-border: color-mix(in srgb, var(--widget-border, #355a66) 72%, var(--widget-border) 12%);
+    --weather-border-soft: color-mix(in srgb, var(--widget-border, #355a66) 34%, transparent);
+    --weather-text-main: color-mix(in srgb, var(--widget-text, #9cdef2) 92%, var(--widget-text) 8%);
+    --weather-text-muted: color-mix(in srgb, var(--widget-text, #9cdef2) 58%, transparent);
+    --weather-accent-coral: var(--widget-accent, #e06c75);
+    --weather-accent-blue: color-mix(in srgb, var(--widget-text, #9cdef2) 80%, var(--widget-accent, #e06c75) 20%);
+    --weather-success: color-mix(in srgb, var(--widget-accent, #e06c75) 35%, var(--widget-accent) 65%);
+    --weather-warning: color-mix(in srgb, var(--widget-accent, #e06c75) 60%, var(--widget-accent) 40%);
     --radius-main: 20px;
     --radius-card: 14px;
     --radius-button: 10px;
@@ -30,11 +30,11 @@
     background:
         radial-gradient(circle at top left, color-mix(in srgb, var(--weather-accent-blue) 16%, transparent), transparent 32%),
         radial-gradient(circle at center, color-mix(in srgb, var(--weather-accent-coral) 10%, transparent), transparent 28%),
-        linear-gradient(180deg, color-mix(in srgb, var(--weather-bg-main) 92%, black 8%) 0%, color-mix(in srgb, var(--weather-bg-main) 98%, black 2%) 100%);
+        linear-gradient(180deg, color-mix(in srgb, var(--weather-bg-main) 92%, var(--widget-surface) 8%) 0%, color-mix(in srgb, var(--weather-bg-main) 98%, var(--widget-surface) 2%) 100%);
     box-shadow:
-        0 30px 80px rgba(0, 0, 0, 0.5),
+        0 30px 80px color-mix(in srgb, var(--theme-shade) 50%, transparent),
         0 0 40px color-mix(in srgb, var(--weather-accent-coral) 16%, transparent),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+        inset 0 0 0 1px color-mix(in srgb, var(--theme-highlight) 3%, transparent);
     backdrop-filter: blur(20px);
     transition: opacity 0.15s ease;
     transform-origin: top left;
@@ -126,7 +126,7 @@
 .weather-radar-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
 .weather-radar-controls input { flex: 1; min-width: 80px; width: 100px; accent-color: var(--weather-text-main); }
 .weather-radar-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.weather-radar-legend i { width: 70px; height: 6px; border-radius: 3px; background: linear-gradient(90deg,#88c9f9,#228bca,#174484,#27164c); }
+.weather-radar-legend i { width: 70px; height: 6px; border-radius: 3px; background: linear-gradient(90deg,var(--widget-accent),var(--widget-accent),var(--widget-accent),var(--widget-accent)); }
 .weather-radar-legend small { flex-basis: 100%; }
 .weather-radar-view .leaflet-control-attribution { font-size: 10px; }
 .weather-shell { box-sizing: border-box; min-height: 0; }
@@ -154,7 +154,7 @@
 .weather-inline-action,
 .weather-settings-action {
     border: 1px solid var(--weather-border-soft);
-    background: rgba(11, 19, 28, 0.94);
+    background: color-mix(in srgb, var(--widget-surface) 94%, transparent);
     color: var(--weather-text-main);
     transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.2s ease;
 }
@@ -277,7 +277,7 @@
 }
 
 .weather-tool-pill.is-active {
-    box-shadow: inset 0 0 0 1px rgba(158, 231, 255, 0.08);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--widget-accent) 8%, transparent);
 }
 
 .weather-toolbar-location {
@@ -308,7 +308,7 @@
     overflow: hidden;
     border-radius: 10px;
     border: 1px solid var(--weather-border-soft);
-    background: rgba(11, 19, 28, 0.92);
+    background: color-mix(in srgb, var(--widget-surface) 92%, transparent);
 }
 
 .weather-tab-button {
@@ -328,7 +328,7 @@
 }
 
 .weather-tab-button.is-active {
-    background: linear-gradient(180deg, rgba(29, 45, 60, 0.95), rgba(11, 19, 28, 0.95));
+    background: linear-gradient(180deg, color-mix(in srgb, var(--widget-accent) 95%, transparent), color-mix(in srgb, var(--widget-surface) 95%, transparent));
     color: var(--weather-accent-blue);
 }
 
@@ -338,8 +338,8 @@
 .weather-inline-message {
     border-radius: var(--radius-card);
     border: 1px solid var(--weather-border-soft);
-    background: linear-gradient(180deg, rgba(16, 24, 32, 0.96), rgba(10, 17, 24, 0.96));
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--widget-surface) 96%, transparent), color-mix(in srgb, var(--widget-surface) 96%, transparent));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-highlight) 2%, transparent);
 }
 
 .weather-settings-panel {
@@ -400,7 +400,7 @@
 }
 
 .weather-search-icon-button:hover {
-    color: #ff8f9a;
+    color: var(--widget-accent);
 }
 
 .weather-search-input {
@@ -413,7 +413,7 @@
 }
 
 .weather-search-input::placeholder {
-    color: rgba(111, 143, 158, 0.88);
+    color: var(--widget-accent);
 }
 
 .weather-inline-message {
@@ -480,8 +480,8 @@
     justify-content: space-between;
     gap: 14px;
     background:
-        radial-gradient(circle at 60% 50%, rgba(255, 255, 255, 0.05), transparent 28%),
-        linear-gradient(180deg, rgba(18, 29, 38, 0.98), rgba(12, 20, 28, 0.98));
+        radial-gradient(circle at 60% 50%, color-mix(in srgb, var(--widget-text) 5%, transparent), transparent 28%),
+        linear-gradient(180deg, color-mix(in srgb, var(--widget-surface) 98%, transparent), color-mix(in srgb, var(--widget-surface) 98%, transparent));
 }
 
 .weather-current-visual {
@@ -525,7 +525,7 @@
 .weather-current-condition {
     font-size: 15px;
     font-weight: 700;
-    color: rgba(216, 243, 255, 0.96);
+    color: var(--widget-accent);
 }
 
 .weather-current-location,
@@ -573,7 +573,7 @@
 .weather-extended-item {
     min-height: 84px;
     padding: 10px 10px;
-    border-right: 1px solid rgba(102, 190, 215, 0.14);
+    border-right: 1px solid color-mix(in srgb, var(--widget-accent) 14%, transparent);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -620,19 +620,19 @@
 }
 
 .weather-metric-icon.accent-blue {
-    color: #64d6ff;
+    color: var(--widget-accent);
 }
 
 .weather-metric-icon.accent-cyan {
-    color: #7ce4ff;
+    color: var(--widget-accent);
 }
 
 .weather-metric-icon.accent-amber {
-    color: #ffbf5a;
+    color: var(--widget-accent);
 }
 
 .weather-metric-icon.accent-green {
-    color: #7ed957;
+    color: var(--widget-accent);
 }
 
 .accent-amber .weather-detail-subtext {
@@ -692,7 +692,7 @@
     gap: 0;
     padding-bottom: 3px;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 111, 125, 0.36) rgba(8, 14, 20, 0.82);
+    scrollbar-color: var(--widget-accent) color-mix(in srgb, var(--theme-shade) 82%, transparent);
 }
 
 .weather-hourly-track::-webkit-scrollbar {
@@ -700,14 +700,14 @@
 }
 
 .weather-hourly-track::-webkit-scrollbar-track {
-    background: rgba(8, 14, 20, 0.82);
+    background: color-mix(in srgb, var(--widget-surface) 82%, transparent);
     border-radius: 999px;
 }
 
 .weather-hourly-track::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(255, 111, 125, 0.48), rgba(255, 111, 125, 0.3));
+    background: linear-gradient(180deg, color-mix(in srgb, var(--widget-accent) 48%, transparent), color-mix(in srgb, var(--widget-accent) 30%, transparent));
     border-radius: 999px;
-    border: 1px solid rgba(255, 111, 125, 0.06);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 6%, transparent);
 }
 
 .weather-hourly-track::-webkit-scrollbar-corner {
@@ -726,8 +726,8 @@
     gap: 3px;
     align-items: center;
     justify-content: flex-start;
-    border-right: 1px solid rgba(102, 190, 215, 0.14);
-    background: rgba(15, 24, 33, 0.85);
+    border-right: 1px solid color-mix(in srgb, var(--widget-accent) 14%, transparent);
+    background: color-mix(in srgb, var(--widget-surface) 85%, transparent);
     color: var(--weather-text-main);
 }
 
@@ -736,8 +736,8 @@
 }
 
 .weather-hour-card.is-now {
-    border: 1px solid rgba(255, 111, 125, 0.74);
-    box-shadow: inset 0 0 0 1px rgba(255, 111, 125, 0.18);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 74%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--widget-accent) 18%, transparent);
 }
 
 .weather-hour-time {
@@ -784,7 +784,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px dashed rgba(102, 190, 215, 0.24);
+    border: 1px dashed color-mix(in srgb, var(--widget-accent) 24%, transparent);
     border-radius: 16px;
     padding: 18px;
 }
@@ -802,14 +802,14 @@
     min-height: 48px;
     padding: 7px 10px;
     border-radius: var(--radius-card);
-    border: 1px solid rgba(255, 111, 125, 0.18);
-    background: rgba(15, 23, 31, 0.92);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 18%, transparent);
+    background: color-mix(in srgb, var(--widget-surface) 92%, transparent);
 }
 
 .weather-alert-card-empty {
     justify-content: flex-start;
-    border: 1px solid rgba(102, 190, 215, 0.22);
-    background: rgba(102, 190, 215, 0.06);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 22%, transparent);
+    background: color-mix(in srgb, var(--widget-accent) 6%, transparent);
 }
 
 .weather-alert-card-empty .weather-alert-title {
@@ -830,7 +830,7 @@
     justify-content: center;
     border-radius: 10px;
     color: var(--weather-accent-coral);
-    border: 1px solid rgba(255, 111, 125, 0.34);
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 34%, transparent);
     font-size: 16px;
 }
 
@@ -862,9 +862,9 @@
     margin-top: -2px;
     padding: 10px 12px;
     border-radius: 16px;
-    border: 1px solid rgba(255, 111, 125, 0.28);
-    background: rgba(66, 18, 28, 0.55);
-    color: #ffc2c9;
+    border: 1px solid color-mix(in srgb, var(--widget-accent) 28%, transparent);
+    background: color-mix(in srgb, var(--widget-accent) 55%, transparent);
+    color: var(--widget-accent);
     font-size: 12px;
 }
 
@@ -874,7 +874,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(4, 8, 12, 0.74);
+    background: color-mix(in srgb, var(--widget-surface) 74%, transparent);
     z-index: 30;
     border-radius: 18px;
 }
@@ -909,9 +909,9 @@
     width: 16px;
     height: 16px;
     border-radius: 6px;
-    background: linear-gradient(135deg, rgba(158, 231, 255, 0.72), rgba(102, 190, 215, 0.96));
+    background: linear-gradient(135deg, color-mix(in srgb, var(--widget-accent) 72%, transparent), color-mix(in srgb, var(--widget-accent) 96%, transparent));
     cursor: se-resize;
-    box-shadow: 0 0 12px rgba(158, 231, 255, 0.28);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--widget-accent) 28%, transparent);
 }
 
 .weather-display .resize-handle::before {
@@ -921,8 +921,8 @@
     bottom: 3px;
     width: 8px;
     height: 8px;
-    border-right: 2px solid rgba(7, 11, 16, 0.8);
-    border-bottom: 2px solid rgba(7, 11, 16, 0.8);
+    border-right: 2px solid color-mix(in srgb, var(--widget-border) 80%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--widget-border) 80%, transparent);
 }
 
 .weather-display.widget-size-small {
@@ -958,7 +958,7 @@
 
 .weather-glyph {
     display: block;
-    color: #e5f7ff;
+    color: var(--widget-text);
     overflow: visible;
 }
 
@@ -1017,11 +1017,11 @@
 }
 
 .weather-radar-bar-precip {
-    background: linear-gradient(180deg, rgba(255, 111, 125, 0.9), rgba(255, 111, 125, 0.45));
+    background: linear-gradient(180deg, color-mix(in srgb, var(--widget-accent) 90%, transparent), color-mix(in srgb, var(--widget-accent) 45%, transparent));
 }
 
 .weather-radar-bar-cloud {
-    background: linear-gradient(180deg, rgba(158, 231, 255, 0.9), rgba(158, 231, 255, 0.42));
+    background: linear-gradient(180deg, color-mix(in srgb, var(--widget-accent) 90%, transparent), color-mix(in srgb, var(--widget-accent) 42%, transparent));
 }
 
 .weather-radar-time {
@@ -1067,8 +1067,8 @@
     }
 
     .weather-detail-item {
-        border-right: 1px solid rgba(102, 190, 215, 0.14);
-        border-bottom: 1px solid rgba(102, 190, 215, 0.14);
+        border-right: 1px solid color-mix(in srgb, var(--widget-accent) 14%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--widget-accent) 14%, transparent);
     }
 
     .weather-detail-item:nth-child(3n) {
@@ -1158,8 +1158,8 @@
     }
 
     .weather-detail-item {
-        border-right: 1px solid rgba(102, 190, 215, 0.14);
-        border-bottom: 1px solid rgba(102, 190, 215, 0.14);
+        border-right: 1px solid color-mix(in srgb, var(--widget-accent) 14%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--widget-accent) 14%, transparent);
     }
 
     .weather-detail-item:nth-child(3n) {
@@ -1182,8 +1182,8 @@
     }
 
     .weather-detail-item {
-        border-right: 1px solid rgba(102, 190, 215, 0.14);
-        border-bottom: 1px solid rgba(102, 190, 215, 0.14);
+        border-right: 1px solid color-mix(in srgb, var(--widget-accent) 14%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--widget-accent) 14%, transparent);
     }
 
     .weather-detail-item:nth-child(3n) {
@@ -1232,7 +1232,7 @@
     .weather-detail-item,
     .weather-extended-item {
         border-right: none;
-        border-bottom: 1px solid rgba(102, 190, 215, 0.14);
+        border-bottom: 1px solid color-mix(in srgb, var(--widget-accent) 14%, transparent);
         min-height: 0;
     }
 
@@ -1254,9 +1254,9 @@
 /* Theme overrides */
 .weather-display {
     box-shadow:
-        0 30px 80px color-mix(in srgb, black 78%, var(--bg) 22%),
-        0 0 40px color-mix(in srgb, var(--accent-strong) 14%, transparent),
-        inset 0 0 0 1px color-mix(in srgb, var(--fg) 4%, transparent);
+        0 30px 80px color-mix(in srgb, var(--theme-shade) 78%, var(--bg) 22%),
+        0 0 40px color-mix(in srgb, var(--widget-accent) 14%, transparent),
+        inset 0 0 0 1px color-mix(in srgb, var(--widget-text) 4%, transparent);
 }
 
 .weather-window-button,
@@ -1271,26 +1271,26 @@
 .weather-panel,
 .weather-inline-message {
     border-color: var(--weather-border-soft);
-    background: color-mix(in srgb, var(--panel) 88%, var(--bg) 12%);
+    background: color-mix(in srgb, var(--widget-surface) 88%, var(--bg) 12%);
 }
 
 .weather-tab-button.is-active,
 .weather-tool-pill.is-active {
-    background: color-mix(in srgb, var(--accent-strong) 18%, var(--panel) 82%);
+    background: color-mix(in srgb, var(--widget-accent) 18%, var(--widget-surface) 82%);
     color: var(--weather-text-main);
 }
 
 .weather-search-icon,
 .weather-title,
 .weather-high {
-    color: var(--accent-strong);
+    color: var(--widget-accent);
 }
 
 .weather-toolbar-location,
 .weather-current-temp,
 .weather-low,
 .weather-inline-message {
-    color: color-mix(in srgb, var(--fg) 82%, var(--accent-strong) 18%);
+    color: color-mix(in srgb, var(--widget-text) 82%, var(--widget-accent) 18%);
 }
 
 .weather-search-input::placeholder,
@@ -1306,12 +1306,12 @@
 
 .weather-current-card {
     background:
-        radial-gradient(circle at 60% 50%, color-mix(in srgb, var(--fg) 6%, transparent), transparent 28%),
-        linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, var(--bg) 8%), color-mix(in srgb, var(--panel) 84%, black 16%));
+        radial-gradient(circle at 60% 50%, color-mix(in srgb, var(--widget-text) 6%, transparent), transparent 28%),
+        linear-gradient(180deg, color-mix(in srgb, var(--widget-surface) 92%, var(--bg) 8%), color-mix(in srgb, var(--widget-surface) 84%, var(--widget-surface) 16%));
 }
 
 .weather-current-condition {
-    color: color-mix(in srgb, var(--fg) 96%, white 4%);
+    color: color-mix(in srgb, var(--widget-text) 96%, var(--widget-text) 4%);
 }
 
 .weather-detail-item,

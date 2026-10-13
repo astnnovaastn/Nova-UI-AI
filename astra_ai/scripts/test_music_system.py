@@ -42,7 +42,7 @@ class MusicSystemTester:
             print("🎵 Setting up Music System Test Environment...")
             
             # Initialize music service
-            api_key = "AIzaSyCB0N8PNZom2ipR2r1clhQjskbSHL2zxsc"
+            api_key = "[CONFIGURE_LOCALLY_IN_SETTINGS]"
             self.music_service = MusicService(youtube_api_key=api_key)
             print("✅ Music service initialized")
             

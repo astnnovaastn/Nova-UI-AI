@@ -590,7 +590,7 @@ def main():
     """Main function"""
     # Configuration
     config = CartesiaConfig(
-        api_key="sk_car_5PdMH1dJjrc5jJhGTcec1i",  # Replace with your actual API key
+        api_key="",  # Replace with your actual API key
         voice_id="a167e0f3-df7e-4d52-a9c3-f949145efdab",
         model_id="sonic-english",
         sample_rate=22050,

@@ -513,8 +513,8 @@ const ImageWidget = ({ onClose, isVisible = true, aiCommand = null, onCommandRes
         <div className="image-header-brand">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <polyline points="21 15 16 10 5 21" />
+            <circle cx="8" cy="8" r="2" />
+            <path d="m3 17 5-5 4 4 4-6 5 7M3 21h18" />
           </svg>
           <span className="brand-text">G-Image</span>
         </div>

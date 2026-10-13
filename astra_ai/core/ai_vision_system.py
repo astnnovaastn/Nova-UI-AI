@@ -7,6 +7,7 @@ import asyncio
 import base64
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Union
 # import cv2
@@ -59,7 +60,7 @@ class AIVisionSystem:
     
     def __init__(self, memory_system=None, google_api_key=None):
         self.memory_system = memory_system
-        self.google_api_key = google_api_key or "AIzaSyASvlCS7UYztayaYwyCEu8Hg2AgKeT-kUw"
+        self.google_api_key = google_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
         self.vision_history: Dict[str, VisionAnalysis] = {}
         self.is_analyzing = False
         self.motion_detector = None
@@ -119,7 +120,7 @@ class AIVisionSystem:
             current_data["total_analyses"] = len(current_data["vision_history"])
             current_data["last_analysis"] = analysis.timestamp.isoformat()
             
-            self.memory_system.memory_system.data["memory_categories"]["visual_experiences"] = current_data
+            self.memory_system.memory_system.save_event("visual_analysis", "vision_"+str(analysis.id).replace("-","_")[:40], "Vision analysis", attributes=analysis.to_dict(), source="legacy", confidence=0.5)
             self.memory_system.memory_system.save_memory()
             
             logger.debug(f"Saved vision analysis to memory: {analysis.id}")
@@ -711,3 +712,4 @@ class AIVisionSystem:
         """Stop real-time vision analysis processing"""
         self.is_analyzing = False
         logger.info("Real-time vision analysis stopped")
+

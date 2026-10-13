@@ -97,8 +97,8 @@ class AIOrganizer:
         self.monitoring_thread = None  # Store reference to monitoring thread
         self.last_processed_index = -1
         self.llm_enabled = config.get('llm_enabled', False)  # Disabled by default
-        self.llm_api_key = config.get('llm_api_key', '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')  # Groq API key
-        self.llm_model = config.get('llm_model', 'llama-3.1-70b-versatile')  # Groq's powerful model
+        self.llm_api_key = config.get('llm_api_key', '')  # Groq API key
+        self.llm_model = config.get('llm_model', 'openai/gpt-oss-20b')  # Groq's powerful model
         self.groq_api_url = 'https://api.groq.com/openai/v1/chat/completions'  # Groq API endpoint
 
         # Store reference to memory system for vector/cluster operations
@@ -11896,8 +11896,8 @@ ORGANIZER_CONFIG = {
     'memory_file_path': os.path.join('astra_ai', 'Date', 'nova_ai_memory.json'),
     'check_interval': 0.25,  # 250ms - fast continuous checking for new messages
     'llm_enabled': False,  # Disabled to use improved fallback
-    'llm_api_key': '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',  # Groq API key
-    'llm_model': 'llama-3.1-70b-versatile'  # Groq's powerful model
+    'llm_api_key': '',  # Groq API key
+    'llm_model': 'openai/gpt-oss-20b'  # Groq's powerful model
 }
 
 def load_organizer_config(config_path: Optional[str] = None) -> Dict[str, Any]:
@@ -11978,6 +11978,13 @@ def main():
 
         final_status = organizer.get_workflow_status()
         print(f"\nFinal Status: {final_status}")
+
+# Preserve original implementations for compatibility/reference. The active
+# organizer uses only the shared service and never starts legacy file writers.
+LegacyAIOrganizer = AIOrganizer
+from astra_ai.memory.organizer_runtime import OrganizerRuntime
+class AIOrganizer(OrganizerRuntime, LegacyAIOrganizer):
+    pass
 
 if __name__ == "__main__":
     main()

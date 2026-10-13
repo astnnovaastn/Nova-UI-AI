@@ -1384,7 +1384,7 @@ class Mem0AI:
                 # Get API key
                 mem0_api_key = mem0_config.get('api_key') or os.getenv('MEM0_API_KEY')
                 if not mem0_api_key:
-                    mem0_api_key = "m0-GOeUOLXjNgYMVqIyyLv0sFLZn0wDHnE3uAJXJsQ6"
+                    mem0_api_key = os.getenv("MEM0_API_KEY", "")
         except Exception as e:
             logger.warning(f"Failed to load config, using defaults: {e}")
             self.cache_timeout = 300
@@ -1393,7 +1393,7 @@ class Mem0AI:
             self.max_cache_size = 1000
             self.retry_attempts = 3
             self.retry_delay = 1
-            mem0_api_key = "m0-GOeUOLXjNgYMVqIyyLv0sFLZn0wDHnE3uAJXJsQ6"
+            mem0_api_key = os.getenv("MEM0_API_KEY", "")
         
         self.batch_queue = []  # Queue for batch processing
         self.last_batch_time = datetime.now()
@@ -3325,7 +3325,7 @@ class AleChatBot:
         self.ai_vision = None
         try:
             if AI_VISION_AVAILABLE:
-                google_api_key = "AIzaSyASvlCS7UYztayaYwyCEu8Hg2AgKeT-kUw"
+                google_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
                 self.ai_vision = AIVisionSystem(
                     memory_system=self.memory_integration,
                     google_api_key=google_api_key

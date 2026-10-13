@@ -2,22 +2,22 @@
   --task-radius-panel: 12px;
   --task-radius-control: 10px;
   --task-radius-row: 9px;
-  --task-bg: color-mix(in srgb, var(--bg, #07131f) 86%, #02070c 14%);
-  --task-surface: color-mix(in srgb, var(--panel, #0b1a29) 88%, #06111c 12%);
-  --task-surface-raised: color-mix(in srgb, var(--panel, #0b1a29) 76%, var(--fg, #a9e5fa) 4%);
-  --task-surface-soft: color-mix(in srgb, var(--panel, #0b1a29) 91%, transparent);
-  --task-border: color-mix(in srgb, var(--border, #28617a) 76%, transparent);
-  --task-border-soft: color-mix(in srgb, var(--border, #28617a) 42%, transparent);
-  --task-text: color-mix(in srgb, var(--fg, #bfeeff) 92%, white 8%);
-  --task-muted: color-mix(in srgb, var(--fg, #8ec9dd) 57%, transparent);
-  --task-faint: color-mix(in srgb, var(--fg, #8ec9dd) 35%, transparent);
-  --task-accent: var(--accent-strong, #55c8ff);
-  --task-accent-soft: color-mix(in srgb, var(--accent-strong, #55c8ff) 15%, transparent);
+  --task-bg: color-mix(in srgb, var(--bg, #07131f) 86%, var(--widget-surface) 14%);
+  --task-surface: color-mix(in srgb, var(--widget-surface, #0b1a29) 88%, var(--widget-surface) 12%);
+  --task-surface-raised: color-mix(in srgb, var(--widget-surface, #0b1a29) 76%, var(--widget-text, #a9e5fa) 4%);
+  --task-surface-soft: color-mix(in srgb, var(--widget-surface, #0b1a29) 91%, transparent);
+  --task-border: color-mix(in srgb, var(--widget-border, #28617a) 76%, transparent);
+  --task-border-soft: color-mix(in srgb, var(--widget-border, #28617a) 42%, transparent);
+  --task-text: color-mix(in srgb, var(--widget-text, #bfeeff) 92%, var(--widget-text) 8%);
+  --task-muted: color-mix(in srgb, var(--widget-text, #8ec9dd) 57%, transparent);
+  --task-faint: color-mix(in srgb, var(--widget-text, #8ec9dd) 35%, transparent);
+  --task-accent: var(--widget-accent, #55c8ff);
+  --task-accent-soft: color-mix(in srgb, var(--widget-accent, #55c8ff) 15%, transparent);
   --task-signal: var(--theme-color, var(--task-accent));
-  --task-green: #4fe59a;
-  --task-amber: #f5be62;
-  --task-red: #ff6978;
-  --task-violet: #a98cff;
+  --task-green: var(--widget-accent);
+  --task-amber: var(--widget-accent);
+  --task-red: var(--widget-accent);
+  --task-violet: var(--widget-accent);
   position: absolute;
   top: max(8px, calc(50vh - 250px));
   left: max(8px, calc(50vw - 320px));
@@ -38,15 +38,15 @@
   border: 1px solid var(--task-border);
   border-radius: 16px;
   background:
-    linear-gradient(rgba(74, 187, 233, .025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(74, 187, 233, .025) 1px, transparent 1px),
+    linear-gradient(color-mix(in srgb, var(--widget-accent) 2.5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--widget-accent) 2.5%, transparent) 1px, transparent 1px),
     radial-gradient(circle at 5% 0, color-mix(in srgb, var(--task-accent) 10%, transparent), transparent 30%),
-    linear-gradient(155deg, color-mix(in srgb, var(--task-bg) 95%, #10273a 5%), var(--task-bg));
+    linear-gradient(155deg, color-mix(in srgb, var(--task-bg) 95%, var(--widget-accent) 5%), var(--task-bg));
   background-size: 24px 24px, 24px 24px, auto, auto;
   box-shadow:
-    0 24px 70px rgba(0, 0, 0, .55),
+    0 24px 70px color-mix(in srgb, var(--theme-shade) 55%, transparent),
     0 0 28px color-mix(in srgb, var(--task-accent) 8%, transparent),
-    inset 0 1px rgba(255, 255, 255, .035);
+    inset 0 1px color-mix(in srgb, var(--theme-highlight) 3.5%, transparent);
   backdrop-filter: blur(18px);
   animation: task-widget-enter .24s cubic-bezier(.2, .8, .2, 1);
   isolation: isolate;
@@ -406,7 +406,7 @@
   border: 1px solid var(--task-border-soft);
   border-radius: var(--task-radius-panel);
   background: color-mix(in srgb, var(--task-surface) 91%, transparent);
-  box-shadow: inset 0 1px rgba(255, 255, 255, .025);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--theme-highlight) 2.5%, transparent);
 }
 
 .task-outcome-composer {
@@ -491,13 +491,13 @@
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--task-accent) 6%, transparent), transparent 40%),
     color-mix(in srgb, var(--task-bg) 80%, transparent);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-shade) 18%, transparent);
   transition: border-color .16s ease, box-shadow .16s ease;
 }
 
 .task-outcome-input:focus-within {
   border-color: var(--task-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--task-accent) 12%, transparent), inset 0 0 0 1px rgba(0, 0, 0, .18);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--task-accent) 12%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--theme-shade) 18%, transparent);
 }
 
 .task-outcome-input textarea {
@@ -531,7 +531,7 @@
   gap: 6px;
   min-height: 28px;
   padding: 0 9px;
-  color: #03121b;
+  color: var(--widget-text);
   border: 1px solid var(--task-accent);
   border-radius: 8px;
   background: var(--task-accent);
@@ -792,7 +792,7 @@
 }
 
 .task-stage-rail > span.is-complete > i {
-  color: #03120d;
+  color: var(--widget-text);
   border-color: var(--task-green);
   background: var(--task-green);
 }
@@ -828,7 +828,7 @@
   position: absolute;
   inset: 0;
   width: 34px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .8), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--widget-text) 80%, transparent), transparent);
   animation: task-rail-scan 1.8s linear infinite;
 }
 
@@ -837,7 +837,7 @@
   gap: 6px;
   padding: 7px 10px;
   border-top: 1px solid var(--task-border-soft);
-  background: rgba(0, 0, 0, .08);
+  background: color-mix(in srgb, var(--widget-surface) 8%, transparent);
 }
 
 .task-execution-actions button,
@@ -1238,8 +1238,8 @@
 }
 
 .task-command-widget option {
-  color: #dff7ff;
-  background: #07131f;
+  color: var(--widget-accent);
+  background: var(--widget-surface);
 }
 
 .task-view-chips,
@@ -1369,7 +1369,7 @@
   border: 1px solid color-mix(in srgb, var(--task-accent) 48%, transparent);
   border-radius: var(--task-radius-row);
   background: color-mix(in srgb, var(--task-accent) 4%, var(--task-surface));
-  box-shadow: 0 8px 22px rgba(0, 0, 0, .18);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--theme-shade) 18%, transparent);
 }
 
 .task-data-row {
@@ -1381,7 +1381,7 @@
   padding: 6px 8px;
   border-bottom: 0;
   border-radius: var(--task-radius-row);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .008));
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--widget-text) 0.8%, transparent));
   transition: background .14s ease, border-color .14s ease;
 }
 
@@ -1572,8 +1572,8 @@
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--task-accent) 52%, var(--task-border));
   border-radius: var(--task-radius-control);
-  background: color-mix(in srgb, var(--task-bg) 97%, #10273a 3%);
-  box-shadow: 0 16px 34px rgba(0, 0, 0, .52), inset 0 1px rgba(255, 255, 255, .035);
+  background: color-mix(in srgb, var(--task-bg) 97%, var(--widget-accent) 3%);
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--theme-shade) 52%, transparent), inset 0 1px color-mix(in srgb, var(--theme-highlight) 3.5%, transparent);
   animation: task-menu-enter .13s ease-out;
 }
 
@@ -2116,7 +2116,7 @@
   gap: 9px;
   padding: 11px;
   border-left: 1px solid var(--task-border-soft);
-  background: rgba(0, 0, 0, .08);
+  background: color-mix(in srgb, var(--widget-surface) 8%, transparent);
 }
 
 .task-trigger-settings > p {
@@ -2163,7 +2163,7 @@
   gap: 10px;
   padding: 7px 9px;
   border-top: 1px solid var(--task-border-soft);
-  background: rgba(0, 0, 0, .1);
+  background: color-mix(in srgb, var(--widget-surface) 10%, transparent);
 }
 
 .task-embedded-form > footer > span {
@@ -2177,7 +2177,7 @@
 }
 
 .task-embedded-form > footer .task-create-button {
-  color: #03121b !important;
+  color: var(--widget-text) !important;
   border-color: var(--task-accent) !important;
   background: var(--task-accent) !important;
 }
@@ -2211,7 +2211,7 @@
   z-index: 40;
   display: flex;
   justify-content: flex-end;
-  background: rgba(2, 8, 13, .7);
+  background: color-mix(in srgb, var(--widget-surface) 70%, transparent);
   backdrop-filter: blur(4px);
 }
 
@@ -2225,7 +2225,7 @@
   background:
     radial-gradient(circle at 100% 0, color-mix(in srgb, var(--task-accent) 8%, transparent), transparent 28%),
     var(--task-bg);
-  box-shadow: -18px 0 50px rgba(0, 0, 0, .4);
+  box-shadow: -18px 0 50px color-mix(in srgb, var(--theme-shade) 40%, transparent);
   animation: task-drawer-in .2s ease-out;
 }
 
@@ -2400,7 +2400,7 @@
   border: 1px solid var(--task-border);
   border-radius: 9px;
   background: var(--task-bg);
-  box-shadow: 0 22px 55px rgba(0, 0, 0, .5);
+  box-shadow: 0 22px 55px color-mix(in srgb, var(--theme-shade) 50%, transparent);
 }
 
 .task-webhook-secret-dialog > label,
@@ -2443,11 +2443,11 @@
   min-height: 31px;
   padding: 6px 9px;
   opacity: 0;
-  color: #07140f;
+  color: var(--widget-text);
   border: 1px solid var(--task-green);
   border-radius: 5px;
   background: var(--task-green);
-  box-shadow: 0 9px 25px rgba(0, 0, 0, .35);
+  box-shadow: 0 9px 25px color-mix(in srgb, var(--theme-shade) 35%, transparent);
   font-size: 9px;
   font-weight: 700;
   pointer-events: none;
