@@ -226,3 +226,9 @@ astra_ai/nova-memory-server/src/storage/backups
 
 # Optional isolated local camera decoder
 **/.venv_presence/
+
+# Disposable retrieval, clock journals, and isolated validation fixtures
+.validation/
+**/recall.sqlite3*
+**/semantic.sqlite3*
+**/memory-runtime/

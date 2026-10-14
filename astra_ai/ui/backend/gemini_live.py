@@ -232,11 +232,32 @@ ACTION_TOOL_DECLARATIONS_EXTRA = [
  {'name':'open_website','description':'Open a website in the user browser only for a requested navigation task. Report browser-launch acceptance, not a claim that the page loaded.','parameters':{'type':'OBJECT','properties':{'url':{'type':'STRING'}},'required':['url']}}
 ]
 
+from astra_ai.memory.context_declarations import DECLARATIONS as CONTEXT_DECLARATIONS
+MEMORY_TOOL_DECLARATIONS.extend(CONTEXT_DECLARATIONS)
+
 async def execute_shared_memory_tool(manager, name, arguments, user_text="", session_id="", operation_id="",profile_id="",project_id="",turn_id="",source=None):
     import re
+    # Connection identity is authority, including compatibility tool names.
+    arguments = {k:v for k,v in arguments.items() if k not in {'profile_id','project_id'}}
+    def allowed_target(rid):
+        from astra_ai.memory.library import permitted
+        data = manager.read_snapshot()
+        record = data['records'].get(rid) or data.get('forgotten_records', {}).get(rid) or data.get('topic_groups', {}).get(rid)
+        if record:return permitted(record,profile_id,project_id)
+        linked = data.get('relationships_v3', {}).get(rid)
+        if linked:return all(allowed_target(linked.get(k,'')) for k in ('from','to'))
+        learned = data.get('learning', {}).get(rid)
+        if learned:return allowed_target(learned.get('record_id',''))
+        return False
+    if name in {'memory_context_action','time_action'}:
+        args={k:v for k,v in arguments.items() if k not in {'action','profile_id','project_id','session_id','scope'}}
+        args.update(profile_id=profile_id,project_id=project_id,session_id=session_id)
+        method=manager.memory_context_action if name=='memory_context_action' else manager.time_action
+        try:return await asyncio.to_thread(method,arguments.get('action','retrieve' if name=='memory_context_action' else 'now'),**args)
+        except (ValueError,TypeError):return {'status':'rejected','reason':'invalid_context_arguments'}
     metadata = {"evidence":user_text,"require_evidence":True,"source":source or ("gemini_live" if session_id.startswith("gemini-live") else "gemini_text"),"session_id":session_id,"turn_id":turn_id or operation_id,"operation_id":operation_id}
     metadata.update(profile_id=profile_id,project_id=project_id)
-    metadata.update({k:arguments[k] for k in ('profile_id','project_id','scope','valid_from','valid_until','explicit_preference','inferred','evidence_refs') if k in arguments})
+    metadata.update({k:arguments[k] for k in ('scope','valid_from','valid_until','explicit_preference','inferred','evidence_refs') if k in arguments})
     if name=="category_action":
         args={k:v for k,v in arguments.items() if k not in {'action','profile_id','project_id','evidence','operation_id'}}
         return await asyncio.to_thread(manager.category_action,arguments.get('action','list'),**args,profile_id=profile_id,project_id=project_id,evidence=user_text,operation_id=operation_id)
@@ -251,35 +272,55 @@ async def execute_shared_memory_tool(manager, name, arguments, user_text="", ses
     if name=="read_standing_rules":
         return await asyncio.to_thread(manager.standing_rules,profile_id=profile_id,project_id=project_id,session_id=session_id,offset=arguments.get("offset",0),limit=arguments.get("limit",100))
     if name=='propose_memories':
-        return await asyncio.to_thread(manager.commit_proposals,arguments.get('proposals'),evidence=user_text,session_id=session_id,turn_id=turn_id or operation_id,operation_id=operation_id,source=metadata['source'],profile_id=arguments.get('profile_id',profile_id),project_id=arguments.get('project_id',project_id))
+        return await asyncio.to_thread(manager.commit_proposals,arguments.get('proposals'),evidence=user_text,session_id=session_id,turn_id=turn_id or operation_id,operation_id=operation_id,source=metadata['source'],profile_id=profile_id,project_id=project_id)
     if name == "memory_action":
         args=dict(arguments);action=args.pop("action","")
-        if action in {"search","list","get","history","list_forgotten","search_forgotten"}:
-            if profile_id:args.setdefault("profile_id",profile_id)
-            if project_id:args.setdefault("project_id",project_id)
+        args.update(profile_id=profile_id,project_id=project_id)
+        if args.get('record_id') and action in {'forget','restore','update','rename','unlink','delete_learning'} and not await asyncio.to_thread(allowed_target,args['record_id']):
+            return {'status':'not_found'}
         if action in {"approve","reject"}:
             return await execute_shared_memory_tool(manager,"approve_memory",{"approval_id":args.get("approval_id",""),"approved":action=="approve"},user_text,session_id,operation_id)
         if action in {"link","learn"}:
             mapped={"from_id":args.get("record_id",""),"to_id":args.get("to_id",""),"relationship_type":args.get("relationship_type","related_to"),"learning_type":args.get("learning_type","preference_learning"),"record_id":args.get("record_id",""),"evidence":args.get("evidence",""),"evidence_refs":args.get("evidence_refs",[])}
-            return await execute_shared_memory_tool(manager,"save_memory_relationship" if action=="link" else "learn_memory",mapped,user_text,session_id,operation_id)
+            return await execute_shared_memory_tool(manager,"save_memory_relationship" if action=="link" else "learn_memory",mapped,user_text,session_id,operation_id,profile_id,project_id,turn_id)
         if action in {"forget","restore","update","rename","unlink","delete_learning"}:
             authorized=await asyncio.to_thread(lambda:manager.load().get("_meta",{}).get("policy",{}).get("routine_autonomy",False))
             if not authorized:return {"status":"rejected","reason":"memory_management_not_enabled"}
         if action in {"create_fact","create_event","update"}:args["metadata"]=metadata
-        return await asyncio.to_thread(manager.memory_action,action,**args)
+        result = await asyncio.to_thread(manager.memory_action,action,**args)
+        if action in {'get','history'} and result.get('status')=='ok':
+            rid = result.get('record',{}).get('id') or result.get('id','')
+            if not await asyncio.to_thread(allowed_target,rid):return {'status':'not_found'}
+        elif action in {'list_forgotten','search_forgotten'}:
+            result['matches'] = [r for r in result.get('matches',[]) if allowed_target(r['id'])]
+            result['total'] = len(result['matches'])
+        elif action in {'list_links','list_learning','list_conflicts'}:
+            key = {'list_links':'links','list_learning':'learning','list_conflicts':'conflicts'}[action]
+            result[key] = [r for r in result.get(key,[]) if allowed_target(r.get('record_id') or r.get('id',''))]
+            result['total'] = len(result[key])
+        elif action == 'list_pending':
+            from astra_ai.memory.library import memory_approvals
+            rows = await asyncio.to_thread(memory_approvals,manager,profile_id,project_id)
+            result = {'status':'ok','proposals':[r['details'] for r in rows if r['state']=='waiting']}
+        return result
     if name == "save_memory":
         return await asyncio.to_thread(manager.save_fact,arguments.get("category",""),arguments.get("key",""),arguments.get("value",""),**metadata)
     if name == "save_memory_event":
         return await asyncio.to_thread(manager.save_event,arguments.get("event_type",""),arguments.get("key",""),arguments.get("content",""),arguments.get("attributes"),arguments.get("tags"),category=arguments.get("category","meta_memory"),**metadata)
     if name == "forget_memory":
         if not await asyncio.to_thread(lambda:manager.load().get("_meta",{}).get("policy",{}).get("routine_autonomy",False)) and not re.search(r"\b(forget|delete|remove|erase|olvida|borra|elimina)\b",user_text,re.I): return {"status":"rejected","reason":"explicit_forget_request_required"}
-        return await asyncio.to_thread(manager.forget_fact,arguments.get("category",""),arguments.get("key",""),arguments.get("record_id",""))
+        target = await asyncio.to_thread(manager.memory_action,'get',record_id=arguments.get('record_id',''),key=arguments.get('key',''),category=arguments.get('category',''),profile_id=profile_id,project_id=project_id)
+        rid = target.get('record',{}).get('id','')
+        if not rid or not await asyncio.to_thread(allowed_target,rid):return {'status':'not_found'}
+        return await asyncio.to_thread(manager.forget,rid)
     if name == "forget_memory_event":
         if not await asyncio.to_thread(lambda:manager.load().get("_meta",{}).get("policy",{}).get("routine_autonomy",False)) and not re.search(r"\b(forget|delete|remove|erase|olvida|borra|elimina)\b",user_text,re.I): return {"status":"rejected","reason":"explicit_forget_request_required"}
-        return await asyncio.to_thread(manager.forget_event,arguments.get("event_id",""))
+        rid = arguments.get('event_id','')
+        if not await asyncio.to_thread(allowed_target,rid):return {'status':'not_found'}
+        return await asyncio.to_thread(manager.forget_event,rid)
     if name in {"recall_memory","recall_conversations"}:
         filters={key:arguments[key] for key in ["category","event_type","source","session_id","since","until","profile_id","project_id","scope","lifecycle"] if arguments.get(key)}
-        filters.setdefault("profile_id",profile_id);filters.setdefault("project_id",project_id)
+        filters.update(profile_id=profile_id,project_id=project_id)
         return await asyncio.to_thread(getattr(manager,name),arguments.get("query",""),arguments.get("limit",5),**filters)
     if name == "get_pending_memories":
         from astra_ai.memory.library import memory_approvals
@@ -288,10 +329,12 @@ async def execute_shared_memory_tool(manager, name, arguments, user_text="", ses
     if name == "approve_memory":
         return {"status":"rejected","reason":"contextual_library_confirmation_required"}
     if name == "save_memory_relationship":
+        if not all([await asyncio.to_thread(allowed_target,arguments.get(k,'')) for k in ('from_id','to_id')]):return {'status':'not_found'}
         evidence=str(arguments.get("evidence",""))
         if not evidence or evidence.casefold() not in user_text.casefold():return {"status":"rejected","reason":"supporting_user_evidence_required"}
         return await asyncio.to_thread(manager.link,arguments.get("from_id",""),arguments.get("to_id",""),arguments.get("relationship_type",""),evidence=evidence)
     if name == "learn_memory":
+        if not await asyncio.to_thread(allowed_target,arguments.get('record_id','')):return {'status':'not_found'}
         evidence=str(arguments.get("evidence",""))
         if not evidence or evidence.casefold() not in user_text.casefold():return {"status":"rejected","reason":"supporting_user_evidence_required"}
         return await asyncio.to_thread(manager.learn,arguments.get("learning_type",""),arguments.get("record_id",""),evidence,evidence_refs=arguments.get("evidence_refs"))
@@ -580,6 +623,10 @@ class GeminiLiveSession:
         self._connect_context = None
         self._session = None
         self._receive_task: Optional[asyncio.Task] = None
+        self._resume_handle = None
+        self._resume_model = LIVE_MODEL
+        self._rotation_pending = False
+        self._prefetch_task = None
         self._memory_profile = ""
         self.model = LIVE_MODEL
         self.fallback_reason = None
@@ -631,7 +678,7 @@ class GeminiLiveSession:
                 turn_coverage="TURN_INCLUDES_ONLY_ACTIVITY",
             ),
         tools=[types.Tool(function_declarations=[{**d, **({"behavior":"BLOCKING"} if self.model==LIVE_PREFERRED else {})} for d in MEMORY_TOOL_DECLARATIONS + MEMORY_EVENT_TOOL_DECLARATIONS + WIDGET_TOOL_DECLARATIONS + ACTION_TOOL_DECLARATIONS])],
-            session_resumption=types.SessionResumptionConfig(),
+            session_resumption=types.SessionResumptionConfig(handle=self._resume_handle if self._resume_model==self.model else None),
             context_window_compression=types.ContextWindowCompressionConfig(
                 trigger_tokens=25_000,
                 sliding_window=types.SlidingWindow(target_tokens=12_000),
@@ -651,6 +698,9 @@ class GeminiLiveSession:
             raise RuntimeError("GEMINI_API_KEY is not configured")
 
         self._closed = False
+        if not self._resume_handle:
+            self._resume_handle=await asyncio.to_thread(self.memory_manager.live_resumption,'get',self.session_id,self.profile_id,self.project_id,self.model)
+        await asyncio.to_thread(self.memory_manager.clock().observe,'conversation_start',self.session_id,self.profile_id,self.project_id,'logical-start:'+self.session_id)
         self._recent_messages=await asyncio.to_thread(self.memory_manager.recent_context,self.session_id,profile_id=self.profile_id,project_id=self.project_id)
         self._memory_profile = await asyncio.to_thread(self.memory_manager.format_response_context,session_id=self.session_id,profile_id=self.profile_id,project_id=self.project_id)
         self._client = genai.Client(
@@ -659,12 +709,20 @@ class GeminiLiveSession:
         )
         for model in dict.fromkeys([MODEL_STATUS["voice"].get("effective") or LIVE_MODEL, LIVE_FALLBACK]):
             self.model = model
+            if self._resume_model!=model or not self._resume_handle:
+                self._resume_model=model
+                self._resume_handle=await asyncio.to_thread(self.memory_manager.live_resumption,'get',self.session_id,self.profile_id,self.project_id,model)
             self._connect_context = self._client.aio.live.connect(model=model, config=await asyncio.to_thread(self._config))
             try:
                 self._session = await asyncio.wait_for(self._connect_context.__aenter__(), timeout=12)
                 mark_model("voice",model,self.fallback_reason)
                 break
             except Exception as exc:
+                if await self._discard_invalid_resumption(exc):
+                    self._connect_context = self._client.aio.live.connect(model=model, config=await asyncio.to_thread(self._config))
+                    self._session = await asyncio.wait_for(self._connect_context.__aenter__(), timeout=12)
+                    mark_model("voice", model, self.fallback_reason)
+                    break
                 if model==LIVE_FALLBACK or not unavailable(exc): raise
                 self.fallback_reason="Preferred model unavailable for this project; using compatible Live fallback."
         if self.operation_executor:
@@ -692,6 +750,7 @@ class GeminiLiveSession:
 
     async def begin_audio(self) -> None:
         if not self.connected or self._speech_active:return
+        self._cancel_prefetch()
         self._notice_gate=False;self._internal_notice=False;self._notice_id=None
         self._speech_active=True;self._has_new_audio=True
         self._barge_pending=self._audio_started or bool(self._output_parts) or self._response_pending
@@ -741,6 +800,10 @@ class GeminiLiveSession:
         self._turn_interrupted = False
         self._output_parts.clear()
         self._input_parts = [cleaned]
+        profile=await asyncio.to_thread(self.memory_manager.format_response_context,query=cleaned,session_id=self.session_id,profile_id=self.profile_id,project_id=self.project_id)
+        if self.model==LIVE_PREFERRED:
+            await self._session.send_client_content(turns=types.Content(role='user',parts=[types.Part(text='Current sourced context, not a new request: '+profile)]),turn_complete=False)
+        await asyncio.to_thread(self.memory_manager.clock().observe,'interaction',self.session_id,self.profile_id,self.project_id,self._turn_id)
         await self.send_json({
             "type": "live_input_transcript", "text": cleaned, "final": True
         })
@@ -755,6 +818,15 @@ class GeminiLiveSession:
                 async for response in self._session.receive():
                     if self._closed:
                         return
+                    update=getattr(response,'session_resumption_update',None)
+                    if update and getattr(update,'resumable',False) and getattr(update,'new_handle',None):
+                        self._resume_handle=update.new_handle
+                        self._resume_model=self.model
+                        await asyncio.to_thread(self.memory_manager.live_resumption,'save',self.session_id,self.profile_id,self.project_id,self.model,update.new_handle)
+                    elif update and not getattr(update,'resumable',False):
+                        self._resume_handle=None
+                        await asyncio.to_thread(self.memory_manager.live_resumption,'clear',self.session_id,self.profile_id,self.project_id,self.model)
+                    if getattr(response,'go_away',None):self._rotation_pending=True
                     content=response.server_content
                     if content and content.interrupted:
                         # Gemini can deliver interrupted and turn_complete in
@@ -792,6 +864,7 @@ class GeminiLiveSession:
                             text = input_tx.text.strip()
                             if text:
                                 self._input_parts.append(text)
+                                self._warm_local_candidates(' '.join(self._input_parts))
                                 await self.send_json({
                                     "type": "live_input_transcript", "text": text, "final": False
                                 })
@@ -821,6 +894,12 @@ class GeminiLiveSession:
                             await self._session.send_tool_response(
                                 function_responses=function_responses
                             )
+                    if self._rotation_pending and not self._speech_active and not self._response_pending and not self._input_parts and not self._internal_notice:
+                        if await self._resume_transport():break
+                if self._rotation_pending and not self._closed:
+                    if not await self._resume_transport():
+                        await self.on_failure('Live transport resumption unavailable',self._audio_started,'')
+                        return
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -835,6 +914,53 @@ class GeminiLiveSession:
                     ),
                     name=f"gemini-live-fallback-{self.session_id}",
                 )
+
+    def _cancel_prefetch(self):
+        if self._prefetch_task and not self._prefetch_task.done():self._prefetch_task.cancel()
+        self._prefetch_task=None
+
+    def _warm_local_candidates(self,text):
+        self._cancel_prefetch()
+        turn_id=self._turn_id
+        async def warm():
+            await asyncio.sleep(.3)
+            if self._closed or self._turn_id!=turn_id:return
+            # Local-only prefetch never spends embedding or conversation quota.
+            try:await asyncio.to_thread(self.memory_manager._keyword_recall,text,12,profile_id=self.profile_id,project_id=self.project_id)
+            except Exception:pass
+        self._prefetch_task=asyncio.create_task(warm(),name='aegis-local-memory-prefetch')
+
+    async def _discard_invalid_resumption(self, error):
+        # Retry an explicitly expired handle once, without replaying operations.
+        message = str(error).casefold()
+        invalid = 'resum' in message and any(word in message for word in ('expired', 'invalid', 'not found', 'not valid'))
+        if not self._resume_handle or not invalid:return False
+        self._resume_handle = None
+        await asyncio.to_thread(self.memory_manager.live_resumption,'clear',self.session_id,self.profile_id,self.project_id,self.model)
+        return True
+
+    async def _resume_transport(self):
+        if not self._client or not self._resume_handle or self._closed:return False
+        context=self._client.aio.live.connect(model=self.model,config=self._config())
+        resumed = True
+        try:new_session=await asyncio.wait_for(context.__aenter__(),timeout=10)
+        except Exception as exc:
+            if not await self._discard_invalid_resumption(exc):
+                self._rotation_pending=False
+                return False
+            resumed = False
+            context = self._client.aio.live.connect(model=self.model, config=await asyncio.to_thread(self._config))
+            try:new_session = await asyncio.wait_for(context.__aenter__(),timeout=10)
+            except Exception:
+                self._rotation_pending=False
+                return False
+        old=self._connect_context;self._connect_context=context;self._session=new_session;self._rotation_pending=False
+        if old:
+            try:await old.__aexit__(None,None,None)
+            except Exception:pass
+        await asyncio.to_thread(self.memory_manager.clock().observe,'reconnect',self.session_id,self.profile_id,self.project_id)
+        await self.send_json({'type':'live_status','provider':'gemini_live','state':'ready','resumed':resumed})
+        return True
 
     async def _execute_memory_tool(self, call) -> types.FunctionResponse:
         name = str(call.name or "")
@@ -891,6 +1017,8 @@ class GeminiLiveSession:
             "input_text": user_text,
             "output_text": assistant_text,
         })
+        if user_text:
+            await asyncio.to_thread(self.memory_manager.clock().observe,'interaction',self.session_id,self.profile_id,self.project_id,self._turn_id)
         self._input_parts.clear()
         self._output_parts.clear()
         self._audio_started = False
@@ -919,8 +1047,12 @@ class GeminiLiveSession:
         if self._closed:
             return
         self._closed = True
+        self._cancel_prefetch()
         try:
-            if end_logical:await asyncio.to_thread(self.memory_manager.end_session,self.session_id)
+            if end_logical:
+                await asyncio.to_thread(self.memory_manager.end_session,self.session_id)
+                await asyncio.to_thread(self.memory_manager.live_resumption,'clear',self.session_id,self.profile_id,self.project_id,self.model)
+                await asyncio.to_thread(self.memory_manager.clock().observe,'conversation_end',self.session_id,self.profile_id,self.project_id)
         except Exception:LOGGER.exception("Could not expire voice session state")
         receive_task = self._receive_task
         self._receive_task = None

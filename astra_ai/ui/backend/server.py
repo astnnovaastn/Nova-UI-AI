@@ -39,6 +39,10 @@ from typing import Optional, Dict, Any, List, Set, Tuple
 from datetime import datetime
 from contextlib import asynccontextmanager
 
+# Establish package access before importing backend adapters, which now share
+# the clock service. Standalone server.py starts with only its own directory.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
 # Load environment variables from .env file
 from dotenv import dotenv_values, load_dotenv
 
@@ -133,6 +137,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from gemini_live import GeminiLiveSession, LIVE_MODEL, MEMORY_TOOL_DECLARATIONS, MEMORY_EVENT_TOOL_DECLARATIONS, WIDGET_TOOL_DECLARATIONS, ACTION_TOOL_DECLARATIONS, execute_shared_memory_tool
 from astra_ai.ui.backend.aegis_runtime import MODEL_STATUS, TEXT_PREFERRED, TEXT_FALLBACK, mark_model, unavailable, UI_CONTEXTS, CHAT_SESSIONS, set_ui, ui_context, context_text, activity
+from astra_ai.core.time_service import configured_timezone
 from astra_ai.memory.live_memory import LiveMemoryManager
 
 try:
@@ -1241,17 +1246,17 @@ async def _resolve_task_widget_request(websocket: WebSocket, user_text: str) -> 
     kind = "research" if re.search(r"\b(research|investigate|compare|study)\b", lowered) else (
         "action" if re.search(r"\b(clean|tidy|delete|move|archive|send|publish|update|fix|build)\b", lowered) else "prompt"
     )
-    trigger: Dict[str, Any] = {"kind": "manual", "timezone": "Europe/Rome", "enabled": True}
+    trigger: Dict[str, Any] = {"kind": "manual", "timezone": configured_timezone(), "enabled": True}
     schedule_match = re.search(
         r"\b(hourly|daily|weekly|every\s+(?:day|week|hour|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at\s+\d{1,2}:\d{2})?|weekdays\s+at\s+\d{1,2}:\d{2})\b",
         lowered,
     )
     event_match = re.search(r"\bafter\s+(\d{1,5})\s+(messages?|sessions?|app events?)\b", lowered)
     if schedule_match:
-        trigger = {"kind": "schedule", "schedule": schedule_match.group(1), "timezone": "Europe/Rome", "enabled": True}
+        trigger = {"kind": "schedule", "schedule": schedule_match.group(1), "timezone": configured_timezone(), "enabled": True}
     elif event_match:
         event_name = "messages" if event_match.group(2).startswith("message") else "sessions" if event_match.group(2).startswith("session") else "app_events"
-        trigger = {"kind": "event", "event_name": event_name, "every_count": int(event_match.group(1)), "timezone": "Europe/Rome", "enabled": True}
+        trigger = {"kind": "event", "event_name": event_name, "every_count": int(event_match.group(1)), "timezone": configured_timezone(), "enabled": True}
 
     title = re.sub(
         r"^(?:aegis[, ]+)?(?:please\s+)?(?:(?:create|add|make|schedule|start)\s+(?:a\s+)?(?:new\s+)?task(?:\s+to|\s+for)?|remind me to|work on|do|handle)\s*",
@@ -1272,7 +1277,7 @@ async def _resolve_task_widget_request(websocket: WebSocket, user_text: str) -> 
             "tags": ["Aegis"],
             "project": "",
             "due_at": None,
-            "timezone": "Europe/Rome",
+            "timezone": configured_timezone(),
             "trigger": trigger,
             "checklist": [],
             "dependency_ids": [],
@@ -3302,7 +3307,7 @@ def _task_payload_from_aegis(arguments: Dict[str, Any]) -> Dict[str, Any]:
         trigger_kind = "manual"
     trigger: Dict[str, Any] = {
         "kind": trigger_kind,
-        "timezone": str(arguments.get("timezone") or "Europe/Rome"),
+        "timezone": str(arguments.get("timezone") or configured_timezone()),
         "enabled": True,
     }
     if trigger_kind == "schedule":
@@ -3326,7 +3331,7 @@ def _task_payload_from_aegis(arguments: Dict[str, Any]) -> Dict[str, Any]:
         "tags": ["Aegis"],
         "project": str(arguments.get("project") or "").strip()[:120],
         "due_at": arguments.get("due_at"),
-        "timezone": str(arguments.get("timezone") or "Europe/Rome"),
+        "timezone": str(arguments.get("timezone") or configured_timezone()),
         "trigger": trigger,
         "checklist": [str(item).strip()[:500] for item in checklist if str(item).strip()][:100],
         "dependency_ids": [],
@@ -3990,7 +3995,7 @@ async def _execute_aegis_widget_envelope(message: Dict[str, Any]) -> None:
             from calendar_backend.quick_add import parse_quick_add
             raw_text = str(arguments.get("text") or "").strip()
             if raw_text:
-                parsed = parse_quick_add(raw_text, str(arguments.get("timezone") or "Europe/Rome"), None)
+                parsed = parse_quick_add(raw_text, str(arguments.get("timezone") or configured_timezone()), None)
                 draft = await asyncio.to_thread(calendar_store.save_quick_draft, raw_text, parsed, None)
                 await send({
                     "type": "widget_control", "widget": "calendar", "command": "new",
@@ -4001,7 +4006,7 @@ async def _execute_aegis_widget_envelope(message: Dict[str, Any]) -> None:
             else:
                 payload = dict(arguments)
                 payload.setdefault("calendar_id", calendar_store.preferences().get("default_calendar_id"))
-                payload.setdefault("timezone", "Europe/Rome")
+                payload.setdefault("timezone", configured_timezone())
                 payload.setdefault("all_day", False)
                 for field in ("start", "end"):
                     if isinstance(payload.get(field), str):
@@ -5148,6 +5153,13 @@ async def lifespan(app: FastAPI):
     logger.info(f"[CONNECT] REST API: http://localhost:{ServerConfig.PORT}")
     
     await state.initialize()
+    from astra_ai.memory.semantic_recall import GeminiEmbeddings,validated_mode
+    await asyncio.to_thread(state.live_memory.prepare_intelligence)
+    semantic_mode=await asyncio.to_thread(validated_mode,state.live_memory,lambda:state.gemini_api_key)
+    try:embedding_budget=int(os.getenv('NOVA_EMBEDDING_DAILY_REQUESTS','40'))
+    except ValueError:embedding_budget=40
+    await asyncio.to_thread(state.live_memory.configure_semantic,GeminiEmbeddings(lambda:state.gemini_api_key),semantic_mode,embedding_budget)
+    await asyncio.to_thread(state.live_memory.clock().observe,'runtime_start')
     text_chat.memory=state.live_memory
     from astra_ai.memory.Mem0_ai_organizer import AIOrganizer
     state.memory_organizer=AIOrganizer({'key_provider':_get_groq_api_key},memory_system=state.live_memory)
@@ -5207,6 +5219,7 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
+    await asyncio.to_thread(state.live_memory.clock().observe,'runtime_stop')
     await asyncio.to_thread(state.memory_organizer.stop_monitoring)
     if speaker_warm_task and not speaker_warm_task.done():
         speaker_warm_task.cancel()
@@ -5621,6 +5634,11 @@ async def _reconcile_job_action(action,context):
     return None
 
 async def _notify_job_progress(client_id,event):
+    task_scope=event.get('scope',{})
+    phase=event.get('state')
+    if phase in {'running','completed','failed','canceled'} and not task_scope.get('guest'):
+        try:await asyncio.to_thread(state.live_memory.clock().observe,'task_start' if phase=='running' else 'task_end',task_scope.get('session_id',''),task_scope.get('profile_id',''),task_scope.get('project_id',''),str(event.get('job_id',''))+':'+str(phase))
+        except Exception:pass
     socket=ws_manager.websocket_for(client_id)
     if socket is None:return
     live=state.live_sessions.get(socket);scope=event.pop('scope',{})
@@ -5724,7 +5742,7 @@ async def _start_gemini_voice(websocket: WebSocket, *, reset_retry: bool = True,
         logger.error("[GEMINI-LIVE] Hard failure: %s", detail)
         failed = state.live_sessions.pop(websocket, None)
         if failed:
-            await failed.close()
+            await failed.close(end_logical=False)
         if any(word in str(detail).lower() for word in ("quota", "api key", "api_key", "unauth", "permission", "401", "403", "429", "invalid argument")):
             if websocket in ws_manager.connections:
                 await ws_manager.send_to_client(websocket, {
@@ -5772,6 +5790,10 @@ async def _start_gemini_voice(websocket: WebSocket, *, reset_retry: bool = True,
     session._speaker_context=("Confirmed enrolled additional speaker; separate memories, no owner context." if speaker_profile else "Unconfirmed guest; no access to owner memories.") if guest else "Main account user context, connected to the existing owner memories and standing rules. Main user is a role, not the person’s name; identity details come from saved memory."
     if guest:session.profile_id=("speaker-"+speaker_profile) if speaker_profile else "guest-"+client_id
     session.session_id=("guest-" if guest else "")+CHAT_SESSIONS.get(client_id,session.session_id)
+    if previous and (previous.guest,previous.profile_id,previous.project_id,previous.session_id)==(session.guest,session.profile_id,session.project_id,session.session_id):
+        session._resume_handle=previous._resume_handle
+        session._resume_model=previous._resume_model
+        session.model=previous.model
     state.live_sessions[websocket] = session
     try:
         await session.start()
@@ -6509,6 +6531,17 @@ def globe_connection(request):
     live=state.live_sessions.get(socket)
     if live and getattr(live,"guest",False):return guest_memory,str(getattr(live,"profile_id","")),str(getattr(live,"project_id",""))
     return state.live_memory,str(getattr(live,"profile_id","")),str(getattr(live,"project_id",""))
+
+@app.get('/api/memory/context/status')
+async def memory_context_status(request:Request):
+    manager,profile,project=globe_connection(request)
+    client=request.headers.get('X-Nova-Client','')
+    live=state.live_sessions.get(ws_manager.websocket_for(client))
+    sid=getattr(live,'session_id',CHAT_SESSIONS.get(client,''))
+    result=await asyncio.to_thread(manager.memory_context_action,'status')
+    result['time']=await asyncio.to_thread(manager.time_action,'status',session_id=sid,profile_id=profile,project_id=project)
+    if globe_connection(request)!=(manager,profile,project):raise HTTPException(403,'Memory session changed')
+    return result
 
 @app.get("/api/memory/globe")
 async def memory_globe(request:Request,cursor:str="",limit:int=500):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from astra_ai.core.time_service import configured_timezone
 from datetime import date, datetime
 from typing import Annotated, Any, Literal, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -34,7 +35,7 @@ def _require_timezone(value: str) -> str:
 class CalendarCreate(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     color: str = Field(default="#58B4FF", pattern=HEX_COLOR)
-    timezone: str = Field(default="Europe/Rome", min_length=1, max_length=80)
+    timezone: str = Field(default_factory=configured_timezone, min_length=1, max_length=80)
 
 
 class CalendarPatch(BaseModel):
@@ -54,7 +55,7 @@ class EventInput(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     all_day: bool = False
-    timezone: str = Field(default="Europe/Rome", max_length=80)
+    timezone: str = Field(default_factory=configured_timezone, max_length=80)
     recurrence: Optional[str] = Field(default=None, max_length=1000)
     tags: list[TagValue] = Field(default_factory=list, max_length=30)
     importance: Literal["normal", "high", "critical"] = "normal"
@@ -143,7 +144,7 @@ class EventPatch(BaseModel):
 
 class QuickAddRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
-    timezone: str = Field(default="Europe/Rome", max_length=80)
+    timezone: str = Field(default_factory=configured_timezone, max_length=80)
     locale: str = Field(default="en-GB", max_length=32)
     reference_time: Optional[datetime] = None
     calendar_id: Optional[str] = None

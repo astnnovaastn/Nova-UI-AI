@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from astra_ai.core.time_service import configured_timezone
 import json
 import sqlite3
 import threading
@@ -156,11 +157,11 @@ class CalendarStore:
                 now = utc_now()
                 conn.execute(
                     "INSERT INTO calendar_calendars(id,name,color,timezone,created_at,updated_at) VALUES(?,?,?,?,?,?)",
-                    (calendar_id, "Personal", "#58B4FF", "Europe/Rome", now, now),
+                    (calendar_id, "Personal", "#58B4FF", configured_timezone(), now, now),
                 )
                 conn.execute(
-                    "INSERT OR IGNORE INTO calendar_preferences(owner_id,timezone,locale,week_start,hour_cycle,default_calendar_id,updated_at) VALUES('local','Europe/Rome','en-GB','monday','24',?,?)",
-                    (calendar_id, now),
+                    "INSERT OR IGNORE INTO calendar_preferences(owner_id,timezone,locale,week_start,hour_cycle,default_calendar_id,updated_at) VALUES('local',?,'en-GB','monday','24',?,?)",
+                    (configured_timezone(), calendar_id, now),
                 )
             self._initialized = True
 
@@ -254,7 +255,7 @@ class CalendarStore:
             "end_at": None if all_day else (end.isoformat() if hasattr(end, "isoformat") else end),
             "start_date": (data.get("start_date").isoformat() if hasattr(data.get("start_date"), "isoformat") else data.get("start_date")) if all_day else None,
             "end_date": (data.get("end_date").isoformat() if hasattr(data.get("end_date"), "isoformat") else data.get("end_date")) if all_day else None,
-            "timezone": data.get("timezone", "Europe/Rome"), "recurrence": data.get("recurrence"),
+            "timezone": data.get("timezone", configured_timezone()), "recurrence": data.get("recurrence"),
             "tags": _json(data.get("tags", [])), "importance": data.get("importance", "normal"),
             "color": data.get("color"),
         }
@@ -587,7 +588,7 @@ class CalendarStore:
             "calendar_id": calendar_id, "title": parsed["title"], "description": parsed.get("description", ""),
             "location": parsed.get("location", ""), "start": datetime.fromisoformat(parsed["start"].replace("Z", "+00:00")),
             "end": datetime.fromisoformat(parsed["end"].replace("Z", "+00:00")), "all_day": False,
-            "timezone": parsed.get("timezone", self.preferences().get("timezone", "Europe/Rome")),
+            "timezone": parsed.get("timezone", self.preferences().get("timezone", configured_timezone())),
             "recurrence": parsed.get("recurrence"), "tags": parsed.get("tags", []),
             "importance": parsed.get("importance", "normal"), "color": parsed.get("color"),
             "reminder_minutes": parsed.get("reminder_minutes", []), "reminder_channels": parsed.get("reminder_channels", ["in_app"]),

@@ -73,14 +73,17 @@ class CategoryEngine:
 
     def privacy_settings(self):
         from .shared_memory import read
+        signature=self._signature()
+        cached=getattr(self,'_privacy_cache',None)
+        if cached and cached[0]==signature:return cached[1].copy()
         settings=read(self.transcript_path,{}).get('privacy_settings',{}).copy()
-        m=self.load()
+        m=self.read_snapshot()
         for r in sorted(m['records'].values(),key=lambda r:r.get('updated','')):
             if r.get('category')!='data_privacy' or lifecycle(r,m['_meta'])!='active':continue
             key=r.get('key');value=r.get('value')
             if key in {'retain_memories','retain_conversations','private_session'} and isinstance(value,bool):settings[key]=value
+        self._privacy_cache=(signature,settings.copy())
         return settings
-
     def end_session(self,session_id):
         from .shared_memory import now
         if not session_id:return {'status':'rejected','reason':'session_id_required'}
@@ -89,12 +92,13 @@ class CategoryEngine:
             return {'status':'saved','session_id':session_id}
 
     def context_records(self,query='',profile_id='',project_id='',session_id='',scope=None):
-        m=self.load();records=m['records']
-        eligible={rid:r for rid,r in records.items() if lifecycle(r,m['_meta'])=='active' and matches_scope(r,profile_id,project_id,scope) and (r.get('category_policy',r.get('category'))!='current_state' or not r.get('session_id') or r.get('session_id')==session_id)}
+        m=self.read_snapshot();records=m['records']
+        dormant=m['_meta'].get('recall_dormancy',{})
+        eligible={rid:r for rid,r in records.items() if dormant.get(rid,{}).get('state')!='dormant' and lifecycle(r,m['_meta'])=='active' and matches_scope(r,profile_id,project_id,scope) and (r.get('category_policy',r.get('category'))!='current_state' or not r.get('session_id') or r.get('session_id')==session_id)}
         priorities={'user_instructions':0,'communication_boundaries':0,'contextual_rules':0,'personal_preferences':1,'response_adaptation':1,'user_identity':1,'data_privacy':1,'task_project_tracking':2,'current_state':2}
         hits=set()
         if query:
-            hits={r['id'] for r in self.recall_memory(query,20,profile_id=profile_id,project_id=project_id,scope=scope)['matches'] if r['id'] in eligible}
+            hits={r['id'] for r in self._keyword_recall(query,20,profile_id=profile_id,project_id=project_id,scope=scope)['matches'] if r['id'] in eligible}
         linked=set()
         for link in m.get('relationships_v3',{}).values():
             if link.get('evidence') and (link['from'] in hits or link['to'] in hits):linked.update({link['from'],link['to']}&eligible.keys())

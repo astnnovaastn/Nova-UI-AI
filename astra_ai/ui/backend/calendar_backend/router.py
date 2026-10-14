@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from astra_ai.core.time_service import configured_timezone
 import asyncio
 import io
 import json
@@ -335,7 +336,7 @@ def commit_ics(payload: dict):
     for item in preview["events"]:
         try:
             if item["all_day"]:
-                event_data = {"calendar_id": calendar_id, "title": item["title"], "description": item["description"], "location": item["location"], "all_day": True, "start_date": date.fromisoformat(item["start"]), "end_date": date.fromisoformat(item["end"]), "timezone": calendar_store.preferences().get("timezone", "Europe/Rome")}
+                event_data = {"calendar_id": calendar_id, "title": item["title"], "description": item["description"], "location": item["location"], "all_day": True, "start_date": date.fromisoformat(item["start"]), "end_date": date.fromisoformat(item["end"]), "timezone": calendar_store.preferences().get("timezone", configured_timezone())}
             else:
                 start = datetime.fromisoformat(item["start"].replace("Z", "+00:00")); end = datetime.fromisoformat(item["end"].replace("Z", "+00:00"))
                 if start.tzinfo is None: start = start.astimezone()

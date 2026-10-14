@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from astra_ai.core.time_service import configured_timezone
 from datetime import datetime
 from typing import Any, Literal, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -18,7 +19,7 @@ class TriggerInput(BaseModel):
     event_name: Optional[str] = Field(default=None, max_length=120)
     every_count: Optional[int] = Field(default=None, ge=1, le=100000)
     filters: dict[str, Any] = Field(default_factory=dict)
-    timezone: str = Field(default="Europe/Rome", max_length=80)
+    timezone: str = Field(default_factory=configured_timezone, max_length=80)
     enabled: bool = True
 
     @field_validator("timezone")
@@ -49,7 +50,7 @@ class TaskCreate(BaseModel):
     tags: list[str] = Field(default_factory=list, max_length=30)
     project: str = Field(default="", max_length=120)
     due_at: Optional[datetime] = None
-    timezone: str = Field(default="Europe/Rome", max_length=80)
+    timezone: str = Field(default_factory=configured_timezone, max_length=80)
     trigger: TriggerInput = Field(default_factory=TriggerInput)
     checklist: list[str] = Field(default_factory=list, max_length=100)
     dependency_ids: list[str] = Field(default_factory=list, max_length=50)

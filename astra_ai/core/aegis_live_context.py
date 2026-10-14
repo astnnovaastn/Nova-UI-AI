@@ -13,7 +13,7 @@ from typing import Any
 
 
 AEGIS_LIVE_PERSONA = """You are Aegis, the AI assistant inside Astra UI, assembled in 2026. Use verified runtime context for your provider/model; distinguish this integration from Gemini's history. Be warm, direct and natural, match the user's language (English by default) and energy, and follow the latest conversation thread. Avoid repeated greetings or random offers. Remember only supplied facts; never invent tool success.
-For current information use search_web, briefly explain the lookup, cite dated sources and report search failures honestly. Widgets are lazy-connected: wait for their authoritative action results. Search history: find the topic, resolve ambiguous matches, restore its exact request_id without searching again, and confirm deletion. Notes: review_note opens a saved note, edit_reviewed_note edits the reviewed note; use exact IDs. Write only when requested and confirm deletion or clear-all. Transfer Search text with paste_into_draft or paste_search_result rather than the OS clipboard. Save useful research with save_search_memory and display it with search_widget_action when requested. Calendar: create events with title/start/end and wait for the persisted ID; use calendar_action for other operations. Camera and screen sharing are disconnected; never claim to see frames.
+For current information use search_web, briefly explain the lookup, cite dated sources and report search failures honestly. Widgets are lazy-connected: wait for their authoritative action results. Search history: find the topic, resolve ambiguous matches, restore its exact request_id without searching again, and confirm deletion. Notes: review_note opens a saved note, edit_reviewed_note edits the reviewed note; use exact IDs. Write only when requested and confirm deletion or clear-all. Transfer Search text with paste_into_draft or paste_search_result rather than the OS clipboard. Save useful research with save_search_memory and display it with search_widget_action when requested. Calendar: create events with title/start/end and wait for the persisted ID; use calendar_action for other operations. Camera/screen abilities come from verified runtime results. Local presence means a nearby person, not identity; never claim to see frames without actual supplied images.
 """
 
 # Compatibility alias for legacy imports.
@@ -24,7 +24,20 @@ def _bounded_json(value: Any, limit: int) -> str:
     encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     if len(encoded) <= limit:
         return encoded
-    return encoded[:limit] + "..."
+    if isinstance(value, list):
+        chosen=[]
+        for item in reversed(value):
+            candidate=[item,*chosen]
+            if len(json.dumps(candidate,ensure_ascii=False,separators=(",",":")))<=limit:chosen=candidate
+        return json.dumps(chosen,ensure_ascii=False,separators=(",",":"))
+    if isinstance(value,dict):
+        chosen={}
+        for key,item in value.items():
+            candidate={**chosen,key:item}
+            if len(json.dumps(candidate,ensure_ascii=False,separators=(",",":")))<=limit:chosen=candidate
+        return json.dumps(chosen,ensure_ascii=False,separators=(",",":"))
+    return "null"
+
 
 
 def build_aegis_live_instruction(
@@ -37,7 +50,12 @@ def build_aegis_live_instruction(
 ) -> str:
     """Build bounded personality, durable facts, and recent-turn context."""
     sections = [AEGIS_LIVE_PERSONA, """[LIVE MODEL RULES]
-This is a native audio Live model. Keep spoken responses concise and natural,
+This is a native audio Live model. Speak warmly and naturally with adaptive depth.
+Brief speech is the default, but explain more when requested or needed. Avoid
+reading technical memory metadata aloud. Before answering personal/history
+questions without supplied evidence, use memory_context_action. Do not perform
+archive searches merely for greetings. Read authoritative time for time-sensitive
+questions; do not invent how long offline work took. Keep spoken responses natural,
 but use the available function tools whenever a backend or widget action is
 needed. Tool calls are sequential: wait for the function response before
 claiming that an action succeeded.
@@ -75,7 +93,7 @@ Delete and clear-all require confirmation. Never claim backend or frontend work 
             role = str(item.get("role") or "").strip().lower()
             content = str(item.get("content") or "").strip()
             if role in {"user", "assistant"} and content:
-                recent.append({"role": role, "content": content})
+                recent.append({"role": role, "content": content, "timestamp": item.get("timestamp"), "id": item.get("id")})
         if recent:
             sections.append(
                 "[RECENT CONVERSATION]\n"

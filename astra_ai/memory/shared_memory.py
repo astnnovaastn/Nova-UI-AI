@@ -6,6 +6,7 @@ from pathlib import Path
 from .memory_types import MemoryCategory, ConflictType, RelationshipType, AdaptiveLearningType
 from .category_engine import CategoryEngine
 from .persistent_rules import PersistentRules
+from .memory_intelligence import MemoryIntelligence
 from .category_policy import POLICIES, defaults, lifecycle, matches_scope, instant
 from .legacy_live_memory import _iter_leaves, _canonical_path, _get_path, _set_path, _delete_path, _redact_sensitive, _SECRET_KEY_RE, _SECRET_VALUE_RE
 
@@ -74,7 +75,7 @@ class StorageLock:
             f.close()
         self.state['lock'].release()
 
-class SharedMemory(PersistentRules,CategoryEngine):
+class SharedMemory(MemoryIntelligence,PersistentRules,CategoryEngine):
     def __init__(self,*,memory_path,transcript_path,aegis_source=None,legacy_transcript_path=None):
         self.memory_path=Path(memory_path);self.transcript_path=Path(transcript_path)
         self.aegis_source=Path(aegis_source) if aegis_source else None
@@ -103,6 +104,15 @@ class SharedMemory(PersistentRules,CategoryEngine):
         with self._lock:
             m=read(self.memory_path,{});t=read(self.transcript_path,{})
             return {'schema_version':m.get('_meta',{}).get('schema_version'), 'legacy_fact_count':len(list(_iter_leaves({k:v for k,v in m.items() if k not in {'records','_meta'}}))), 'conversation_count':len(t.get('conversation',[])), 'existing_records':len(m.get('records',{}))}
+    def read_snapshot(self):
+        """Internal read-only snapshot; callers must use load() before any write."""
+        with self._lock:
+            signature=self._signature()
+            cached=getattr(self,'_read_snapshot_cache',None)
+            if cached and cached[0]==signature and not self.transaction_path.exists():return cached[1]
+            data=self.load()
+            self._read_snapshot_cache=(self._signature(),data)
+            return data
     def _backup(self,path,label='pre_schema3'):
         if path.exists():
             dest=path.parent/'backups';dest.mkdir(parents=True,exist_ok=True)
@@ -419,6 +429,8 @@ class SharedMemory(PersistentRules,CategoryEngine):
             m['conflicts']=[v for v in m.get('conflicts',[]) if v.get('record_id')!=rid]
             m['learning']={k:v for k,v in m.get('learning',{}).items() if v.get('record_id')!=rid}
             m['pending_approvals']={k:v for k,v in m.get('pending_approvals',{}).items() if v.get('record',{}).get('id')!=rid and rid not in {v.get('relationship',{}).get('from'),v.get('relationship',{}).get('to')}}
+            m['_meta']['episodic_summaries']={k:v for k,v in m['_meta'].get('episodic_summaries',{}).items() if rid not in v.get('source_ids',[])}
+            m['_meta'].get('recall_dormancy',{}).pop(rid,None)
             self._commit(m);return {'status':'forgotten','id':rid}
     def link(self,from_id,to_id,relationship_type,evidence='',approved=False):
         if relationship_type not in {x.value for x in RelationshipType}:return {'status':'rejected','reason':'invalid_relationship_type'}
@@ -580,44 +592,24 @@ class SharedMemory(PersistentRules,CategoryEngine):
         paths=[self.memory_path,self.transcript_path,self.forgotten_path,*sorted(self.archive.glob('*.jsonl'))]
         return tuple((str(p),p.stat().st_mtime_ns,p.stat().st_size) for p in paths if p.exists())
     def _index(self):
-        signature=self._signature()
-        conn=sqlite3.connect(self.index_path,timeout=30)
+        from .retrieval_index import synchronize
         try:
-            conn.execute('CREATE VIRTUAL TABLE IF NOT EXISTS recall USING fts5(id UNINDEXED, text, payload UNINDEXED)')
-            conn.execute('CREATE TABLE IF NOT EXISTS metadata (signature TEXT)')
-            current=conn.execute('SELECT signature FROM metadata').fetchone()
-            if current and current[0]==canonical(signature):return conn
-            conn.execute('DELETE FROM recall')
-            loaded=self.load();entity_terms={}
-            for e in loaded.get('entity_graph',{}).get('entities',{}).values():
-                if e.get('state')=='active':
-                    for rid in e.get('member_ids',[]):entity_terms.setdefault(rid,[]).extend([e.get('label',''),*e.get('aliases',[])])
-            for t in loaded.get('topic_groups',{}).values():
-                if t.get('state')=='active':
-                    for rid in t.get('member_ids',[]):entity_terms.setdefault(rid,[]).append(t.get('label',''))
-            from .category_registry import registry
-            categories=registry(loaded)
-            for r in loaded['records'].values():
-                item=categories.get(r['category']);seen=set()
-                while item and item['id'] not in seen:
-                    seen.add(item['id']);entity_terms.setdefault(r['id'],[]).extend([item['label'],*item.get('aliases',[])]);item=categories.get(item.get('parent_id'))
-            rows=[(r['id'],' '.join(entity_terms.get(r['id'],[]))+' '+str(r['key'])+' '+canonical(r.get('value'))+' '+r['category']+' '+str(r.get('event_type','')),canonical(r)) for r in self.load().get('records',{}).values()]
-            hidden=[normal(str(r.get('value',''))) for r in self.load().get('forgotten_records',{}).values() if len(str(r.get('value','')).strip())>=4]
-            seen=set()
-            for m in self._messages():
-                if any(value in normal(m.get('content','')) for value in hidden):continue
-                rid=m.get('id') or stable(m.get('role'),m.get('content'),m.get('timestamp'),m.get('session_id'))
-                if rid in seen:continue
-                seen.add(rid);r={**m,'id':rid,'kind':'conversation','source':m.get('source','conversation'),'updated':m.get('timestamp','')};rows.append((rid,str(m.get('content','')),canonical(r)))
-            conn.executemany('INSERT INTO recall VALUES (?,?,?)',rows);conn.execute('DELETE FROM metadata');conn.execute('INSERT INTO metadata VALUES (?)',(canonical(signature),));conn.commit();return conn
+            return synchronize(self)
         except sqlite3.DatabaseError:
-            conn.close();self.index_path.unlink(missing_ok=True);self._index_signature=None
-            # The disposable index may be rebuilt once; JSON is never removed.
             if getattr(self,'_rebuilding',False):raise
             self._rebuilding=True
-            try:return self._index()
+            try:
+                for suffix in ('','-wal','-shm'):
+                    self.index_path.with_name(self.index_path.name+suffix).unlink(missing_ok=True)
+                return synchronize(self)
             finally:self._rebuilding=False
     def recall_memory(self,query,limit=5,**filters):
+        semantic=getattr(self,'semantic',None)
+        if semantic and semantic.mode=='enabled' and filters.get('lifecycle','active')=='active':
+            if filters.get('session_id'):filters['conversation_session_id']=filters['session_id']
+            return self.retrieve_context(query,limit,**filters)
+        return self._keyword_recall(query,limit,**filters)
+    def _keyword_recall(self,query,limit=5,**filters):
         tokens=re.findall(r'\w+',str(query),re.UNICODE)
         if not tokens:return {'status':'rejected','reason':'empty_query','matches':[]}
         with self._lock:
@@ -644,11 +636,14 @@ class SharedMemory(PersistentRules,CategoryEngine):
                 rows=conn.execute('SELECT payload FROM recall WHERE '+' AND '.join(clauses)+' ORDER BY bm25(recall)',params)
                 signature=self._signature();cached=getattr(self,'_recall_snapshot',None)
                 if cached and cached[0]==signature:loaded=cached[1]
-                else:loaded=self.load();self._recall_snapshot=(signature,loaded)
+                else:loaded=self.read_snapshot();self._recall_snapshot=(signature,loaded)
                 results=[];relationships=loaded.get('relationships_v3',{})
                 for row in rows:
                     r=json.loads(row[0])
                     if not matches_scope(r,filters.get('profile_id',''),filters.get('project_id',''),filters.get('scope')):continue
+                    attributes=r.get('attributes',{})
+                    if any(r.get(k) for k in ('private','private_session','inaccessible','forgotten_at')) or attributes.get('private') or attributes.get('private_session') or r.get('consent') in {'none','denied','revoked','private'}:continue
+                    if filters.get('lifecycle','active')=='active' and any(loaded['_meta'].get('recall_dormancy',{}).get(rid,{}).get('state')=='dormant' for rid in r.get('source_ids',[r['id']])):continue
                     if r.get('kind')!='conversation':
                         state=lifecycle(r,loaded['_meta'])
                         wanted=filters.get('lifecycle','active')
@@ -656,14 +651,22 @@ class SharedMemory(PersistentRules,CategoryEngine):
                         if not matches_scope(r,filters.get('profile_id',''),filters.get('project_id',''),filters.get('scope')):continue
                         r['effective_lifecycle']=state
                     if any(filters.get(k) and r.get(k)!=(ALIASES.get(filters[k],filters[k]) if k=='category' else filters[k]) for k in ('kind','event_type','source','session_id')):continue
-                    r['related_ids']=[v['to'] if v['from']==r['id'] else v['from'] for v in relationships.values() if r['id'] in {v['from'],v['to']}]
+                    related=[v['to'] if v['from']==r['id'] else v['from'] for v in relationships.values() if r['id'] in {v['from'],v['to']}]
+                    from .library import permitted
+                    r['related_ids']=[rid for rid in related if rid in loaded['records'] and permitted(loaded['records'][rid],filters.get('profile_id',''),filters.get('project_id',''))]
                     results.append(r)
                     if len(results)>=max(1,min(int(limit),100)):break
                 return {'status':'ok','query':query,'matches':results}
             finally:conn.close()
     def recall_conversations(self,query,limit=5,**filters):
         result=self.recall_memory(query,limit,kind='conversation',**filters)
-        result['matches']=[{'id':r['id'],'turn_id':r.get('turn_id',''),'session_id':r.get('session_id',''),'messages':[{'role':r.get('role'),'content':safe(r.get('content',''))[:1200],'timestamp':r.get('timestamp'),'session_id':r.get('session_id'),'turn_id':r.get('turn_id','')}]} for r in result.get('matches',[])]
+        exchanges=[];seen=set()
+        for record in result.get('matches',[]):
+            episode=self.episode(record['id'],**{k:v for k,v in filters.items() if k in {'profile_id','project_id','scope','session_id'}})
+            marker=(episode.get('session_id'),episode.get('turn_id') or record['id'])
+            if episode.get('status')=='ok' and marker not in seen:
+                seen.add(marker);exchanges.append({'id':record['id'],**episode})
+        result['matches']=exchanges
         return result
     def format_for_prompt(self,max_chars=6000,query='',include_rules=True,**context):
         max_chars=max(0,min(int(max_chars),6000))

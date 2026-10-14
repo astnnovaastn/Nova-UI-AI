@@ -3,7 +3,7 @@ import asyncio, copy, json, uuid, time, hashlib
 from pathlib import Path
 from astra_ai.memory.shared_memory import atomic, read, StorageLock, now, safe
 
-READS={"transcript_action_read","read_ui_context","read_standing_rules","recall_memory","recall_conversations","get_system_status","read_notes_context","read_search_context","read_calendar_context","read_image_context","recall_search_memory","list_tracked_files","read_file","file_status","search_web"}
+READS={"memory_context_action","time_action","transcript_action_read","read_ui_context","read_standing_rules","recall_memory","recall_conversations","get_system_status","read_notes_context","read_search_context","read_calendar_context","read_image_context","recall_search_memory","list_tracked_files","read_file","file_status","search_web"}
 def readonly(action):
     return action['name']=='research_action' and action.get('arguments',{}).get('action') in {'run','get','list','read'} or action['name']=='category_action' and action.get('arguments',{}).get('action') in {'list','resolve'} or action['name']=='capability_action' and action.get('arguments',{}).get('action') in {'list','get','status'} or action["name"]=="transcript_action" and action.get("arguments",{}).get("action") in {"sessions","list","get","history"} or action["name"] in READS or action["name"]=="memory_action" and action.get("arguments",{}).get("action") in {"list","get","history","search","list_forgotten","search_forgotten"}
 class ActionJobs:

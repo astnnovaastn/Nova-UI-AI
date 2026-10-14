@@ -18,6 +18,35 @@ def _memory_manager(tmp_path: Path, transcript_path: Path) -> LiveMemoryManager:
     return manager
 
 
+def test_expired_live_handle_rebuilds_context_without_replaying_actions(tmp_path):
+    manager = _memory_manager(tmp_path, tmp_path/'history.json')
+    notices = []; opened = []
+    async def send_json(message):notices.append(message)
+    async def noop(*args):pass
+    session = GeminiLiveSession(api_key='fixture', memory_file=tmp_path/'history.json',
+                                memory_manager=manager, send_json=send_json,
+                                send_bytes=noop, on_failure=noop)
+    session._resume_model = session.model
+    session._resume_handle = 'expired-opaque-token'
+    manager.live_resumption('save',session.session_id,session.profile_id,session.project_id,session.model,session._resume_handle)
+    class Connection:
+        async def __aenter__(self):
+            if len(opened)==1:raise ValueError('Session resumption handle expired')
+            return SimpleNamespace()
+        async def __aexit__(self,*args):pass
+    def connect(**kwargs):
+        opened.append(kwargs['config'].session_resumption.handle)
+        return Connection()
+    session._client = SimpleNamespace(aio=SimpleNamespace(live=SimpleNamespace(connect=connect)))
+    assert asyncio.run(session._resume_transport())
+    assert opened == ['expired-opaque-token', None]
+    assert notices[-1]['resumed'] is False
+    assert manager.live_resumption('get',session.session_id,session.profile_id,session.project_id,session.model) is None
+    assert asyncio.run(session._discard_invalid_resumption(ValueError('Session resumption handle expired'))) is False
+    session._resume_handle = 'valid-token'
+    assert asyncio.run(session._discard_invalid_resumption(ValueError('429 quota exhausted'))) is False
+
+
 def test_live_config_pins_requested_model_and_voice(tmp_path: Path):
     memory = tmp_path / "memory.json"
     memory.write_text('{"conversation": []}', encoding="utf-8")
@@ -51,7 +80,7 @@ def test_live_config_pins_requested_model_and_voice(tmp_path: Path):
     assert all(tool.google_search is None for tool in config.tools)
     declarations = next(tool.function_declarations for tool in config.tools if tool.function_declarations)
     assert {declaration.name for declaration in declarations} == {
-        "library_action", "notice_action", "presence_action", "category_action", "research_action", "capability_action", "open_website", "save_memory", "forget_memory", "recall_conversations", "set_standing_rule", "read_standing_rules", "transcript_action", "memory_topic_action", "memory_view_action", "run_action_batch", "job_action",
+        "memory_context_action", "time_action", "library_action", "notice_action", "presence_action", "category_action", "research_action", "capability_action", "open_website", "save_memory", "forget_memory", "recall_conversations", "set_standing_rule", "read_standing_rules", "transcript_action", "memory_topic_action", "memory_view_action", "run_action_batch", "job_action",
         "save_memory_event", "forget_memory_event", "recall_memory",
         "approve_memory", "get_pending_memories", "save_memory_relationship", "learn_memory", "memory_action", "propose_memories",
                     "read_ui_context", "get_system_status", "read_notes_context", "read_search_context", "read_calendar_context", "read_image_context", "notes_action", "calendar_create_event", "calendar_action", "image_action", "search_history_action",

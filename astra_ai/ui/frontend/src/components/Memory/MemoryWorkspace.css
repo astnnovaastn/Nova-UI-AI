@@ -135,3 +135,5 @@
 @keyframes memory-wait-dot{0%,15%,85%,100%{opacity:.15;transform:translateY(0)}35%,65%{opacity:1;transform:translateY(-1px)}}
 @keyframes memory-wait-halo{50%{box-shadow:0 0 0 4px #d9b72818,0 0 12px #d9b72840}}
 @media(prefers-reduced-motion:reduce){.status-waiting,.memory-waiting-dots i,.memory-record-row,.memory-work-detail,.memory-library-menu [role=menu]{animation:none}}
+.memory-runtime-status{position:absolute;left:22px;bottom:18px;z-index:4;display:flex;align-items:center;gap:6px;color:var(--text-secondary,#aaa);font-size:11px;pointer-events:none;opacity:.8}
+.memory-runtime-dot{width:5px;height:5px;border-radius:50%;background:#6fcf7f;flex:none}

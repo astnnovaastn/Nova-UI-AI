@@ -12,7 +12,8 @@ def schema():
     observation={'type':'object','additionalProperties':False,'properties':{'record_id':string,'label':string,'evidence':evidence},'required':['record_id','label','evidence']}
     group={'type':'object','additionalProperties':False,'properties':{'label':string,'member_ids':{'type':'array','items':string},'evidence':evidence},'required':['label','member_ids','evidence']}
     category={'type':'object','additionalProperties':False,'properties':{'label':string,'parent_id':string,'policy_template':string,'member_ids':{'type':'array','items':string},'evidence':evidence},'required':['label','parent_id','policy_template','member_ids','evidence']}
-    return {'type':'object','additionalProperties':False,'properties':{'categories':{'type':'array','items':category},'entities':{'type':'array','items':entity},'relationships':{'type':'array','items':link},'observations':{'type':'array','items':observation},'topics':{'type':'array','items':group},'patterns':{'type':'array','items':group}},'required':['categories','entities','relationships','observations','topics','patterns']}
+    maintenance={'type':'object','additionalProperties':False,'properties':{'action':{'type':'string','enum':['summary','dormant']},'record_id':string,'revision':{'type':'integer'},'reason':string,'related_id':string,'summary':string,'quotes':{'type':'array','items':string}},'required':['action','record_id','revision','reason','related_id','summary','quotes']}
+    return {'type':'object','additionalProperties':False,'properties':{'categories':{'type':'array','items':category},'entities':{'type':'array','items':entity},'relationships':{'type':'array','items':link},'observations':{'type':'array','items':observation},'topics':{'type':'array','items':group},'patterns':{'type':'array','items':group},'maintenance':{'type':'array','items':maintenance}},'required':['categories','entities','relationships','observations','topics','patterns','maintenance']}
 
 class OrganizerRuntime:
     def __init__(self,config=None,memory_system=None):
@@ -25,7 +26,7 @@ class OrganizerRuntime:
         self.key_provider=self.config.get('key_provider',lambda:'')
         self.background_budget=self.config.get('background_budget')
         self.analysis_lock=threading.Lock();self.stop_event=threading.Event();self.monitoring_thread=None;self.monitoring_active=False;self.organizer_enabled=True
-        saved=read(self.path,{'jobs':{}}).get('metadata',{});self.paused=saved.get('paused',False);self.model='openai/gpt-oss-20b';self.last_error=None;self.last_success=saved.get('last_success');self.next_attempt=saved.get('next_attempt',0);self.probed=False
+        saved=read(self.path,{'jobs':{}}).get('metadata',{});self.paused=saved.get('paused',False);self.pause_reason=saved.get('pause_reason','manual pause' if self.paused else '');self.model='openai/gpt-oss-20b';self.last_error=None;self.last_success=saved.get('last_success');self.next_attempt=saved.get('next_attempt',0);self.probed=False
     def enqueue(self,session_id,turn_id,profile_id='',project_id=''):
         with self.memory_system._lock:
             q=read(self.path,{'jobs':{}});source_revision=stable(*[(msg.get('id',''),msg.get('content',''),msg.get('revision',1)) for msg in self.memory_system._messages() if msg.get('session_id')==session_id and msg.get('turn_id')==turn_id]);jid=stable(session_id,turn_id,source_revision,VERSION)
@@ -61,10 +62,10 @@ class OrganizerRuntime:
     def is_monitoring(self):return self.monitoring_active
     def _metadata(self):
         with self.memory_system._lock:
-            q=read(self.path,{'jobs':{}});q['metadata']={'paused':self.paused,'last_success':self.last_success,'next_attempt':self.next_attempt};atomic(self.path,q)
+            q=read(self.path,{'jobs':{}});q['metadata']={'paused':self.paused,'pause_reason':self.pause_reason,'last_success':self.last_success,'next_attempt':self.next_attempt};atomic(self.path,q)
     def pause_processing(self,reason='manual pause'):self.paused=True;self.pause_reason=reason;self._metadata()
     def resume_processing(self):
-        self.paused=False;self.next_attempt=0
+        self.paused=False;self.pause_reason='';self.next_attempt=0
         with self.memory_system._lock:
             q=read(self.path,{'jobs':{}})
             for j in q['jobs'].values():
@@ -92,7 +93,15 @@ class OrganizerRuntime:
         return messages
     def _run(self):
         while not self.stop_event.wait(.5):
-            if self.paused or time.time()<self.next_attempt:continue
+            if self.paused and self.pause_reason!='provider_quota':continue
+            if self.paused or time.time()<self.next_attempt:
+                # A Groq quota pause does not bypass Google's own embedding
+                # budget, nor does it require pausing unrelated local recall.
+                semantic=getattr(self.memory_system,'semantic',None)
+                if semantic:
+                    try:semantic.backfill(limit=1)
+                    except Exception:pass
+                continue
             try:self.process_once()
             except Exception as exc:
                 self.last_error=type(exc).__name__;self.next_attempt=time.time()+30
@@ -103,7 +112,11 @@ class OrganizerRuntime:
                     atomic(self.path,q)
     def process_once(self):
         if not self.analysis_lock.acquire(blocking=False):return
-        try:return self._process_once()
+        try:
+            semantic=getattr(self.memory_system,'semantic',None)
+            if semantic and not self.paused:semantic.backfill(limit=1)
+            if not self.paused:self.memory_system.consolidate_recall()
+            return self._process_once()
         finally:self.analysis_lock.release()
     def _process_once(self):
         with self.memory_system._lock:
@@ -125,9 +138,10 @@ class OrganizerRuntime:
             if self.model not in {m['id'] for m in response.json().get('data',[])}:self.last_error='Preferred organizer model unavailable';self.next_attempt=time.time()+300;return
             self.probed=True
         with self.memory_system._lock:
-            m=self.memory_system.load();records=[{'id':r['id'],'category':r['category'],'key':r['key'],'value':safe(str(r['value']))[:180]} for r in m['records'].values() if r.get('profile_id','')==scope[0] and r.get('project_id','')==scope[1] and __import__('astra_ai.memory.category_policy',fromlist=['lifecycle']).lifecycle(r,m['_meta'])=='active'][-20:]
+            m=self.memory_system.load();query=' '.join(s['content'] for s in sources)[:1200]
+            records=[{'id':r['id'],'category':r['category'],'key':r['key'],'revision':r.get('revision',1),'value':safe(str(r['value']))[:600]} for r in self.memory_system.context_records(query,profile_id=scope[0],project_id=scope[1])[:20]]
         import json
-        payload={'user_sources':[{'id':s['id'],'content':safe(s['content'])[:600]} for s in sources],'accepted_records':records,'category_candidates':[{'id':r['id'],'label':r['label'],'policy_template':r['policy_template']} for r in self.memory_system.category_action('list',limit=30,profile_id=scope[0],project_id=scope[1]).get('categories',[])]}
+        payload={'user_sources':[{'id':s['id'],'content':safe(s['content'])[:600]} for s in sources],'accepted_records':records,'category_candidates':self.memory_system.relevant_categories(' '.join(s['content'] for s in sources)[:1200],limit=30,profile_id=scope[0],project_id=scope[1])}
         import contextlib
         from astra_ai.core.background_budget import BudgetPaused
         try:
@@ -148,6 +162,9 @@ class OrganizerRuntime:
         with self.memory_system._lock:
             q=read(self.path,{'jobs':{}});valid=[j for j in jobs if q['jobs'][j['id']]['state']!='canceled']
             if len(valid)!=len(jobs):self._finish(valid,'queued','Batch canceled; reanalyze surviving sources');return
+            for proposal in proposals.get('maintenance',[])[:4]:
+                if not isinstance(proposal,dict):continue
+                self.memory_system.maintenance_action(proposal.get('action'),record_id=proposal.get('record_id',''),revision=proposal.get('revision'),reason=proposal.get('reason',''),related_id=proposal.get('related_id',''),summary=proposal.get('summary',''),evidence=proposal.get('quotes'),profile_id=scope[0],project_id=scope[1])
             result=apply_proposals(self.memory_system,proposals,self._sources(valid),stable(*[j['id'] for j in valid]))
         self._finish(valid,'completed',result['status']);self.last_success=now();self.last_error=None;self.next_attempt=time.time()+65;self._metadata()
     def _finish(self,jobs,state,reason):
@@ -160,7 +177,7 @@ class OrganizerRuntime:
         status=response.status_code;self.last_error=f'Groq returned HTTP {status}'
         self.next_attempt=time.time()+min(900,max(30,float(response.headers.get('retry-after','180')) if str(response.headers.get('retry-after','')).isdigit() else 180))
         self._finish(jobs,'quota_paused' if status==429 else 'failed',self.last_error)
-        if status==429 and max((j.get('attempts',0) for j in jobs),default=0)>=2:self.paused=True
+        if status==429 and max((j.get('attempts',0) for j in jobs),default=0)>=2:self.paused=True;self.pause_reason='provider_quota'
         self._metadata()
     def start_memory_organization_cycle(self):return local_organize(self.memory_system)
 

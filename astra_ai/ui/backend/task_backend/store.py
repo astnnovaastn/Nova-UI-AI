@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from astra_ai.core.time_service import configured_timezone
 import hashlib
 import json
 import re
@@ -259,7 +260,7 @@ class TaskStore:
             (
                 trigger_id, task_id, owner, trigger.get("kind", "manual"),
                 trigger.get("schedule"), trigger.get("event_name"), trigger.get("every_count"),
-                _json(trigger.get("filters", {})), trigger.get("timezone", "Europe/Rome"),
+                _json(trigger.get("filters", {})), trigger.get("timezone", configured_timezone()),
                 int(trigger.get("enabled", True)), _iso(trigger.get("next_fire_at")) or next_schedule_fire(trigger.get("schedule"), trigger.get("timezone")),
                 public_id, secret_hash, now, now,
             ),
@@ -668,11 +669,11 @@ def _iso(value: Any) -> str | None:
     return str(value)
 
 
-def next_schedule_fire(schedule: str | None, timezone_name: str | None = "Europe/Rome") -> str | None:
+def next_schedule_fire(schedule: str | None, timezone_name: str | None = configured_timezone()) -> str | None:
     if not schedule:
         return None
     try:
-        zone = ZoneInfo(timezone_name or "Europe/Rome")
+        zone = ZoneInfo(timezone_name or configured_timezone())
     except (ZoneInfoNotFoundError, ValueError):
         zone = timezone.utc
     now = datetime.now(zone)
