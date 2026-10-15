@@ -32,7 +32,7 @@ export default function ConversationWork({chat,active,target}){
  const waiting=page.counts?.waiting||0,running=Object.entries(page.counts||{}).reduce((sum,[state,count])=>sum+(['completed','failed','canceled'].includes(state)?0:Number(count)),0),completed=page.counts?.completed||0;
  const steps=detail?.details?.actions||[],done=steps.filter(s=>s.state==='completed').length,progress=steps.length?Math.round(100*done/steps.length):null;
  return <section className="memory-work-panel" hidden={!active} aria-label="Tasks and learning">
-  <div className="memory-work-heading"><div><span className="memory-chat-kicker">AEGIS WORKSPACE</span><h3>Tasks and learning</h3><p>Real progress. One place to follow it.</p></div><button className="memory-sound-button" aria-pressed={sound} title="Notification sound" onClick={()=>{setNotificationSound(!sound);setSound(!sound);}}>{sound?'Sound on':'Sound off'}</button></div>
+  <div className="memory-work-heading"><h3>{view==='approvals'?'Approvals':view==='learning'?'Learning':'Tasks and learning'}</h3><button className="memory-sound-button" aria-pressed={sound} title="Notification sound" onClick={()=>{setNotificationSound(!sound);setSound(!sound);}}>{sound?'Sound on':'Sound off'}</button></div>
   <nav className="memory-work-tabs" aria-label="Work views">{['tasks','learning','approvals'].map(v=><button key={v} aria-pressed={view===v} onClick={()=>switchView(v)}>{human(v)}</button>)}</nav>
   <div className="memory-work-scroll" ref={scroll}>
   {chat.guest?<p className="memory-work-empty">Tasks and learning belong to the owner workspace.</p>:<>

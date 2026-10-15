@@ -316,10 +316,8 @@ export class GlobeEngine {
         for(const m of ms){const day=m.date?.slice(0,10)||new Date(m.created||0).toISOString().slice(0,10),month=/^\d{4}-\d{2}/.test(day)?day.slice(0,7):'undated';const group=months.get(month)??[];group.push(m);months.set(month,group);}
         for(const [month,group] of [...months].sort((a,b)=>a[0].localeCompare(b[0]))){
           const monthId=c.id+'#'+month,monthLabel=month==='undated'?'Date not recorded':new Intl.DateTimeFormat('en',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(month+'-15T12:00:00Z'));
-          items.push({...c,id:monthId,label:c.label+' · '+monthLabel,count:group.length>600?0:group.length,totalCount:group.length});mainOf.set(monthId,c.id);
-          if(group.length<=600){group.forEach(m=>itemOf.set(m.id,monthId));continue;}
-          const weeks=new Map<string,GraphMemory[]>();for(const m of group){const day=m.date?.slice(0,10)||new Date(m.created||0).toISOString().slice(0,10),d=new Date(day+'T12:00:00Z');const week=Number.isFinite(d.getTime())?(d.setUTCDate(d.getUTCDate()-(d.getUTCDay()+6)%7),d.toISOString().slice(0,10)):'undated';const batch=weeks.get(week)??[];batch.push(m);weeks.set(week,batch);}
-          for(const [week,batch] of [...weeks].sort((a,b)=>a[0].localeCompare(b[0]))){const id=monthId+'#week:'+week;items.push({...c,id,label:'Week of '+week,count:batch.length,totalCount:batch.length});mainOf.set(id,monthId);batch.forEach(m=>itemOf.set(m.id,id));}
+          items.push({...c,id:monthId,label:c.label+' · '+monthLabel,count:group.length,totalCount:group.length});mainOf.set(monthId,c.id);
+          group.forEach(m=>itemOf.set(m.id,monthId));
         }
         continue;
       }
@@ -381,7 +379,7 @@ export class GlobeEngine {
       }
       for (let i = 0; i < n; i++) P[i] = nrm([P[i][0] + delta[i][0] * step * 3, P[i][1] + delta[i][1] * step * 3, P[i][2] + delta[i][2] * step * 3]);
     }
-    cats.forEach((c, i) => this.makeCat(c, P[i], rc[i], this.catColor(c.id.split("#")[0], baseIds.indexOf(c.id.split("#")[0]))));
+    cats.forEach((c, i) => this.makeCat(c, P[i], rc[i], this.catColor(c.id, baseIds.indexOf(c.id.split("#")[0]))));
   }
 
   private createCategory(id: string): CatState {
@@ -531,7 +529,7 @@ export class GlobeEngine {
     };
     on("pointerup", up); on("pointercancel", up);
     on("pointerleave", () => { this.mx = this.my = -1e3; });
-    on("wheel", (e) => { e.preventDefault();this.manualUntil=performance.now()+5000;this.focusYaw=null;const oldZoom=this.zt,r=cv.getBoundingClientRect(),ratio=Math.min(8,Math.max(.6,this.zt*Math.exp(-e.deltaY*.0013)))/oldZoom;this.panX=Math.max(-1,Math.min(1,(e.clientX-r.left-this.W/2)*(1-ratio)/(this.W*.4)+this.panX*ratio));this.panY=Math.max(-1,Math.min(1,(e.clientY-r.top-this.H/2)*(1-ratio)/(this.H*.4)+this.panY*ratio));this.zt*=ratio;if(this.zt<1.35&&this.sel)this.clearSelection(true);this.startTransition(this.yaw,this.pitch,this.zt); }, { passive: false });
+    on("wheel", (e) => { e.preventDefault();this.manualUntil=performance.now()+5000;this.focusYaw=null;this.zt=Math.min(8,Math.max(.6,this.zt*Math.exp(-e.deltaY*.0013)));if(this.zt<1.35&&this.sel)this.clearSelection(true);this.startTransition(this.yaw,this.pitch,this.zt); }, { passive: false });
   }
 
   private hit(px: number, py: number): GNode | null {

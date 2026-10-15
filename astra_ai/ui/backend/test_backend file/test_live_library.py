@@ -35,7 +35,7 @@ def test_unlimited_categories_paged_and_palette_preserves_ids(memory):
  assert memory.load()['records']==before
 
 
-def test_session_month_week_day_counts_keep_madrid_four_am_boundary(memory):
+def test_session_month_day_counts_and_legacy_week_keep_madrid_four_am_boundary(memory):
  from astra_ai.memory.daily_history import conversation_day
  assert conversation_day('2026-10-01')=='2026-10-01'
  memory.append_turn('Late evening fixture','First response','month-one','turn-one',timestamp='2026-10-01T00:30:00+02:00')
@@ -45,10 +45,14 @@ def test_session_month_week_day_counts_keep_madrid_four_am_boundary(memory):
  assert months=={'session_themes#2026-10':2,'session_themes#2026-09':2}
  october=library.page(memory,category='session_themes#2026-10')
  assert october['total']==2 and sum(r['count'] for r in october['collections'])==2
- week=library.page(memory,category=october['collections'][0]['id'])
- assert week['total']==2 and week['collections'][0]['title']=='2026-10-01'
- day=library.page(memory,category=week['collections'][0]['id'])
+ assert [r['kind'] for r in october['collections']]==['day']
+ day=library.page(memory,category=october['collections'][0]['id'])
  assert day['total']==2 and day['collections']==[]
+ assert day['parent']=='session_themes#2026-10'
+ week=library.page(memory,category='session_themes#2026-10#week:2026-09-28')
+ assert week['total']==2 and week['collections'][0]['title']=='2026-10-01'
+ assert library.page(memory,category=week['collections'][0]['id'])['total']==2
+ assert library.page(memory,category='session_themes#2026-10#day:2026-10-01#day:2026-10-01')['total']==0
  assert library.page(memory,category='session_themes#2026-11')['total']==0
  assert len(list(memory._messages()))==4
 

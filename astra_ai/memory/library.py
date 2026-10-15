@@ -64,21 +64,30 @@ def page(manager,profile='',project='',category='',query='',state='all',offset=0
     if base=='session_themes':
         def matches(record):
             month,week,day=period_parts(record)
-            return (not parts or month==parts[0]) and (len(parts)<2 or parts[1]=='week:'+week) and (len(parts)<3 or parts[2]=='day:'+day) and len(parts)<=3
+            # New navigation is month -> day. Saved week URLs still resolve,
+            # but are never emitted as extra collections in the monthly view.
+            expected={'week':week,'day':day}
+            if parts and month!=parts[0]:return False
+            kinds=[]
+            for token in parts[1:]:
+                kind,separator,value=token.partition(':')
+                if not separator or kind not in expected or value!=expected[kind] or kind in kinds:return False
+                kinds.append(kind)
+            return kinds in ([],['day'],['week'],['week','day'])
         result=[r for r in result if matches(r)]
         grouped={}
-        if len(parts)<3:
+        if not any(token.startswith('day:') for token in parts[1:]):
             for record in result:
                 month,week,day=period_parts(record)
-                suffix=month if not parts else 'week:'+week if len(parts)==1 else 'day:'+day
+                suffix=month if not parts else 'day:'+day
                 grouped.setdefault(suffix,[]).append(record['id'])
             for suffix,group in sorted(grouped.items(),reverse=True):
                 identifier=category+'#'+suffix
-                title=('Date not recorded' if suffix=='undated' else suffix) if not parts else ('Week of '+suffix[5:] if len(parts)==1 else suffix[4:])
+                title=('Date not recorded' if suffix=='undated' else suffix) if not parts else suffix[4:]
                 if not parts and suffix!='undated':
                     from datetime import date
                     title=date.fromisoformat(suffix+'-01').strftime('%B %Y')
-                collections.append({'id':identifier,'title':title,'count':len(group),'kind':'month' if not parts else 'week' if len(parts)==1 else 'day'})
+                collections.append({'id':identifier,'title':title,'count':len(group),'kind':'month' if not parts else 'day'})
         parent=category.rsplit('#',1)[0] if parts else ''
     result.sort(key=lambda r:(r.get('updated') or r.get('created') or '',r['id']),reverse=True)
     offset=max(0,int(offset));limit=max(1,min(100,int(limit)))

@@ -8,7 +8,10 @@ export type ColorFamily = keyof typeof MEMORY_BASES;
 export interface CategoryPalette { family?: string; blend_percent?: number; base?: string; blend_with?: string }
 const families: ColorFamily[] = ['blue','gray_blue','red','green','violet','pink','deep_red','deep_violet','yellow','orange','deep_blue'];
 const blends = [0, .08, .0914, .1029, .1143, .1257, .1371, .1486, .16];
-const aliases:Record<string,ColorFamily>={};
+// Five main accents; older registry values remain readable without repainting
+// whole transcript collections yellow. Deep variants retain their existing hue.
+const defaultFamilies: ColorFamily[] = ['blue','red','green','violet','pink'];
+const aliases:Record<string,ColorFamily>={yellow:'red',orange:'red',deep_blue:'blue'};
 export const stableColorHash = (id: string) => { let h = 2166136261; for (const c of id) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
 type Triple = [number, number, number];
 const linear = (v: number) => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4;
@@ -33,7 +36,13 @@ export function categoryColorIndex(id: string, palette?: CategoryPalette): numbe
   const base = id.split('#')[0], hash = stableColorHash(base);
   const supplied=aliases[palette?.family||'']||palette?.family;
   let family = families.includes(supplied as ColorFamily) ? supplied as ColorFamily : undefined;
-  if (!family) family = families[hash % families.length];
+  if (!family) family = defaultFamilies[hash % defaultFamilies.length];
+  // Months are presentation groups, not new registry categories. Consecutive
+  // months use a stable accent independent of load order and transcript count.
+  if (base === 'session_themes') {
+    const month = /^session_themes#(\d{4})-(\d{2})$/.exec(id);
+    family = month ? defaultFamilies[(Number(month[1])*12 + Number(month[2])-1)%defaultFamilies.length] : 'gray_blue';
+  }
   const value = Number(palette?.blend_percent), amount = Number.isFinite(value) ? Math.max(.08, Math.min(.16, value/100)) : blends[1 + (hash >>> 4) % (blends.length-1)];
   let shade = 1; for (let i=2; i<blends.length; i++) if (Math.abs(blends[i]-amount) < Math.abs(blends[shade]-amount)) shade = i;
   return families.indexOf(family)*blends.length + shade;

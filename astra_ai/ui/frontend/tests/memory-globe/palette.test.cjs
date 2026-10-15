@@ -6,4 +6,13 @@ test('supplied bases plus distinct yellow, orange and deep blue mixtures',()=>{a
 test('thousands of categories keep stable colors independently of order',()=>{const ids=Array.from({length:2400},(_,i)=>'category_'+i);const a=new Map(ids.map(id=>[id,categoryColorIndex(id)])),b=new Map(ids.reverse().map(id=>[id,categoryColorIndex(id)]));assert.ok([...a].every(([id,c])=>b.get(id)===c&&c>=0&&c<MEMORY_SHADES.length));assert.equal(categoryColorIndex('new#2026-10'),categoryColorIndex('new'));});
 test('family metadata wins and malformed metadata stays bounded',()=>{assert.ok(categoryColorIndex('user_identity',{family:'red',blend_percent:12})>=18);for(const value of [-200,999,NaN,Infinity])assert.ok(categoryColorIndex('new',{family:'invalid',blend_percent:value})<MEMORY_SHADES.length);assert.notDeepEqual(contrastShades(true),contrastShades(false));});
 
-test('yellow never aliases green and unrelated categories can use every family',()=>{assert.notEqual(categoryColorIndex('same',{family:'yellow'}),categoryColorIndex('same',{family:'green'}));const chosen=new Set(Array.from({length:300},(_,i)=>Math.floor(categoryColorIndex('family_'+i)/9)));assert.equal(chosen.size,11);});
+test('default categories use five stable accents and old yellow cannot flood transcript patches',()=>{
+ const chosen=new Set(Array.from({length:300},(_,i)=>Math.floor(categoryColorIndex('family_'+i)/9)));
+ assert.equal(chosen.size,5);
+ assert.equal(categoryColorIndex('session_themes',{family:'yellow'}),categoryColorIndex('session_themes',{family:'pink'}));
+ const months=Array.from({length:12},(_,i)=>'session_themes#2026-'+String(i+1).padStart(2,'0'));
+ assert.equal(new Set(months.map(id=>Math.floor(categoryColorIndex(id,{family:'yellow'})/9))).size,5);
+ assert.ok(months.every(id=>Math.floor(categoryColorIndex(id,{family:'yellow'})/9)<8));
+ assert.equal(Math.floor(categoryColorIndex('legacy',{family:'yellow'})/9),2);
+ assert.equal(Math.floor(categoryColorIndex('important',{family:'deep_red'})/9),6);
+});

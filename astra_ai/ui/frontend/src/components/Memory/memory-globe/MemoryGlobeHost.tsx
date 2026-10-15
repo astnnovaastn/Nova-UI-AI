@@ -4,7 +4,7 @@ import {conversationSnapshot} from "../../../conversation";
 import type {GlobeEngine,SelectionInfo} from "./globeEngine";
 import type {GraphData,RawMemoryFile,RawRecord} from "./memoryTypes";
 
-export default function MemoryGlobeHost({active,railOpen,libraryOpen,onSelection,onRecords}:{active:boolean;railOpen:boolean;libraryOpen?:boolean;onSelection?:(selection:SelectionInfo|null)=>void;onRecords?:(records:GraphData)=>void}){
+export default function MemoryGlobeHost({active,libraryOpen,onSelection,onRecords}:{active:boolean;libraryOpen?:boolean;onSelection?:(selection:SelectionInfo|null)=>void;onRecords?:(records:GraphData)=>void}){
  const [connection,setConnection]=useState(()=>conversationSnapshot()),[data,setData]=useState<GraphData|null>(null),[dataScope,setDataScope]=useState(""),[error,setError]=useState(""),[detail,setDetail]=useState<RawRecord|null>(null),[detailError,setDetailError]=useState(""),[detailLoading,setDetailLoading]=useState(false),[undo,setUndo]=useState<{id:string;revision?:number}|null>(null),[actionError,setActionError]=useState("");
  const scopeKey=connection.clientId+":"+connection.guest;
  const engine=useRef<GlobeEngine|null>(null),cache=useRef<GraphData|null>(null),revision=useRef(""),refresh=useRef<()=>void>(()=>{}),selected=useRef<string|null>(null),activity=useRef(new Map<string,number>()),pendingRecall=useRef<{ids:string[];until:number}[]>([]);
@@ -78,7 +78,7 @@ export default function MemoryGlobeHost({active,railOpen,libraryOpen,onSelection
   refresh.current();window.dispatchEvent(new CustomEvent("nova-memory-changed",{detail:{record_id:id,action}}));
  },[select]);
  const ready=useCallback((value:GlobeEngine|null)=>{engine.current=value;if(!value)return;const commands=queuedCommands.current.splice(0);for(const command of commands)applyCommand.current(command);const known=new Set(cache.current?.memories.map(m=>m.id)||[]);for(const item of pendingRecall.current)if(item.until>Date.now())value.recall(item.ids.filter(id=>known.has(id)));pendingRecall.current=pendingRecall.current.filter(item=>{item.ids=item.ids.filter(id=>!known.has(id));return item.ids.length>0&&item.until>Date.now();});},[]);
- return <div className="memory-globe-host" style={{position:"absolute",inset:0,right:railOpen&&!matchMedia("(max-width:700px)").matches?340:0}}>
+ return <div className="memory-globe-host">
   {active&&connection.connected&&dataScope===scopeKey&&data&&<MemoryGlobe hideDetails={libraryOpen} data={data} onReady={ready} onSelection={select} onAction={recordAction} detail={detail} detailLoading={detailLoading} detailError={detailError} theme="obsidian" ambient={false} options={{flows:false,idlePulses:false,maxMemories:Infinity}} style={{background:"var(--widget-surface)",color:"var(--widget-text,#eee)"}}/>}
   {active&&!data&&!error&&<div className="memory-network-notice">{connection.connected?"Loading memory globe…":"Connecting to memory…"}</div>}
   {undo&&dataScope===scopeKey&&connection.connected&&<div className="memory-globe-undo" role="status">Memory forgotten. <button onClick={()=>recordAction("restore",undo.id,undefined,undo.revision).catch(()=>setActionError("Restoration is unavailable. Retry when connected."))}>Restore</button></div>}

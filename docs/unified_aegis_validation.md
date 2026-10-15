@@ -166,3 +166,52 @@ and reduced-motion regressions continue to pass. Background semantic lookup and
 model organization were quota-paused during inspection; local recall and cached
 candidates remain available. The archive has not been claimed fully regrouped:
 reviewed organization continues incrementally when the existing budget permits.
+
+
+## Restrained palette and stable desktop layout — 15 October
+
+This follow-up supersedes the previous eleven-family presentation and weekly
+session patches. The stored registry and its original color assignments remain
+intact. The globe uses five default accents from the supplied reference (blue,
+red, green, violet, pink), with supplied neutral/deep variants. Legacy yellow,
+orange and deep-blue metadata uses compatible reference accents for rendering;
+waiting/approval indicators retain their small status accents. Library swatches
+use the same frontend resolver. Monthly conversation groups receive stable
+accents independent of record count or load order, so a transcript family cannot
+paint the entire globe yellow.
+
+Every month is now one session-theme patch, including months exceeding 600
+messages. The scoped library goes directly from month to days. Legacy week URLs
+remain readable but are no longer emitted in navigation. No transcripts,
+category IDs, record values, timestamps, memberships or history were rewritten.
+The existing Madrid 4 AM boundary remains authoritative. Unlimited registry
+categories and evidence-based reuse/merge validation remain unchanged.
+
+Chat, History and Tasks now share the top Aegis header with a smaller collapse
+control. The desktop conversation and library rails share a responsive 380–440 px
+width. Tasks use the panel's content area without duplicate inner padding or an
+extra workspace identity heading. Their scrollbar has a reserved gutter, and
+search/status controls have room without horizontal overflow.
+
+One persistent left drawing area is reserved regardless of which rail is open.
+The workspace paints the full background, including below the right panel.
+Wheel zoom no longer introduces cursor-dependent pan; explicit validated pan
+commands remain supported. Rotation, click-to-focus, 350 ms transitions, camera
+persistence and the supplied design remain in place.
+
+Validation: 566 backend tests passed, one skipped, five warnings (74.33 seconds);
+105 frontend tests and 43 globe tests passed; TypeScript and production build
+passed. Existing Calculator eval and bundle-size build warnings remain. New
+regressions cover monthly retention without weekly subdivisions, legacy week
+links, direct day counts, duplicate period rejection, restrained stable palette
+assignment, and wheel zoom preserving the camera center at arbitrary pointers.
+
+The running desktop showed eight monthly groups and October's 667 memories with
+direct day drill-down. Canvas bounds stayed x=0, width=768.23 px across library
+and conversation states at the inspected viewport. The header and task filters
+had equal scroll/client widths (no horizontal overflow). Background and canvas
+surface colors matched. A rotating overview sample retained 3,122 memories and
+6,477 connections at 50.0 FPS, 5.30 ms drawing cost, quality 1. This is a live
+sample, not a hardware guarantee. No provider requests or private memory changes
+were required by these presentation corrections. Backend semantic organization
+remains subject to its existing quota pause.
