@@ -1,3 +1,4 @@
+import {notificationSoundEnabled,notificationTarget,newNoticeIds} from './conversation';
 import {VoiceSessionState} from './voiceSession.mjs';
 import {PresenceCapture} from './presenceCapture';
 import {requestedResearchReady} from './taskNotices';
@@ -323,6 +324,23 @@ audioPlayer.onFinished(() => {
 });
 
 const presenceCapture=new PresenceCapture(socket);
+// One bounded, scoped notice surface. Reconnects do not replay chimes.
+let workNoticeAudio:AudioContext|null=null,workNoticeScope='',workNoticeBaseline=false;
+const seenWorkNotices=new Set<string>();
+window.addEventListener('nova-conversation',()=>{const snap=conversationSnapshot();if(snap.guest||workNoticeScope&&workNoticeScope!==snap.sessionId+':'+snap.guest)document.getElementById('aegis-work-notice')?.remove();});
+function armWorkNoticeAudio(){if(!notificationSoundEnabled())return;try{workNoticeAudio??=new AudioContext();void workNoticeAudio.resume().catch(()=>{});}catch{}}
+document.addEventListener('pointerdown',armWorkNoticeAudio,{passive:true});document.addEventListener('keydown',armWorkNoticeAudio,{passive:true});
+function workNoticeChime(){if(!notificationSoundEnabled()||!workNoticeAudio||workNoticeAudio.state!=='running')return;const audio=workNoticeAudio,t=audio.currentTime;for(const [hz,offset] of [[440,0],[660,.09]]){const oscillator=audio.createOscillator(),gain=audio.createGain();oscillator.type='sine';oscillator.frequency.value=hz;gain.gain.setValueAtTime(.0001,t+offset);gain.gain.exponentialRampToValueAtTime(.035,t+offset+.018);gain.gain.exponentialRampToValueAtTime(.0001,t+offset+.3);oscillator.connect(gain);gain.connect(audio.destination);oscillator.start(t+offset);oscillator.stop(t+offset+.32);}}
+function showWorkNotices(items:any[]){
+ const snap=conversationSnapshot(),scope=snap.sessionId+':'+snap.guest;
+ if(scope!==workNoticeScope){workNoticeScope=scope;seenWorkNotices.clear();workNoticeBaseline=false;document.getElementById('aegis-work-notice')?.remove();try{for(const id of JSON.parse(sessionStorage.getItem('nova-notice-seen:'+scope)||'[]'))seenWorkNotices.add(String(id));}catch{}}
+ if(snap.guest)return;const fresh=newNoticeIds(items,seenWorkNotices);try{sessionStorage.setItem('nova-notice-seen:'+scope,JSON.stringify([...seenWorkNotices]));}catch{}
+ const canChime=workNoticeBaseline;workNoticeBaseline=true;if(!fresh.length)return;
+ const item=fresh[fresh.length-1];document.getElementById('aegis-work-notice')?.remove();
+ const box=document.createElement('aside');box.id='aegis-work-notice';box.className='aegis-work-notice';box.setAttribute('aria-label','Aegis notification');
+ const open=document.createElement('button');open.className='aegis-work-notice-open';const kicker=document.createElement('small');kicker.textContent=item.kind==='approval'?'REVIEW NEEDED':'TASK UPDATE';const text=document.createElement('strong');text.textContent=item.title||(item.kind==='approval'?'An action needs your approval':'Your task has an update');const hint=document.createElement('span');hint.textContent='Open tasks and learning →';open.append(kicker,text,hint);open.onclick=()=>{window.dispatchEvent(new CustomEvent('nova-open-work',{detail:notificationTarget(item)}));box.remove();};
+ const close=document.createElement('button');close.className='aegis-work-notice-close';close.setAttribute('aria-label','Dismiss notification');close.textContent='×';close.onclick=()=>box.remove();box.append(open,close);document.body.append(box);if(canChime)workNoticeChime();
+}
 let noticePlaying='',noticeComplete='';
 function acknowledgeNotice(){if(noticePlaying&&noticePlaying===noticeComplete&&!isAudioPlaying){socket.send({type:'notice_delivered',notice_id:noticePlaying});noticePlaying=noticeComplete='';}}
 socket.onBinary((pcm) => {
@@ -365,7 +383,7 @@ socket.onMessage((msg) => {
   if(type==='presence_stop'){presenceCapture.stop();return;}
   if(type==='presence_image_request'){presenceCapture.requestImage(String(msg.notice_id));return;}
   if(type==='presence_result'){presenceCapture.result(String(msg.state));return;}
-  if(type==='operation_notices'){window.dispatchEvent(new CustomEvent('nova-operation-notices',{detail:msg}));return;}
+  if(type==='operation_notices'){showWorkNotices(Array.isArray(msg.items)?msg.items:[]);window.dispatchEvent(new CustomEvent('nova-operation-notices',{detail:msg}));return;}
   if(type==='live_notice_begin'){noticePlaying=String(msg.notice_id);noticeComplete='';return;}
   if(type==='live_notice_complete'){noticeComplete=String(msg.notice_id);acknowledgeNotice();return;}
   if(type==='live_audio_generation'){audioGeneration=String(msg.generation||'');return;}

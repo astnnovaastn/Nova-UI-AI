@@ -30,3 +30,9 @@ export async function conversationLoad(sessionId:string){
 export function conversationDraft(sessionId:string,value?:string){try{const key='nova-draft-'+sessionId;if(value!==undefined)sessionStorage.setItem(key,value);return sessionStorage.getItem(key)||'';}catch{return value||'';}}
 
 export function conversationInterrupt(){for(const m of messages)if(m.status==='streaming'||m.status==='pending')m.status='interrupted';changed();}
+
+/** Notification preferences do not affect microphone or assistant playback. */
+export function notificationSoundEnabled(){try{return localStorage.getItem('nova-notification-sound')!=='off';}catch{return true;}}
+export function setNotificationSound(enabled:boolean){try{localStorage.setItem('nova-notification-sound',enabled?'on':'off');}catch{}window.dispatchEvent(new CustomEvent('nova-notification-sound',{detail:{enabled}}));}
+export function notificationTarget(item:{kind?:string;target?:string}){return {view:item.kind==='approval'?'approvals':'tasks',id:String(item.target||'')};}
+export function newNoticeIds<T extends {id:string}>(items:T[],seen:Set<string>):T[]{const fresh:T[]=[];for(const item of items.slice(-128)){if(!seen.has(item.id)){fresh.push(item);seen.add(item.id);}}while(seen.size>128)seen.delete(seen.values().next().value!);return fresh;}

@@ -58,7 +58,7 @@ const KIND_RGB: Record<LinkKind, string> = {
 };
 const FLOW_COLS = Object.values(KIND_RGB);
 const KIND_FLOW = KIND_RGB;
-const CURVE: Record<LinkKind, number> = { category: 0, entity: 0.5, explicit: 0.4, semantic: 0.45, session: 0.5, catalog: 0.35 };
+const CURVE: Record<LinkKind, number> = { category: .82, entity: 0.5, explicit: 0.4, semantic: 0.45, session: 0.5, catalog: 0.35 };
 const MEANINGFUL = new Set<LinkKind>(["explicit", "semantic", "session"]);
 const EDGE_STYLE = {
   glass: {
@@ -233,7 +233,7 @@ export class GlobeEngine {
     // A category can occupy several dated patches. Highlight its real members and
     // their existing edges, including members placed in more specific topic patches.
     const base = n.cat.split("#")[0];
-    const members = n.kind === "category" ? n.cat.includes("#")?this.nodes.filter(other=>other.mem&&other.cat===n.cat):[...(this.membersByCategory.get(base)??[])] : [n];
+    const members = n.kind === "category" ? n.cat.includes("#")?this.nodes.filter(other=>other.mem&&(other.cat===n.cat||other.cat.startsWith(n.cat+"#"))):[...(this.membersByCategory.get(base)??[])] : [n];
     this.selEdges = [...new Set(members.flatMap(other => other.adj).concat(n.adj))];
     this.focusSet = new Set([n.id, ...members.map(other => other.id), ...this.selEdges.flatMap(e => [e.a.id,e.b.id])]);
     const rho = Math.hypot(n.x, n.z);
@@ -310,6 +310,19 @@ export class GlobeEngine {
     for (const m of data.memories) { const cid=m.displayCategory??m.category;const g = by.get(cid); if (g) g.push(m); else by.set(cid, [m]); }
     for (const c of data.categories) {
       const ms = by.get(c.id) ?? [];
+      if(c.id==='session_themes'&&ms.length){
+        items.push({...c,count:0,totalCount:ms.length});
+        const months=new Map<string,GraphMemory[]>();
+        for(const m of ms){const day=m.date?.slice(0,10)||new Date(m.created||0).toISOString().slice(0,10),month=/^\d{4}-\d{2}/.test(day)?day.slice(0,7):'undated';const group=months.get(month)??[];group.push(m);months.set(month,group);}
+        for(const [month,group] of [...months].sort((a,b)=>a[0].localeCompare(b[0]))){
+          const monthId=c.id+'#'+month,monthLabel=month==='undated'?'Date not recorded':new Intl.DateTimeFormat('en',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(month+'-15T12:00:00Z'));
+          items.push({...c,id:monthId,label:c.label+' · '+monthLabel,count:group.length>600?0:group.length,totalCount:group.length});mainOf.set(monthId,c.id);
+          if(group.length<=600){group.forEach(m=>itemOf.set(m.id,monthId));continue;}
+          const weeks=new Map<string,GraphMemory[]>();for(const m of group){const day=m.date?.slice(0,10)||new Date(m.created||0).toISOString().slice(0,10),d=new Date(day+'T12:00:00Z');const week=Number.isFinite(d.getTime())?(d.setUTCDate(d.getUTCDate()-(d.getUTCDay()+6)%7),d.toISOString().slice(0,10)):'undated';const batch=weeks.get(week)??[];batch.push(m);weeks.set(week,batch);}
+          for(const [week,batch] of [...weeks].sort((a,b)=>a[0].localeCompare(b[0]))){const id=monthId+'#week:'+week;items.push({...c,id,label:'Week of '+week,count:batch.length,totalCount:batch.length});mainOf.set(id,monthId);batch.forEach(m=>itemOf.set(m.id,id));}
+        }
+        continue;
+      }
       const greeting=/^(hello|greetings?|welcome)$/i.test(c.label),chunkSize=180;
       if (ms.length <= chunkSize || greeting) { items.push({ ...c, count: ms.length }); ms.forEach((m) => itemOf.set(m.id, c.id)); continue; }
       const groups = new Map<string, GraphMemory[]>();

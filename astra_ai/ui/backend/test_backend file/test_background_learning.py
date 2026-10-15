@@ -82,7 +82,7 @@ def test_shared_background_budget_pauses(tmp_path):
         with budget.lease(100):pass
 
 
-@pytest.mark.parametrize('filename',['gemini_session.py','runtime_context.py','task_coordination.py','organization_review.py','research_artifacts.py','aegis_ai.py'])
+@pytest.mark.parametrize('filename',['aegis_ai.py','aegis_live_context.py','action_jobs.py','research_learning.py','organizer_runtime.py','learned_capabilities.py'])
 def test_moved_core_infrastructure_cannot_auto_repair(tmp_path,filename):
     from astra_ai.core.learned_capabilities import PROTECTED
     assert filename in PROTECTED

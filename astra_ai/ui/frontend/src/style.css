@@ -1346,3 +1346,7 @@ body::-webkit-scrollbar-thumb {
 .voice-enrollment-progress .current,.voice-enrollment-progress .complete{color:var(--panel-text);border-color:var(--accent-readable);background:color-mix(in srgb,var(--accent-readable) 12%,transparent)}
 #voice-enroll-feedback{font-size:12px;min-height:32px;line-height:1.6;color:var(--panel-text-muted)}
 .voice-profile-wizard[hidden],.voice-profile-home[hidden]{display:none}
+
+.aegis-work-notice{position:fixed;right:22px;top:78px;width:310px;z-index:1300;display:flex;gap:6px;padding:8px;background:var(--panel,#292826);color:var(--panel-text,var(--fg,#eee));border:1px solid var(--border,#7774);border-radius:16px;box-shadow:0 14px 45px #0003;animation:work-notice-enter .2s ease-out;font-family:system-ui}
+.aegis-work-notice button{color:inherit;border:0;background:transparent;cursor:pointer}.aegis-work-notice-open{display:grid;gap:7px;text-align:left;padding:8px;flex:1;min-width:0}.aegis-work-notice-open small{font-size:9px;letter-spacing:.1em;opacity:.6}.aegis-work-notice-open strong{font-size:13px;line-height:1.5;font-weight:500;overflow-wrap:anywhere}.aegis-work-notice-open span{font-size:10px;opacity:.65}.aegis-work-notice-close{align-self:flex-start;font-size:20px;padding:4px 8px}.aegis-work-notice button:focus-visible{outline:2px solid var(--accent-readable,#bc7855);outline-offset:2px;border-radius:8px}
+@keyframes work-notice-enter{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.aegis-work-notice{animation:none}}

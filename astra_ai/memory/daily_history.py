@@ -7,6 +7,8 @@ MADRID = ZoneInfo('Europe/Madrid')
 
 def conversation_day(timestamp):
     try:
+        if isinstance(timestamp,str) and len(timestamp)==10:
+            return datetime.strptime(timestamp,'%Y-%m-%d').date().isoformat()
         date=datetime.fromisoformat(str(timestamp).replace('Z','+00:00'))
         if date.tzinfo is None:date=date.replace(tzinfo=MADRID)
         return (date.astimezone(MADRID)-timedelta(hours=4)).date().isoformat()

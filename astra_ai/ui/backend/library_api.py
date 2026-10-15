@@ -35,9 +35,17 @@ class LibraryService:
         for r in jobs.values():
             if (r['context'].get('profile_id',''),r['context'].get('project_id',''))!=(c.get('profile_id',''),c.get('project_id','')) or r['context'].get('guest'):continue
             commands=[a['name'].replace('_',' ') for a in r['actions']]
+            title=r.get('title') or ', '.join(commands[:3])
+            if len(r['actions'])==1:
+                action=r['actions'][0];args=action.get('arguments',{})
+                if action['name']=='research_action' and r['context'].get('research_id') and self.learning():
+                    research=self.learning().get(r['context']['research_id'],c)
+                    if research.get('status')=='ok':title=research['note']['query']
+                elif action['name']=='capability_action':title='Tool recovery' + (': '+str(args['purpose'])[:140] if args.get('purpose') else '')
+                elif title==args.get('action'):title={'import_research':'Save research to Notes','show_view':'Open Notes','list_notes':'Inspect saved notes','open_note':'Open a saved note','review_note':'Review a saved note','close':'Close Notes'}.get(title,title.replace('_',' '))
             controls=['cancel'] if r['state'] not in {'completed','canceled','failed'} else ['retry'] if r['state']=='failed' else []
             controls+=['resume'] if r.get('paused') and r['state'] not in {'completed','failed','canceled'} else ['pause'] if r['state'] in {'running','queued','waiting_for_retry','waiting_for_ui'} else []
-            result.append({'id':'job:'+r['id'],'source':'job','source_id':r['id'],'background':bool(r['context'].get('background')),'title':r.get('title') or ', '.join(commands[:3]),'state':'paused' if r.get('paused') and r['state'] not in {'completed','failed','canceled'} else r['state'],'created':r['created'],'updated':r['updated'],'version':str(r.get('sequence',0)),'controls':controls,'details':{k:copy.deepcopy(v) for k,v in r.items() if k!='context'}})
+            result.append({'id':'job:'+r['id'],'source':'job','source_id':r['id'],'background':bool(r['context'].get('background')),'title':title,'state':'paused' if r.get('paused') and r['state'] not in {'completed','failed','canceled'} else r['state'],'created':r['created'],'updated':r['updated'],'version':str(r.get('sequence',0)),'controls':controls,'details':{k:copy.deepcopy(v) for k,v in r.items() if k!='context'}})
         self.tasks._ensure()
         with self.tasks.connection() as db:rows=db.execute("SELECT r.id,t.metadata FROM task_runs r JOIN tasks t ON t.id=r.task_id WHERE r.owner_id=?",('local',)).fetchall()
         for row in rows:
@@ -46,8 +54,10 @@ class LibraryService:
             task=self.tasks.get_task('local',r['task_id'])
             result.append({'id':'run:'+r['id'],'source':'run','source_id':r['id'],'title':task['title'],'state':{'succeeded':'completed','cancelled':'canceled'}.get(state,state),'created':r['created_at'],'updated':r['updated_at'],'version':r['updated_at'],'controls':controls,'details':r})
         return result
-    def listing(self,view,c,status='',query='',offset=0,limit=30):
+    def listing(self,view,c,status='',query='',offset=0,limit=30,kind=''):
         rows=self.approvals(c) if view=='approvals' else self.work(c)
+        if view=='tasks' and kind=='learning':
+            rows=[r for r in rows if r.get('background') or any(a.get('name') in {'research_action','capability_action'} for a in r.get('details',{}).get('actions',[]))]
         counts={s:sum(r['state']==s for r in rows) for s in {r['state'] for r in rows}}
         rows=[r for r in rows if (not status or status=='all' or r['state']==status) and (not query or query.casefold() in r['title'].casefold())]
         rows.sort(key=lambda r:(r.get('created') or '',r['id']),reverse=True);offset=max(0,int(offset));limit=max(1,min(100,int(limit)))
@@ -127,9 +137,9 @@ def install(app,get_service,context):
     async def create(request:Request,payload:dict):
         c=context(request);return await asyncio.to_thread(service().memory.memory_action,'create_fact',category=str(payload.get('category','')),key=str(payload.get('key','')),value=payload.get('value'),metadata={'source':'human','evidence':str(payload.get('value','')),'profile_id':c['profile_id'],'project_id':c['project_id'],'session_id':c['session_id']})
     @app.get('/api/memory/library/{view}')
-    async def listing(view:str,request:Request,status:str='',query:str='',offset:int=0,limit:int=30):
+    async def listing(view:str,request:Request,status:str='',query:str='',offset:int=0,limit:int=30,kind:str=''):
         if view not in {'approvals','tasks'}:raise HTTPException(404)
-        return await asyncio.to_thread(service().listing,view,context(request),status,query,offset,limit)
+        return await asyncio.to_thread(service().listing,view,context(request),status,query,offset,limit,kind)
     @app.get('/api/memory/library/{view}/{identifier}')
     async def detail(view:str,identifier:str,request:Request):
         if view not in {'approvals','tasks'}:raise HTTPException(404)

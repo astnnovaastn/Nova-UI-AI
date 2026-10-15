@@ -40,7 +40,7 @@ export function tokenize(s: string): string[] {
 
 // ---------- raw record -> graph memory ----------
 export function rawToMemory(r: RawRecord, kind: GraphMemory["kind"] = "fact", pending = false): GraphMemory {
-  const date = typeof r.attributes?.original_date === "string" ? (r.attributes.original_date as string) : undefined;
+  const date = typeof r.attributes?.conversation_day === "string" ? (r.attributes.conversation_day as string) : typeof r.attributes?.original_date === "string" ? (r.attributes.original_date as string) : undefined;
   const derived = r.attributes?.derived_context === true;
   const text = valueToText(r.content ?? r.value);
   const label = /^derived[_ ]summary/i.test(r.key) ? `Daily trace${date ? " · " + date : ""}` : clip(prettify(r.key), 56);
@@ -221,7 +221,8 @@ export function buildGraph(raw: RawMemoryFile): GraphData {
   }
   const entityIds = new Set(entities.map(e => e.id));
   for (const r of Object.values(raw.entity_graph?.connections ?? {})) {
-    if (r.state === "active" && entityIds.has(r.from) && entityIds.has(r.to)) push({a:"ent:"+r.from,b:"ent:"+r.to,kind:"explicit",weight:1,reason:r.evidence || r.type || "Evidenced relationship"});
+    const a=recs.has(r.from)?r.from:entityIds.has(r.from)?"ent:"+r.from:null,b=recs.has(r.to)?r.to:entityIds.has(r.to)?"ent:"+r.to:null;
+    if (r.state === "active" && a && b) push({a,b,kind:"explicit",weight:1,reason:r.evidence || r.type || "Evidenced relationship"});
   }
   for (const r of Object.values(raw.relationships_v3 ?? {})) {
     if (recs.has(r.from) && recs.has(r.to)) push({ a: r.from, b: r.to, kind: "explicit", weight: 1, reason: r.evidence || "Explicit relationship" });

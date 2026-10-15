@@ -15,7 +15,7 @@ class Notices:
         with self.lock:
             data=self.load()
             if identifier in data['items']:return identifier
-            data['items'][identifier]={'id':identifier,'kind':kind,'target':target,'version':str(version),'details':safe(str(details))[:4000],'created':now(),'state':'pending','session_id':context.get('session_id',''),'profile_id':context.get('profile_id',''),'project_id':context.get('project_id','')};atomic(self.path,data)
+            data['items'][identifier]={'id':identifier,'kind':kind,'target':target,'version':str(version),'title':safe(str(details.get('title') or details.get('message') or ''))[:160] if isinstance(details,dict) else '', 'details':safe(str(details))[:4000],'created':now(),'state':'pending','session_id':context.get('session_id',''),'profile_id':context.get('profile_id',''),'project_id':context.get('project_id','')};atomic(self.path,data)
         return identifier
     def listing(self,context):
         with self.lock:items=self.load()['items']

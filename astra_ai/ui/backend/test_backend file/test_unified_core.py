@@ -45,7 +45,7 @@ def test_completed_turn_cannot_clear_a_new_utterance(tmp_path, monkeypatch):
 
 def test_core_is_import_safe_and_backend_is_compatibility_adapter():
     from astra_ai.core.aegis_ai import AegisCore
-    from astra_ai.core.gemini_session import GeminiLiveSession as CoreSession
+    from astra_ai.core.aegis_ai import GeminiLiveSession as CoreSession
     assert CoreSession is GeminiLiveSession
     assert AegisCore.__module__.startswith('astra_ai.core')
 
@@ -104,7 +104,7 @@ def test_completed_typed_message_is_not_replayed_after_restart(tmp_path):
 
 def test_tool_latency_does_not_block_the_next_provider_transcript(tmp_path):
     async def scenario():
-        from astra_ai.core.gemini_session import CURRENT_OPERATION
+        from astra_ai.core.aegis_ai import CURRENT_OPERATION
         events=[];entered=asyncio.Event();release=asyncio.Event();captured=[]
         async def operation(name,args):
             captured.append(dict(CURRENT_OPERATION.get()));entered.set();await release.wait()
@@ -131,7 +131,7 @@ def test_tool_latency_does_not_block_the_next_provider_transcript(tmp_path):
     'Can you open my notes widget and put in all the search information about OpenAI?',
 ])
 def test_october_14_requests_keep_priority_over_late_development_results(utterance):
-    from astra_ai.core.working_context import WorkingContext
+    from astra_ai.core.aegis_live_context import WorkingContext
     from astra_ai.core.aegis_live_context import AEGIS_LIVE_PERSONA
     working=WorkingContext();working.begin('Test the camera code','old-development')
     working.begin(utterance,'current-request')

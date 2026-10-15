@@ -2,13 +2,13 @@
  * Conversion matrices: https://bottosson.github.io/posts/oklab/
  * Hue interpolation: CSS color-mix(in oklch), shorter hue.
  */
-export const MEMORY_BASES = { blue:'#5b8def',gray_blue:'#8b95a7',red:'#d9544f',green:'#6fcf7f',violet:'#9b6bff',pink:'#ffb3c1',deep_red:'#8f1d2c',deep_violet:'#5a3aa8' } as const;
+export const MEMORY_BASES = { blue:'#5b8def',gray_blue:'#8b95a7',red:'#d9544f',green:'#6fcf7f',violet:'#9b6bff',pink:'#ffb3c1',deep_red:'#8f1d2c',deep_violet:'#5a3aa8',yellow:'#F8E401',orange:'#C58D3D',deep_blue:'#040273' } as const;
 export const MEMORY_HIGHLIGHT = '#DCD7CE';
 export type ColorFamily = keyof typeof MEMORY_BASES;
 export interface CategoryPalette { family?: string; blend_percent?: number; base?: string; blend_with?: string }
-const families: ColorFamily[] = ['blue','gray_blue','red','green','violet','pink','deep_red','deep_violet'];
+const families: ColorFamily[] = ['blue','gray_blue','red','green','violet','pink','deep_red','deep_violet','yellow','orange','deep_blue'];
 const blends = [0, .08, .0914, .1029, .1143, .1257, .1371, .1486, .16];
-const aliases:Record<string,ColorFamily>={orange:'pink',deep_blue:'gray_blue',yellow:'green'};
+const aliases:Record<string,ColorFamily>={};
 export const stableColorHash = (id: string) => { let h = 2166136261; for (const c of id) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
 type Triple = [number, number, number];
 const linear = (v: number) => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4;
@@ -33,7 +33,7 @@ export function categoryColorIndex(id: string, palette?: CategoryPalette): numbe
   const base = id.split('#')[0], hash = stableColorHash(base);
   const supplied=aliases[palette?.family||'']||palette?.family;
   let family = families.includes(supplied as ColorFamily) ? supplied as ColorFamily : undefined;
-  if (!family) family = /identity|knowledge|research|expertise|user.message/i.test(base) ? 'blue' : /session|conversation|chat|trace|message|task|project|action/i.test(base) ? 'pink' : /pattern|connection|relationship|privacy|media|rule|instruction/i.test(base) ? 'violet' : /state|activity|system|management/i.test(base) ? 'red' : (['blue','gray_blue','red','green','violet','pink','deep_red','deep_violet'] as ColorFamily[])[hash % 8];
+  if (!family) family = families[hash % families.length];
   const value = Number(palette?.blend_percent), amount = Number.isFinite(value) ? Math.max(.08, Math.min(.16, value/100)) : blends[1 + (hash >>> 4) % (blends.length-1)];
   let shade = 1; for (let i=2; i<blends.length; i++) if (Math.abs(blends[i]-amount) < Math.abs(blends[shade]-amount)) shade = i;
   return families.indexOf(family)*blends.length + shade;

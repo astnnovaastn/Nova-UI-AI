@@ -11,9 +11,9 @@ export default function LearningReview({active}) {
   return () => window.removeEventListener('nova-conversation', changed);
  }, []);
  const key = contextKey(connection), warmRetries = useRef(0);
- useEffect(() => {warmRetries.current=0;},[key]);
+ useEffect(() => {warmRetries.current=0;setItems([]);setStatus(null);setError('');setBusy('');},[key]);
+ useEffect(()=>{if(!active)return;let timer;const changed=()=>{clearTimeout(timer);timer=setTimeout(()=>setRevision(v=>v+1),250);};window.addEventListener('nova-library-changed',changed);const interval=setInterval(changed,30000);return()=>{clearTimeout(timer);clearInterval(interval);window.removeEventListener('nova-library-changed',changed);};},[active]);
  useEffect(() => {
-  setItems([]); setStatus(null); setError(''); setBusy('');
   if (!active || connection.guest || !connection.connected) return;
   let warmTimer;
   const controller = new AbortController(), headers = {'X-Nova-Client':connection.clientId};

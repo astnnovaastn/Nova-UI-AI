@@ -54,7 +54,7 @@ export default function MemoryGlobeHost({active,railOpen,libraryOpen,onSelection
  },[connection.clientId,connection.connected,connection.guest]);
  useEffect(()=>{
   const resolve=(id:string)=>{if(id?.startsWith("category:"))return "cat:"+id.slice(9);if(cache.current?.entities.some(e=>e.id===id))return "ent:"+id;return id;};
-  const choose=(event:Event)=>engine.current?.select(resolve((event as CustomEvent).detail?.id)||null);
+  const choose=(event:Event)=>(()=>{const id=resolve((event as CustomEvent).detail?.id)||null;if(!id)return engine.current?.select(null);let target=id;while(target.includes('#')&&!cache.current?.layout?.nodes.some(n=>n.id===target))target=target.slice(0,target.lastIndexOf('#'));engine.current?.select(target);})();
   const command=(event:Event)=>{
    const v=(event as CustomEvent).detail||{};if(["rail","session","filter","day"].includes(v.action))return;
    let result:{status:string;reason?:string};

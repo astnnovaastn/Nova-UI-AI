@@ -6,20 +6,22 @@ Implementation date: 15 October 2026. Desktop scope; mobile work remains paused.
 
 | Module | Responsibility |
 |---|---|
-| `astra_ai/core/aegis_ai.py` | Import-safe public core and compatibility facade. |
-| `astra_ai/core/gemini_session.py` | Canonical provider configuration, tool declarations, Live turns, text input, output transcription and asynchronous tools. |
-| `astra_ai/core/runtime_context.py` | Shared capability descriptions, bounded UI context and activity events. |
-| `astra_ai/core/working_context.py` | Latest request and a bounded set of actual operation references; no hidden reasoning transcript. |
-| `astra_ai/core/action_jobs.py` | Existing durable executor, concurrency, dependencies, reconciliation and safe result references. |
-| `astra_ai/core/task_coordination.py` | Operational-plan adapter from existing saved tasks into that executor. |
-| `astra_ai/core/research_artifacts.py` | Immutable scoped reports, configured connectors, report pages and verified Notes import. |
-| `astra_ai/core/research_learning.py` | Existing research queue, Markdown documents and external-knowledge index. |
-| `astra_ai/memory/organizer_runtime.py` | Incremental Groq organization through the existing background budget. |
-| `astra_ai/memory/organization_review.py` | Revision-bound Gemini review of ambiguous content merges. |
-| `astra_ai/ui/backend/server.py` | Browser connections, transport, current-user scope resolution and validated UI delivery. |
+| `astra_ai/core/aegis_ai.py` | Canonical Gemini Live provider, declarations, turns, input/output, import-safe public core and compatibility facade. |
+| `astra_ai/core/aegis_live_context.py` | Shared prompt, runtime capability metadata, UI context and bounded per-conversation working references. |
+| `astra_ai/core/action_jobs.py` | Existing durable queue, operational planning, dependencies, reconciliation and completed-result references. |
+| `astra_ai/core/research_learning.py` | Configured research connectors, immutable scoped reports, Markdown knowledge and verified Notes transfer. |
+| `astra_ai/memory/organizer_runtime.py` | Incremental Groq proposals and source-backed Gemini organization review using the shared budget. |
+| `astra_ai/ui/backend/server.py` | Browser connections, audio transport, current-user scope resolution and validated UI delivery. |
 
-Backend `gemini_live`, `aegis_runtime` and `action_jobs` imports alias the same
-core modules; they do not start competing engines. The former standalone entry
+Six overlapping implementation modules were consolidated into these existing
+owners on 15 October. Their imports and tests were migrated, and their retired
+source files removed from the live installation. Backend compatibility import
+names remain small aliases for established callers. UI components and tests
+remain in their existing component/test directories; temporary validation
+artifacts are ignored and never shipped as production code.
+
+Backend `gemini_live`, `aegis_runtime` and `action_jobs` imports alias their
+canonical core modules; they do not start competing engines. The former standalone entry
 point is preserved byte-for-byte in `legacy_aegis_ai.py`, loaded only for explicit
 legacy callers or command-line execution. `teastai.py` is not activated.
 The old `TextChat` class remains available to compatibility callers and its
@@ -155,3 +157,43 @@ Runtime memory, learned research, journals, credentials and generated artifacts
 remain excluded from Git. Rollback consists of restoring the previous source
 revision and retaining compatibility imports; authoritative memory is never
 replaced by an older code checkout.
+
+## Desktop work and organization follow-up
+
+The conversation panel has Chat, History and Tasks tabs. Tasks contains separate
+Tasks, Learning and Approvals views with remembered filters and reading position.
+It reads the same authoritative stores as the library. Progress percentages are
+shown only when actual completed and total steps are recorded. Status changes
+refresh quietly; they do not reload the message log. Approval decisions use the
+same revision-bound service as the library and retain recorded timestamps.
+
+A scoped notification opens its exact originating task or approval. A quiet
+synthesized two-tone chime plays for a new notice after browser audio activation;
+unchanged polling, reconnects and the initial backlog do not replay sounds.
+Sound can be turned off independently of microphone mute and assistant playback.
+No proprietary notification audio asset is copied. A direct Memory launcher sits
+above Theme; the existing Settings entry remains available.
+
+Session themes are presented by month, then week and day using Madrid's 4 AM
+conversation boundary. Large months use week patches in the globe; all original
+dots and timestamps remain. Counts and record pages use the same period resolver.
+Category strands curve according to real endpoint geometry, without invented
+links. Singleton observation relays that merely repeat a fact's label are omitted
+from rendering while their source records remain stored and inspectable.
+
+Palette version 4 restores actual yellow, orange and deep blue rather than aliases
+for other colors. The supplied eight bases remain; eleven stable families derive
+bounded perceptual shades. Only untouched builtin defaults are redistributed;
+explicit family choices and category history remain. Stores are backed up before
+this additive metadata migration.
+
+Paraphrase collections require a source-backed model review; word spelling is
+not the grouping rule. Review reads complete bounded passages, checks revisions
+again after model latency, and keeps every original value and ID. Existing local
+record vectors can supply candidate neighbors without another embedding request.
+Model work remains sequential within the existing background budget. An exhausted
+budget leaves work inspectable and queued; this rollout does not reset quotas.
+
+On reconnect, bounded research/note handles are restored from completed durable
+steps belonging to the same logical conversation and scope. Full reports and
+unrelated conversation history are not inserted into the working state.

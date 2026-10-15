@@ -43,13 +43,47 @@ def categories(manager,profile='',project='',query='',offset=0,limit=50,state='a
     items.sort(key=lambda r:(r['title'].casefold(),r['id']));offset=max(0,int(offset));limit=max(1,min(100,int(limit)))
     return {'status':'ok','revision':revision,'categories':items[offset:offset+limit],'total':len(items),'offset':offset,'limit':limit}
 
+def period_day(record):
+    from .daily_history import conversation_day
+    return conversation_day(record.get('attributes',{}).get('original_date') or record.get('created'))
+
+
+def period_parts(record):
+    from datetime import date,timedelta
+    day=period_day(record)
+    if day=='undated':return ('undated','undated','undated')
+    stamp=date.fromisoformat(day);week=(stamp-timedelta(days=stamp.weekday())).isoformat()
+    return day[:7],week,day
+
+
 def page(manager,profile='',project='',category='',query='',state='all',offset=0,limit=20):
     rows,records,members,revision=snapshot(manager,profile,project,state)
-    ids=members.get(category.split('#')[0],set()) if category else records.keys()
+    base,*parts=category.split('#');ids=members.get(base,set()) if category else records.keys()
     result=[records[rid] for rid in ids if not query or all(w in canonical(records[rid]).casefold() for w in query.casefold().split())]
+    collections=[];parent=''
+    if base=='session_themes':
+        def matches(record):
+            month,week,day=period_parts(record)
+            return (not parts or month==parts[0]) and (len(parts)<2 or parts[1]=='week:'+week) and (len(parts)<3 or parts[2]=='day:'+day) and len(parts)<=3
+        result=[r for r in result if matches(r)]
+        grouped={}
+        if len(parts)<3:
+            for record in result:
+                month,week,day=period_parts(record)
+                suffix=month if not parts else 'week:'+week if len(parts)==1 else 'day:'+day
+                grouped.setdefault(suffix,[]).append(record['id'])
+            for suffix,group in sorted(grouped.items(),reverse=True):
+                identifier=category+'#'+suffix
+                title=('Date not recorded' if suffix=='undated' else suffix) if not parts else ('Week of '+suffix[5:] if len(parts)==1 else suffix[4:])
+                if not parts and suffix!='undated':
+                    from datetime import date
+                    title=date.fromisoformat(suffix+'-01').strftime('%B %Y')
+                collections.append({'id':identifier,'title':title,'count':len(group),'kind':'month' if not parts else 'week' if len(parts)==1 else 'day'})
+        parent=category.rsplit('#',1)[0] if parts else ''
     result.sort(key=lambda r:(r.get('updated') or r.get('created') or '',r['id']),reverse=True)
     offset=max(0,int(offset));limit=max(1,min(100,int(limit)))
-    return {'status':'ok','revision':revision,'matches':result[offset:offset+limit],'total':len(result),'offset':offset,'limit':limit}
+    return {'status':'ok','revision':revision,'matches':result[offset:offset+limit],'total':len(result),'offset':offset,'limit':limit,'collections':collections,'parent':parent}
+
 
 def approval_token(proposal):return stable('approval-v1',canonical(proposal))
 

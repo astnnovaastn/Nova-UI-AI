@@ -28,6 +28,20 @@ class FixtureEmbeddings:
         return [0, 0, 1, 0]
 
 
+def test_organizer_uses_cached_record_vectors_without_query_requests(tmp_path):
+    m=SharedMemory(memory_path=tmp_path/'m.json',transcript_path=tmp_path/'history.json');m.ensure_ready()
+    one=m.save_fact('notes','car_a','My automobile is blue')['id']
+    two=m.save_fact('notes','car_b','I use a vehicle to commute')['id']
+    m.save_fact('notes','plant','I grow orchids')
+    provider=FixtureEmbeddings();m.configure_semantic(provider,'enabled')
+    m.semantic.backfill(limit=4);calls=len(provider.calls)
+    assert [r['id'] for r in m.semantic.record_neighbors([one])]==[two]
+    assert len(provider.calls)==calls
+    assert m.semantic.record_neighbors([one],profile_id='different')==[]
+    m.memory_action('update',record_id=two,value='I grow a flower')
+    assert m.semantic.record_neighbors([one])==[]
+
+
 @pytest.fixture
 def memory(tmp_path):
     manager = SharedMemory(memory_path=tmp_path/'memory.json', transcript_path=tmp_path/'history.json')

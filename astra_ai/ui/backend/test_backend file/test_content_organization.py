@@ -1,5 +1,5 @@
 from astra_ai.memory.shared_memory import SharedMemory
-from astra_ai.memory.organization_review import OrganizationReview
+from astra_ai.memory.organizer_runtime import OrganizationReview
 from astra_ai.memory.globe_topics import topics
 
 def fixture(tmp_path):
@@ -45,3 +45,30 @@ def test_review_rejects_changed_evidence_and_cross_scope(tmp_path):
     assert r.process_one()['state']=='unresolved' and not called
     c,_=category(m,'Owner private group','Owner-only details','other')
     r.enqueue([{'category_id':a,'merge_id':c}]);assert r.process_one() is None
+
+
+def test_reviewed_paraphrases_form_one_collection_without_rewriting_facts(tmp_path):
+    m=fixture(tmp_path)
+    one=m.save_fact('notes','animation_a','Build smooth motion between screens')['id']
+    two=m.save_fact('notes','animation_b','Create fluid transitions when changing views')['id']
+    original=m.load()['records']
+    r=OrganizationReview(m,lambda payload:{'compatible':True,'reason':'Both describe UI motion design','evidence_ids':[one,two]})
+    r.enqueue_groups([{'label':'Interface motion','member_ids':[one,two]}])
+    assert r.process_one()['state']=='applied'
+    groups=m.load()['topic_groups'];assert len(groups)==1
+    assert set(next(iter(groups.values()))['member_ids'])=={one,two}
+    assert m.load()['records']==original
+    r.enqueue_groups([{'label':'Interface motion','member_ids':[one,two]}])
+    assert r.process_one() is None
+
+
+def test_group_review_never_accepts_incomplete_or_private_evidence(tmp_path):
+    m=fixture(tmp_path)
+    one=m.save_fact('notes','legal','Acts passed by parliament')['id']
+    two=m.save_fact('notes','stage','Acting on stage')['id']
+    r=OrganizationReview(m,lambda payload:{'compatible':True,'reason':'Incomplete coverage','evidence_ids':[one]})
+    r.enqueue_groups([{'label':'Acts','member_ids':[one,two]}]);assert r.process_one()['state']=='unresolved'
+    assert not m.load().get('topic_groups')
+    with m._lock:
+        data=m.load();data['records'][two]['private']=True;m._commit(data)
+    r.enqueue_groups([{'label':'Private group','member_ids':[one,two]}]);assert r.process_one() is None

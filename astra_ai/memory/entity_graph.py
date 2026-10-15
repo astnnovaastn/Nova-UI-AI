@@ -31,6 +31,7 @@ def local_organize(manager):
         for r in m['records'].values():
             if lifecycle(r,m['_meta'])!='active':continue
             typ='project' if r['category']=='task_project_tracking' else 'person' if r['category']=='user_identity' and r['key']=='name' else 'concept'
+            if typ=='concept':continue  # Concepts require named source evidence, not one mirror per fact.
             label=str(r['value'])[:80] if typ=='person' else r['key'].replace('_',' ')
             identity=stable('entity',typ,normal(label),r.get('profile_id',''),r.get('project_id',''),r['id'])
             if r['id'] in covered:

@@ -195,6 +195,25 @@ class SemanticRecall:
             self.last_error = str(exc) if isinstance(exc, EmbeddingPaused) else type(exc).__name__
             return {'status': 'paused', 'count': count, 'reason': self.last_error}
 
+    def record_neighbors(self,record_ids,profile_id='',project_id='',limit=8):
+        """Local cached-vector candidates for organization. No provider requests."""
+        if not self.provider or self.mode=='off':return []
+        records=self.manager._eligible_sources(profile_id=profile_id,project_id=project_id)
+        records={r['id']:r for r in records if r.get('kind')=='fact' and (r.get('profile_id',''),r.get('project_id',''))==(profile_id,project_id)}
+        try:
+            with self.connection() as conn:
+                vectors={rid:blob for rid,digest,model,blob in conn.execute('SELECT id,digest,model,vector FROM vectors') if rid in records and model==self.provider.model and self._digest(records[rid])[0]==digest}
+            seeds=[vectors[rid] for rid in list(record_ids)[:4] if rid in vectors];ranked=[]
+            for rid,blob in vectors.items():
+                if rid in record_ids:continue
+                values=array('f');values.frombytes(blob);score=0
+                for seed in seeds:
+                    other=array('f');other.frombytes(seed)
+                    if len(values)==len(other):score=max(score,sum(a*b for a,b in zip(values,other)))
+                if score>=.65:ranked.append((score,rid))
+            return [records[rid] for _,rid in sorted(ranked,key=lambda pair:(-pair[0],pair[1]))[:max(1,min(12,limit))]]
+        except Exception:return []
+
     def search(self, query, sources, limit=40, scope_key=''):
         if not self.provider or self.mode == 'off' or not query.strip():
             return []

@@ -8,9 +8,9 @@ screenshots are excluded from source delivery.
 
 | Check | Result |
 |---|---|
-| Backend regression suite | 558 passed, 1 skipped, 5 warnings; 63.97 seconds. |
-| Frontend Node tests | 104 passed; no failures or skips. |
-| Supplied globe regression suite | 39 passed; no failures or skips. |
+| Backend regression suite | 566 passed, 1 skipped, 5 warnings; 70.05 seconds. |
+| Frontend Node tests | 105 passed; no failures or skips. |
+| Supplied globe regression suite | 42 passed; no failures or skips. |
 | TypeScript `tsc --noEmit` | Passed. |
 | Vite production build | Passed; 131 modules transformed. |
 | Source credential-pattern audit | No credential-like strings found in changed/new source. |
@@ -131,3 +131,38 @@ the source revision restores compatibility code without restoring old memory
 files over current authoritative stores. Organization creates its own backup
 before its first additive commit; original evidence and reversible merge history
 remain authoritative.
+
+## Consolidation and desktop work follow-up — 15 October
+
+Six overlapping production modules were folded into the existing Aegis,
+Live-context, action-jobs, research-learning and organizer modules. All active
+imports were migrated. Compatibility adapters remain; no competing engines or
+writers were introduced. Original memory records were not rewritten. Obsolete
+local code-generation helpers are removed separately from production source.
+
+Additional checks cover reviewed paraphrase collections, complete evidence and
+privacy rejection, local cached-vector neighbors with no API calls, stale vector
+suppression, month/week/day count consistency, the Madrid 4 AM boundary, date-only
+historical labels, explicit palette-choice preservation, restored same-conversation
+research handles, and folded relays retaining real connection endpoints.
+The period suite was rerun after its final date-only correction: 18 passed,
+1 skipped. Notification tests cover large backlogs, duplicate polling, bounded
+seen IDs and exact task/approval targets. Sound uses synthesized tones, activated
+by a browser gesture, and can be disabled independently of the microphone.
+Physical listening to the notification chime is not represented as an automated
+audio-quality measurement.
+
+Desktop inspection verified notification-to-task navigation and the dedicated
+Tasks, Learning and Approvals views. The task counter includes queued/retrying
+work; recorded step counts drive percentages. Technical data stays in a
+secondary disclosure. Registry metadata migration backs up stores before
+redistributing untouched builtin defaults across eleven genuine color families.
+Explicit choices, source values, IDs and original timestamps remain intact.
+
+With 3,122 memories and 6,486 retained connections, a populated desktop sample
+reported 47.2 FPS, 5.80 ms drawing cost and quality 1. This is one live development
+sample, not a percentile or an older-hardware guarantee. All supplied large-data
+and reduced-motion regressions continue to pass. Background semantic lookup and
+model organization were quota-paused during inspection; local recall and cached
+candidates remain available. The archive has not been claimed fully regrouped:
+reviewed organization continues incrementally when the existing budget permits.

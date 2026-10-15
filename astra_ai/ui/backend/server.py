@@ -2292,7 +2292,7 @@ def _save_search_record(query: str, summary: str, results: Any, record_id: Optio
 _research_services = {}
 
 def get_research_services():
-    from astra_ai.core.research_artifacts import ResearchArtifacts, ResearchSearch
+    from astra_ai.core.research_learning import ResearchArtifacts, ResearchSearch
     path=state.live_memory.memory_path.parent/'research_artifacts'/'reports.json'
     key=str(path.resolve())
     if key not in _research_services:
@@ -2301,7 +2301,7 @@ def get_research_services():
     return _research_services[key]
 
 async def _aegis_search_web(arguments):
-    from astra_ai.core.gemini_session import CURRENT_OPERATION
+    from astra_ai.core.aegis_ai import CURRENT_OPERATION
     context=CURRENT_OPERATION.get() or {}
     if not context.get('client_id') and not context.get('background'):return {'status':'rejected','reason':'connected_search_context_required'}
     artifacts,service=get_research_services()
@@ -2906,7 +2906,7 @@ async def _gemini_search_widget_action(client_id: str, arguments: Dict[str, Any]
         "show_saved_search": "restore_search_result",
         "delete_history": "delete_search_result",
     }.get(action, action)
-    from astra_ai.core.gemini_session import CURRENT_OPERATION
+    from astra_ai.core.aegis_ai import CURRENT_OPERATION
     operation_context=CURRENT_OPERATION.get() or {}
     request_id = str(operation_context.get('request_id') or f"gemini-search-widget-{uuid.uuid4().hex}")
     if not client_id:
@@ -2981,7 +2981,7 @@ async def _gemini_search_widget_action(client_id: str, arguments: Dict[str, Any]
             failure={'type':'widget_control','widget':'search','command':'show_results','request_id':request_id,'query':arguments.get('query',''),'loading':False,'error':result.get('reason','Research unavailable'),'answer':'','results':[]}
             state.update_search_widget_context(failure);await ws_manager.send_to_client_id(client_id,failure)
             return result
-        from astra_ai.core.gemini_session import CURRENT_OPERATION
+        from astra_ai.core.aegis_ai import CURRENT_OPERATION
         artifacts,_=get_research_services()
         artifact=artifacts.get(result['research_id'],CURRENT_OPERATION.get() or {})['artifact']
         payload={'type':'widget_control','widget':'search','command':'show_results','request_id':request_id,
@@ -3090,7 +3090,7 @@ async def _gemini_notes_action(client_id: str, arguments: Dict[str, Any]) -> Dic
             }
         return {"status": "unavailable", "error": "no_connected_client"}
     if action == 'import_research':
-        from astra_ai.core.gemini_session import CURRENT_OPERATION
+        from astra_ai.core.aegis_ai import CURRENT_OPERATION
         context=CURRENT_OPERATION.get() or {}
         if not context.get('client_id') or context.get('guest'):return {'status':'rejected','reason':'owner_connection_required'}
         artifacts,_=get_research_services()
@@ -5211,7 +5211,7 @@ async def lifespan(app: FastAPI):
     background_budget=BackgroundBudget(state.live_memory.memory_path.parent/'background_budget.json')
     background_model=BackgroundModel(_get_groq_api_key,background_budget)
     state.memory_organizer.background_budget=background_budget
-    from astra_ai.memory.organization_review import OrganizationReview, GeminiMergeReviewer
+    from astra_ai.memory.organizer_runtime import OrganizationReview, GeminiMergeReviewer
     state.memory_organizer.organization_review=OrganizationReview(state.live_memory,GeminiMergeReviewer(lambda:state.gemini_api_key,background_budget))
     learning_service=ResearchLearning(learned_root,state.live_memory,action_jobs,_background_search,background_model.summarize)
     capability_service=LearnedCapabilities(learned_root,Path(__file__).resolve().parents[3],state.live_memory,action_jobs,_dispatch_aegis_tool,background_model)
@@ -5232,7 +5232,7 @@ async def lifespan(app: FastAPI):
     calendar_store.initialize()
     task_store.initialize()
 
-    from astra_ai.core.task_coordination import TaskCoordinator
+    from astra_ai.core.action_jobs import TaskCoordinator
     async def current_run_state(identifier):
         return (await asyncio.to_thread(task_store.get_run,'local',identifier))['status']
     coordinator=TaskCoordinator(action_jobs,background_model,ALL_AEGIS_TOOLS,
@@ -5561,7 +5561,7 @@ async def conversation_operation(payload:Dict[str,Any]):
     except Exception:return JSONResponse(status_code=503,content={"status":"failed","reason":"Conversation storage unavailable; retry without losing your draft."})
 
 async def _dispatch_aegis_tool(name,arguments,context,operation_id):
-    from astra_ai.core.gemini_session import CURRENT_OPERATION
+    from astra_ai.core.aegis_ai import CURRENT_OPERATION
     token=CURRENT_OPERATION.set({**context,'operation_id':operation_id})
     try:return await _dispatch_scoped_aegis_tool(name,arguments,context,operation_id)
     finally:CURRENT_OPERATION.reset(token)
@@ -5670,7 +5670,7 @@ async def _background_search(query):
                 from astra_ai.memory.shared_memory import atomic
                 atomic(background_budget.path,data)
         await asyncio.to_thread(reserve)
-    from astra_ai.core.gemini_session import CURRENT_OPERATION
+    from astra_ai.core.aegis_ai import CURRENT_OPERATION
     context=CURRENT_OPERATION.get() or {}
     artifacts,service=get_research_services()
     from astra_ai.memory.shared_memory import stable
@@ -5798,7 +5798,8 @@ async def cancel_action_job(job_id:str,request:Request):
 
 async def _dispatch_registered_operation(client_id: str, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     if name == "read_ui_context":
-        return ui_context(client_id,[d["name"] for d in MEMORY_TOOL_DECLARATIONS + MEMORY_EVENT_TOOL_DECLARATIONS + WIDGET_TOOL_DECLARATIONS + ACTION_TOOL_DECLARATIONS])
+        from astra_ai.core.aegis_ai import CURRENT_OPERATION
+        return {**ui_context(client_id,[d["name"] for d in MEMORY_TOOL_DECLARATIONS + MEMORY_EVENT_TOOL_DECLARATIONS + WIDGET_TOOL_DECLARATIONS + ACTION_TOOL_DECLARATIONS]),'recent_operations':await asyncio.to_thread(action_jobs.recent_references,CURRENT_OPERATION.get() or {})}
     if name == "calendar_create_event":
         normalized = dict(arguments)
         normalized["action"] = "create_event"
@@ -5884,7 +5885,7 @@ async def _start_gemini_voice(websocket: WebSocket, *, reset_retry: bool = True,
     client_id = ws_manager.client_id(websocket)
 
     async def operation_executor(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        from astra_ai.core.gemini_session import CURRENT_OPERATION
+        from astra_ai.core.aegis_ai import CURRENT_OPERATION
         live=state.live_sessions.get(websocket)
         captured=CURRENT_OPERATION.get()
         ctx={"client_id":client_id,"session_id":getattr(live,"session_id",CHAT_SESSIONS.get(client_id,"")),"turn_id":getattr(live,"_turn_id",""),"user_text":" ".join(getattr(live,"_input_parts",[])),"guest":bool(getattr(live,"guest",False)),"profile_id":getattr(live,"profile_id",""),"project_id":getattr(live,"project_id","")}
@@ -8339,7 +8340,7 @@ async def check_operation_notices(socket):
         if work['state'] in {'completed','failed','waiting_approval','waiting_input'} and (not work.get('background') or work['state']=='failed'):
             await asyncio.to_thread(notice_store.enqueue,'job' if work['source']=='job' else 'task',work['id'],work['state'] if work['source']=='job' else work['version'],{'title':work['title'],'state':work['state'],'task_id':work['id']},c)
     items=await asyncio.to_thread(notice_store.listing,c)
-    await ws_manager.send_to_client(socket,{'type':'operation_notices','items':[{k:r.get(k) for k in ('id','kind','target','state','created')} for r in items if r['state'] not in {'delivered','dismissed'}]})
+    await ws_manager.send_to_client(socket,{'type':'operation_notices','items':[{k:r.get(k) for k in ('id','kind','target','state','created','title','version')} for r in items if r['state'] not in {'delivered','dismissed'}]})
     for item in items:
         if item['state'] in {'delivered','dismissed'}:continue
         if item['kind']=='approval':

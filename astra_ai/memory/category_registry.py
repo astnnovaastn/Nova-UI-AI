@@ -3,10 +3,10 @@ import copy
 from dataclasses import asdict, replace
 from .category_policy import POLICIES, matches_scope
 
-VERSION=3
-PALETTE={'blue':'#5b8def','gray_blue':'#8b95a7','red':'#d9544f','green':'#6fcf7f','violet':'#9b6bff','pink':'#ffb3c1','deep_red':'#8f1d2c','deep_violet':'#5a3aa8','orange':'#ffb3c1','deep_blue':'#8b95a7','yellow':'#6fcf7f','highlight':'#DCD7CE'}
-FAMILIES=('blue','gray_blue','red','green','violet','pink','deep_red','deep_violet')
-COMPATIBLE_FAMILIES=FAMILIES+('orange','deep_blue','yellow')
+VERSION=4
+PALETTE={'blue':'#5b8def','gray_blue':'#8b95a7','red':'#d9544f','green':'#6fcf7f','violet':'#9b6bff','pink':'#ffb3c1','deep_red':'#8f1d2c','deep_violet':'#5a3aa8','orange':'#C58D3D','deep_blue':'#040273','yellow':'#F8E401','highlight':'#DCD7CE'}
+FAMILIES=('blue','gray_blue','red','green','violet','pink','deep_red','deep_violet','yellow','orange','deep_blue')
+COMPATIBLE_FAMILIES=FAMILIES
 
 def registry(memory):
     from .shared_memory import stable
@@ -72,8 +72,18 @@ def prepare(manager):
         memory=manager.load()
         if memory['_meta'].get('category_registry_version')==VERSION:return manager.stats(memory)
         for path in (manager.memory_path,manager.transcript_path,manager.forgotten_path):manager._backup(path,'before_category_registry')
-        registry(memory);memory['_meta']['category_registry_version']=VERSION
-        memory['_meta']['memory_palette']={'version':3,'bases':PALETTE,'mix_space':'oklch'}
+        rows=registry(memory)
+        # Only replace untouched builtin defaults. User-selected families remain intact.
+        from .shared_memory import now
+        for i,(cid,policy) in enumerate(POLICIES.items()):
+            row=rows[cid];old_default='blue' if cid=='user_identity' else 'orange' if cid=='session_themes' else ('blue','violet','red','orange')[i%4]
+            if row.get('revision',1)==1 and row.get('color_family')==old_default and not row.get('history'):
+                family='blue' if cid=='user_identity' else FAMILIES[i%len(FAMILIES)]
+                if family!=row['color_family']:
+                    row['history'].append({k:copy.deepcopy(v) for k,v in row.items() if k!='history'})
+                    row.update(color_family=family,revision=2,updated=now())
+        memory['_meta']['category_registry_version']=VERSION
+        memory['_meta']['memory_palette']={'version':4,'bases':PALETTE,'mix_space':'oklch'}
         manager._commit(memory);return manager.stats(memory)
 
 def execute(manager,action,category_id='',label='',parent_id=None,aliases=None,policy_template='',description='',color_family='',merge_id='',expected_revision=None,profile_id='',project_id='',source_refs=None,evidence='',operation_id='',offset=0,limit=50):

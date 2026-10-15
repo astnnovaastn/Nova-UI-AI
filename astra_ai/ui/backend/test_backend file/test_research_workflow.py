@@ -1,6 +1,6 @@
 import asyncio
 from types import SimpleNamespace
-from astra_ai.core.research_artifacts import ResearchArtifacts, ResearchSearch
+from astra_ai.core.research_learning import ResearchArtifacts, ResearchSearch
 from astra_ai.core.action_jobs import ActionJobs, result_value
 
 CTX={'profile_id':'owner','project_id':'alpha','session_id':'conversation'}
@@ -63,6 +63,21 @@ def test_json_pointer_does_not_evaluate_expressions():
     assert result_value({'a/b':[{'~value':3}]},'/a~1b/0/~0value')==3
     with pytest.raises(ValueError):result_value({'value':1},'__import__("os")')
 
+
+def test_completed_research_references_survive_restart_only_in_same_conversation(tmp_path):
+    from astra_ai.memory.shared_memory import atomic
+    jobs=ActionJobs(tmp_path/'jobs.json',None,None,None,{'search_web'})
+    submitted=jobs.submit([{'name':'search_web','arguments':{'query':'Fixture public research'}}],CTX,'search-reference')
+    data=jobs.load();step=data['jobs'][submitted['job_id']]['actions'][0]
+    step.update(state='completed',result={'status':'completed','research_id':'report-fixture','research_revision':'hash-fixture','summary':'This full text must not be injected'})
+    atomic(jobs.path,data)
+    restarted=ActionJobs(jobs.path,None,None,None,{'search_web'})
+    refs=restarted.recent_references(CTX)
+    assert len(refs)==1 and refs[0]['research_id']=='report-fixture' and 'summary' not in refs[0]
+    assert restarted.recent_references({**CTX,'session_id':'other'})==[]
+    assert restarted.recent_references({**CTX,'profile_id':'other'})==[]
+    assert restarted.recent_references({**CTX,'guest':True})==[]
+
 def test_authentication_failure_does_not_repeat_or_create_a_report(tmp_path):
     calls=[]
     class Transport:
@@ -76,7 +91,7 @@ def test_authentication_failure_does_not_repeat_or_create_a_report(tmp_path):
     assert calls==[1]
 
 def test_saved_task_uses_the_existing_queue_and_preserves_results(tmp_path):
-    from astra_ai.core.task_coordination import TaskCoordinator
+    from astra_ai.core.action_jobs import TaskCoordinator
     class Planner:
         calls=0
         def structured(self,*args):

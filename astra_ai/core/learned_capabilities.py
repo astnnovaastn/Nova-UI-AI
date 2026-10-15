@@ -9,7 +9,7 @@ from .background_model import ModelUnavailable
 
 SAFE_CAPABILITIES={'open_website','get_system_status','read_file','file_status','recall_memory','recall_conversations','search_web'}
 # Keep canonical core modules protected as well as their transport aliases.
-PROTECTED={'server.py','gemini_live.py','gemini_session.py','aegis_ai.py','legacy_aegis_ai.py','aegis_runtime.py','runtime_context.py','task_coordination.py','organization_review.py','research_artifacts.py','chat_stream.py','action_jobs.py','sandbox_worker.py','learned_capabilities.py','background_budget.py','background_model.py','shared_memory.py','category_policy.py','category_registry.py','persistent_rules.py'}
+PROTECTED={'server.py','gemini_live.py','gemini_session.py','aegis_ai.py','aegis_live_context.py','research_learning.py','organizer_runtime.py','legacy_aegis_ai.py','aegis_runtime.py','runtime_context.py','task_coordination.py','organization_review.py','research_artifacts.py','chat_stream.py','action_jobs.py','sandbox_worker.py','learned_capabilities.py','background_budget.py','background_model.py','shared_memory.py','category_policy.py','category_registry.py','persistent_rules.py'}
 FORBIDDEN={'exec','eval','compile','open','__import__','globals','locals','vars','getattr','setattr','delattr','breakpoint'}
 
 def validate_code(code):

@@ -1,47 +1,60 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import LearningReview from './LearningReview.jsx';
-
-const terminal=new Set(['completed','failed','canceled']);
-export default function ConversationWork({chat}){
- const [open,setOpen]=useState(false),[items,setItems]=useState([]),[detail,setDetail]=useState(null),[error,setError]=useState('');
- const scope=chat.clientId+':'+chat.sessionId+':'+chat.guest;
- useEffect(()=>{setItems([]);setDetail(null);setError('');},[scope]);
+import ApprovalDetail,{ApprovalAge} from './ApprovalDetail.jsx';
+import StructuredMemory from './StructuredMemory.jsx';
+import {conversationSnapshot,notificationSoundEnabled,setNotificationSound} from '../../conversation';
+const human=value=>String(value||'').replaceAll('_',' ');
+const blank=()=>({status:'all',query:'',offset:0,id:'',scroll:0});
+const statuses={tasks:['all','queued','running','paused','waiting_for_retry','waiting_for_ui','waiting_approval','waiting_input','interrupted','completed','failed','canceled'],learning:['all','queued','running','paused','waiting_for_retry','waiting_for_ui','waiting_approval','waiting_input','interrupted','completed','failed'],approvals:['all','waiting','approved','rejected']};
+export default function ConversationWork({chat,active,target}){
+ const [view,setView]=useState('tasks'),[filter,setFilter]=useState(blank),[page,setPage]=useState({items:[],counts:{},total:0}),[detail,setDetail]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(false),[revision,setRevision]=useState(0),[sound,setSound]=useState(notificationSoundEnabled),[report,setReport]=useState(null);
+ const saved=useRef({tasks:blank(),learning:blank(),approvals:blank()}),scroll=useRef(null),listScroll=useRef(0),restore=useRef(null),pages=useRef({}),scope=chat.clientId+':'+chat.sessionId+':'+chat.guest;
+ function switchView(next){if(!saved.current[next])return;saved.current[view]={...filter,scroll:scroll.current?.scrollTop||0};setView(next);setPage(pages.current[next]||{items:[],counts:{},total:0});setFilter(saved.current[next]);setDetail(null);setReport(null);setError('');restore.current=saved.current[next].scroll;}
+ useEffect(()=>{if(target?.view){setView(target.view==='approvals'?'approvals':target.view==='learning'?'learning':'tasks');setFilter(old=>({...old,id:target.id||'',offset:0}));}},[target]);
+ useEffect(()=>{saved.current={tasks:blank(),learning:blank(),approvals:blank()};pages.current={};setReport(null);setPage({items:[],counts:{},total:0});setDetail(null);setFilter(blank());setError('');},[scope]);
  useEffect(()=>{
-  if(!chat.connected||chat.guest)return;
-  let stopped=false,timer,refreshSequence=0;
-  const controller=new AbortController();
-  async function refresh(){const sequence=++refreshSequence;try{
-   const r=await fetch('/api/memory/library/tasks?limit=100',{headers:{'X-Nova-Client':chat.clientId},signal:controller.signal});
-   if(!r.ok)throw Error('Task status is unavailable.');const d=await r.json();
-   if(!stopped&&sequence===refreshSequence){setItems(d.items||[]);setError('');}
-  }catch(e){if(!stopped&&sequence===refreshSequence&&e.name!=='AbortError')setError(e.message);}}
-  const changed=()=>{clearTimeout(timer);timer=setTimeout(refresh,200);};
-  refresh();const interval=setInterval(refresh,15000);
-  window.addEventListener('nova-library-changed',changed);
-  return()=>{stopped=true;controller.abort();clearTimeout(timer);clearInterval(interval);window.removeEventListener('nova-library-changed',changed);};
- },[scope,chat.connected]);
- async function inspect(item){try{
-  const r=await fetch('/api/memory/library/tasks/'+encodeURIComponent(item.id),{headers:{'X-Nova-Client':chat.clientId}});
-  if(!r.ok)throw Error('Task details are unavailable.');setDetail((await r.json()).item);setError('');
- }catch(e){setError(e.message);}}
- async function control(item,action){try{
-  const r=await fetch('/api/memory/library/tasks/'+encodeURIComponent(item.id)+'/action',{method:'POST',headers:{'X-Nova-Client':chat.clientId,'Content-Type':'application/json'},body:JSON.stringify({action})});
-  const d=await r.json();if(!r.ok||['failed','rejected'].includes(d.status))throw Error(d.reason||'Task could not be changed.');
-  window.dispatchEvent(new Event('nova-library-changed'));setDetail(null);
- }catch(e){setError(e.message);}}
- const active=items.filter(i=>!terminal.has(i.state));
- return <details className="memory-jobs" onToggle={e=>setOpen(e.currentTarget.open)}>
-  <summary>Tasks and learning · {active.length} active</summary>
-  {error&&<p role="status">{error}</p>}
-  {items.slice(0,20).map(item=><article className="memory-work-row" key={item.id}>
-   <button onClick={()=>inspect(item)}><strong>{item.title}</strong><span>{item.state.replaceAll('_',' ')}</span></button>
-   {item.controls?.map(action=><button className="memory-work-control" key={action} onClick={()=>control(item,action)}>{action}</button>)}
-  </article>)}
-  {!items.length&&!error&&<p className="memory-work-empty">Requested work appears here with its actual progress.</p>}
-  {detail&&<section className="memory-work-detail"><header><strong>{detail.title}</strong><button aria-label="Close task details" onClick={()=>setDetail(null)}>×</button></header>
-   <p>{detail.state.replaceAll('_',' ')}</p>
-   {detail.details?.actions?.map((step,i)=><div key={i}><strong>{i+1}. {step.name.replaceAll('_',' ')}</strong><p>{step.state.replaceAll('_',' ')}{step.attempts?' · attempt '+step.attempts:''}</p>{step.result?.reason&&<p>{step.result.reason}</p>}{step.result?.note_id&&<p>Note saved and verified.</p>}{step.result?.results?.map((source,j)=><a key={j} href={source.url} target="_blank" rel="noopener noreferrer">{source.title||'Source'} ↗</a>)}</div>)}
-  </section>}
-  <LearningReview active={open}/>
- </details>;
+  if(!active||!chat.connected||chat.guest)return;
+  const controller=new AbortController();let sequence=0,timer,stopped=false;
+  async function refresh(silent=false){const ticket=++sequence;if(!silent)setLoading(true);try{
+   const resource=view==='approvals'?'approvals':'tasks',suffix=filter.id?'/'+encodeURIComponent(filter.id):'?'+new URLSearchParams({status:filter.status,query:filter.query,offset:String(filter.offset),limit:'20',kind:view==='learning'?'learning':''});
+   const r=await fetch('/api/memory/library/'+resource+suffix,{headers:{'X-Nova-Client':chat.clientId},signal:controller.signal});const d=await r.json();if(!r.ok||d.status==='not_found')throw Error('This item is unavailable for the current connection.');
+   if(!stopped&&ticket===sequence){if(filter.id)setDetail(d.item);else {setPage(d);pages.current[view]=d;}setError('');if(restore.current!==null)requestAnimationFrame(()=>{if(scroll.current)scroll.current.scrollTop=restore.current;restore.current=null;});}
+  }catch(e){if(!stopped&&ticket===sequence&&e.name!=='AbortError')setError(e.message);}finally{if(!stopped&&ticket===sequence)setLoading(false);}}
+  const changed=()=>{clearTimeout(timer);timer=setTimeout(()=>refresh(true),180);};refresh();const interval=setInterval(()=>refresh(true),15000);window.addEventListener('nova-library-changed',changed);window.addEventListener('nova-operation-notices',changed);
+  return()=>{stopped=true;controller.abort();clearTimeout(timer);clearInterval(interval);window.removeEventListener('nova-library-changed',changed);window.removeEventListener('nova-operation-notices',changed);};
+ },[active,scope,chat.connected,view,filter.status,filter.query,filter.offset,filter.id,revision]);
+ async function act(action,decision=false){if(!detail||busy)return;setBusy(true);try{
+  const current=conversationSnapshot();if(current.clientId!==chat.clientId||current.guest)throw Error('User connection changed.');
+  const resource=decision?'approvals':'tasks',r=await fetch('/api/memory/library/'+resource+'/'+encodeURIComponent(detail.id)+(decision?'/decision':'/action'),{method:'POST',headers:{'X-Nova-Client':chat.clientId,'Content-Type':'application/json'},body:JSON.stringify(decision?{decision:action,version:detail.version}:{action})});const d=await r.json();
+  if(!r.ok||['failed','conflict','not_found'].includes(d.status)||d.status==='rejected'&&action!=='rejected')throw Error(d.reason||'The operation could not be applied.');window.dispatchEvent(new Event('nova-library-changed'));setRevision(v=>v+1);
+ }catch(e){setError(e.message);}finally{setBusy(false);}}
+ async function readReport(id,version,offset=0){try{const snap=conversationSnapshot();const r=await fetch('/api/research/'+encodeURIComponent(id)+'?'+new URLSearchParams({revision:version||'',offset:String(offset),limit:'12000'}),{headers:{'X-Nova-Client':snap.clientId}});const d=await r.json();if(!r.ok||d.status!=='ok')throw Error('The sourced report is unavailable.');if(conversationSnapshot().clientId===snap.clientId&&conversationSnapshot().guest===snap.guest&&conversationSnapshot().sessionId===snap.sessionId)setReport({id,revision:d.research_revision,content:d.content,next_offset:d.next_offset});}catch(e){setError(e.message);}}
+ const waiting=page.counts?.waiting||0,running=Object.entries(page.counts||{}).reduce((sum,[state,count])=>sum+(['completed','failed','canceled'].includes(state)?0:Number(count)),0),completed=page.counts?.completed||0;
+ const steps=detail?.details?.actions||[],done=steps.filter(s=>s.state==='completed').length,progress=steps.length?Math.round(100*done/steps.length):null;
+ return <section className="memory-work-panel" hidden={!active} aria-label="Tasks and learning">
+  <div className="memory-work-heading"><div><span className="memory-chat-kicker">AEGIS WORKSPACE</span><h3>Tasks and learning</h3><p>Real progress. One place to follow it.</p></div><button className="memory-sound-button" aria-pressed={sound} title="Notification sound" onClick={()=>{setNotificationSound(!sound);setSound(!sound);}}>{sound?'Sound on':'Sound off'}</button></div>
+  <nav className="memory-work-tabs" aria-label="Work views">{['tasks','learning','approvals'].map(v=><button key={v} aria-pressed={view===v} onClick={()=>switchView(v)}>{human(v)}</button>)}</nav>
+  <div className="memory-work-scroll" ref={scroll}>
+  {chat.guest?<p className="memory-work-empty">Tasks and learning belong to the owner workspace.</p>:<>
+   {error&&<div className="memory-alert" role="alert">{error}<button onClick={()=>setRevision(v=>v+1)}>Retry</button></div>}
+   {view==='learning'&&!filter.id&&<LearningReview active={active}/>}
+   {filter.id&&!detail?<p role="status">{loading?'Loading work details…':'Select another item or retry.'}</p>:filter.id&&detail?<article className="memory-work-selected"><button className="memory-work-back" onClick={()=>{restore.current=listScroll.current;setFilter(old=>({...old,id:''}));setDetail(null);setReport(null);}}>← Back to {view}</button><div className="memory-work-item-state"><span className={'memory-status-dot status-'+detail.state}/>{human(detail.state)}</div><h3>{detail.title}</h3>{view==='approvals'?<ApprovalAge created={detail.created} decided={detail.decided}/>:detail.created&&<time>{new Date(detail.created).toLocaleString()}</time>}
+    {view==='approvals'?<><ApprovalDetail item={detail}/>{detail.state==='waiting'&&<div className="memory-work-actions"><button disabled={busy} onClick={()=>act('approved',true)}>Approve this version</button><button disabled={busy} onClick={()=>act('rejected',true)}>Reject</button></div>}</>:<>
+     {progress!==null&&<div className="memory-work-progress"><progress value={done} max={steps.length}/><span>{done} of {steps.length} steps complete · {progress}%</span></div>}
+     {steps.map((step,i)=><section className="memory-work-step" key={step.operation_id||i}><span className={'memory-work-step-number '+(step.state==='completed'?'done':'')}>{step.state==='completed'?'✓':i+1}</span><div><strong>{human(step.name)}</strong><small>{human(step.state)}{step.attempts?' · attempt '+step.attempts:''}</small>{step.result?.reason&&<p>{human(step.result.reason)}</p>}{step.result?.verified&&step.result.note_id&&<p>Full report saved and verified in Notes.</p>}{step.result?.summary&&<p>{String(step.result.summary).replace(/^#+ /gm,'').slice(0,220)}{step.result.summary.length>220?'…':''}</p>}{step.result?.research_id&&<button onClick={()=>readReport(step.result.research_id,step.result.research_revision)}>View research report</button>}{step.result?.results?.filter(s=>/^https?:\/\//.test(s.url||'')).map((source,j)=><a key={j} href={source.url} target="_blank" rel="noopener noreferrer">{source.title||'Source'} ↗</a>)}</div></section>)}
+     {!steps.length&&<StructuredMemory raw={false} value={{summary:detail.details?.summary,result:detail.details?.result,error:detail.details?.error,message:detail.details?.message}}/>}
+     {report&&<section className="memory-work-report"><header><strong>Research report</strong><button onClick={()=>setReport(null)}>Close report</button></header><StructuredMemory raw={false} value={report.content}/>{report.next_offset!==null&&<button onClick={()=>readReport(report.id,report.revision,report.next_offset)}>Read next portion</button>}</section>}
+     <div className="memory-work-actions">{detail.controls?.map(action=><button disabled={busy} key={action} onClick={()=>act(action)}>{human(action)}</button>)}</div><details className="memory-detail-disclosure"><summary>Recorded details</summary><StructuredMemory value={detail.details}/></details>
+    </>}
+   </article>:<>
+    <div className="memory-work-stats"><div><strong>{view==='approvals'?waiting:running}</strong><span>{view==='approvals'?'Awaiting review':'Open work'}</span></div><div><strong>{view==='approvals'?(page.counts?.approved||0):completed}</strong><span>{view==='approvals'?'Approved':'Completed'}</span></div><div><strong>{page.total||0}</strong><span>In this view</span></div></div>
+    <div className="memory-work-filter"><input aria-label="Find work" placeholder={view==='approvals'?'Find an approval…':'Find a task…'} value={filter.query} onChange={e=>setFilter(old=>({...old,query:e.target.value,offset:0}))}/><select aria-label="Work status" value={filter.status} onChange={e=>setFilter(old=>({...old,status:e.target.value,offset:0}))}>{statuses[view].map(s=><option key={s} value={s}>{human(s)}</option>)}</select></div>
+    {loading&&!page.items?.length&&<p role="status">Loading work…</p>}
+    {!loading&&!error&&!page.items?.length&&<div className="memory-work-empty"><span>✓</span><h4>{view==='approvals'?'Nothing waiting here':'A clear workspace'}</h4><p>{view==='approvals'?'Requests that need your decision will appear here.':'Requested tasks and useful background learning will appear with their real progress.'}</p></div>}
+    <div className="memory-work-cards">{page.items?.map(item=><button className="memory-work-card" key={item.id} onClick={()=>{listScroll.current=scroll.current?.scrollTop||0;restore.current=0;setReport(null);setFilter(old=>({...old,id:item.id}));setDetail(null);}}><span className={'memory-status-dot status-'+item.state}/><span><strong>{human(item.title)}</strong><small>{human(item.state)} · {human(item.source==='run'?'saved task':item.background?'background work':item.source)}</small></span><span aria-hidden="true">›</span></button>)}</div>
+    {page.total>20&&<footer className="memory-pagination"><button disabled={!filter.offset} onClick={()=>setFilter(old=>({...old,offset:Math.max(0,old.offset-20)}))}>Previous</button><span>{filter.offset+1}–{Math.min(filter.offset+20,page.total)}</span><button disabled={filter.offset+20>=page.total} onClick={()=>setFilter(old=>({...old,offset:old.offset+20}))}>Next</button></footer>}
+   </>}
+  </>}
+  </div>
+ </section>;
 }

@@ -24,6 +24,28 @@ def test_forget_restore_and_private_transcript(memory):
     assert 'private-message' not in projection(memory)['records'];memory.forget(rid);assert not detail(memory,rid)['record'];assert not any('Fake secret context' in str(r.get('content','')) for r in projection(memory)['records'].values())
     memory.restore(rid);assert detail(memory,rid)['record']['value']=='Fake secret context'
 
+
+def test_singleton_observation_does_not_duplicate_its_fact_label(memory):
+    rid=memory.save_fact('notes','rich_created_aegis_ui','Rich created the Aegis interface')['id']
+    with memory._lock:
+        data=memory.load();data.setdefault('entity_graph',{}).setdefault('observations',{})['same-label']={'id':'same-label','label':'Rich created aegis ui','state':'active','member_ids':[rid]}
+        memory._commit(data)
+    snap=projection(memory)
+    assert rid in snap['records'] and 'same-label' not in snap['raw']['entity_graph']['entities']
+    assert memory.load()['entity_graph']['observations']['same-label']['member_ids']==[rid]
+
+
+def test_redundant_concept_relay_keeps_its_real_connection(memory):
+    one=memory.save_fact('notes','rich_created_aegis_ui','Rich created Aegis')['id']
+    two=memory.save_fact('notes','design_work','Aegis interface design')['id']
+    with memory._lock:
+        data=memory.load();graph=data.setdefault('entity_graph',{});graph.setdefault('entities',{}).update({'mirror':{'id':'mirror','label':'Rich created aegis ui','entity_type':'concept','state':'active','member_ids':[one]},'project':{'id':'project','label':'Aegis','entity_type':'project','state':'active','member_ids':[two]}})
+        graph.setdefault('connections',{})['link']={'id':'link','from':'mirror','to':'project','state':'active','evidence':'Original supported relationship'};memory._commit(data)
+    snap=projection(memory);graph=snap['raw']['entity_graph']
+    assert 'mirror' not in graph['entities'] and graph['connections']['link']['from']==one
+    assert graph['connections']['link']['to']=='project' and set(snap['records'])=={one,two}
+    assert memory.load()['entity_graph']['connections']['link']['from']=='mirror'
+
 def test_api_rejects_unknown_connection_and_scope_spoof(memory,monkeypatch):
     from astra_ai.ui.backend import server
     from starlette.requests import Request

@@ -1182,6 +1182,10 @@ const WidgetContainer = () => {
         })}
       </div>
       <div id="widget-launcher-bottom" aria-label="Theme launcher">
+        <button type="button" className="widget-launcher-item widget-launcher-item-bottom" aria-label="Memory explorer" title="Memory explorer" onClick={()=>window.dispatchEvent(new Event('nova-open-memory'))}>
+          <span className="widget-launcher-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="8"/><ellipse cx="12" cy="12" rx="3.5" ry="8"/><path d="M4 12h16M6 7.5c4 2 8 2 12 0M6 16.5c4-2 8-2 12 0"/></svg></span>
+          <span className="widget-launcher-tooltip"><span className="widget-launcher-label">Memory</span><span className="widget-launcher-copy">Explore memories and connections</span></span>
+        </button>
         {launcherItems.filter((item) => item.dock === 'bottom').map((item) => {
           const isActive = themeVisibility === 'open';
           const showIndicator = themeVisibility === 'minimized';

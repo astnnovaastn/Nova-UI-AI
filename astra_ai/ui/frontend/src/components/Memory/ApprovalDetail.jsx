@@ -1,7 +1,9 @@
-import React from 'react';
+import React,{useEffect,useState} from 'react';
 import StructuredMemory from './StructuredMemory.jsx';
 const human=s=>String(s||'').replaceAll('_',' ');
 const populated=v=>v!==null&&v!==undefined&&v!==''&&(!Array.isArray(v)||v.length>0)&&(!(v&&typeof v==='object'&&!Array.isArray(v))||Object.keys(v).length>0);
+export function ApprovalAge({created,decided}){const [clock,setClock]=useState(Date.now);useEffect(()=>{if(decided)return;const timer=setInterval(()=>setClock(Date.now()),1000);return()=>clearInterval(timer);},[decided]);const stamp=Date.parse(created||'');if(!Number.isFinite(stamp))return <span>Creation time not recorded</span>;const end=Date.parse(decided||'')||clock,secs=Math.max(0,Math.floor((end-stamp)/1000)),mins=Math.floor(secs/60);return <span className="memory-approval-time"><time dateTime={created}>{new Date(stamp).toLocaleString()}</time><span>{decided?'Waited':'Waiting'} {Math.floor(mins/1440)}d {Math.floor(mins/60)%24}h {mins%60}m {secs%60}s</span>{decided&&<time dateTime={decided}>Decided {new Date(decided).toLocaleString()}</time>}</span>;}
+
 export function Waiting(){return <span className="memory-waiting-label">Waiting<span className="memory-waiting-dots" aria-hidden="true"><i/><i/><i/></span></span>;}
 export default function ApprovalDetail({item}){
  const d=item.details||{},r=d.record||{},proposed=r.value??r.content??d.description??d.purpose??d.instruction;

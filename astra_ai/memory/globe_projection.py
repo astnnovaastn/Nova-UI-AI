@@ -27,16 +27,26 @@ def projection(manager, profile_id='', project_id=''):
             rid=msg.get('id');date=msg.get('timestamp','')
             if not rid or rid in records:continue
             records[rid]={'id':rid,'kind':'activity','category':'session_themes','key':f"{msg['role']} message · {date[:10] if isinstance(date,str) else 'undated'}",'content':safe(msg.get('content','')),'created':date,'updated':msg.get('updated',date),'revision':msg.get('revision',1),'source':'conversation','session_id':msg.get('session_id','legacy-history'),'turn_id':msg.get('turn_id',''),'profile_id':msg.get('profile_id',''),'project_id':msg.get('project_id',''),'attributes':{'original_date':date,'speaker':msg['role'],'transcript':True},'provenance':copy.deepcopy(msg.get('provenance',{})),'history':copy.deepcopy(msg.get('history',[]))}
-        ids=set(records);g=m.get('entity_graph',{});entities={}
+        from .daily_history import conversation_day
+        for record in records.values():
+            if record.get('category')=='session_themes':record.setdefault('attributes',{})['conversation_day']=conversation_day(record.get('attributes',{}).get('original_date') or record.get('created'))
+        ids=set(records);g=m.get('entity_graph',{});entities={};aliases={}
         for section in ('entities','observations','patterns'):
             for eid,e in sorted(g.get(section,{}).items()):
                 members=sorted(set(e.get('member_ids',[]))&ids)
-                if e.get('state')=='active' and members and visible(e,m['_meta'],profile_id,project_id):entities[eid]={**copy.deepcopy(e),'member_ids':members}
+                if e.get('state')!='active' or not members or not visible(e,m['_meta'],profile_id,project_id):continue
+                redundant=(section=='observations' or e.get('entity_type')=='concept') and len(members)==1 and normal(e.get('label','')) in {normal(records[members[0]].get('key','').replace('_',' ')),normal(str(records[members[0]].get('value','')))}
+                if redundant:aliases[eid]=members[0]
+                else:entities[eid]={**copy.deepcopy(e),'member_ids':members}
         for eid,e in sorted(m.get('topic_groups',{}).items()):
             members=sorted(set(e.get('member_ids',[]))&ids)
             if e.get('state')=='active' and members and visible(e,m['_meta'],profile_id,project_id):entities[eid]={**copy.deepcopy(e),'member_ids':members}
         relationships={rid:copy.deepcopy(r) for rid,r in sorted(m.get('relationships_v3',{}).items()) if r.get('from') in ids and r.get('to') in ids}
-        connections={rid:copy.deepcopy(r) for rid,r in sorted(g.get('connections',{}).items()) if r.get('state')=='active' and r.get('from') in entities and r.get('to') in entities}
+        connections={}
+        for rid,r in sorted(g.get('connections',{}).items()):
+            if r.get('state')!='active' or not all(r.get(k) in entities or r.get(k) in aliases for k in ('from','to')):continue
+            projected={**copy.deepcopy(r),'from':aliases.get(r['from'],r['from']),'to':aliases.get(r['to'],r['to'])}
+            if projected['from']!=projected['to']:connections[rid]=projected
         from .category_registry import catalog,palette,resolve
         category_rows=catalog(m,profile_id,project_id,True);members_by_category={}
         for cid,row in category_rows.items():

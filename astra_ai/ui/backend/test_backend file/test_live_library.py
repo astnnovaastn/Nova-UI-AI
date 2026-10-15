@@ -34,6 +34,34 @@ def test_unlimited_categories_paged_and_palette_preserves_ids(memory):
  assert not ({r['id'] for r in first['categories']}&{r['id'] for r in second['categories']})
  assert memory.load()['records']==before
 
+
+def test_session_month_week_day_counts_keep_madrid_four_am_boundary(memory):
+ from astra_ai.memory.daily_history import conversation_day
+ assert conversation_day('2026-10-01')=='2026-10-01'
+ memory.append_turn('Late evening fixture','First response','month-one','turn-one',timestamp='2026-10-01T00:30:00+02:00')
+ memory.append_turn('Morning fixture','Second response','month-two','turn-two',timestamp='2026-10-01T10:00:00+02:00')
+ root=library.page(memory,category='session_themes')
+ months={r['id']:r['count'] for r in root['collections']}
+ assert months=={'session_themes#2026-10':2,'session_themes#2026-09':2}
+ october=library.page(memory,category='session_themes#2026-10')
+ assert october['total']==2 and sum(r['count'] for r in october['collections'])==2
+ week=library.page(memory,category=october['collections'][0]['id'])
+ assert week['total']==2 and week['collections'][0]['title']=='2026-10-01'
+ day=library.page(memory,category=week['collections'][0]['id'])
+ assert day['total']==2 and day['collections']==[]
+ assert library.page(memory,category='session_themes#2026-11')['total']==0
+ assert len(list(memory._messages()))==4
+
+
+def test_palette_has_real_yellow_and_preserves_explicit_family_choices(memory):
+ from astra_ai.memory.category_registry import PALETTE,FAMILIES,prepare
+ assert PALETTE['yellow']=='#F8E401' and PALETTE['yellow']!=PALETTE['green']
+ data=memory.load();row=data['category_registry']['user_identity'];row['color_family']='deep_red';row['revision']=7;data['_meta']['category_registry_version']=3
+ before=copy.deepcopy(data['records']);memory._commit(data);prepare(memory)
+ after=memory.load();assert after['category_registry']['user_identity']['color_family']=='deep_red'
+ assert after['category_registry']['user_identity']['revision']==7 and after['records']==before
+ assert len(FAMILIES)==11
+
 def test_private_forgotten_expired_and_scope_counts_match_pages(memory):
  one=memory.save_fact('knowledge_expertise','fixture_a','Visible fixture')['id']
  other=memory.save_fact('knowledge_expertise','fixture_b','Other fixture',profile_id='other')['id']
