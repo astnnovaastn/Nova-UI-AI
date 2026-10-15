@@ -60,6 +60,28 @@ class ResearchLearning:
     def control(self,paused):
         with self.lock:data=self.load();data.setdefault('metadata',{})['paused']=paused;atomic(self.path,data);self.paused=paused
         return {'status':'paused' if paused else 'resumed'}
+    def import_artifact(self,item,context):
+        """Index the same immutable report as external knowledge, never a user fact."""
+        if context.get('guest') or not item['sources']:return {'status':'rejected'}
+        privacy=self.memory.privacy_settings()
+        if privacy.get('private_session') or privacy.get('retain_memories') is False:return {'status':'private'}
+        rid=item['id'];profile=context.get('profile_id','');project=context.get('project_id','');scope_key=stable(profile,project)
+        with self.lock:
+            old=self.load()['notes'].get(rid)
+            if old and old.get('artifact_revision')==item['revision']:return {'status':'duplicate','research_id':rid}
+        directory=self.root/'research'/scope_key;directory.mkdir(parents=True,exist_ok=True)
+        path=directory/(rid+'.md');temporary=path.with_suffix('.tmp');temporary.write_text(item['report'],encoding='utf-8');os.replace(temporary,path)
+        urls=[s['url'][:1200] for s in item['sources'][:8]]
+        saved=self.memory.save_event('research_note','research_'+rid[:24],{'summary':item['summary'][:1200],'source_urls':urls,'research_id':rid},category='knowledge_expertise',attributes={'external_knowledge':True,'research_note_id':rid,'artifact_revision':item['revision']},source='application',capture_source='verified_application_event',evidence='Verified external research artifact',profile_id=profile,project_id=project,operation_id='artifact:'+rid,approved=True)
+        if saved['status'] not in {'saved','updated','duplicate'}:return saved
+        note={'id':rid,'query':item['query'],'state':'completed','scope_key':scope_key,'scope':'default' if not profile and not project else f'profile:{profile}/project:{project}',
+              'profile_id':profile,'project_id':project,'created':item['created'],'updated':item['created'],'requested':True,'record_id':saved['id'],
+              'artifact_revision':item['revision'],'document':str(path.relative_to(self.root)),'completed_at':item['created_epoch'],
+              'sources':[{k:s[k] for k in ('title','url')} for s in item['sources']],'context':{}}
+        with self.memory._lock:
+            memory=self.memory.load();memory.setdefault('research_index',{})[rid]={k:v for k,v in note.items() if k not in {'context','query'}};self.memory._commit(memory)
+        with self.lock:data=self.load();data['notes'][rid]=note;atomic(self.path,data)
+        return {'status':'completed','research_id':rid,'record_id':saved['id']}
     async def run(self,rid,context):
         current=await asyncio.to_thread(self.get,rid,context)
         if current['status']!='ok':return current
@@ -101,10 +123,11 @@ class ResearchLearning:
             with self.lock:data=self.load();data['notes'][rid].update(state='quota_paused',next_attempt=exc.until);atomic(self.path,data)
             return {'status':'waiting_for_quota','next_attempt':exc.until,'reason':exc.reason}
         except asyncio.CancelledError:raise
-        except Exception:return self.fail(rid,{'status':'failed','reason':'research_unavailable'})
+        except Exception as error:return self.fail(rid,{'status':'failed','reason':'research_unavailable','error_type':type(error).__name__})
     def fail(self,rid,result):
-        with self.lock:data=self.load();data['notes'][rid].update(state='failed',reason=safe(result.get('reason') or result.get('error') or 'research_unavailable')[:200],updated=now());atomic(self.path,data)
-        return {'status':'failed','reason':'research_unavailable','retryable':bool(result.get('retryable')),'retry_after_seconds':result.get('retry_after_seconds',65)}
+        reason=safe(result.get('reason') or result.get('error') or 'research_unavailable')[:200]
+        with self.lock:data=self.load();data['notes'][rid].update(state='failed',reason=reason,error_type=result.get('error_type'),updated=now());atomic(self.path,data)
+        return {'status':'failed','reason':reason,'retryable':bool(result.get('retryable')),'retry_after_seconds':result.get('retry_after_seconds',65)}
     def commit(self,rid,note,summary,sources):
         privacy=self.memory.privacy_settings()
         if privacy.get('private_session') or privacy.get('retain_memories') is False:return {'status':'private','reason':'research_retention_disabled'}

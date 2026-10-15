@@ -1,3 +1,4 @@
+import {resolveSavedNote} from './resolveSavedNote.mjs';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './NotesWidget.css';
 
@@ -726,17 +727,12 @@ const NotesWidget = ({
     textareaRef.current.focus();
   };
 
-  const findNoteByQuery = async (query, noteId = '') => {
-    const explicitId = String(noteId || '').trim();
-    if (explicitId) {
-      const localMatch = notes.find((item) => String(item?.id || '') === explicitId);
-      if (localMatch) return localMatch;
-    }
-    const cleaned = String(query || '').trim();
-    if (!cleaned) return null;
-    const payload = await apiJson(`/api/notes/match?query=${encodeURIComponent(cleaned)}`);
-    return payload?.note || null;
-  };
+  const findNoteByQuery = (query,noteId='') => resolveSavedNote({
+    notes,noteId,query,
+    refresh:()=>apiJson('/api/notes/state'),
+    match:text=>apiJson(`/api/notes/match?query=${encodeURIComponent(text)}`),
+    onRefresh:payload=>applyNotesPayload(payload,setNotes,setSummaries),
+  });
 
   const copyDraft = async () => {
     const draft = String(newNoteContent || '').trim();

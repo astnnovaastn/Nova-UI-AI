@@ -82,6 +82,7 @@ def _compact_history_item(current: Dict[str, Any]) -> Dict[str, Any]:
         "display_subtopic": current.get("display_subtopic") or "",
         "answer": sanitize_search_answer(current.get("answer")),
         "results": list(current.get("results") or []),
+        "completeness":current.get("completeness", "complete"),"research_id":current.get("research_id", ""),"research_revision":current.get("research_revision", ""),
         "search_type": current.get("search_type") or "",
         "source": current.get("source") or "",
         "original_transcript": current.get("original_transcript") or "",
@@ -108,7 +109,7 @@ def apply_search_widget_command(state: Dict[str, Any], message: Dict[str, Any], 
     if command == "set_loading" and incoming_request_id:
         current["latest_request_id"] = incoming_request_id
 
-    fields = [
+    fields = ["research_id", "research_revision", "completeness",
         "query",
         "display_topic",
         "display_subtopic",

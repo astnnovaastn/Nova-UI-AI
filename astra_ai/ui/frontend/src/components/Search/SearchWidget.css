@@ -272,3 +272,5 @@
 @keyframes searchPulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 @keyframes searchScan { to { transform: rotate(360deg); } }
 @keyframes searchReveal { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+.search-report-more{display:block;margin:14px auto;padding:10px 16px;border:1px solid var(--widget-border,#ffffff20);border-radius:10px;background:transparent;color:var(--widget-text,#ddd);cursor:pointer;font:12px system-ui}

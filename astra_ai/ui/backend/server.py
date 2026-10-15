@@ -2289,26 +2289,29 @@ def _save_search_record(query: str, summary: str, results: Any, record_id: Optio
     return record
 
 
+_research_services = {}
+
+def get_research_services():
+    from astra_ai.core.research_artifacts import ResearchArtifacts, ResearchSearch
+    path=state.live_memory.memory_path.parent/'research_artifacts'/'reports.json'
+    key=str(path.resolve())
+    if key not in _research_services:
+        artifacts=ResearchArtifacts(path)
+        _research_services[key]=(artifacts,ResearchSearch(artifacts,_get_env_value))
+    return _research_services[key]
+
 async def _aegis_search_web(arguments):
-    """Grounded, bounded research. Never enable billing or invent sources."""
-    from google import genai
-    from google.genai import types
-    query=str(arguments.get("query") or "").strip()[:600]
-    if not query: return {"status":"failed","error":"Search query is required."}
-    client=genai.Client(api_key=state.gemini_api_key)
-    try:
-        result=await asyncio.wait_for(client.aio.models.generate_content(model="gemini-2.5-flash",contents="Find current information with dated sources: "+query,config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())],max_output_tokens=900)),timeout=15)
-        chunks=[]
-        for candidate in result.candidates or []:
-            meta=getattr(candidate,"grounding_metadata",None)
-            for chunk in getattr(meta,"grounding_chunks",None) or []:
-                web=getattr(chunk,"web",None)
-                if web: chunks.append({"title":web.title or "Source","url":web.uri or ""})
-        if not chunks: raise ValueError("No grounded sources returned")
-        return {"status":"completed","summary":result.text or "","results":chunks[:5],"provider":"google_search","retrieved_at":datetime.now().isoformat()}
-    except Exception:
-        return {'status':'failed','reason':'search_provider_unavailable','retryable':True}
-    finally: await client.aio.aclose()
+    from astra_ai.core.gemini_session import CURRENT_OPERATION
+    context=CURRENT_OPERATION.get() or {}
+    if not context.get('client_id') and not context.get('background'):return {'status':'rejected','reason':'connected_search_context_required'}
+    artifacts,service=get_research_services()
+    result=await service.search(arguments,context,context.get('operation_id',''))
+    if result.get('research_id') and learning_service and not context.get('guest'):
+        item=await asyncio.to_thread(artifacts.get,result['research_id'],context,result['research_revision'])
+        if item['status']=='ok':
+            indexed=await asyncio.to_thread(learning_service.import_artifact,item['artifact'],context)
+            result['knowledge_index_status']=indexed.get('status')
+    return result
 
 
 def _gemini_search_web(arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -2903,7 +2906,9 @@ async def _gemini_search_widget_action(client_id: str, arguments: Dict[str, Any]
         "show_saved_search": "restore_search_result",
         "delete_history": "delete_search_result",
     }.get(action, action)
-    request_id = f"gemini-search-widget-{uuid.uuid4().hex}"
+    from astra_ai.core.gemini_session import CURRENT_OPERATION
+    operation_context=CURRENT_OPERATION.get() or {}
+    request_id = str(operation_context.get('request_id') or f"gemini-search-widget-{uuid.uuid4().hex}")
     if not client_id:
         return {"status": "unavailable", "operation_id": request_id, "error": "no_connected_client"}
     if action not in {"connect", "disconnect", "open", "close", "set_query", "run", "find_history", "show_results", "show_history", "show_current", "restore_latest", "restore_search_result", "delete_search_result", "clear_current"}:
@@ -2963,23 +2968,31 @@ async def _gemini_search_widget_action(client_id: str, arguments: Dict[str, Any]
             return {"status": "failed", "operation_id": request_id, "error": "Search widget did not acknowledge the history action."}
         return {"status": "completed", "operation_id": request_id, "action": action, "request_id": target_id, "current": updated.get("current", {}), "history": state.get_search_history_preview()}
 
-    if action == "run":
-        try:
-            await _run_serp_widget("search", {"query": arguments.get("query"), "max_results": arguments.get("max_results")}, request_id, client_id)
-            current = state.search_widget_context.get("current", {})
-            return {"status": "completed", "operation_id": request_id, "widget": "search",
-                    "action": action, "current": current}
-        except Exception as exc:
-            error = str(exc)[:500]
-            failure = {
-                "type": "widget_control", "widget": "search", "command": "show_results",
-                "request_id": request_id, "source": "gemini_live", "query": arguments.get("query", ""),
-                "display_topic": arguments.get("query", ""), "loading": False, "error": error,
-                "results": [], "answer": "",
-            }
-            state.update_search_widget_context(failure)
-            await ws_manager.send_to_client_id(client_id, failure)
-            return {"status": "failed", "operation_id": request_id, "widget": "search", "action": action, "error": error}
+    if action == 'run' or action=='show_results' and arguments.get('research_id'):
+        if action=='run':
+            loading={'type':'widget_control','widget':'search','command':'set_loading','request_id':request_id,'query':arguments.get('query',''),'loading':True,'source':'research_artifact'}
+            state.update_search_widget_context(loading);await ws_manager.send_to_client_id(client_id,loading)
+            result=await _aegis_search_web({**arguments,'mode':arguments.get('mode','detailed')})
+        else:
+            artifacts,_=get_research_services()
+            fetched=await asyncio.to_thread(artifacts.get,str(arguments['research_id']),operation_context,str(arguments.get('research_revision','')))
+            result=artifacts.brief(fetched['artifact']) if fetched['status']=='ok' else fetched
+        if not result.get('research_id'):
+            failure={'type':'widget_control','widget':'search','command':'show_results','request_id':request_id,'query':arguments.get('query',''),'loading':False,'error':result.get('reason','Research unavailable'),'answer':'','results':[]}
+            state.update_search_widget_context(failure);await ws_manager.send_to_client_id(client_id,failure)
+            return result
+        from astra_ai.core.gemini_session import CURRENT_OPERATION
+        artifacts,_=get_research_services()
+        artifact=artifacts.get(result['research_id'],CURRENT_OPERATION.get() or {})['artifact']
+        payload={'type':'widget_control','widget':'search','command':'show_results','request_id':request_id,
+                 'query':artifact['query'],'display_topic':artifact['query'],'answer':artifact['report'],
+                 'results':result['results'],'research_id':artifact['id'],'research_revision':artifact['revision'],
+                 'loading':False,'source':'research_artifact','completeness':result['completeness'],'error':''}
+        state.update_search_widget_context(payload)
+        state.register_widget_action(client_id,request_id)
+        await ws_manager.send_to_client_id(client_id,payload)
+        ack=await state.await_widget_action(client_id,request_id,timeout=5)
+        return {**result,'ui_status':(ack or {}).get('status','unacknowledged')}
     state.register_widget_action(client_id, request_id)
     payload = {"type": "widget_control", "widget": "search", "command": action,
                "request_id": request_id, "source": "gemini_live", "execution": "frontend"}
@@ -3070,12 +3083,22 @@ async def _gemini_notes_action(client_id: str, arguments: Dict[str, Any]) -> Dic
             state.register_widget_action(client_id, request_id)
             await ws_manager.send_to_client_id(client_id, {
                 "type": "widget_control", "widget": "notes", "command": command,
-                "request_id": request_id, "source": "gemini_live", **payload,
+                "request_id": request_id, "source": "gemini_live", "execution":"frontend", **payload,
             })
             return await state.await_widget_action(client_id, request_id, timeout=5.0) or {
                 "status": "failed", "error": "Notes widget did not acknowledge the refresh."
             }
         return {"status": "unavailable", "error": "no_connected_client"}
+    if action == 'import_research':
+        from astra_ai.core.gemini_session import CURRENT_OPERATION
+        context=CURRENT_OPERATION.get() or {}
+        if not context.get('client_id') or context.get('guest'):return {'status':'rejected','reason':'owner_connection_required'}
+        artifacts,_=get_research_services()
+        result=await asyncio.to_thread(artifacts.import_note,str(arguments.get('research_id','')),str(arguments.get('research_revision','')),context,context.get('operation_id',''),state)
+        if result.get('verified'):
+            ui=await refresh_notes_ui('review_note',note_id=result['note_id'])
+            result['ui_status']=ui.get('status','unacknowledged')
+        return result
     frontend_actions = {
         "connect", "disconnect", "open", "close", "show_view", "review_note", "clear_review", "edit_reviewed_note", "show_note", "show_add", "show_ai_summaries", "open_ai_chat",
         "set_draft", "append_draft", "clear_draft", "save_note", "open_note",
@@ -3169,7 +3192,7 @@ async def _gemini_notes_action(client_id: str, arguments: Dict[str, Any]) -> Dic
             state.clear_all_notes()
             ui_result = await refresh_notes_ui("refresh_state")
             return {"status": "completed", "operation_id": request_id, "cleared": True, "ui_refresh_status": ui_result.get("status"), "ui_result": ui_result}
-        return {"status": "failed", "operation_id": request_id, "error": f"Unsupported Notes action: {action}"}
+        return {"status": "rejected", "reason":"unsupported_notes_action", "operation_id": request_id, "error": f"Unsupported Notes action: {action}"}
     except KeyError as exc:
         return {"status": "failed", "operation_id": request_id, "error": f"Note not found: {exc.args[0] if exc.args else ''}"}
     except Exception as exc:
@@ -4832,7 +4855,24 @@ def _generate_tts_audio(text: str) -> Optional[bytes]:
 # MESSAGE HANDLER
 # ============================================================================
 
-async def handle_transcript_message(websocket: WebSocket, message: Dict[str, Any]):
+async def handle_transcript_message(websocket: WebSocket,message: Dict[str,Any]):
+    text=str(message.get('text') or '').strip()
+    if not text or not message.get('isFinal'):return
+    client=ws_manager.client_id(websocket);source=message.get('source','voice');rid=str(message.get('request_id') or uuid.uuid4().hex)
+    if not re.fullmatch(r'[a-zA-Z0-9_-]{1,128}',rid):return
+    if source=='news_widget':
+        await ws_manager.send_to_client(websocket,{'type':'typed_transcript_status','request_id':rid,'source':source,'status':'accepted'})
+        await _run_serp_widget('news',{'query':message.get('display_query') or text},rid,client)
+        return
+    session=state.live_sessions.get(websocket)
+    if not session:
+        await _start_gemini_voice(websocket,guest=speaker_recognition.status()['enabled'])
+        session=state.live_sessions.get(websocket)
+    if session:await session.send_text(text,request_id=rid)
+    else:await ws_manager.send_to_client(websocket,{'type':'live_error','message':'Live conversation unavailable; your draft is preserved.'})
+
+
+async def _legacy_handle_transcript_message(websocket: WebSocket, message: Dict[str, Any]):
     """
     Handle incoming transcript from frontend.
     Pipeline:
@@ -5160,9 +5200,8 @@ async def lifespan(app: FastAPI):
     except ValueError:embedding_budget=40
     await asyncio.to_thread(state.live_memory.configure_semantic,GeminiEmbeddings(lambda:state.gemini_api_key),semantic_mode,embedding_budget)
     await asyncio.to_thread(state.live_memory.clock().observe,'runtime_start')
-    text_chat.memory=state.live_memory
     from astra_ai.memory.Mem0_ai_organizer import AIOrganizer
-    state.memory_organizer=AIOrganizer({'key_provider':_get_groq_api_key},memory_system=state.live_memory)
+    state.memory_organizer=AIOrganizer({'key_provider':_get_groq_api_key,'conversation_busy':lambda:any(s._speech_active or s._response_pending for s in state.live_sessions.values())},memory_system=state.live_memory)
     from astra_ai.core.background_budget import BackgroundBudget
     from astra_ai.core.background_model import BackgroundModel
     from astra_ai.core.research_learning import ResearchLearning
@@ -5172,6 +5211,8 @@ async def lifespan(app: FastAPI):
     background_budget=BackgroundBudget(state.live_memory.memory_path.parent/'background_budget.json')
     background_model=BackgroundModel(_get_groq_api_key,background_budget)
     state.memory_organizer.background_budget=background_budget
+    from astra_ai.memory.organization_review import OrganizationReview, GeminiMergeReviewer
+    state.memory_organizer.organization_review=OrganizationReview(state.live_memory,GeminiMergeReviewer(lambda:state.gemini_api_key,background_budget))
     learning_service=ResearchLearning(learned_root,state.live_memory,action_jobs,_background_search,background_model.summarize)
     capability_service=LearnedCapabilities(learned_root,Path(__file__).resolve().parents[3],state.live_memory,action_jobs,_dispatch_aegis_tool,background_model)
     await asyncio.to_thread(learning_service.initialize);await asyncio.to_thread(capability_service.initialize)
@@ -5186,25 +5227,27 @@ async def lifespan(app: FastAPI):
     await asyncio.to_thread(state.memory_organizer.start_monitoring)
     await action_jobs.start()
     speaker_warm_task=asyncio.create_task(speaker_recognition.prepare(),name="local-speaker-warmup") if speaker_recognition.status()["enabled"] else None
-    if state.gemini_api_key: text_chat.probe_task=asyncio.create_task(text_chat.probe(),name="aegis-text-model-probe")
+    # Conversation uses the existing Live session; no second text model is probed.
     memory_notification_task=asyncio.create_task(memory_change_loop(),name="nova-memory-changes")
     calendar_store.initialize()
     task_store.initialize()
 
+    from astra_ai.core.task_coordination import TaskCoordinator
+    async def current_run_state(identifier):
+        return (await asyncio.to_thread(task_store.get_run,'local',identifier))['status']
+    coordinator=TaskCoordinator(action_jobs,background_model,ALL_AEGIS_TOOLS,
+        busy=lambda:any(s._speech_active or s._response_pending for s in state.live_sessions.values()),run_state=current_run_state)
     async def execute_aegis_task(task: Dict[str, Any], emit):
-        await emit(18, "Sending instruction to Aegis")
-        prompt = (
-            "[ASTRA_TASK_EXECUTION]\n"
-            f"Task: {task['title']}\n"
-            f"Type: {task['kind']}\n"
-            f"Instruction: {task['instruction']}\n"
-            "Complete the task and return a concise result summary. "
-            "Do not claim an external or destructive action succeeded unless it actually did."
-        )
-        ready = await state.ensure_aegis_ai()
-        response = await state.aegis_ai.send_message(prompt, timeout=300.0) if ready else None
-        await emit(92, "Recording Aegis result")
-        return {"summary": response or "Aegis returned no result.", "provider": "aegis"}
+        # Bind the saved owner task to a current matching connection, without
+        # starting the standalone legacy model, speech stack or memory writer.
+        metadata=dict(task.get('metadata') or {})
+        for socket in ws_manager.connections:
+            live=state.live_sessions.get(socket)
+            if getattr(live,'guest',False):continue
+            if (getattr(live,'profile_id',''),getattr(live,'project_id',''))==(metadata.get('profile_id',''),metadata.get('project_id','')):
+                client=ws_manager.client_id(socket)
+                metadata.update(client_id=client,session_id=getattr(live,'session_id',CHAT_SESSIONS.get(client,'')));break
+        return await coordinator.run({**task,'metadata':metadata},emit)
 
     task_orchestrator.set_executor(execute_aegis_task)
     await task_orchestrator.start()
@@ -5229,10 +5272,6 @@ async def lifespan(app: FastAPI):
     if learning_warm_task:
         await asyncio.gather(learning_warm_task,return_exceptions=True)
     await action_jobs.stop()
-    if text_chat.probe_task and not text_chat.probe_task.done():
-        text_chat.probe_task.cancel()
-        try:await text_chat.probe_task
-        except asyncio.CancelledError:pass
     logger.info("="*70)
     logger.info("AEGIS SERVER SHUTDOWN")
     logger.info("="*70)
@@ -5522,12 +5561,37 @@ async def conversation_operation(payload:Dict[str,Any]):
     except Exception:return JSONResponse(status_code=503,content={"status":"failed","reason":"Conversation storage unavailable; retry without losing your draft."})
 
 async def _dispatch_aegis_tool(name,arguments,context,operation_id):
+    from astra_ai.core.gemini_session import CURRENT_OPERATION
+    token=CURRENT_OPERATION.set({**context,'operation_id':operation_id})
+    try:return await _dispatch_scoped_aegis_tool(name,arguments,context,operation_id)
+    finally:CURRENT_OPERATION.reset(token)
+
+async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
     client_id=context.get("client_id","");sid=context.get("session_id","")
     names={d["name"] for d in ALL_AEGIS_TOOLS}
     if name not in names:return {"status":"rejected","reason":"unregistered_tool"}
     if context.get("guest") and name not in {d["name"] for d in MEMORY_TOOL_DECLARATIONS+MEMORY_EVENT_TOOL_DECLARATIONS} | {"search_web","get_system_status"}:
         return {"status":"rejected","reason":"Guest context cannot access owner widgets or private UI."}
-    if name=="run_action_batch":return await asyncio.to_thread(action_jobs.submit,arguments.get("actions"),context,operation_id)
+    if (name in {'search_web','notes_action'} or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and action_jobs.task:
+        actions=[{'name':name,'arguments':{k:v for k,v in arguments.items() if k!='save_to_notes'}}]
+        if name=='search_web' and arguments.get('save_to_notes') is True:
+            actions.append({'name':'notes_action','arguments':{'action':'import_research'},'depends_on':[0],
+                            'result_refs':{'research_id':{'action_index':0,'result_path':'/research_id'},'research_revision':{'action_index':0,'result_path':'/research_revision'}}})
+        submitted=await asyncio.to_thread(action_jobs.submit,actions,context,operation_id,str(arguments.get('query') or arguments.get('action') or name)[:180])
+        if submitted.get('status') not in {'queued','duplicate'}:return submitted
+        jid=submitted['job_id']
+        deadline=time.monotonic()+90
+        while time.monotonic()<deadline:
+            snapshot=await asyncio.to_thread(action_jobs.list,jid,context)
+            job=snapshot.get('job',{});steps=job.get('actions') or [{}];step=steps[-1]
+            if job.get('state') in {'completed','failed','canceled'}:
+                failed=next((a for a in steps if a.get('state') in {'failed','uncertain','canceled'}),None)
+                outcome=(failed or step).get('result') or {'status':job['state']}
+                return {**outcome,'job_id':jid}
+            if job.get('paused') or job.get('state') in {'waiting_for_retry','waiting_for_ui'}:return {'status':job.get('state'),'job_id':jid,'reason':'Work continues in the durable task queue.'}
+            await asyncio.sleep(.1)
+        return {'status':'running','job_id':jid,'reason':'Inspect the existing task; do not submit it again.'}
+    if name=="run_action_batch":return await asyncio.to_thread(action_jobs.submit,arguments.get("actions"),context,operation_id,arguments.get("goal", ""))
     if name=="job_action":
         action=arguments.get("action","list")
         jid=arguments.get("job_id","")
@@ -5539,12 +5603,29 @@ async def _dispatch_aegis_tool(name,arguments,context,operation_id):
     if name in {'notice_action','presence_action'}:return await dispatch_notice(name,arguments,context)
     if name=='approve_memory' or name=='memory_action' and arguments.get('action') in {'approve','reject'}:
         return await get_library_service().decision('memory:'+str(arguments.get('approval_id','')),{'decision':'approved' if arguments.get('approved') is True or arguments.get('action')=='approve' else 'rejected','version':arguments.get('version'),'confirmation_quote':arguments.get('confirmation_quote')},context,voice=True)
+    if name=='research_artifact_action':
+        artifacts,_=get_research_services()
+        return await asyncio.to_thread(artifacts.page,str(arguments.get('research_id','')),context,str(arguments.get('research_revision','')),arguments.get('offset',0),arguments.get('limit',12000))
     if name=="library_action":
-        library=get_library_service();view=arguments.get('view','approvals');action=arguments.get('action','list')
+        library=get_library_service();view=arguments.get('view','memories');action=arguments.get('action','list')
+        if view=='memories':
+            from astra_ai.memory import library as memory_library
+            if context.get('guest'):return {'status':'rejected','reason':'owner_library_unavailable'}
+            profile=context.get('profile_id','');project=context.get('project_id','')
+            if action=='categories':return await asyncio.to_thread(memory_library.categories,state.live_memory,profile,project,arguments.get('query',''),arguments.get('offset',0),arguments.get('limit',30))
+            if action=='list':return await asyncio.to_thread(memory_library.page,state.live_memory,profile,project,arguments.get('category_id',''),arguments.get('query',''),arguments.get('status') or 'all',arguments.get('offset',0),arguments.get('limit',20))
+            if action=='get':
+                rows,records,members,revision=await asyncio.to_thread(memory_library.snapshot,state.live_memory,profile,project)
+                record=records.get(arguments.get('id',''))
+                return {'status':'ok','record':record,'revision':revision} if record else {'status':'not_found'}
+            if action=='open':return await _memory_view_action(client_id,{'action':'category' if arguments.get('category_id') else 'rail','rail':'library',**({'category':arguments['category_id']} if arguments.get('category_id') else {})})
+            return {'status':'rejected','reason':'invalid_memory_library_action'}
+        if view not in {'approvals','tasks'}:return {'status':'rejected','reason':'invalid_library_view'}
         if action=='list':return await asyncio.to_thread(library.listing,view,context,arguments.get('status',''),arguments.get('query',''),arguments.get('offset',0),arguments.get('limit',20))
         if action=='get':return await asyncio.to_thread(library.detail,view,arguments.get('id',''),context)
         if action=='decision':return await library.decision(arguments.get('id',''),arguments,context,voice=True)
         if action in {'pause','resume','retry','cancel'}:return await library.control(arguments.get('id',''),action,context)
+        if action=='open':return await _memory_view_action(client_id,{'action':'rail','rail':view})
         return {'status':'rejected','reason':'invalid_library_action'}
     if name=="get_system_status":return await health_check()
     if name in {'research_action','capability_action'}:
@@ -5575,7 +5656,7 @@ learning_warm_task=None
 async def _background_search(query):
     # Use the already configured search connector. Background learning never
     # silently spends conversation-model quota or substitutes another provider.
-    if not _get_env_value('FIRECRAWL_API_KEY'):return {'status':'failed','reason':'search_connector_not_configured'}
+    if not _get_env_value('SERPAPI_KEY'):return {'status':'failed','reason':'search_connector_not_configured'}
     if background_budget:
         from astra_ai.core.background_budget import BudgetPaused
         state_budget=await asyncio.to_thread(background_budget.snapshot)
@@ -5589,9 +5670,21 @@ async def _background_search(query):
                 from astra_ai.memory.shared_memory import atomic
                 atomic(background_budget.path,data)
         await asyncio.to_thread(reserve)
-    return await asyncio.to_thread(_gemini_search_web,{'query':query,'max_results':4})
+    from astra_ai.core.gemini_session import CURRENT_OPERATION
+    context=CURRENT_OPERATION.get() or {}
+    artifacts,service=get_research_services()
+    from astra_ai.memory.shared_memory import stable
+    scoped={**context,'background':True}
+    result=await service.search({'query':query,'mode':'quick','max_results':4},scoped,str(context.get('operation_id',''))+':question:'+stable(query))
+    if result.get('research_id'):
+        full=await asyncio.to_thread(artifacts.get,result['research_id'],scoped,result['research_revision'])
+        if full['status']=='ok':result={**result,'results':full['artifact']['sources']}
+    return result
 
 async def _diagnose_failed_job(jid,index,action,result,context):
+    # Authentication, provider limits and external availability require account
+    # recovery, not generated code or another research/repair task.
+    if action['name']=='search_web' or result.get('http_status') in {401,402,403,429,432,433}:return
     if learning_service:await learning_service.diagnose(jid,index,action,result,context)
     if not capability_service or context.get('guest') or context.get('background') or action['name'] in {'research_action','capability_action'}:return
     # One bounded repair-development task. It does not replay the failed action.
@@ -5621,7 +5714,6 @@ async def _open_requested_website(arguments,context,operation_id):
     return await asyncio.to_thread(launch)
 
 from astra_ai.ui.backend.action_jobs import ActionJobs
-from astra_ai.ui.backend.chat_stream import TextChat
 ALL_AEGIS_TOOLS=list({d["name"]:d for d in MEMORY_TOOL_DECLARATIONS+MEMORY_EVENT_TOOL_DECLARATIONS+WIDGET_TOOL_DECLARATIONS+ACTION_TOOL_DECLARATIONS}.values())
 async def _reconcile_job_action(action,context):
     from astra_ai.memory.shared_memory import stable,read
@@ -5631,6 +5723,12 @@ async def _reconcile_job_action(action,context):
     if action["name"]=="transcript_action":
         operations=await asyncio.to_thread(lambda:read(state.live_memory.transcript_path,{}).get("transcript_operations",{}))
         return operations.get(action["operation_id"])
+    if action['name']=='notes_action':
+        args=action.get('resolved_arguments',action.get('arguments',{}))
+        if args.get('action')=='import_research':
+            artifacts,_=get_research_services()
+            result=await asyncio.to_thread(artifacts.import_note,args.get('research_id',''),args.get('research_revision',''),context,action['operation_id'],state)
+            return result if result.get('verified') else None
     return None
 
 async def _notify_job_progress(client_id,event):
@@ -5652,18 +5750,36 @@ async def _notify_job_progress(client_id,event):
     await ws_manager.send_to_client_id(client_id,event)
 
 action_jobs=ActionJobs(Path(__file__).parent/"action_jobs.json",_dispatch_aegis_tool,_notify_job_progress,lambda client_id:ws_manager.websocket_for(client_id) is not None,[d["name"] for d in ALL_AEGIS_TOOLS],reconcile=_reconcile_job_action)
-text_chat=TextChat(state.live_memory,lambda:state.gemini_api_key,ALL_AEGIS_TOOLS,_dispatch_aegis_tool)
 
-@app.post("/api/chat/stream")
+async def _connected_live_reply(message):
+    if not state.gemini_api_key:raise HTTPException(503,'Configure GEMINI_API_KEY in Settings.')
+    client=str(message.get('client_id') or '')
+    socket=ws_manager.websocket_for(client)
+    if socket is None:raise HTTPException(403,'A current local UI connection is required.')
+    sid=CHAT_SESSIONS.get(client,'')
+    if message.get('session_id') and sid and message['session_id']!=sid:raise HTTPException(409,'Conversation changed; refresh before sending.')
+    session=state.live_sessions.get(socket)
+    if not session:
+        await _start_gemini_voice(socket,guest=speaker_recognition.status()['enabled'])
+        session=state.live_sessions.get(socket)
+    if not session:raise HTTPException(503,'Live conversation unavailable; draft preserved.')
+    rid=str(message.get('operation_id') or message.get('request_id') or uuid.uuid4().hex)
+    if not re.fullmatch(r'[a-zA-Z0-9_-]{1,128}',rid):raise HTTPException(400,'Invalid request identifier.')
+    text=str(message.get('text') or '').strip()
+    if not text or len(text)>8000:raise HTTPException(400,'A message of 1 to 8000 characters is required.')
+    result=await session.text_reply(text,rid)
+    return {'type':'complete','request_id':rid,'response':result['output_text'],'session_id':session.session_id,
+            'model':session.model,'provider':'gemini_live','memory_status':result.get('memory_status','pending'),'audio_via':'websocket'}
+
+
+@app.post('/api/chat/stream')
 async def streaming_chat(message:Dict[str,Any],request:Request):
-    if not state.gemini_api_key:raise HTTPException(503,"Configure Gemini in Settings.")
-    # Tests and runtime replacements use the same authoritative manager.
-    text_chat.memory=state.live_memory
+    # Compatibility adapter: audio/transcripts come from the same Live session.
+    if request.headers.get('X-Nova-Client'):message={**message,'client_id':request.headers['X-Nova-Client']}
     async def events():
-        async for event in text_chat.events(message):
-            if await request.is_disconnected():break
-            yield json.dumps(event,ensure_ascii=False)+"\n"
-    return StreamingResponse(events(),media_type="application/x-ndjson",headers={"Cache-Control":"no-store","X-Accel-Buffering":"no"})
+        try:yield json.dumps(await _connected_live_reply(message),ensure_ascii=False)+'\n'
+        except HTTPException as exc:yield json.dumps({'type':'error','message':exc.detail,'request_id':message.get('operation_id')})+'\n'
+    return StreamingResponse(events(),media_type='application/x-ndjson',headers={'Cache-Control':'no-store'})
 
 @app.get("/api/jobs")
 async def list_action_jobs(request:Request,job_id:str=""):
@@ -5768,17 +5884,20 @@ async def _start_gemini_voice(websocket: WebSocket, *, reset_retry: bool = True,
     client_id = ws_manager.client_id(websocket)
 
     async def operation_executor(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        from astra_ai.core.gemini_session import CURRENT_OPERATION
         live=state.live_sessions.get(websocket)
+        captured=CURRENT_OPERATION.get()
         ctx={"client_id":client_id,"session_id":getattr(live,"session_id",CHAT_SESSIONS.get(client_id,"")),"turn_id":getattr(live,"_turn_id",""),"user_text":" ".join(getattr(live,"_input_parts",[])),"guest":bool(getattr(live,"guest",False)),"profile_id":getattr(live,"profile_id",""),"project_id":getattr(live,"project_id","")}
-        return await _dispatch_aegis_tool(name,arguments,ctx,uuid.uuid4().hex)
+        if captured:ctx={**ctx,**captured,"client_id":client_id}
+        return await _dispatch_aegis_tool(name,arguments,ctx,str(captured.get("operation_id") or uuid.uuid4().hex) if captured else uuid.uuid4().hex)
 
     async def status_provider() -> Dict[str, Any]:
         return await _gemini_system_status(client_id)
 
-    session = GeminiLiveSession(
+    from astra_ai.core.aegis_ai import AegisCore
+    session = AegisCore(guest_memory if guest else state.live_memory).live_session(
         api_key=state.gemini_api_key,
         memory_file=guest_memory.transcript_path if guest else state.memory_file,
-        memory_manager=guest_memory if guest else state.live_memory,
         send_json=lambda message: ws_manager.send_to_client(websocket, message),
         send_bytes=lambda payload: ws_manager.send_bytes_to_client(websocket, payload),
         on_failure=hard_failure,
@@ -5966,23 +6085,20 @@ async def websocket_endpoint(websocket: WebSocket):
                     source = str(message.get("source") or "typed_input").strip().lower()
                     if not text:
                         continue
-                    # Search-widget turns retain their existing widget-aware
-                    # Aegis route until Gemini tools are introduced in phase 2.
-                    if source in {"search_widget", "news_widget"}:
-                        await handle_transcript_message(websocket, {
-                            **message, "type": "transcript", "isFinal": True
-                        })
-                        continue
                     session = state.live_sessions.get(websocket)
                     if state.live_providers.get(websocket) != "gemini_live" or not session:
                         await _start_gemini_voice(websocket,guest=speaker_recognition.status()["enabled"])
                         session = state.live_sessions.get(websocket)
-                    if state.live_providers.get(websocket) == "legacy" or not session:
-                        await handle_transcript_message(websocket, {
-                            **message, "type": "transcript", "isFinal": True
-                        })
+                    if not session:
+                        await ws_manager.send_to_client(websocket,{'type':'live_error','message':'Live conversation could not start. Your draft is preserved.'})
                     else:
-                        await session.send_text(text)
+                        rid=str(message.get('request_id') or uuid.uuid4().hex)
+                        if not re.fullmatch(r'[a-zA-Z0-9_-]{1,128}',rid):
+                            await ws_manager.send_to_client(websocket,{'type':'live_error','message':'Invalid request identifier.'})
+                            continue
+                        if source=='search_widget':text='Search in the Search widget for '+str(message.get('display_query') or text)
+                        accepted=await session.send_text(text,request_id=rid)
+                        if source=='search_widget':await ws_manager.send_to_client(websocket,{'type':'typed_transcript_status','request_id':rid,'source':source,'status':'accepted' if accepted.get('status') in {'accepted','duplicate'} else 'failed'})
                 elif msg_type == "transcript":
                     await handle_transcript_message(websocket, message)
                 elif msg_type == "widget_connection_request":
@@ -6086,6 +6202,8 @@ async def health_check():
     memory_status = await asyncio.to_thread(state.live_memory.stats)
     return {
         "status": "healthy",
+        "conversation_core": "astra_ai.core.aegis_ai",
+        "typed_provider": "gemini_live",
         "default_voice_provider": "gemini_live",
         "gemini_live_model": MODEL_STATUS["voice"].get("effective") or LIVE_MODEL,
         "models": MODEL_STATUS,
@@ -6128,6 +6246,8 @@ async def get_status():
     return {
         "processing": state.is_processing,
         "connections": len(ws_manager.connections),
+        "conversation_core": "astra_ai.core.aegis_ai",
+        "typed_provider": "gemini_live",
         "default_voice_provider": "gemini_live",
         "gemini_live_model": LIVE_MODEL,
         "gemini_live_sessions": len(state.live_sessions),
@@ -6139,53 +6259,10 @@ async def get_status():
     }
 
 
-@app.post("/api/chat")
-async def chat_rest(message: Dict[str, Any]):
-    """
-    REST API endpoint for chat (alternative to WebSocket).
-    Uses Gemini text generation, or an already running legacy AI process.
-    """
-    raw_text = message.get("text", "")
-    if not isinstance(raw_text, str):
-        raise HTTPException(status_code=400, detail="text must be a string")
-    text = raw_text.strip()
-    
-    if not text:
-        raise HTTPException(status_code=400, detail="Empty message")
-    
-    if state.gemini_api_key:
-        text_chat.memory=state.live_memory
-        final=None
-        async for event in text_chat.events(message):
-            if event["type"]=="complete":final=event
-            elif event["type"]=="error":raise HTTPException(502,event["message"])
-        if not final:raise HTTPException(502,"Aegis did not complete a reply.")
-        return {**final,"audio":None,"provider":"gemini","timestamp":datetime.now().isoformat()}
-    if not state.aegis_ai or not state.aegis_ai.is_running:
-        raise HTTPException(status_code=503, detail="Configure GEMINI_API_KEY in Settings or the root .env to enable chat")
-    
-    try:
-        logger.info(f"Chat REST: {text[:50]}...")
-        
-        # Send message to Aegis AI subprocess
-        response = await state.aegis_ai.send_message(text, timeout=30.0)
-        
-        if not response:
-            raise Exception("No response from Aegis AI")
-        
-        # Try to generate audio
-        audio_b64 = await generate_audio_base64(response)
-        
-        return {
-            "response": response,
-            "audio": audio_b64,
-            "format": "mp3",
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    except Exception as e:
-        logger.error(f"[ERROR] Chat endpoint error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+@app.post('/api/chat')
+async def chat_rest(message:Dict[str,Any]):
+    if not isinstance(message.get('text'),str) or not message['text'].strip():raise HTTPException(400,'Empty message')
+    return await _connected_live_reply(message)
 
 
 @app.post("/api/transcribe")
@@ -6563,7 +6640,7 @@ def _learning_context(request):
 async def learning_status(request:Request):
     context=_learning_context(request)
     if not capability_service or not learning_service:return {'status':'initializing'}
-    return {'status':'ok','search_connector':{'provider':'firecrawl','configured':bool(_get_env_value('FIRECRAWL_API_KEY'))},'capabilities':await asyncio.to_thread(capability_service.status),'research':await asyncio.to_thread(learning_service.listing,context),'budget':await asyncio.to_thread(background_budget.snapshot)}
+    return {'status':'ok','search_connector':{'provider':'serpapi','configured':bool(_get_env_value('SERPAPI_KEY')),'detailed_provider':'tavily','detailed_configured':bool(_get_env_value('TAVILY_API_KEY'))},'capabilities':await asyncio.to_thread(capability_service.status),'research':await asyncio.to_thread(learning_service.listing,context),'budget':await asyncio.to_thread(background_budget.snapshot)}
 
 @app.post('/api/learning/action')
 async def learning_action(request:Request,payload:Dict[str,Any]):
@@ -7667,51 +7744,16 @@ async def get_search_widget_state():
 
 
 @app.post("/api/search/run")
-async def run_search_widget(data: Dict[str, Any]):
-    """Run a direct, typed Search-widget query through the shared SERP pipeline."""
-    query = str(data.get("query") or "").strip()
-    if not query:
-        return JSONResponse(status_code=400, content={"success": False, "error": "query is required"})
-
-    request_id = f"search-{uuid.uuid4().hex}"
-    try:
-        await _run_serp_widget("search", {"query": query}, request_id)
-    except Exception as exc:
-        logger.warning("[SEARCH] Direct search failed for %r: %s", query, exc)
-        failure = {
-            "type": "widget_control",
-            "widget": "search",
-            "command": "show_results",
-            "request_id": request_id,
-            "source": "direct_search",
-            "query": query,
-            "display_topic": query,
-            "display_subtopic": "Live web",
-            "answer": "",
-            "results": [],
-            "search_type": "web",
-            "loading": False,
-            "error": str(exc) or "Search could not be completed.",
-            "original_transcript": query,
-        }
-        updated = state.update_search_widget_context(failure)
-        if str(updated.get("current", {}).get("request_id") or "") == request_id:
-            await ws_manager.broadcast(failure)
-        return JSONResponse(
-            status_code=502,
-            content={
-                "success": False,
-                "error": failure["error"],
-                "current": state.search_widget_context.get("current", {}),
-                "history": state.get_search_history_preview(),
-            },
-        )
-
-    return {
-        "success": True,
-        "current": state.search_widget_context.get("current", {}),
-        "history": state.get_search_history_preview(),
-    }
+async def run_search_widget(data: Dict[str, Any], request: Request):
+    """Compatibility adapter to scoped artifact research and the same widget action."""
+    query=str(data.get('query') or '').strip()
+    if not query:return JSONResponse(status_code=400,content={'success':False,'error':'query is required'})
+    context=_learning_context(request);request_id=str(data.get('request_id') or uuid.uuid4().hex)
+    if not re.fullmatch(r'[a-zA-Z0-9_-]{1,128}',request_id):raise HTTPException(422,'Invalid request identifier')
+    result=await _dispatch_aegis_tool('search_widget_action',{'action':'run','query':query,'mode':data.get('mode','detailed')},{**context,'request_id':request_id,'user_text':'Search for '+query},request_id)
+    success=result.get('status')=='completed'
+    payload={'success':success,'research':result,'current':state.search_widget_context.get('current',{}),'history':state.get_search_history_preview()}
+    return payload if success else JSONResponse(status_code=502,content={**payload,'error':result.get('reason','Research unavailable')})
 
 
 @app.get("/api/search/history")
@@ -8202,6 +8244,16 @@ def get_library_service():
         _library_service=LibraryService(state.live_memory,action_jobs,task_store,lambda:learning_service,lambda:capability_service,task_orchestrator.wake)
     return _library_service
 install_library(app,get_library_service,_learning_context)
+
+@app.get('/api/research/{identifier}')
+async def research_detail(identifier:str,request:Request,revision:str='',offset:int=0,limit:int=12000):
+    context=_learning_context(request)
+    artifacts,_=get_research_services()
+    result=await asyncio.to_thread(artifacts.page,identifier,context,revision,offset,limit)
+    if _learning_context(request)!=context:raise HTTPException(403,'Research session changed')
+    if result['status']=='not_found':raise HTTPException(404,'Research unavailable')
+    return result
+
 
 
 from astra_ai.ui.backend.notices import Notices

@@ -80,3 +80,19 @@ def test_shared_background_budget_pauses(tmp_path):
     with budget.lease(100):pass
     with pytest.raises(BudgetPaused):
         with budget.lease(100):pass
+
+
+@pytest.mark.parametrize('filename',['gemini_session.py','runtime_context.py','task_coordination.py','organization_review.py','research_artifacts.py','aegis_ai.py'])
+def test_moved_core_infrastructure_cannot_auto_repair(tmp_path,filename):
+    from astra_ai.core.learned_capabilities import PROTECTED
+    assert filename in PROTECTED
+    async def run():
+        m=SharedMemory(memory_path=tmp_path/'m.json',transcript_path=tmp_path/'t.json');m.ensure_ready()
+        target=tmp_path/'astra_ai'/'core'/filename;target.parent.mkdir(parents=True)
+        original='def adjust(value):\n    return value-1\n';target.write_text(original)
+        caps=LearnedCapabilities(tmp_path/'learned',tmp_path,m,None,None,sandbox=FakeSandbox());caps.initialize()
+        staged=caps.stage_repair(str(target.relative_to(tmp_path)),'adjust','def adjust(value):\n    return value+1',[{'input':3,'expected':4}],{})
+        assert staged['risk']=='high'
+        assert (await caps.apply_repair(staged['repair_id'],{}))['status']=='waiting_for_approval'
+        assert target.read_text()==original
+    asyncio.run(run())

@@ -27,3 +27,17 @@ test('speech onset stays bounded and capture continues after onset',async()=>{
  for(let i=0;i<4;i++)send(Array(640).fill(200));assert.equal(starts,0);
  const speech=Array.from({length:640},(_,i)=>Math.sin(i*.08)*4000);send(speech);assert.equal(starts,0);send(speech);assert.equal(starts,0);send(speech);assert.equal(starts,1);assert.equal(frames,6);input.stop();
 });
+
+for(const delay of [0,50,100,250])test(`speech ${delay} ms after playback keeps the first captured samples`,async()=>{
+ const h=harness();let started=0;const frames=[];
+ const input=h.api.createLiveVoiceInput(frame=>frames.push(new Int16Array(frame)),()=>{},()=>started++);
+ input.start();await new Promise(r=>setTimeout(r,0));
+ // Speaking/listening are presentation states; resume never resets active VAD.
+ input.resume();
+ const send=pcm=>h.getWorklet().port.onmessage({data:pcm.buffer});
+ for(let i=0;i<Math.ceil(delay/40);i++)send(new Int16Array(640));
+ const first=Int16Array.from({length:640},(_,i)=>Math.sin(i*.08)*4000);
+ send(first);input.resume();send(first.slice());send(first.slice());
+ assert.equal(started,1);assert.ok(frames.some(p=>p.every((v,i)=>v===first[i])));
+ assert.ok(frames.length<=7);input.stop();
+});

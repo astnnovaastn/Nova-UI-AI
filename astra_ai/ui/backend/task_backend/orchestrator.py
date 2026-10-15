@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Optional
 
@@ -50,6 +51,10 @@ class TaskOrchestrator:
         while not self._stopping.is_set():
             try:
                 await self._fire_schedules()
+                for pending in await asyncio.to_thread(task_store.active_runs,'local'):
+                    result=pending.get('result') or {}
+                    if pending['status']=='waiting_input' and result.get('status')=='waiting_for_retry' and result.get('next_attempt',float('inf'))<=time.time():
+                        await asyncio.to_thread(task_store.transition_run,'local',pending['id'],'queued',message='Retrying at the recorded budget checkpoint')
                 run = await asyncio.to_thread(task_store.next_queued_run)
                 if run:
                     await self._execute(run)
@@ -92,7 +97,7 @@ class TaskOrchestrator:
             current = await asyncio.to_thread(task_store.get_run, owner, run_id)
             if current["status"] == "pausing":
                 await asyncio.to_thread(task_store.transition_run, owner, run_id, "paused", message="Paused at a safe checkpoint")
-                return
+                raise asyncio.CancelledError
             if current["status"] in {"paused", "cancelled"}:
                 raise asyncio.CancelledError
             await asyncio.to_thread(
@@ -103,12 +108,13 @@ class TaskOrchestrator:
                 progress=progress,
                 current_step=step,
                 message=step,
+                **({'result':payload} if payload else {}),
             )
 
         try:
             await emit(8, "Preparing Aegis task")
             if self._executor:
-                result = self._executor(task, emit)
+                result = self._executor({**task,'execution_run_id':run_id}, emit)
                 if inspect.isawaitable(result):
                     result = await result
             else:
@@ -117,6 +123,13 @@ class TaskOrchestrator:
                 result = {"summary": "Task processed by the local task orchestrator.", "instruction": task["instruction"]}
             current = await asyncio.to_thread(task_store.get_run, owner, run_id)
             if current["status"] == "running":
+                state=(result or {}).get('status') if isinstance(result,dict) else None
+                if state in {'waiting_for_retry','waiting_for_input'}:
+                    await asyncio.to_thread(task_store.transition_run,owner,run_id,'waiting_input',result=result,current_step=result.get('reason','Waiting'),message=result.get('reason','Waiting'))
+                    return
+                if state in {'failed','canceled','cancelled'}:
+                    await asyncio.to_thread(task_store.transition_run,owner,run_id,'failed' if state=='failed' else 'cancelled',result=result,error=result.get('reason'),message='Task did not complete')
+                    return
                 await asyncio.to_thread(
                     task_store.transition_run,
                     owner,

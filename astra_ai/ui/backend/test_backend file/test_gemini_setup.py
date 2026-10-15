@@ -19,27 +19,22 @@ def test_saved_gemini_key_updates_running_server(tmp_path, monkeypatch):
     assert asyncio.run(server.get_settings_status())["env_keys_set"]["gemini"] is True
 
 
-def test_chat_uses_gemini_without_legacy_subprocess(monkeypatch, tmp_path):
-    from astra_ai.memory.live_memory import LiveMemoryManager
-    manager=LiveMemoryManager(memory_path=tmp_path/"long_term.json",transcript_path=tmp_path/"conversation.json")
-    manager.ensure_ready()
-    monkeypatch.setattr(server.state,"live_memory",manager)
-    closed = []
-    async def generate_content_stream(**kwargs):
-        assert kwargs["contents"][-1].parts[0].text == "Hello"
-        async def chunks():
-            yield SimpleNamespace(candidates=[SimpleNamespace(content=SimpleNamespace(parts=[SimpleNamespace(text="Hello from Gemini",thought=False,function_call=None)]))])
-        return chunks()
-    async def close():
-        closed.append(True)
-    client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content_stream=generate_content_stream), aclose=close))
-    monkeypatch.setattr(genai, "Client", lambda **kwargs: client)
-    monkeypatch.setattr(server.state, "gemini_api_key", "test-only-key")
-    monkeypatch.setattr(server.state, "aegis_ai", None)
-    result = asyncio.run(server.chat_rest({"text": "Hello"}))
-    assert result["response"] == "Hello from Gemini"
-    assert result["provider"] == "gemini"
-    assert closed == [True]
+def test_chat_uses_existing_live_session_without_another_model(monkeypatch):
+    socket=object()
+    async def reply(text, request_id):
+        assert text=='Hello'
+        return {'output_text':'Hello from Gemini Live','memory_status':'pending'}
+    live=SimpleNamespace(text_reply=reply,model='gemini-3.8-live',session_id='shared')
+    monkeypatch.setattr(server.ws_manager,'websocket_for',lambda client:socket if client=='connected' else None)
+    monkeypatch.setattr(server.state,'live_sessions',{socket:live})
+    monkeypatch.setattr(server.state,'gemini_api_key','fixture-key')
+    monkeypatch.setattr(genai,'Client',lambda **kwargs:(_ for _ in ()).throw(AssertionError('must reuse Live')))
+    result=asyncio.run(server.chat_rest({'text':'Hello','client_id':'connected'}))
+    assert result['response']=='Hello from Gemini Live'
+    assert result['provider']=='gemini_live' and result['audio_via']=='websocket'
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.chat_rest({'text':'Hello','client_id':'unknown'}))
+    assert error.value.status_code==403
 
 
 @pytest.mark.parametrize("text", [None, 7, {}, " "])

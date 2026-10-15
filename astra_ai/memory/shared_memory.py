@@ -467,9 +467,9 @@ class SharedMemory(MemoryIntelligence,PersistentRules,CategoryEngine):
             active=confidence>=.9 and lifecycle(record,m['_meta'])=='active' and (not pattern or (len(refs)>=3 and len({r['session_id'] for r in refs})>=2))
             m['learning'][rid]={'id':rid,'type':learning_type,'record_id':record_id,'examples':examples,'evidence_refs':refs,'active':active,'updated':now()};self._commit(m)
             return {'status':'saved','active':active,'id':rid}
-    def append_turn(self,user_text,assistant_text,session_id='default',turn_id=None,profile_id='',project_id=''):
+    def append_turn(self,user_text,assistant_text,session_id='default',turn_id=None,profile_id='',project_id='',timestamp=None):
         turn_id=turn_id or uuid.uuid4().hex
-        messages=[{'id':stable(turn_id,role),'turn_id':turn_id,'role':role,'content':safe(content),'timestamp':now(),'session_id':session_id,'profile_id':profile_id,'project_id':project_id} for role,content in [('user',user_text),('assistant',assistant_text)]]
+        messages=[{'id':stable(turn_id,role),'turn_id':turn_id,'role':role,'content':safe(content),'timestamp':timestamp or now(),'session_id':session_id,'profile_id':profile_id,'project_id':project_id} for role,content in [('user',user_text),('assistant',assistant_text)]]
         result=self.append_messages([m for m in messages if m['content']])
         with self._lock:
             privacy=self.privacy_settings()
@@ -563,6 +563,14 @@ class SharedMemory(MemoryIntelligence,PersistentRules,CategoryEngine):
     def recent_context(self,session_id,**args):
         from .conversation_sessions import context
         return context(self,session_id,**args)
+    def completed_request(self,session_id,turn_id,profile_id='',project_id=''):
+        """Reconnect reconciliation reads effective, scoped retained exchanges."""
+        from .category_policy import matches_scope
+        with self._lock:
+            messages=[r for r in self._messages() if r.get('session_id')==session_id and r.get('turn_id')==turn_id and matches_scope(r,profile_id,project_id)]
+        user=next((r for r in messages if r.get('role')=='user'),None)
+        assistant=next((r for r in messages if r.get('role')=='assistant'),None)
+        return {'input_text':user['content'],'output_text':assistant['content']} if user and assistant else None
     def topic_action(self,action,**args):
         from .memory_topics import action as execute
         return execute(self,action,**args)

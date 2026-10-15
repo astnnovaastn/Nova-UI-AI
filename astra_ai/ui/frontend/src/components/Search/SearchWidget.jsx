@@ -76,7 +76,9 @@ const SearchWidget = ({ onClose, isVisible = true, aiConnected = false, aiComman
   const inputRef = useRef(null);
   const activeRequestRef = useRef('');
 
-  const parsedAnswer = useMemo(() => parseSearchAnswer(answer), [answer]);
+  const [visibleCharacters,setVisibleCharacters]=useState(20000);
+  useEffect(()=>setVisibleCharacters(20000),[answer]);
+  const parsedAnswer = useMemo(() => parseSearchAnswer(answer.slice(0,visibleCharacters)), [answer,visibleCharacters]);
   const answerSources = useMemo(() => compactSearchSources(results, 3), [results]);
   const answerSections = useMemo(() => parsedAnswer.sections.filter((section) => !(
     results.length > 0 && section.title === 'Sources'
@@ -103,7 +105,7 @@ const SearchWidget = ({ onClose, isVisible = true, aiConnected = false, aiComman
     }
     if (activeRequestRef.current && incomingRequestId === activeRequestRef.current && !current.loading) {
       activeRequestRef.current = '';
-      setFeedback(current.error ? 'Search needs attention' : 'Research updated and saved');
+      setFeedback(current.error ? 'Search needs attention' : current.completeness==='partial'?'Partial report saved; check limitations.':'Research updated and saved');
     }
   }, []);
 
@@ -303,7 +305,7 @@ const SearchWidget = ({ onClose, isVisible = true, aiConnected = false, aiComman
 
   const copyAnswer = async () => {
     try {
-      await navigator.clipboard.writeText(parsedAnswer.directAnswer || answer);
+      await navigator.clipboard.writeText(answer);
       setFeedback('Direct answer copied');
     } catch { setFeedback('Clipboard access was unavailable'); }
   };
@@ -421,7 +423,7 @@ const SearchWidget = ({ onClose, isVisible = true, aiConnected = false, aiComman
               <>
                 <article className="search-direct-card search-trail-node">
                   <div className="search-card-heading"><span><small>01</small><span>DIRECT ANSWER</span></span><button type="button" onClick={copyAnswer}><Icon name="copy" size={15} />Copy</button></div>
-                  <div className="search-answer-text">{(parsedAnswer.directAnswer || answer).split('\n').map((line, index) => line ? <p key={index}>{line.replace(/^[-*]\s*/, '')}</p> : null)}</div>
+                  <div className="search-answer-text">{(parsedAnswer.directAnswer || answer.slice(0,visibleCharacters)).split('\n').map((line, index) => line ? <p key={index}>{line.replace(/^[-*]\s*/, '')}</p> : null)}</div>
                   <div className="search-answer-actions"><button type="button" onClick={clearCurrent} disabled={pendingId === 'clear'}>Clear current</button></div>
                 </article>
                 {answerSections.map((section, index) => {
@@ -442,6 +444,7 @@ const SearchWidget = ({ onClose, isVisible = true, aiConnected = false, aiComman
           </div>
         )}
 
+        {activeTab==='answer'&&answer.length>visibleCharacters&&<button className="search-report-more" onClick={()=>setVisibleCharacters(n=>n+20000)}>Read next portion · {(answer.length-visibleCharacters).toLocaleString()} characters remaining</button>}
         {activeTab === 'results' && (
           <div className="search-results-view" id="search-panel-results" role="tabpanel" aria-labelledby="search-tab-results">
             <div className="search-view-intro"><div><span>FULL SEARCH</span><h3>{results.length ? `${results.length} indexed sources` : 'No linked sources yet'}</h3></div></div>

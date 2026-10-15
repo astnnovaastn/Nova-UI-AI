@@ -52,7 +52,9 @@ def test_interrupted_voice_turn_and_context_refresh(memory,tmp_path):
     session._input_parts=['I prefer concise answers'];session._output_parts=['okay']
     asyncio.run(session._complete_turn())
     assert memory.recall_memory('concise')['matches']
-    assert contexts and contexts[-1]['turn_complete'] is False
+    # A completed topic refreshes the cache, never interrupts a newer utterance
+    # by injecting stale context into the provider's conversation.
+    assert contexts == []
     assert 'concise' in session._memory_profile
 
 def test_third_party_statements_are_not_automatic_user_facts(memory):

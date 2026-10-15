@@ -2,7 +2,7 @@
 export type ChatMessage = {id:string; role:string; text:string; status:string};
 const messages:ChatMessage[]=[];
 let loadRevision=0,messageRevision=0;
-let connection={connected:false,muted:true,state:'idle',model:'',clientId:'',sessionId:(()=>{try{let id=sessionStorage.getItem('nova-conversation-session');if(!id){id=crypto.randomUUID();sessionStorage.setItem('nova-conversation-session',id);}return id;}catch{return crypto.randomUUID();}})(),status:'',textBusy:false,sessionSwitching:false,guest:false,jobs:[] as Array<{id:string;state:string;completed:number;total:number}>,sources:[] as Array<{title:string;url:string}>};
+let connection={connected:false,muted:true,state:'idle',model:'',clientId:'',sessionId:(()=>{try{let id=sessionStorage.getItem('nova-conversation-session');if(!id){id=crypto.randomUUID();sessionStorage.setItem('nova-conversation-session',id);}return id;}catch{return crypto.randomUUID();}})(),status:'',textBusy:false,sessionSwitching:false,guest:false,jobs:[] as Array<{id:string;state:string;completed:number;total:number;sequence?:number;title?:string;step?:string}>,sources:[] as Array<{title:string;url:string}>};
 export function conversationSnapshot(){return {messages:[...messages],...connection};}
 function changed(){window.dispatchEvent(new CustomEvent('nova-conversation',{detail:conversationSnapshot()}));}
 export function conversationState(update:Partial<typeof connection>){const scopeChanged=update.guest!==undefined&&update.guest!==connection.guest||update.clientId!==undefined&&update.clientId!==connection.clientId;connection={...connection,...update,...(scopeChanged?{jobs:[]}:{} )};changed();}

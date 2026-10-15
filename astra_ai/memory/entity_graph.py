@@ -115,6 +115,9 @@ def apply_proposals(manager, proposals, sources, operation_id):
                 refs=evidence(p,profile,project);label=str(p.get('label','')).strip()[:80]
                 if not refs or not label or safe(label)!=label or not any(normal(label) in normal(r['quote']) for r in refs):continue
                 identity=stable(section,normal(label),profile,project,*sorted(r['id'] for r in members));target=m.setdefault('topic_groups',{}) if section=='topics' else g[section]
+                if section=='topics':
+                    existing=next((t for t in target.values() if normal(t.get('label',''))==normal(label) and (t.get('profile_id',''),t.get('project_id',''))==(profile,project) and t.get('state')=='active'),None)
+                    if existing:identity=existing['id'];members=list({r['id']:r for r in [*members,*[accessible[rid] for rid in existing.get('member_ids',[]) if rid in accessible]]}.values())
                 old=target.get(identity)
                 if old and old.get('state')=='forgotten':continue
                 merged=list(old.get('evidence_refs',[])) if old else []
@@ -127,6 +130,16 @@ def apply_proposals(manager, proposals, sources, operation_id):
                 if old and old['evidence_refs']==merged:continue
                 item={'id':identity,'kind':'topic' if section=='topics' else 'observation' if section=='observations' else 'pattern','label':label,'category':members[0]['category'],'member_ids':sorted(r['id'] for r in members),'record_id':members[0]['id'],'profile_id':profile,'project_id':project,'evidence_refs':merged,'state':state,'revision':old.get('revision',0)+1 if old else 1,'created':old.get('created',now()) if old else now(),'updated':now(),'history':list(old.get('history',[]))+[{k:v for k,v in old.items() if k!='history'}] if old else []}
                 target[identity]=item;saved+=state=='active';pending+=state=='pending'
+        for proposed in proposals.get('memberships',[])[:20]:
+            from .category_registry import resolve
+            members=[accessible[rid] for rid in proposed.get('member_ids',[]) if rid in accessible]
+            if not members:continue
+            profile=members[0].get('profile_id','');project=members[0].get('project_id','')
+            if any((r.get('profile_id',''),r.get('project_id',''))!=(profile,project) for r in members):continue
+            category=resolve(m,proposed.get('category_id',''),profile,project)
+            if not category or not evidence(proposed,profile,project):continue
+            result=manager.category_action('update',category_id=category['id'],expected_revision=category['revision'],source_refs=[{'record_id':r['id']} for r in members],profile_id=profile,project_id=project,operation_id=operation_id+':membership:'+category['id'])
+            saved+=result.get('status')=='updated'
         for proposed in proposals.get('categories',[])[:10]:
             if not isinstance(proposed,dict):continue
             members=[accessible[r] for r in proposed.get('member_ids',[]) if r in accessible]

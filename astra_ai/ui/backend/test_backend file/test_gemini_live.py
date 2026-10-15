@@ -80,7 +80,7 @@ def test_live_config_pins_requested_model_and_voice(tmp_path: Path):
     assert all(tool.google_search is None for tool in config.tools)
     declarations = next(tool.function_declarations for tool in config.tools if tool.function_declarations)
     assert {declaration.name for declaration in declarations} == {
-        "memory_context_action", "time_action", "library_action", "notice_action", "presence_action", "category_action", "research_action", "capability_action", "open_website", "save_memory", "forget_memory", "recall_conversations", "set_standing_rule", "read_standing_rules", "transcript_action", "memory_topic_action", "memory_view_action", "run_action_batch", "job_action",
+            "research_artifact_action", "memory_context_action", "time_action", "library_action", "notice_action", "presence_action", "category_action", "research_action", "capability_action", "open_website", "save_memory", "forget_memory", "recall_conversations", "set_standing_rule", "read_standing_rules", "transcript_action", "memory_topic_action", "memory_view_action", "run_action_batch", "job_action",
         "save_memory_event", "forget_memory_event", "recall_memory",
         "approve_memory", "get_pending_memories", "save_memory_relationship", "learn_memory", "memory_action", "propose_memories",
                     "read_ui_context", "get_system_status", "read_notes_context", "read_search_context", "read_calendar_context", "read_image_context", "notes_action", "calendar_create_event", "calendar_action", "image_action", "search_history_action",

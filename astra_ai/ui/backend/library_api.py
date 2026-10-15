@@ -37,12 +37,12 @@ class LibraryService:
             commands=[a['name'].replace('_',' ') for a in r['actions']]
             controls=['cancel'] if r['state'] not in {'completed','canceled','failed'} else ['retry'] if r['state']=='failed' else []
             controls+=['resume'] if r.get('paused') and r['state'] not in {'completed','failed','canceled'} else ['pause'] if r['state'] in {'running','queued','waiting_for_retry','waiting_for_ui'} else []
-            result.append({'id':'job:'+r['id'],'source':'job','source_id':r['id'],'background':bool(r['context'].get('background')),'title':', '.join(commands[:3]),'state':'paused' if r.get('paused') and r['state'] not in {'completed','failed','canceled'} else r['state'],'created':r['created'],'updated':r['updated'],'version':str(r.get('sequence',0)),'controls':controls,'details':{k:copy.deepcopy(v) for k,v in r.items() if k!='context'}})
+            result.append({'id':'job:'+r['id'],'source':'job','source_id':r['id'],'background':bool(r['context'].get('background')),'title':r.get('title') or ', '.join(commands[:3]),'state':'paused' if r.get('paused') and r['state'] not in {'completed','failed','canceled'} else r['state'],'created':r['created'],'updated':r['updated'],'version':str(r.get('sequence',0)),'controls':controls,'details':{k:copy.deepcopy(v) for k,v in r.items() if k!='context'}})
         self.tasks._ensure()
         with self.tasks.connection() as db:rows=db.execute("SELECT r.id,t.metadata FROM task_runs r JOIN tasks t ON t.id=r.task_id WHERE r.owner_id=?",('local',)).fetchall()
         for row in rows:
             if not self._scope(json.loads(row['metadata'] or '{}'),c):continue
-            r=self.tasks.get_run('local',row['id']);state=r['status'];controls=['pause','cancel'] if state in {'queued','running'} else ['resume','cancel'] if state in {'paused','interrupted'} else ['retry'] if state=='failed' else []
+            r=self.tasks.get_run('local',row['id']);state=r['status'];controls=['pause','cancel'] if state in {'queued','running'} else ['resume','cancel'] if state in {'paused','interrupted','waiting_input'} else ['retry'] if state=='failed' else []
             task=self.tasks.get_task('local',r['task_id'])
             result.append({'id':'run:'+r['id'],'source':'run','source_id':r['id'],'title':task['title'],'state':{'succeeded':'completed','cancelled':'canceled'}.get(state,state),'created':r['created_at'],'updated':r['updated_at'],'version':r['updated_at'],'controls':controls,'details':r})
         return result

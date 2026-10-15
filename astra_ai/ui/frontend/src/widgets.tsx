@@ -611,6 +611,7 @@ const WidgetContainer = () => {
   };
 
   const openWidget = (widgetName: WidgetName) => {
+    window.dispatchEvent(new Event('nova-open-dashboard'));
     if (widgetName === 'weather') {
       setWeatherVisibility('open');
     }

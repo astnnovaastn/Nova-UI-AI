@@ -263,6 +263,10 @@ class MemoryIntelligence:
         entries = [{'id': r['id'], 'kind': 'user_rule', 'revision': r.get('revision', 1), 'scope': r.get('scope'), 'text': safe(str(r['value']))} for r in rules['records']]
         records = self.context_records(query=query, **context)
         for r in records:
+            # Base context is small and stable. Old development topics cannot
+            # crowd out the current utterance merely because they are stored.
+            if query and r.get('_context_role')=='base' and r.get('category_policy',r.get('category')) not in {'user_identity','language_preferences','timezone_preferences','response_adaptation','communication_boundaries'}:
+                continue
             if any(e['id'] == r['id'] for e in entries):
                 continue
             entries.append({'id': r['id'], 'kind': 'research' if r.get('attributes', {}).get('external_knowledge') else r['kind'], 'category': r['category'], 'revision': r.get('revision', 1), 'timestamp': r.get('created'), 'valid_from': r.get('valid_from'), 'valid_until': r.get('valid_until'), 'text': safe(evidence_text(r))})
