@@ -69,12 +69,18 @@ uncertain writes, result-reference validation and saved-task completion reuse.
 UI progress comes from the existing task stores; stale progress and overlapping
 snapshot responses cannot overwrite newer state.
 
-SerpAPI was verified against its configured public endpoint. Tavily returned
-HTTP 401 with the installed configuration. The live root `.env` was unchanged
-on disk when the user reported updating a key. No fallback provider was silently
-used. Detailed Tavily research therefore remains an outstanding real-provider
-check; mocked advanced-search contracts pass. Do not repeatedly probe until the
-configuration is corrected. Authentication errors do not trigger code repair.
+SerpAPI was verified against its configured public endpoint. Tavily initially
+returned HTTP 401; the live root `.env` was unchanged at that earlier check.
+After the user confirmed saving the updated key on 15 October, the official
+endpoint returned HTTP 200 with three results. A subsequent real-provider test
+using Nova's production `ResearchSearch` implementation completed in 4.164
+seconds, retaining 222,849 report characters from three public documentation
+sources. Scoped detail retrieval, the first 20,000-character page, continuation
+and rejection of an unrelated scope all passed. This used an isolated local
+test artifact store and no private memory. It verifies the provider/connector
+and artifact path, not a new full voice-to-Notes benchmark. No fallback provider
+was used. Nova reads the saved key dynamically; no restart was necessary.
+Authentication errors do not trigger code repair.
 
 The specifically approved test-generated repair job `2b7c8ffa` was canceled.
 Other saved background work was not broadly canceled. Background model quota
