@@ -61,11 +61,7 @@ export class SoundWaveController {
     this.isMuted = muted;
     this.isActive = (this.currentState === "listening" || this.currentState === "idle") && !muted;
     this.updateVisuals();
-    if (muted) {
-      this.stopMic();
-    } else {
-      this.checkAndStartMic();
-    }
+
   }
 
   /**
@@ -77,11 +73,7 @@ export class SoundWaveController {
     this.isActive = (state === "listening" || state === "idle") && !this.isMuted;
     this.updateVisuals();
     
-    if (this.isActive) {
-      this.checkAndStartMic();
-    } else {
-      this.stopMic();
-    }
+
   }
 
   /**
@@ -94,7 +86,7 @@ export class SoundWaveController {
     this.container.classList.remove("idle", "listening", "thinking", "speaking", "muted");
     
     // Apply current state class
-    if (this.isMuted) {
+    if (this.isMuted && this.currentState !== "speaking") {
       this.container.classList.add("muted");
     } else {
       this.container.classList.add(this.currentState);
@@ -104,54 +96,8 @@ export class SoundWaveController {
   /**
    * Requests mic permission and initiates the microphone audio analyzer.
    */
-  private async checkAndStartMic(): Promise<void> {
-    if (!this.isActive || this.isMuted) return;
-    if (this.stream) return; // Already capturing
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      console.warn("[SOUND-WAVE] getUserMedia not supported in this context");
-      return;
-    }
-
-    try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      this.audioCtx = new AudioContextClass();
-      this.micAnalyser = this.audioCtx.createAnalyser();
-      this.micAnalyser.fftSize = 128;
-      this.micAnalyser.smoothingTimeConstant = 0.72; // Smooth out mic jitter
-
-      this.source = this.audioCtx.createMediaStreamSource(this.stream);
-      this.source.connect(this.micAnalyser);
-    } catch (err) {
-      console.warn("[SOUND-WAVE] Failed to start microphone analyser:", err);
-    }
-  }
-
-  /**
-   * Stops analysis and releases the microphone hardware/stream.
-   */
-  private stopMic(): void {
-    if (this.stream) {
-      this.stream.getTracks().forEach((track) => track.stop());
-      this.stream = null;
-    }
-
-    if (this.source) {
-      this.source.disconnect();
-      this.source = null;
-    }
-
-    if (this.audioCtx) {
-      if (this.audioCtx.state !== "closed") {
-        this.audioCtx.close().catch(() => {});
-      }
-      this.audioCtx = null;
-    }
-
-    this.micAnalyser = null;
-  }
+  public setMicAnalyser(analyser: AnalyserNode | null): void { this.micAnalyser=analyser; }
+  private stopMic(): void { this.micAnalyser=null; }
 
   /**
    * Animation frame loop to process frequency bands and update bar heights.
@@ -164,7 +110,7 @@ export class SoundWaveController {
 
       // Determine active analyser based on current state
       let activeAnalyser: AnalyserNode | null = null;
-      if (this.currentState === "speaking" && !this.isMuted) {
+      if (this.currentState === "speaking") {
         activeAnalyser = this.aiAnalyser;
       } else if (this.isActive && !this.isMuted) {
         activeAnalyser = this.micAnalyser;
@@ -238,7 +184,7 @@ export class SoundWaveController {
           const breatheSpeed = this.currentState === "thinking" ? 0.0055 : 0.0025;
           const breatheAmp = this.currentState === "thinking" ? 1.5 : 0.8;
           const breathe = Math.sin(Date.now() * breatheSpeed + i) * breatheAmp;
-          targetHeight = Math.max(4, this.baseHeights[i] + breathe);
+          targetHeight = 4;
         }
 
         // Snappy rise (when target > current) and smooth decay (when target < current)

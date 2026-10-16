@@ -25,9 +25,18 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
+    "@tiptap/core": "^3.32.0",
+    "@tiptap/extension-image": "^3.32.0",
+    "@tiptap/extension-table": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/react": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
     "@types/three": "^0.183.1",
+    "dompurify": "^3.4.17",
     "leaflet": "^1.9.4",
+    "marked": "^18.1.1",
     "onnxruntime-web": "^1.23.2",
+    "pdfjs-dist": "^6.4.299",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "three": "^0.183.2"

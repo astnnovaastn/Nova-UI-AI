@@ -2,7 +2,8 @@ import React,{useEffect,useRef,useState} from 'react';
 import {conversationSnapshot} from '../../conversation';
 
 export default function MemoryRuntimeStatus({active}){
- const [status,setStatus]=useState(null);
+ const [status,setStatus]=useState(null),[stats,setStats]=useState(null);
+ useEffect(()=>{const onStats=e=>setStats(e.detail);window.addEventListener('nova-memory-stats',onStats);return()=>window.removeEventListener('nova-memory-stats',onStats);},[]);
  const scopeRef=useRef('');
  useEffect(()=>{
   if(!active)return;
@@ -21,5 +22,5 @@ export default function MemoryRuntimeStatus({active}){
  const mode=status.semantic?.mode||'off';
  const label=mode==='enabled'?'Semantic recall':mode==='shadow'?'Recall evaluation':'Local recall';
  let date='';try{date=new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',timeZone:status.time?.timezone||'Europe/Madrid'}).format(new Date(status.time.observed_at));}catch{}
- return <div className="memory-runtime-status" aria-label="Memory runtime status" title={`${status.time?.timezone||'Europe/Madrid'} · ${status.semantic?.indexed||0} indexed sources${status.semantic?.error?' · semantic lookup paused; local recall available':''}`}><span className="memory-runtime-dot"/>{label}{date&&<span> · {date}</span>}</div>;
+ return <div className="memory-workspace-status">{stats&&<span>{stats.memories.toLocaleString()} memories · {stats.categories} categories · {stats.links.toLocaleString()} connections</span>}<details><summary><span className="memory-runtime-dot"/>{label} · {date}</summary><p>{status.time?.timezone||'Europe/Madrid'}<br/>{status.semantic?.indexed||0} indexed sources{status.semantic?.error?' · semantic lookup paused; local recall available':''}</p></details></div>;
 }

@@ -2290,6 +2290,11 @@ def _save_search_record(query: str, summary: str, results: Any, record_id: Optio
 
 
 _research_services = {}
+background_model=None
+async def _synthesize_research(query,sources):
+    if background_model is None:return ''
+    return await background_model.report(query,sources)
+
 
 def get_research_services():
     from astra_ai.core.research_learning import ResearchArtifacts, ResearchSearch
@@ -2297,7 +2302,7 @@ def get_research_services():
     key=str(path.resolve())
     if key not in _research_services:
         artifacts=ResearchArtifacts(path)
-        _research_services[key]=(artifacts,ResearchSearch(artifacts,_get_env_value))
+        _research_services[key]=(artifacts,ResearchSearch(artifacts,_get_env_value,synthesize=_synthesize_research))
     return _research_services[key]
 
 async def _aegis_search_web(arguments):
@@ -2311,6 +2316,8 @@ async def _aegis_search_web(arguments):
         if item['status']=='ok':
             indexed=await asyncio.to_thread(learning_service.import_artifact,item['artifact'],context)
             result['knowledge_index_status']=indexed.get('status')
+    if result.get('research_id') and context.get('client_id') and (arguments.get('mode')=='detailed' or context.get('requested_research')):
+        await ws_manager.send_to_client_id(context['client_id'],{'type':'research_ready','research_id':result['research_id'],'research_revision':result['research_revision'],'query':result['query']})
     return result
 
 
@@ -2971,7 +2978,8 @@ async def _gemini_search_widget_action(client_id: str, arguments: Dict[str, Any]
     if action == 'run' or action=='show_results' and arguments.get('research_id'):
         if action=='run':
             loading={'type':'widget_control','widget':'search','command':'set_loading','request_id':request_id,'query':arguments.get('query',''),'loading':True,'source':'research_artifact'}
-            state.update_search_widget_context(loading);await ws_manager.send_to_client_id(client_id,loading)
+            state.update_search_widget_context(loading)
+            if arguments.get('mode','detailed')=='quick':await ws_manager.send_to_client_id(client_id,loading)
             result=await _aegis_search_web({**arguments,'mode':arguments.get('mode','detailed')})
         else:
             artifacts,_=get_research_services()
@@ -2984,6 +2992,8 @@ async def _gemini_search_widget_action(client_id: str, arguments: Dict[str, Any]
         from astra_ai.core.aegis_ai import CURRENT_OPERATION
         artifacts,_=get_research_services()
         artifact=artifacts.get(result['research_id'],CURRENT_OPERATION.get() or {})['artifact']
+        if artifact['mode']=='detailed':
+            return {**result,'ui_status':'available_in_research_workspace','destination':'research'}
         payload={'type':'widget_control','widget':'search','command':'show_results','request_id':request_id,
                  'query':artifact['query'],'display_topic':artifact['query'],'answer':artifact['report'],
                  'results':result['results'],'research_id':artifact['id'],'research_revision':artifact['revision'],
@@ -3043,6 +3053,15 @@ async def _gemini_ui_action(client_id: str, arguments: Dict[str, Any]) -> Dict[s
         "mute_microphone": "mute", "pause_listening": "mute",
         "unmute_microphone": "unmute", "resume_listening": "unmute",
     }
+    if action in {'discover','snapshot','invoke','workspace'}:
+        if not client_id:return {'status':'failed','reason':'connected_ui_required'}
+        request_id='ui-'+uuid.uuid4().hex
+        permitted={'action','control_id','interaction','value','expected_revision','offset','limit','query','workspace','research_id'}
+        payload={k:v for k,v in arguments.items() if k in permitted}
+        state.register_widget_action(client_id,request_id)
+        await ws_manager.send_to_client_id(client_id,{'type':'application_control','request_id':request_id,**payload})
+        result=await state.await_widget_action(client_id,request_id,timeout=5.0)
+        return {**(result or {'status':'unconfirmed','reason':'UI did not confirm. Inspect current state before retrying.'}),'operation_id':request_id}
     command = mapping.get(action)
     request_id = f"gemini-ui-{uuid.uuid4().hex}"
     if not command:
@@ -5206,7 +5225,7 @@ async def lifespan(app: FastAPI):
     from astra_ai.core.background_model import BackgroundModel
     from astra_ai.core.research_learning import ResearchLearning
     from astra_ai.core.learned_capabilities import LearnedCapabilities
-    global learning_service,capability_service,background_budget,learning_warm_task
+    global learning_service,capability_service,background_budget,learning_warm_task,background_model
     learned_root=Path(__file__).resolve().parents[2]/'core'/'learned'
     background_budget=BackgroundBudget(state.live_memory.memory_path.parent/'background_budget.json')
     background_model=BackgroundModel(_get_groq_api_key,background_budget)
@@ -5485,7 +5504,7 @@ async def _memory_view_action(client_id,arguments):
     live=state.live_sessions.get(socket)
     if live and live.guest:return {'status':'rejected','reason':'owner_view_required'}
     profile=str(getattr(live,'profile_id',''));project=str(getattr(live,'project_id',''));args=dict(arguments)
-    allowed={'open','category','session','inspect','search','filter','focus','zoom','pan','rotate','highlight','reset','rail','entity','day','topic','expand'}
+    allowed={'open','category','session','inspect','search','filter','focus','zoom','pan','rotate','highlight','reset','rail','entity','day','topic','expand','pause_rotation','resume_rotation'}
     if args.get('action') not in allowed:return {'status':'rejected','reason':'unsupported_view_action'}
     for field in ('x','y','zoom','yaw','pitch'):
         if field in args:
@@ -5560,6 +5579,38 @@ async def conversation_operation(payload:Dict[str,Any]):
     except (TypeError,ValueError):raise HTTPException(422,"Invalid conversation request")
     except Exception:return JSONResponse(status_code=503,content={"status":"failed","reason":"Conversation storage unavailable; retry without losing your draft."})
 
+_destructive_confirmations={}
+
+def _destructive_revision(name,arguments,context):
+    from astra_ai.memory.shared_memory import stable,canonical
+    target=str(arguments.get('note_id') or arguments.get('record_id') or arguments.get('event_id') or arguments.get('id') or arguments.get('path') or '')
+    if name=='notes_action':snapshot=state.get_note_by_id(target) if target else state.get_notes_state()
+    elif name in {'memory_action','transcript_action','delete_memory','delete_search_memory'}:snapshot=state.live_memory.load().get('_meta',{})
+    else:snapshot={'ui':state.widget_connections.context_payload_for(context.get('client_id','')).get('connected_widgets',{}),'target':target}
+    return stable(name,canonical(arguments),canonical(snapshot),context.get('profile_id',''),context.get('project_id',''),context.get('session_id',''))
+
+async def _confirm_destructive(name,arguments,context):
+    action=str(arguments.get('action',''));destructive=bool(re.search(r'(^|_)(delete|forget|erase|reset|purge|clear_all|clear_draft|discard)(_|$)',action) or name in {'delete_file','delete_memory','delete_search_memory'})
+    if not destructive:return None
+    if context.get('guest') or context.get('background') or not context.get('client_id'):return {'status':'rejected','reason':'attributed_owner_confirmation_required'}
+    revision=await asyncio.to_thread(_destructive_revision,name,arguments,context);key=(context['client_id'],revision)
+    entry=_destructive_confirmations.get(key)
+    if entry and time.monotonic()-entry['created']<120:
+        if entry['state']=='approved':
+            if entry.get('used_by') not in {None,context.get('operation_id')}:return {'status':'rejected','reason':'confirmation_already_consumed'}
+            entry['used_by']=context.get('operation_id');return None
+        return {'status':'rejected' if entry['state']=='rejected' else 'waiting_for_ui','reason':'user_rejected' if entry['state']=='rejected' else 'Owner confirmation is pending; no data changed.'}
+    request_id='confirm-'+uuid.uuid4().hex
+    _destructive_confirmations[key]={'created':time.monotonic(),'state':'waiting','request_id':request_id}
+    if len(_destructive_confirmations)>200:
+        for old in list(_destructive_confirmations)[:50]:_destructive_confirmations.pop(old,None)
+    state.register_widget_action(context['client_id'],request_id)
+    await ws_manager.send_to_client_id(context['client_id'],{'type':'application_confirmation','request_id':request_id,'revision':revision,'title':name+': '+action,'target':str(arguments.get('note_id') or arguments.get('record_id') or arguments.get('event_id') or arguments.get('id') or arguments.get('path') or 'selected content')})
+    result=await state.await_widget_action(context['client_id'],request_id,timeout=5)
+    if result and result.get('confirmed') and await asyncio.to_thread(_destructive_revision,name,arguments,context)==revision:
+        _destructive_confirmations[key].update(state='approved',used_by=context.get('operation_id'));return None
+    return {'status':'waiting_for_ui','reason':'Owner confirmation is required; no data changed.'}
+
 async def _dispatch_aegis_tool(name,arguments,context,operation_id):
     from astra_ai.core.aegis_ai import CURRENT_OPERATION
     token=CURRENT_OPERATION.set({**context,'operation_id':operation_id})
@@ -5591,6 +5642,8 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
             if job.get('paused') or job.get('state') in {'waiting_for_retry','waiting_for_ui'}:return {'status':job.get('state'),'job_id':jid,'reason':'Work continues in the durable task queue.'}
             await asyncio.sleep(.1)
         return {'status':'running','job_id':jid,'reason':'Inspect the existing task; do not submit it again.'}
+    confirmation=await _confirm_destructive(name,arguments,{**context,'operation_id':operation_id})
+    if confirmation:return confirmation
     if name=="run_action_batch":return await asyncio.to_thread(action_jobs.submit,arguments.get("actions"),context,operation_id,arguments.get("goal", ""))
     if name=="job_action":
         action=arguments.get("action","list")
@@ -6135,7 +6188,13 @@ async def websocket_endpoint(websocket: WebSocket):
                             "status": "rejected",
                             "detail": str(exc),
                         })
-                elif msg_type == "widget_action_result" and message.get("widget")=="memory":
+                elif msg_type == "widget_action_result" and message.get("widget")=="application_confirmation":
+                    client=ws_manager.client_id(websocket)
+                    for key,entry in _destructive_confirmations.items():
+                        if key[0]==client and entry['request_id']==message.get('request_id') and key[1]==message.get('revision') and entry['state']=='waiting':
+                            entry['state']='approved' if message.get('confirmed') is True else 'rejected'
+                    state.resolve_widget_action(client,str(message.get('request_id') or ''),message)
+                elif msg_type == "widget_action_result" and message.get("widget") in {"memory","application"}:
                     state.resolve_widget_action(ws_manager.client_id(websocket),str(message.get("request_id") or ""),message)
                 elif msg_type == "widget_action_result":
                     logger.info(
@@ -6147,7 +6206,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
                     state.record_widget_result(message)
                     state.widget_connections.record_result(ws_manager.client_id(websocket), message)
-                    if str(message.get("status") or "").lower() in {"completed", "failed"}:
+                    if str(message.get("status") or "").lower() in {"completed", "failed", "unconfirmed"}:
                         state.resolve_widget_action(
                             ws_manager.client_id(websocket),
                             str(message.get("request_id") or ""),
@@ -8249,6 +8308,50 @@ def get_library_service():
     return _library_service
 install_library(app,get_library_service,_learning_context)
 
+@app.get('/api/research')
+async def research_listing(request:Request,offset:int=0,limit:int=30):
+    context=_learning_context(request);artifacts,_=get_research_services()
+    return await asyncio.to_thread(artifacts.listing,context,offset,limit)
+
+@app.post('/api/research')
+async def research_request(request:Request):
+    context=_learning_context(request)
+    if context.get('guest'):raise HTTPException(403,'Owner research required')
+    body=await request.json()
+    arguments={'query':body.get('query',''),'mode':body.get('mode','detailed'),'subquestions':body.get('subquestions',[])}
+    operation_id=str(body.get('operation_id') or uuid.uuid4().hex)
+    result=action_jobs.submit([{'name':'search_web','arguments':arguments}],{**context,'requested_research':True},operation_id,goal=arguments['query'])
+    return result
+
+@app.get('/api/research/{identifier}/document')
+async def research_document(identifier:str,request:Request,revision:str=''):
+    context=_learning_context(request);artifacts,_=get_research_services()
+    result=await asyncio.to_thread(artifacts.document,identifier,context,revision)
+    if result['status']=='not_found':raise HTTPException(404,'Research unavailable')
+    return result
+
+@app.put('/api/research/{identifier}/draft')
+async def research_draft(identifier:str,request:Request):
+    context=_learning_context(request);body=await request.json();artifacts,_=get_research_services()
+    result=await asyncio.to_thread(artifacts.save_draft,identifier,context,str(body.get('source_revision','')),str(body.get('expected_revision','')),body.get('html',''))
+    return JSONResponse(result,status_code=409 if result['status']=='conflict' else 400 if result['status']=='rejected' else 200)
+
+@app.get('/api/research/{identifier}/export')
+async def research_export(identifier:str,request:Request,revision:str,format:str='md',draft:bool=False):
+    context=_learning_context(request);artifacts,_=get_research_services()
+    try:body,mime=await asyncio.to_thread(artifacts.export,identifier,context,revision,format,draft)
+    except ValueError as exc:raise HTTPException(400,str(exc))
+    from fastapi.responses import Response
+    return Response(body,media_type=mime,headers={'Content-Disposition':f'attachment; filename="research.{format}"','X-Content-Type-Options':'nosniff','Cache-Control':'no-store'})
+
+@app.get('/api/research/{identifier}/sources/{source_id}')
+async def research_source(identifier:str,source_id:str,request:Request):
+    context=_learning_context(request);artifacts,_=get_research_services()
+    try:body,mime=await asyncio.to_thread(artifacts.source_bytes,identifier,context,source_id)
+    except Exception:raise HTTPException(422,'Source preview unavailable. Open the original source.')
+    from fastapi.responses import Response
+    return Response(body,media_type=mime,headers={'X-Content-Type-Options':'nosniff','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; sandbox"})
+
 @app.get('/api/research/{identifier}')
 async def research_detail(identifier:str,request:Request,revision:str='',offset:int=0,limit:int=12000):
     context=_learning_context(request)
@@ -8339,11 +8442,13 @@ async def check_operation_notices(socket):
     for approval in approvals:
         if approval['state']=='waiting':
             await asyncio.to_thread(notice_store.enqueue,'approval',approval['id'],approval['version'],{'title':approval['title'],'approval_id':approval['id']},c)
-    for work in await asyncio.to_thread(get_library_service().work,c):
+    works=await asyncio.to_thread(get_library_service().work,c)
+    work_titles={row['id']:row['title'] for row in works}
+    for work in works:
         if work['state'] in {'completed','failed','waiting_approval','waiting_input'} and (not work.get('background') or work['state']=='failed'):
             await asyncio.to_thread(notice_store.enqueue,'job' if work['source']=='job' else 'task',work['id'],work['state'] if work['source']=='job' else work['version'],{'title':work['title'],'state':work['state'],'task_id':work['id']},c)
     items=await asyncio.to_thread(notice_store.listing,c)
-    await ws_manager.send_to_client(socket,{'type':'operation_notices','items':[{k:r.get(k) for k in ('id','kind','target','state','created','title','version')} for r in items if r['state'] not in {'delivered','dismissed'}]})
+    await ws_manager.send_to_client(socket,{'type':'operation_notices','items':[{**{k:r.get(k) for k in ('id','kind','target','state','created','version')},'title':r.get('title') or work_titles.get(r['target']) or current_approvals.get(r['target'],{}).get('title') or 'Work update'} for r in items if r['state'] not in {'delivered','dismissed'}]})
     for item in items:
         if item['state'] in {'delivered','dismissed'}:continue
         if item['kind']=='approval':

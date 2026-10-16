@@ -268,10 +268,154 @@ class ResearchArtifacts:
             data['imports'][key].update(state='completed',note_id=note['id'],verified_at=now());atomic(self.path,data)
             return {'status':'completed','note_id':note['id'],'research_id':identifier,'research_revision':revision,'characters':len(body),'verified':True}
 
+    def listing(self, context, offset=0, limit=30):
+        with self.lock:
+            rows=[r for r in read(self.path,{'artifacts':{}})['artifacts'].values() if scope(r)==scope(context)]
+            rows.sort(key=lambda r:r['created'],reverse=True)
+            return {'status':'ok','total':len(rows),'items':[self.brief(r) for r in rows[max(0,offset):max(0,offset)+max(1,min(50,limit))]]}
+
+    def document(self, identifier, context, revision=''):
+        result=self.get(identifier,context,revision)
+        if result['status']!='ok':return result
+        item=result['artifact']
+        sources=[{**s,'id':'S'+str(i+1)} for i,s in enumerate(item['sources'])]
+        sections=[{'id':'section-'+str(i),'title':line.lstrip('# ').strip()} for i,line in enumerate(item['report'].splitlines()) if re.match(r'^#{1,3} ',line)]
+        with self.lock:
+            draft=read(self.path,{'drafts':{}}).get('drafts',{}).get(identifier)
+        return {**self.brief(item),'status':'ok','report':item['report'],'sources':sources,'sections':sections,'draft':copy.deepcopy(draft),'legacy_evidence':'Sourced research excerpts.' in item['report'],'evidence_collection':'Sourced research excerpts.' in item['report'] or 'not a completed synthesis.' in item['report']}
+
+    def save_draft(self, identifier, context, revision, expected_revision, html):
+        import bleach,shutil
+        if not revision:return {'status':'rejected','reason':'source_revision_required'}
+        result=self.get(identifier,context,revision)
+        if result['status']!='ok':return result
+        if context.get('guest'):return {'status':'rejected','reason':'owner_required'}
+        if not isinstance(html,str) or len(html)>1_000_000:return {'status':'rejected','reason':'draft_too_large'}
+        html=bleach.clean(html,tags={'p','h1','h2','h3','h4','strong','em','u','s','ul','ol','li','blockquote','pre','code','br','hr','a','table','thead','tbody','tr','th','td','img','span'},attributes={'a':['href','title','data-citation'],'img':['src','alt','title'],'th':['colspan','rowspan'],'td':['colspan','rowspan'],'span':['data-citation']},protocols={'https','http'},strip=True)
+        with self.lock:
+            data=read(self.path,{'artifacts':{},'imports':{}});drafts=data.setdefault('drafts',{});previous=drafts.get(identifier)
+            if (previous or {}).get('revision','')!=expected_revision:return {'status':'conflict','reason':'draft_revision_changed','draft':previous}
+            if self.path.exists() and not self.path.with_suffix('.before-drafts.bak').exists():shutil.copy2(self.path,self.path.with_suffix('.before-drafts.bak'))
+            draft={'html':html,'revision':hashlib.sha256(html.encode()).hexdigest(),'source_revision':revision,'updated':now()}
+            data.setdefault('draft_history',{}).setdefault(identifier,[]).append(copy.deepcopy(previous or {'html':'','revision':''}))
+            drafts[identifier]=draft;atomic(self.path,data)
+        return {'status':'completed','draft':draft}
+
+    def export(self, identifier, context, revision, format, draft=False):
+        import io,html as html_module
+        from bs4 import BeautifulSoup
+        result=self.document(identifier,context,revision)
+        if result['status']!='ok':raise ValueError(result['status'])
+        if format not in {'md','html','pdf','docx'}:raise ValueError('unsupported_export')
+        body=result.get('draft',{}).get('html','') if draft and result.get('draft') else ''
+        if not body:
+            from markdown_it import MarkdownIt
+            body=MarkdownIt('default',{'html':False}).render(result['report'])
+        soup=BeautifulSoup(body,'html.parser')
+        source_text='\n\nSources\n'+'\n'.join(f"[{s['id']}] {s['title']}: {s['url']}" for s in result['sources'])
+        text=soup.get_text('\n')+source_text
+        if format=='md':return (text if draft else result['report']+source_text).encode(),'text/markdown; charset=utf-8'
+        if format=='html':
+            links=''.join('<li><a href="'+html_module.escape(s['url'],quote=True)+'">['+s['id']+'] '+html_module.escape(s['title'])+'</a></li>' for s in result['sources'])
+            return ('<!doctype html><meta charset="utf-8"><title>'+html_module.escape(result['query'])+'</title><main>'+body+'<h2>Sources</h2><ol>'+links+'</ol></main>').encode(),'text/html; charset=utf-8'
+        output=io.BytesIO()
+        if format=='docx':
+            from docx import Document
+            from docx.oxml import OxmlElement
+            from docx.oxml.ns import qn
+            from docx.opc.constants import RELATIONSHIP_TYPE
+            doc=Document();doc.add_heading(result['query'],0)
+            for node in soup.find_all(['h1','h2','h3','p','li','blockquote','pre','table']):
+                if node.find_parent(['li','blockquote','pre','table']):continue
+                if node.name=='table':
+                    rows=node.find_all('tr');width=max((len(r.find_all(['td','th'])) for r in rows),default=0)
+                    if width:
+                        table=doc.add_table(rows=0,cols=width);table.style='Table Grid'
+                        for row in rows:
+                            cells=table.add_row().cells
+                            for i,cell in enumerate(row.find_all(['td','th'])):cells[i].text=cell.get_text()
+                    continue
+                if node.name.startswith('h'):doc.add_heading(node.get_text(),min(3,int(node.name[1])))
+                else:
+                    paragraph=doc.add_paragraph(style='List Bullet' if node.name=='li' else None)
+                    for part in node.descendants:
+                        if isinstance(part,str):
+                            run=paragraph.add_run(part);parents={p.name for p in part.parents};run.bold=bool({'strong','b'}&parents);run.italic=bool({'em','i'}&parents)
+            doc.add_heading('Sources',1)
+            for source in result['sources']:
+                paragraph=doc.add_paragraph('['+source['id']+'] ');link=OxmlElement('w:hyperlink');link.set(qn('r:id'),paragraph.part.relate_to(source['url'],RELATIONSHIP_TYPE.HYPERLINK,is_external=True));run=OxmlElement('w:r');value=OxmlElement('w:t');value.text=source['title'];run.append(value);link.append(run);paragraph._p.append(link)
+            doc.save(output);return output.getvalue(),'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        from reportlab.lib import colors
+        styles=getSampleStyleSheet();story=[]
+        font=Path('C:/Windows/Fonts/segoeui.ttf')
+        if font.exists():
+            if 'NovaExport' not in pdfmetrics.getRegisteredFontNames():pdfmetrics.registerFont(TTFont('NovaExport',str(font)))
+            for style in styles.byName.values():style.fontName='NovaExport'
+        for node in soup.find_all(['h1','h2','h3','p','li','blockquote','pre','table']):
+            if node.find_parent(['li','blockquote','pre','table']):continue
+            if node.name=='table':
+                rows=[[Paragraph(html_module.escape(c.get_text()),styles['BodyText']) for c in row.find_all(['td','th'])] for row in node.find_all('tr')]
+                if rows:
+                    width=max(map(len,rows));rows=[row+[Paragraph('',styles['BodyText'])]*(width-len(row)) for row in rows]
+                    table=Table(rows,colWidths=[460/width]*width,repeatRows=1)
+                    table.setStyle(TableStyle([('GRID',(0,0),(-1,-1),.4,colors.lightgrey),('BACKGROUND',(0,0),(-1,0),colors.whitesmoke),('VALIGN',(0,0),(-1,-1),'TOP'),('BOTTOMPADDING',(0,0),(-1,-1),7)]));story.extend([table,Spacer(1,12)])
+                continue
+            value=node.get_text()
+            if not value.strip():continue
+            style=styles['Heading'+node.name[1]] if node.name in {'h1','h2','h3'} else styles['BodyText']
+            story.extend([Paragraph(html_module.escape(value).replace('\\n','<br/>'),style),Spacer(1,9)])
+        story.extend([Paragraph('Sources',styles['Heading2']),Spacer(1,8)])
+        for source in result['sources']:story.append(Paragraph('['+source['id']+'] <link href="'+html_module.escape(source['url'],quote=True)+'">'+html_module.escape(source['title'])+'</link>',styles['BodyText']))
+        SimpleDocTemplate(output,title=result['query']).build(story)
+        return output.getvalue(),'application/pdf'
+
+    def source_bytes(self, identifier, context, source_id):
+        """Fetch only an artifact's public source; no credentials, redirects revalidated."""
+        import socket,ipaddress
+        from urllib.parse import urljoin
+        result=self.get(identifier,context)
+        if result['status']!='ok':raise ValueError('not_found')
+        if not re.fullmatch(r'S[1-9][0-9]*',source_id):raise ValueError('invalid_source')
+        index=int(source_id[1:])-1
+        if index>=len(result['artifact']['sources']):raise ValueError('not_found')
+        url=result['artifact']['sources'][index]['url']
+        import urllib3
+        for _ in range(5):
+            parsed=urlsplit(url)
+            if parsed.scheme not in {'http','https'} or not parsed.hostname or parsed.username or parsed.password or parsed.port not in {None,80,443}:raise ValueError('invalid_source_url')
+            addresses=socket.getaddrinfo(parsed.hostname,parsed.port or (443 if parsed.scheme=='https' else 80),type=socket.SOCK_STREAM)
+            if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):raise ValueError('non_public_source')
+            # Pin the connection to the validated address, retaining TLS SNI/hostname checks.
+            ip=addresses[0][4][0]
+            pool=urllib3.HTTPSConnectionPool(ip,port=443,assert_hostname=parsed.hostname,server_hostname=parsed.hostname) if parsed.scheme=='https' else urllib3.HTTPConnectionPool(ip,port=80)
+            target=parsed.path or '/'
+            if parsed.query:target+='?'+parsed.query
+            with pool.request('GET',target,timeout=urllib3.Timeout(connect=5,read=15),redirect=False,retries=False,preload_content=False,headers={'Host':parsed.hostname,'User-Agent':'NovaResearchReader/1.0','Accept':'application/pdf,text/html,text/plain,text/markdown'}) as response:
+                if response.status in {301,302,303,307,308}:url=urljoin(url,response.headers.get('Location',''));continue
+                if response.status!=200:raise ValueError('source_http_error')
+                mime=response.headers.get('Content-Type','').split(';')[0].lower()
+                if mime not in {'application/pdf','text/plain','text/markdown','text/html'}:raise ValueError('unsupported_document')
+                content=bytearray()
+                for chunk in response.stream(65536):
+                    content.extend(chunk)
+                    if len(content)>12_000_000:raise ValueError('document_too_large')
+                if mime=='text/html':
+                    from bs4 import BeautifulSoup
+                    soup=BeautifulSoup(bytes(content),'html.parser')
+                    for node in soup(['script','style','nav','header','footer','iframe','form']):node.decompose()
+                    return soup.get_text('\n',strip=True).encode(),'text/plain; charset=utf-8'
+                return bytes(content),mime
+        raise ValueError('too_many_redirects')
+
 
 class ResearchSearch:
-    def __init__(self, artifacts, key_provider, transport=requests):
+    def __init__(self, artifacts, key_provider, transport=requests, synthesize=None):
         self.artifacts=artifacts;self.key_provider=key_provider;self.transport=transport
+        self.synthesize=synthesize
         self.network=asyncio.Semaphore(4);self.operation_locks={};self.provider_states={}
 
     def _request(self, query, mode, count):
@@ -284,7 +428,7 @@ class ResearchSearch:
             return [], {k:v for k,v in previous.items() if k not in {'key_hash','until'}}
         try:
             if mode=='detailed':
-                response=self.transport.post('https://api.tavily.com/search',headers={'Authorization':'Bearer '+key},json={'query':query,'search_depth':'advanced','max_results':count,'include_raw_content':'markdown','include_answer':True},timeout=30)
+                response=self.transport.post('https://api.tavily.com/search',headers={'Authorization':'Bearer '+key},json={'query':query,'search_depth':'advanced','max_results':count,'include_raw_content':'markdown','include_answer':True,'include_favicon':True},timeout=30)
             else:
                 response=self.transport.get('https://serpapi.com/search.json',params={'api_key':key,'engine':'google','q':query,'num':count},timeout=20)
             if response.status_code!=200:
@@ -304,7 +448,7 @@ class ResearchSearch:
                 content=str(row.get('raw_content') or row.get('content') or row.get('snippet') or '').strip()
                 if not content:continue
                 sources.append({'title':safe(str(row.get('title') or parsed.hostname)), 'url':url,
-                                'content':safe(content), 'retrieved_at':now(), 'provider':provider})
+                                'content':safe(content), 'retrieved_at':now(), 'provider':provider,'favicon':row.get('favicon','') if str(row.get('favicon','')).startswith('https://') else ''})
             return sources, None if sources else {'provider':provider,'reason':'no_supported_results'}
         except Exception as error:
             # Requests exceptions may contain URLs and private keys. Keep type only.
@@ -347,5 +491,17 @@ class ResearchSearch:
                         'query':query,'results':[],'failures':failures,'completeness':'unavailable'}
             sections+=['','## Limitations','Search extracts may be incomplete. Verify time-sensitive claims against the linked sources.']
             if failures:sections+=['Some searches were unavailable; this is a partial result.']
-            item=await asyncio.to_thread(self.artifacts.save,query,mode,'\n'.join(sections),sources,failures,context,operation_id)
+            report='\n'.join(sections)
+            if self.synthesize and mode=='detailed':
+                try:
+                    synthesized=await self.synthesize(query,sources)
+                    if synthesized:report=synthesized
+                    else:failures.append({'reason':'synthesis_unavailable','evidence_available':True})
+                except asyncio.CancelledError:raise
+                except Exception as exc:
+                    failures.append({'reason':'synthesis_pending_quota' if isinstance(exc,BudgetPaused) else 'synthesis_unavailable','evidence_available':True})
+            if report=='\n'.join(sections):
+                # Evidence-only fallback is explicitly labelled, never impersonates a synthesis.
+                report='# '+query+'\n\n## Collected evidence\n\nThese are source excerpts, not a completed synthesis.\n\n'+'\n\n'.join('### '+row['title']+' ['+'S'+str(i+1)+']\n\n'+row['content'] for i,row in enumerate(sources))+'\n\n## Limitations\nSearch excerpts may be incomplete. Verify time-sensitive claims against the original sources.'
+            item=await asyncio.to_thread(self.artifacts.save,query,mode,report,sources,failures,context,operation_id)
             return self.artifacts.brief(item)

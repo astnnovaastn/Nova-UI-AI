@@ -77,3 +77,49 @@ sequenceDiagram
     Note over Frontend UI: State: Idle/Listening
     Frontend UI->>Frontend UI: Resumes Microphone
 ```
+
+## Current Live flow (desktop, 2026-10-16)
+
+Dashboard, Memory, and Research share one Gemini Live conversation. Typing can start
+Live without requesting microphone access. Microphone mute stops user capture only;
+assistant playback and its analyser remain active. The waveform consumes the existing
+capture analyser and does not open another microphone stream.
+
+Notifications use one queued, scoped presentation layer: three seconds visible,
+hover/focus pause, and an exit transition. Initial snapshots populate the inbox
+quietly. Dismissal does not decide approvals or cancel work. Voice cues have separate
+preferences and volume; their known waveform is included in the echo reference.
+
+Application discovery returns bounded control pages and a UI revision. Invocation
+checks that revision, availability, permissions, and observable results. Unconfirmed
+writes become uncertain work, not completed work. Destructive changes require an
+actual owner confirmation bound to the operation and current state; generic model
+clicks cannot approve proposals.
+
+Research reuses the durable action queue, immutable artifact store, SerpAPI/Tavily,
+and shared background model budget. The reader preserves original evidence; rich
+drafts use revision-checked autosave and a local recovery copy. Source preview fetches
+pin public DNS addresses and validate each redirect. Reports export to Markdown,
+HTML, PDF, and DOCX. Detailed research no longer opens the legacy Search widget or
+copies itself into Notes by default.
+
+### Validation and measured limits
+
+- Backend: 596 passed, 1 skipped; five existing framework deprecation warnings.
+- Frontend: 118 passed. Globe: 46 passed. TypeScript and production build passed.
+- Browser: public research returned eight sources; shared background quota paused
+  synthesis, producing an explicitly partial evidence collection. Source reading,
+  draft autosave/recovery, and a real DOCX download were verified.
+- Live Gemini, typed while muted: acknowledged a requested globe zoom of 2.5; the
+  actual canvas reported 2.500. Library opening preserved zoom, orientation and bounds.
+- Populated desktop, 1280 x 720 viewport: observed 60 FPS; overview drawing sample
+  6.80 ms, close zoom samples 0.50–0.90 ms. These are snapshots on this computer,
+  not older-hardware or extended-residence guarantees.
+- YouTube player and controls loaded. Physical-microphone timing, audible cue quality,
+  sustained video playback/audio ducking, long-duration CPU/RAM, and a full PDF
+  browser fixture remain outstanding. File-format and source-failure fixtures pass.
+- Existing build warnings remain for Calculator eval and large bundles. Research is
+  split from the main entry; the editor/PDF bundle is loaded separately.
+
+Private stores, credentials, recordings, downloads, backups, and validation artifacts
+are excluded from delivery.

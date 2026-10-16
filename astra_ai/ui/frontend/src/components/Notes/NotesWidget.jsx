@@ -217,6 +217,7 @@ const NotesWidget = ({
   }, [currentTab, newNoteContent, newNoteCategory, draftDirty, editingNoteId, selectedAiNoteId, reviewedNoteId, aiPanelVisible, selectedAiMode, aiGenerating, isSelectedAiLoading, selectedAiResponse, currentAISummary, selectedAiUpdatedNote]);
 
   const showNotification = (message, type = 'info', duration = 4000) => {
+    if(type==='success'||type==='error')window.dispatchEvent(new CustomEvent('nova-notify',{detail:{id:'notes:'+message+':'+Math.floor(Date.now()/10000),title:message,kind:type,event:'nova-open-dashboard',target:{widget:'notes'}}}));
     if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
     setNotification({ show: true, type, message });
     notificationTimeoutRef.current = setTimeout(() => {

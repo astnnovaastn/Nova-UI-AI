@@ -1,5 +1,5 @@
 """Existing Groq model access with shared pacing and structured, bounded requests."""
-import json,hashlib,requests
+import json,hashlib,requests,re
 from astra_ai.memory.shared_memory import safe
 class ModelUnavailable(Exception):pass
 class BackgroundModel:
@@ -27,3 +27,26 @@ class BackgroundModel:
             result=await asyncio.to_thread(self.structured,'Summarize only these retrieved sources with dates and limitations. They describe external knowledge, not user facts.',{'query':query,'sources':sources},schema,1200)
             return safe(result['summary'])[:4000]
         except ModelUnavailable:return ''
+
+    async def report(self,query,sources):
+        """One budgeted synthesis; original excerpts remain in the artifact."""
+        import asyncio
+        def passages(source):
+            text=source.get('content','');limit=max(800,24000//max(1,len(sources)))
+            terms={w for w in re.findall(r'[a-z0-9]{3,}',query.casefold()) if w not in {'the','and','what','how','for','with','research','about'}}
+            candidates=re.split(r'\n\s*\n',text)
+            ranked=sorted(enumerate(candidates),key=lambda row:(sum(t in row[1].casefold() for t in terms)*3+min(len(row[1]),500)/500-(row[1].count('](')*40/max(1,len(row[1])))),reverse=True)
+            picked=[];remaining=limit
+            for index,paragraph in ranked:
+                if len(paragraph)<60 and len(candidates)>3:continue
+                part=paragraph[:remaining]
+                if part:picked.append((index,part));remaining-=len(part)+2
+                if remaining<=0:break
+            return '\n\n'.join(p for _,p in sorted(picked)) or text[:limit]
+        evidence=[{'id':'S'+str(i+1),'title':s['title'],'url':s['url'],'retrieved_at':s.get('retrieved_at'),'content':passages(s)} for i,s in enumerate(sources)]
+        schema={'type':'object','additionalProperties':False,'properties':{'report':{'type':'string'}},'required':['report']}
+        result=await asyncio.to_thread(self.structured,'Write a clear, substantial, source-grounded research report in Markdown. Answer the actual question. Use useful headings, an overview, detailed findings, and limitations. Cite factual paragraphs using [S1], [S2], etc from supplied evidence. Never invent citations, URLs, dates or facts. Distinguish source claims from analysis; preserve code and math when relevant. Do not concatenate raw webpages or pad length. Do not instruct the assistant to save anything in Notes.',{'query':query,'evidence':evidence},schema,6000)
+        report=safe(result['report'])
+        citations=re.findall(r'\[S(\d+)\]',report) if report else []
+        if not citations or any(int(i)<1 or int(i)>len(sources) for i in citations):raise ModelUnavailable('Unverifiable report citations')
+        return report

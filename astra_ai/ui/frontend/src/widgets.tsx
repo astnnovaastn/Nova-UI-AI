@@ -467,6 +467,16 @@ const WidgetContainer = () => {
     status: string,
     detail: string,
   ) => {
+    if(status==='completed'&&['open','show','activate','close','hide','dismiss','toggle'].includes(command)){
+      const desired=!['close','hide','dismiss'].includes(command);
+      const verify=(attempt=0)=>{
+        const root=document.querySelector<HTMLElement>('[data-aegis-widget="'+widget+'"]');
+        const visible=!!root&&root.getClientRects().length>0&&getComputedStyle(root).visibility!=='hidden'&&!root.closest('[hidden]');
+        if(visible===desired){window.dispatchEvent(new CustomEvent('aegisWidgetActionResult',{detail:{protocol_version:2,widget,command,request_id:payload.request_id,status:'completed',detail,data:{visible},state_revision:payload.state_revision}}));return;}
+        if(attempt<15){setTimeout(()=>verify(attempt+1),100);return;}
+        window.dispatchEvent(new CustomEvent('aegisWidgetActionResult',{detail:{widget,command,request_id:payload.request_id,status:'unconfirmed',detail:'Rendered visibility did not confirm the requested state.',data:{visible}}}));
+      };setTimeout(()=>verify(),0);return;
+    }
     window.dispatchEvent(new CustomEvent('aegisWidgetActionResult', {
       detail: {
         protocol_version: 2,
@@ -734,7 +744,7 @@ const WidgetContainer = () => {
       window.setTimeout(() => {
         try {
           const result = interactWithAegisWidget(normalized, payload);
-          reportActionResult(normalized, action, { ...payload, result_data: result }, 'completed', `Interacted with ${result.label}.`);
+          reportActionResult(normalized, action, { ...payload, result_data: result }, result.status, result.status==='completed'?`Applied ${result.label}.`:`Dispatched ${result.label}; inspect the resulting state before confirming.`);
         } catch (error) {
           reportActionResult(normalized, action, payload, 'failed', error instanceof Error ? error.message : 'Widget interaction failed.');
         }
@@ -1168,6 +1178,7 @@ const WidgetContainer = () => {
               onClick={() => toggleWidget(item.widget)}
               title={`${item.label} - ${item.description}`}
               aria-label={item.label}
+              aria-pressed={isActive}
             >
               <span className="widget-launcher-icon" aria-hidden="true">
                 <Icon name={item.widget} />
@@ -1198,6 +1209,7 @@ const WidgetContainer = () => {
               onClick={() => toggleWidget(item.widget)}
               title={`${item.label} - ${item.description}`}
               aria-label={item.label}
+              aria-pressed={isActive}
             >
               <span className="widget-launcher-icon" aria-hidden="true">
                 <Icon name={item.widget} />

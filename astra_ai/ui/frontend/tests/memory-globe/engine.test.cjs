@@ -55,3 +55,8 @@ test('wheel zoom retains the canvas center at arbitrary pointer locations',()=>{
  e.cv.handlers.wheel({preventDefault(){},deltaY:500,clientX:780,clientY:20});
  e.frame(3000);assert.deepEqual([e.rot.cx,e.rot.cyy],center);assert.equal(e.memCount,1);e.destroy();
 });
+
+test('close zoom stops both automatic axes with hysteresis and overview resumes',()=>{const e=make();e.setData(buildGraph(raw));e.zoom=e.zt=2.3;e.frame(100);const y=e.yaw,p=e.pitch;e.frame(117);assert.equal(e.yaw,y);assert.equal(e.pitch,p);e.zoom=e.zt=1.9;e.frame(134);assert.equal(e.yaw,y);e.zoom=e.zt=1.5;e.frame(151);assert.notEqual(e.yaw,y);e.destroy();});
+test('explicit rotation pause survives zoom and resumes only when requested',()=>{const e=make();e.setData(buildGraph(raw));assert.equal(e.view({action:'pause_rotation'}).status,'completed');e.frame(100);const y=e.yaw;e.zoom=e.zt=1.2;e.frame(117);assert.equal(e.yaw,y);e.view({action:'resume_rotation'});e.frame(134);assert.notEqual(e.yaw,y);e.destroy();});
+
+test('explicit rotation pause survives camera restoration and permits manual inertia',()=>{const e=make(),next=make();e.setData(buildGraph(raw));e.view({action:'pause_rotation'});next.restoreCamera(e.getCamera());assert.equal(next.getCamera().rotationPaused,true);next.vy=.02;const yaw=next.yaw;next.frame(100);assert.notEqual(next.yaw,yaw);e.destroy();next.destroy();});

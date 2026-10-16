@@ -1,0 +1,23 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import fs from 'node:fs';
+import ts from 'typescript';
+function fixture(){
+ let now=0,next=0;const timers=new Map(),listeners=new Map(),storage=new Map();
+ class Element{children=[];parent=null;id='';className='';hover=false;textContent='';handlers={};classList={add:(c)=>{this.className+=' '+c;}};append(...children){for(const c of children){c.parent=this;this.children.push(c);}}remove(){if(this.parent)this.parent.children=this.parent.children.filter(c=>c!==this);this.parent=null;}setAttribute(k,v){this[k]=v;}addEventListener(k,f){this.handlers[k]=f;}matches(){return this.hover;}contains(e){return e===this||this.children.some(c=>c.contains(e));}focus(){document.activeElement=this;}}
+ const body=new Element(),find=(root,id)=>root.id===id?root:root.children.map(c=>find(c,id)).find(Boolean);
+ const document={body,activeElement:null,createElement:()=>new Element(),getElementById:id=>find(body,id),addEventListener:(k,f)=>listeners.set(k,f)};
+ const sessionStorage={getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)};
+ const timeout=(f,ms=0)=>{timers.set(++next,{f,at:now+ms});return next;};
+ const sandbox={exports:{},document,sessionStorage,localStorage:sessionStorage,performance:{now:()=>now},setTimeout:timeout,clearTimeout:id=>timers.delete(id),CustomEvent:class{constructor(type,opts){this.type=type;this.detail=opts?.detail;}}};
+ sandbox.window={setTimeout:timeout,addEventListener:(k,f)=>listeners.set(k,f),dispatchEvent:e=>listeners.get(e.type)?.(e)};
+ vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../src/notifications.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,sandbox);
+ function advance(ms){const end=now+ms;for(;;){const due=[...timers].filter(([,t])=>t.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!due)break;now=due[1].at;timers.delete(due[0]);due[1].f();}now=end;}
+ return {api:sandbox.exports,document,advance,body};
+}
+test('notice enters for three seconds, exits, and never cancels work',()=>{const f=fixture();f.api.notify({id:'one',title:'Done'});const box=f.document.getElementById('aegis-work-notice');assert.ok(box);f.advance(2999);assert.ok(!box.className.includes('leaving'));f.advance(1);assert.ok(box.className.includes('leaving'));f.advance(200);assert.equal(f.document.getElementById('aegis-work-notice'),undefined);});
+test('hover pauses remaining time, queued notices follow, duplicates do not replay',()=>{const f=fixture();f.api.notify({id:'one',title:'One'});f.api.notify({id:'two',title:'Two'});f.api.notify({id:'two',title:'Two (updated)'});const box=f.document.getElementById('aegis-work-notice');f.advance(1000);box.hover=true;box.handlers.mouseenter();f.advance(9000);assert.ok(!box.className.includes('leaving'));box.hover=false;box.handlers.mouseleave();f.advance(2200);assert.equal(f.document.getElementById('aegis-work-notice').children[0].children[1].textContent,'Two (updated)');f.advance(3200);assert.equal(f.document.getElementById('aegis-work-notice'),undefined);});
+test('dismissed notices remain in scoped inbox and cannot cross a guest boundary',()=>{const f=fixture();f.api.noticeScope('owner');f.api.notify({id:'approval',title:'Review action'});f.advance(3200);f.document.getElementById('nova-notification-button').onclick();let inbox=f.document.getElementById('nova-notification-inbox');assert.ok(inbox.children.some(c=>c.textContent==='Review action'));f.api.noticeScope('guest');assert.equal(f.document.getElementById('nova-notification-inbox'),undefined);f.api.noticeScope('owner');f.document.getElementById('nova-notification-button').onclick();inbox=f.document.getElementById('nova-notification-inbox');assert.ok(inbox.children.some(c=>c.textContent==='Review action'));});
+
+test('initial snapshots populate inbox without popping up a backlog',()=>{const f=fixture();f.api.noticeScope('owner');f.api.notify({id:'old',title:'Old result',inboxOnly:true});assert.equal(f.document.getElementById('aegis-work-notice'),undefined);f.document.getElementById('nova-notification-button').onclick();assert.ok(f.document.getElementById('nova-notification-inbox').children.some(c=>c.textContent==='Old result'));});

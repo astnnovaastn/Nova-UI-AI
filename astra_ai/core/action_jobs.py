@@ -236,7 +236,7 @@ class ActionJobs:
         except Exception as exc:result={"status":"failed","reason":type(exc).__name__,"retryable":isinstance(exc,(TimeoutError,ConnectionError))}
         if not isinstance(result,dict):result={'status':'failed','reason':'invalid_tool_result'}
         if action.get('repair_used') and action.get('original_action') and action['original_action']['name'] not in result.get('executed_names',[]):result={'status':'failed','reason':'repair_did_not_perform_original_operation'}
-        status=result.get('status');failed=status in {'failed','error','rejected','uncertain','not_found','conflict','exhausted','validation_failed'}
+        status=result.get('status');failed=status in {'failed','error','rejected','uncertain','unconfirmed','not_found','conflict','exhausted','validation_failed'}
         transient=bool(result.get('retryable') or result.get('http_status') in {429,502,503,504} or result.get('reason') in {'TimeoutError','ConnectionError'})
         attempts=action.get('attempts',0)+1;extra={}
         if status in {'waiting_for_quota','waiting_for_retry'}:state='waiting_for_retry';extra.update(next_attempt=max(time.time()+1,float(result.get('next_attempt',time.time()+65))),attempts=action.get('attempts',0))
@@ -246,7 +246,7 @@ class ActionJobs:
             try:delay=max(0,min(3600,float(delay)))
             except (ValueError,TypeError):delay=30
             state='waiting_for_retry';extra['next_attempt']=time.time()+delay
-        else:state='uncertain' if status=='uncertain' or failed and transient and not readonly(action) else 'failed' if failed else 'completed';extra['acknowledged']=not failed
+        else:state='uncertain' if status in {'uncertain','unconfirmed'} or failed and transient and not readonly(action) else 'failed' if failed else 'completed';extra['acknowledged']=not failed
         await self.set_action(job['id'],index,state,result,**extra)
         await self.finalize(job['id'])
         if state=='failed' and self.diagnose and status not in {'rejected','conflict'}:

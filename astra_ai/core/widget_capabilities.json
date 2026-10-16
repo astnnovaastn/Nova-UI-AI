@@ -211,9 +211,14 @@
       },
       "examples": ["open theme controls", "close theme controls", "show appearance options", "review current theme", "prepare a theme change", "use theme color for AI glow", "keep widget colors synchronized", "inspect custom fonts", "open visual settings", "return to the assistant"]
     },
+    "research": {"purpose": "Sourced reports, separate versioned drafts, source/PDF previews, YouTube media and exports. Use current-turn destinations; never automatically copy reports to Notes.", "actions": {"open": {"execution": "frontend", "risk": "low"}, "read": {"execution": "frontend", "risk": "low"}, "edit": {"execution": "frontend", "risk": "low"}, "sources": {"execution": "frontend", "risk": "low"}, "media": {"execution": "frontend", "risk": "low"}, "export": {"execution": "frontend", "risk": "low"}, "close": {"execution": "frontend", "risk": "low"}}},
     "ui": {
       "purpose": "Control safe top-level UI functions. File, shell, and code changes are deliberately outside automatic UI authority.",
       "actions": {
+        "discover": {"execution": "frontend", "risk": "low", "args": ["control_id", "interaction", "expected_revision", "value", "workspace", "offset", "limit", "query"]},
+        "snapshot": {"execution": "frontend", "risk": "low", "args": ["control_id", "interaction", "expected_revision", "value", "workspace", "offset", "limit", "query"]},
+        "invoke": {"execution": "frontend", "risk": "low", "args": ["control_id", "interaction", "expected_revision", "value", "workspace", "offset", "limit", "query"]},
+        "workspace": {"execution": "frontend", "risk": "low", "args": ["control_id", "interaction", "expected_revision", "value", "workspace", "offset", "limit", "query"]},
         "mute": {"execution": "frontend", "risk": "low"},
         "unmute": {"execution": "frontend", "risk": "low"},
         "open_menu": {"execution": "frontend", "risk": "low"},

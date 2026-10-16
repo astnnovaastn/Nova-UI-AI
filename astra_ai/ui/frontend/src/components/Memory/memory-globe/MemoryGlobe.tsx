@@ -67,7 +67,7 @@ export default function MemoryGlobe({ data, onReady, theme = "obsidian", ambient
     const canvas = canvasRef.current, host = boxRef.current;
     if (!canvas || !host) return;
     let engine:GlobeEngine;
-    try { engine = new GlobeEngine(canvas, { theme, ambient, ...options, onHover: setHover, onSelect: value => { selectionRef.current=value; setSel(value); callbackRef.current?.(value); }, onStats: value => { setStats(value); canvas.dataset.globeMemories=String(value.memories); canvas.dataset.globeLinks=String(value.links); } }); } catch { setUnavailable(true); return; }
+    try { engine = new GlobeEngine(canvas, { theme, ambient, ...options, onHover: setHover, onSelect: value => { selectionRef.current=value; setSel(value); callbackRef.current?.(value); }, onStats: value => { setStats(value);window.dispatchEvent(new CustomEvent("nova-memory-stats",{detail:value})); canvas.dataset.globeMemories=String(value.memories); canvas.dataset.globeLinks=String(value.links); } }); } catch { setUnavailable(true); return; }
     engineRef.current = engine;
     const camera=readMemoryCamera();if(camera)engine.restoreCamera(camera);
     const saveCamera=()=>rememberMemoryCamera(engine.getCamera());

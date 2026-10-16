@@ -1,3 +1,5 @@
+import {applicationControl} from './aegisWidgetProtocol';
+import {notify,noticeScope,cue} from './notifications';
 import {notificationSoundEnabled,notificationTarget,newNoticeIds} from './conversation';
 import {VoiceSessionState} from './voiceSession.mjs';
 import {PresenceCapture} from './presenceCapture';
@@ -51,6 +53,7 @@ const voiceSession=new VoiceSessionState();
 let errorTimer: ReturnType<typeof setTimeout> | null = null;
 
 function showError(msg: string) {
+  notify({id:'error:'+msg+':'+Math.floor(Date.now()/60000),title:'Aegis needs attention',message:msg,event:'nova-open-dashboard'});
   errorEl.textContent = msg;
   errorEl.style.opacity = "1";
   if (errorTimer) clearTimeout(errorTimer);
@@ -59,7 +62,11 @@ function showError(msg: string) {
   }, 4000);
 }
 
+let connectionWasReady=false,connectionLost=false;
 function setConnected(ok: boolean): void {
+  if(!ok&&connectionWasReady&&!connectionLost){connectionLost=true;notify({id:'connection-lost:'+Date.now(),title:'Reconnecting to Aegis',message:'Your conversation is preserved.',event:'nova-open-dashboard',silent:true});}
+  if(ok&&connectionLost){connectionLost=false;notify({id:'connection-ready:'+Date.now(),title:'Aegis is connected',event:'nova-open-dashboard',silent:true});}
+  if(ok)connectionWasReady=true;
   if (!badgeEl) return;
   badgeEl.classList.toggle("connected", ok);
   badgeEl.classList.toggle("disconnected", !ok);
@@ -173,6 +180,7 @@ const socket = createSocket(WS_URL);
 const audioPlayer = createAudioPlayer();
 orb.setAnalyser(audioPlayer.getAnalyser());
 soundWave.setAIAnalyser(audioPlayer.getAnalyser());
+window.addEventListener('nova-mic-analyser',e=>soundWave.setMicAnalyser((e as CustomEvent).detail));
 applyOrbTheme(selectedOrbTheme);
 window.addEventListener("themechange", ((event: CustomEvent) => {
   const detail = event.detail || {};
@@ -292,12 +300,13 @@ function setupLiveVoiceInput() {
     },
     (message) => showError(message),
     () => {
+      window.dispatchEvent(new CustomEvent('nova-user-speaking',{detail:true}));
       const generation=isAudioPlaying?audioGeneration:'';
       let checkpoint=false;
       if(isAudioPlaying&&!isMuted){checkpoint=audioPlayer.holdPcm();heldGeneration=checkpoint?generation:'';canceledGeneration=audioGeneration;isAudioPlaying=false;transition('listening');}
       socket.send({type:'live_speech_start',generation,has_checkpoint:checkpoint});
     },
-    (speechMs) => socket.send({type:'live_speech_end',speech_ms:speechMs}),
+    (speechMs) => {window.dispatchEvent(new CustomEvent('nova-user-speaking',{detail:false}));socket.send({type:'live_speech_end',speech_ms:speechMs});},
     (pcm,end)=>audioPlayer.isPlaybackEcho(pcm,end)
   );
 }
@@ -328,24 +337,21 @@ audioPlayer.onFinished(() => {
   acknowledgeNotice();
 });
 
+window.addEventListener('nova-local-audio-reference',e=>{const d=(e as CustomEvent).detail;audioPlayer.addEchoReference(d.samples,d.sampleRate,d.capturedAt);});
+window.addEventListener('nova-ai-playback-begin',()=>cue('voice','ai:'+audioGeneration));
 const presenceCapture=new PresenceCapture(socket);
 // One bounded, scoped notice surface. Reconnects do not replay chimes.
-let workNoticeAudio:AudioContext|null=null,workNoticeScope='',workNoticeBaseline=false;
+let workNoticeScope='',workNoticeBaseline=false;
 const seenWorkNotices=new Set<string>();
-window.addEventListener('nova-conversation',()=>{const snap=conversationSnapshot();if(snap.guest||workNoticeScope&&workNoticeScope!==snap.sessionId+':'+snap.guest)document.getElementById('aegis-work-notice')?.remove();});
-function armWorkNoticeAudio(){if(!notificationSoundEnabled())return;try{workNoticeAudio??=new AudioContext();void workNoticeAudio.resume().catch(()=>{});}catch{}}
-document.addEventListener('pointerdown',armWorkNoticeAudio,{passive:true});document.addEventListener('keydown',armWorkNoticeAudio,{passive:true});
-function workNoticeChime(){if(!notificationSoundEnabled()||!workNoticeAudio||workNoticeAudio.state!=='running')return;const audio=workNoticeAudio,t=audio.currentTime;for(const [hz,offset] of [[440,0],[660,.09]]){const oscillator=audio.createOscillator(),gain=audio.createGain();oscillator.type='sine';oscillator.frequency.value=hz;gain.gain.setValueAtTime(.0001,t+offset);gain.gain.exponentialRampToValueAtTime(.035,t+offset+.018);gain.gain.exponentialRampToValueAtTime(.0001,t+offset+.3);oscillator.connect(gain);gain.connect(audio.destination);oscillator.start(t+offset);oscillator.stop(t+offset+.32);}}
 function showWorkNotices(items:any[]){
  const snap=conversationSnapshot(),scope=snap.sessionId+':'+snap.guest;
- if(scope!==workNoticeScope){workNoticeScope=scope;seenWorkNotices.clear();workNoticeBaseline=false;document.getElementById('aegis-work-notice')?.remove();try{for(const id of JSON.parse(sessionStorage.getItem('nova-notice-seen:'+scope)||'[]'))seenWorkNotices.add(String(id));}catch{}}
+ if(scope!==workNoticeScope){workNoticeScope=scope;noticeScope(scope);seenWorkNotices.clear();workNoticeBaseline=false;try{for(const id of JSON.parse(sessionStorage.getItem('nova-notice-seen:'+scope)||'[]'))seenWorkNotices.add(String(id));}catch{}}
  if(snap.guest)return;const fresh=newNoticeIds(items,seenWorkNotices);try{sessionStorage.setItem('nova-notice-seen:'+scope,JSON.stringify([...seenWorkNotices]));}catch{}
- const canChime=workNoticeBaseline;workNoticeBaseline=true;if(!fresh.length)return;
- const item=fresh[fresh.length-1];document.getElementById('aegis-work-notice')?.remove();
- const box=document.createElement('aside');box.id='aegis-work-notice';box.className='aegis-work-notice';box.setAttribute('aria-label','Aegis notification');
- const open=document.createElement('button');open.className='aegis-work-notice-open';const kicker=document.createElement('small');kicker.textContent=item.kind==='approval'?'REVIEW NEEDED':'TASK UPDATE';const text=document.createElement('strong');text.textContent=item.title||(item.kind==='approval'?'An action needs your approval':'Your task has an update');const hint=document.createElement('span');hint.textContent='Open tasks and learning →';open.append(kicker,text,hint);open.onclick=()=>{window.dispatchEvent(new CustomEvent('nova-open-work',{detail:notificationTarget(item)}));box.remove();};
- const close=document.createElement('button');close.className='aegis-work-notice-close';close.setAttribute('aria-label','Dismiss notification');close.textContent='×';close.onclick=()=>box.remove();box.append(open,close);document.body.append(box);if(canChime)workNoticeChime();
+ const inboxOnly=!workNoticeBaseline,silent=inboxOnly||!notificationSoundEnabled();workNoticeBaseline=true;
+ const freshIds=new Set(fresh.map(item=>String(item.id)));
+ for(const item of items)notify({id:String(item.id),title:item.title||'Your task has an update',kind:item.kind,target:notificationTarget(item),silent,inboxOnly:inboxOnly||!freshIds.has(String(item.id))});
 }
+window.addEventListener('nova-conversation',()=>{const s=conversationSnapshot();noticeScope(s.sessionId+':'+s.guest);});
 let noticePlaying='',noticeComplete='';
 function acknowledgeNotice(){if(noticePlaying&&noticePlaying===noticeComplete&&!isAudioPlaying){socket.send({type:'notice_delivered',notice_id:noticePlaying});noticePlaying=noticeComplete='';}}
 socket.onBinary((pcm) => {
@@ -374,6 +380,9 @@ socket.onMessage((msg) => {
   if(type==='conversation_switched'){if(msg.status==='ok'){const switchingId=String(msg.session_id);conversationReplace((Array.isArray(msg.messages)?msg.messages:[]).map((m:any)=>({id:m.id,role:m.role,text:m.content,status:m.status||'completed'})),switchingId);void conversationLoad(switchingId).catch(e=>showError(e.message)).finally(()=>conversationState({sessionSwitching:false,status:''}));}else{conversationState({sessionSwitching:false,status:String(msg.reason||'Conversation switch failed')});showError(String(msg.reason||'Conversation switch failed'));}if(!isMuted)voiceInput.resume();return;}
   if(type==='speaker_status'){const wasGuest=conversationSnapshot().guest;conversationState({guest:msg.guest===true,status:msg.state==='matched'?(msg.owner?'Main user confirmed · existing memories connected':'Speaker confirmed · separate memories'):'Guest conversation · speaker not confirmed'});if(msg.guest&&!wasGuest)conversationReplace([],conversationSnapshot().sessionId);if(!msg.guest&&wasGuest)void conversationLoad(conversationSnapshot().sessionId).catch(()=>{});return;}
   if(type==='status'&&msg.client_id){conversationState({clientId:String(msg.client_id)});socket.send({type:'conversation_attach',session_id:conversationSnapshot().sessionId});void conversationLoad(conversationSnapshot().sessionId).catch(()=>{});}
+  if(type==='application_confirmation'){const confirmed=window.confirm('Aegis requests: '+String(msg.title)+'\nTarget: '+String(msg.target)+'\nRevision: '+String(msg.revision)+'\nApprove this destructive change?');socket.send({type:'widget_action_result',widget:'application_confirmation',request_id:msg.request_id,revision:msg.revision,confirmed,status:confirmed?'completed':'failed'});return;}
+  if(type==='application_control'){void applicationControl(msg).then(result=>socket.send({type:'widget_action_result',widget:'application',command:msg.action,request_id:msg.request_id,...result})).catch(e=>socket.send({type:'widget_action_result',widget:'application',request_id:msg.request_id,status:'failed',detail:e.message}));return;}
+  if(type==='research_ready'){window.dispatchEvent(new CustomEvent('nova-research-ready',{detail:msg}));return;}
   if(type==='memory_view_action'){window.dispatchEvent(new CustomEvent('nova-memory-view-action',{detail:msg}));return;}
   if(type==='jobs_snapshot'){conversationState({jobs:Array.isArray(msg.jobs)?msg.jobs as any:[]});return;}
   if(type==='job_progress'){
@@ -434,6 +443,7 @@ socket.onMessage((msg) => {
     audioPlayer.discardHeldPcm();heldGeneration=pendingInterruptionGeneration='';conversationState({status:''});
     userTranscript=String(msg.full_text||((userTranscript?userTranscript+' ':'')+String(msg.text||'')));
     userMessageId=String(msg.request_id||('user:'+String(msg.turn_id||'active')));
+    if(userTranscript.trim())cue('voice','user:'+userMessageId);
     conversationMessage('user',userTranscript,msg.final?'completed':'streaming',userMessageId);
   }
   else if (type === 'live_output_transcript') {
@@ -1046,6 +1056,7 @@ setTimeout(() => {
 
 
 initMemoryWorkspace({getAnalyser: () => audioPlayer.getAnalyser()});
+void import('./components/Research/ResearchWorkspace').then(m=>m.default());
 
 // Component-owned, allowlisted UI state; no credential or document scraping.
 let uiTimer:ReturnType<typeof setTimeout>|null=null;

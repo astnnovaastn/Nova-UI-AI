@@ -853,6 +853,7 @@ export interface AudioPlayer {
   resumeHeldPcm(): boolean;
   discardHeldPcm(): void;
   stop(): void;
+  addEchoReference(samples:Float32Array,sampleRate:number,capturedAt:number):void;
   getAnalyser(): AnalyserNode;
   onFinished(cb: () => void): void;
 }
@@ -883,6 +884,7 @@ export function createLiveVoiceInput(
   let silentGain: GainNode | null = null;
 
   function release(): void {
+    if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent('nova-mic-analyser',{detail:null}));
     if(detector)detector.onmessage=null;detector?.terminate();detector=null;ready=false;gate.reset();
     worklet?.disconnect();
     source?.disconnect();
@@ -920,6 +922,9 @@ export function createLiveVoiceInput(
         context = new AudioContext();
         await context.audioWorklet.addModule("/pcm-capture-worklet.js");
         source = context.createMediaStreamSource(stream);
+        const visualAnalyser=context.createAnalyser();visualAnalyser.fftSize=128;
+        source.connect(visualAnalyser);
+        if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent('nova-mic-analyser',{detail:visualAnalyser}));
         worklet = new AudioWorkletNode(context, "astra-pcm-capture", {
           processorOptions: { targetSampleRate: 16000, chunkMs: 40 },
         });
@@ -1355,7 +1360,7 @@ export function createAudioPlayer(): AudioPlayer {
     };
 
     echoGuard.add(buffer.getChannelData(0),buffer.sampleRate,performance.now());
-    source.start();
+    source.start();typeof window!=='undefined'&&window.dispatchEvent(new Event('nova-ai-playback-begin'));
   }
 
   return {
@@ -1422,6 +1427,7 @@ export function createAudioPlayer(): AudioPlayer {
       };
       echoGuard.add(channel,sampleRate,performance.now()+(startAt-audioCtx.currentTime)*1000);
       source.start(startAt);
+      if(pcmSources.size===1)typeof window!=='undefined'&&window.dispatchEvent(new Event('nova-ai-playback-begin'));
     },
 
     finishPcmTurn() {
@@ -1487,6 +1493,7 @@ export function createAudioPlayer(): AudioPlayer {
     },
 
     isPlaybackEcho(pcm,end) {return echoGuard.isEcho(pcm,end);},
+    addEchoReference(samples,sampleRate,capturedAt){echoGuard.add(samples,sampleRate,capturedAt);},
     getAnalyser() {
       return analyser;
     },

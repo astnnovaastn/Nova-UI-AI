@@ -1350,3 +1350,14 @@ body::-webkit-scrollbar-thumb {
 .aegis-work-notice{position:fixed;right:22px;top:78px;width:310px;z-index:1300;display:flex;gap:6px;padding:8px;background:var(--panel,#292826);color:var(--panel-text,var(--fg,#eee));border:1px solid var(--border,#7774);border-radius:16px;box-shadow:0 14px 45px #0003;animation:work-notice-enter .2s ease-out;font-family:system-ui}
 .aegis-work-notice button{color:inherit;border:0;background:transparent;cursor:pointer}.aegis-work-notice-open{display:grid;gap:7px;text-align:left;padding:8px;flex:1;min-width:0}.aegis-work-notice-open small{font-size:9px;letter-spacing:.1em;opacity:.6}.aegis-work-notice-open strong{font-size:13px;line-height:1.5;font-weight:500;overflow-wrap:anywhere}.aegis-work-notice-open span{font-size:10px;opacity:.65}.aegis-work-notice-close{align-self:flex-start;font-size:20px;padding:4px 8px}.aegis-work-notice button:focus-visible{outline:2px solid var(--accent-readable,#bc7855);outline-offset:2px;border-radius:8px}
 @keyframes work-notice-enter{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.aegis-work-notice{animation:none}}
+
+/* Global notices are transient presentation; work remains in the inbox. */
+.aegis-work-notice{animation:nova-notice-enter .24s ease-out;box-shadow:0 12px 44px #0003;backdrop-filter:blur(20px)}
+.aegis-work-notice.leaving{animation:nova-notice-exit .2s ease-in forwards;pointer-events:none}
+@keyframes nova-notice-enter{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
+@keyframes nova-notice-exit{to{opacity:0;transform:translateX(30px)}}
+.nova-notification-button{position:fixed;right:116px;top:14px;z-index:80;width:34px;height:34px;border:1px solid var(--border,#ffffff26);border-radius:50%;background:var(--panel,#252525);color:var(--fg,#eee);font-size:22px;cursor:pointer}
+.nova-notification-inbox{position:fixed;right:22px;top:65px;z-index:1400;width:340px;max-height:75vh;overflow:auto;box-sizing:border-box;padding:20px;border:1px solid var(--border,#666);border-radius:20px;background:var(--panel,#292929);color:var(--fg,#eee);box-shadow:0 20px 60px #0004;font:13px system-ui}
+.nova-notification-inbox h2{font-size:18px;margin:0 0 16px}.nova-notification-inbox>button{display:block;width:100%;text-align:left;border:0;border-radius:9px;padding:12px;margin:5px 0;background:color-mix(in srgb,var(--fg,#eee) 5%,transparent);color:inherit;cursor:pointer}
+.nova-notification-inbox label{display:flex;align-items:center;gap:9px;padding:12px 0}.nova-notification-inbox input[type=range]{width:80px}
+@media(prefers-reduced-motion:reduce){.aegis-work-notice,.aegis-work-notice.leaving{animation:none}}

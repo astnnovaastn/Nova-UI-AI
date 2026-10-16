@@ -109,6 +109,7 @@ export class GlobeEngine {
 
   private now = 0; private W = 0; private H = 0; private DPR = 1; private S = 1; private dprCap = 1.5;
   private yaw = 0.6; private pitch = 0.3; private vy = 0.002; private vp = 0;
+  private closeZoomPaused=false;private rotationPaused=false;
   private zoom = 1.12; private zt = 1.12;
   private down = false; private mx = -1e3; private my = -1e3; private moved = 0;
   private ema = 16; private lod = 1; private cool = 0; private last = 0;
@@ -547,13 +548,15 @@ export class GlobeEngine {
     const x1 = x * cy + z * sy, z1 = -x * sy + z * cy, y2 = y * cp - z1 * sp, z2 = y * sp + z1 * cp, s = 3.6 / (3.6 - z2);
     o.sx = cx + x1 * s * sc; o.sy = cyy + y2 * s * sc; o.z2 = z2; o.s = s;
   }
-  getCamera(): MemoryCamera { return {yaw:this.yaw,pitch:this.pitch,zoom:this.zt}; }
+  getCamera(): MemoryCamera { return {yaw:this.yaw,pitch:this.pitch,zoom:this.zt,...(this.rotationPaused?{rotationPaused:true}:{})}; }
   private startTransition(yaw:number,pitch:number,zoom:number){this.transition={start:performance.now(),yaw:this.yaw,pitch:this.pitch,zoom:this.zoom,targetYaw:yaw,targetPitch:pitch,targetZoom:zoom};if(this.reduced){this.yaw=yaw;this.pitch=pitch;this.zoom=zoom;this.transition=null;}}
   view(command:{action:string;id?:string;zoom?:number;x?:number;y?:number;yaw?:number;pitch?:number;guided?:boolean;ids?:string[]}):{status:string;reason?:string}{
     if(command.guided&&(this.down||performance.now()<this.manualUntil))return {status:'deferred',reason:'user_interacting'};
     if(['focus','inspect','expand','category','entity','topic'].includes(command.action)){if(!command.id||!this.byId.has(command.id))return {status:'not_found'};this.select(command.id);}
     else if(command.action==='highlight'){const ids=command.ids??(command.id?[command.id]:[]);if(ids.some(id=>!this.byId.has(id)))return {status:'not_found'};this.recall(ids);}
     else if(command.action==='zoom'){if(!Number.isFinite(command.zoom))return {status:'rejected'};this.zt=Math.max(.6,Math.min(8,command.zoom!));if(this.zt<1.35)this.clearSelection(true);this.startTransition(this.yaw,this.pitch,this.zt);}
+    else if(command.action==='pause_rotation'){this.rotationPaused=true;this.vy=this.vp=0;}
+    else if(command.action==='resume_rotation'){this.rotationPaused=false;}
     else if(command.action==='rotate'){if(!Number.isFinite(command.yaw)||!Number.isFinite(command.pitch))return {status:'rejected'};this.focusYaw=wrap(command.yaw!);this.focusPitch=wrap(command.pitch!);this.startTransition(this.focusYaw,this.focusPitch,this.zt);}
     else if(command.action==='pan'){if(!Number.isFinite(command.x)||!Number.isFinite(command.y))return {status:'rejected'};this.panX=Math.max(-1,Math.min(1,command.x!));this.panY=Math.max(-1,Math.min(1,command.y!));this.sceneVersion++;}
     else if(command.action==='reset'){this.clearSelection(true);this.panX=this.panY=0;this.focusYaw=null;this.zt=1.12;this.startTransition(.6,.3,1.12);}
@@ -562,7 +565,7 @@ export class GlobeEngine {
   }
   restoreCamera(value: MemoryCamera): void {
     if(![value.yaw,value.pitch,value.zoom].every(Number.isFinite))return;
-    this.yaw=wrap(value.yaw);this.pitch=wrap(value.pitch);this.zoom=this.zt=Math.min(8,Math.max(.6,value.zoom));this.sceneVersion++;
+    this.yaw=wrap(value.yaw);this.pitch=wrap(value.pitch);this.zoom=this.zt=Math.min(8,Math.max(.6,value.zoom));this.rotationPaused=value.rotationPaused===true;if(this.rotationPaused)this.vy=this.vp=0;this.sceneVersion++;
   }
   /** Resolve paint colors only on theme/size changes, never for every particle. */
   refreshAppearance(): void {
@@ -589,9 +592,10 @@ export class GlobeEngine {
     else if (this.focusYaw !== null && !this.down) {
       if(this.reduced){this.yaw=this.focusYaw;this.pitch=this.focusPitch;}else{this.yaw += wrap(this.focusYaw - this.yaw) * 0.09 * f;this.pitch += wrap(this.focusPitch - this.pitch) * 0.09 * f;if(Math.abs(wrap(this.focusYaw-this.yaw))<.001&&Math.abs(wrap(this.focusPitch-this.pitch))<.001){this.yaw=this.focusYaw;this.pitch=this.focusPitch;}} this.vy = this.vp = 0;
     } else if (!this.down) {
-      const spin = this.sel || this.reduced ? 0 : 0.00108;
+      const wasClose=this.closeZoomPaused;if(this.zoom>=2.2)this.closeZoomPaused=true;else if(this.zoom<1.6)this.closeZoomPaused=false;if(!wasClose&&this.closeZoomPaused)this.vy=this.vp=0;
+    const spin = this.sel || this.reduced || this.closeZoomPaused || this.rotationPaused ? 0 : 0.00108;
       if(this.reduced)this.vy=this.vp=0;
-      this.vy += (spin - this.vy) * 0.03 * f; this.vp += ((this.sel || this.reduced ? 0 : .00033) - this.vp) * .03 * f;
+      this.vy += (spin - this.vy) * 0.03 * f; this.vp += ((this.sel || this.reduced || this.closeZoomPaused || this.rotationPaused ? 0 : .00033) - this.vp) * .03 * f;
       this.yaw = wrap(this.yaw + this.vy * f); this.pitch = wrap(this.pitch + this.vp * f);
     }
     if(!this.transition)this.zoom += (this.zt - this.zoom) * (this.reduced ? 1 : Math.min(1, 0.12 * f));

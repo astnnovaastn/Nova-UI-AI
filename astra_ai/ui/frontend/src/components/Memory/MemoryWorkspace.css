@@ -206,3 +206,10 @@
 .memory-conversation>footer{flex-shrink:0;padding-top:14px}
 .memory-work-filter input{flex:1;width:0}
 .memory-work-filter select{flex:0 0 112px;max-width:112px}
+
+/* Readable status lives in the header, clear of the globe and composer. */
+.memory-workspace .memory-globe-stats{display:none}
+.memory-workspace-status{position:absolute;top:68px;left:24px;z-index:8;display:flex;align-items:center;gap:14px;font-size:10px;color:var(--widget-muted)}
+.memory-workspace-status details{position:relative}.memory-workspace-status summary{cursor:pointer;display:flex;gap:6px;align-items:center;list-style:none}.memory-workspace-status details p{position:absolute;top:16px;left:0;min-width:220px;background:var(--widget-surface);border:1px solid var(--memory-edge);border-radius:12px;padding:14px;line-height:1.8;box-shadow:0 10px 35px #0003}
+.memory-workspace-open #sound-wave{left:calc((100% - clamp(323px,30.6vw,374px) - 44px)/2);right:auto;bottom:83px;width:90px;height:20px;padding:7px 18px;transform:translateX(-50%);border-radius:40px;background:color-mix(in srgb,var(--accent-readable,#739fe6) 8%,var(--panel,#222));box-shadow:0 -8px 28px color-mix(in srgb,var(--accent-readable,#739fe6) 20%,transparent);pointer-events:none}
+.memory-workspace-open #sound-wave .sound-wave-bar{max-height:22px;width:3px}
