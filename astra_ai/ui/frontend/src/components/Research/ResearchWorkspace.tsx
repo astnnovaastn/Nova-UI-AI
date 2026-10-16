@@ -117,6 +117,8 @@ type Report = {
   thread_id?: string;
   phase?: string;
   next_attempt?: number;
+  processing_seconds?: number;
+  active_since?: number | null;
   waiting_reason?: string;
   image_items?: {
     id: string;
@@ -722,6 +724,147 @@ function SourceChip({
           document.body,
         )}
     </span>
+  );
+}
+function researchProgress(
+  phase: string,
+  seconds: number,
+  activeSince: number | null | undefined,
+  now: number,
+  sourceCount: number,
+) {
+  const active = [
+    "collecting_sources",
+    "comparing_evidence",
+    "preparing_report",
+  ].includes(phase);
+  const elapsed =
+    Math.max(0, seconds) +
+    (active && typeof activeSince === "number"
+      ? Math.max(0, now / 1000 - activeSince)
+      : 0);
+  const whole = Math.floor(elapsed);
+  return {
+    active,
+    elapsed,
+    label: active
+      ? "Working"
+      : phase === "queued"
+        ? "Queued"
+        : phase === "failed"
+          ? "Research interrupted"
+          : "Summary pending",
+    time:
+      String(Math.floor(whole / 60)).padStart(2, "0") +
+      ":" +
+      String(whole % 60).padStart(2, "0"),
+    skeleton: active && sourceCount === 0 && elapsed >= 1.5,
+  };
+}
+function PendingResearch({
+  report,
+  onOpen,
+}: {
+  report: Report;
+  onOpen: (source: Source) => void;
+}) {
+  const [now, setNow] = useState(Date.now());
+  const status = researchProgress(
+    report.phase || "queued",
+    report.processing_seconds || 0,
+    report.active_since,
+    now,
+    report.sources.length,
+  );
+  useEffect(() => {
+    if (!status.active) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [report.phase]);
+  return (
+    <section className="research-progress" aria-label="Research progress">
+      <h1>{report.display_title || report.query}</h1>
+      <div className="research-working-status">
+        <span
+          className={
+            status.active
+              ? "research-working-dot active"
+              : "research-working-dot"
+          }
+          aria-hidden="true"
+        />
+        <span role="status">{status.label}</span>
+        {(status.active || typeof report.processing_seconds === "number") && (
+          <span
+            className="research-working-time"
+            aria-label={"Processing time " + status.time}
+          >
+            {status.time}
+            {!status.active ? " worked" : ""}
+          </span>
+        )}
+        {report.phase === "waiting_for_quota" && (
+          <details className="research-wait-explanation">
+            <summary>Why the wait?</summary>
+            <p>
+              The report-writing service has reached its usage limit. Your
+              collected findings are available below, and the summary will
+              resume automatically when the service is available.
+            </p>
+          </details>
+        )}
+      </div>
+      {status.skeleton && (
+        <div className="research-loading-lines" aria-hidden="true">
+          {[0, 1].map((n) => (
+            <div className="research-skeleton" key={n}>
+              <i />
+              <i />
+              <i />
+              <i />
+            </div>
+          ))}
+        </div>
+      )}
+      {!!report.sources.length && (
+        <section
+          className="research-collected-findings"
+          aria-label="Collected findings"
+        >
+          <h2>Collected findings</h2>
+          <p className="research-evidence-label">
+            Supporting passages from the sources found so far.
+          </p>
+          {report.sources.map((source) => (
+            <article
+              className="research-evidence-card"
+              id={"source-" + source.id}
+              key={source.id}
+            >
+              <h2>{source.title}</h2>
+              <p>
+                {sourceExcerpt(source)}{" "}
+                <SourceChip source={source} onClick={() => onOpen(source)} />
+              </p>
+              <button
+                className="research-inline-action"
+                onClick={() => onOpen(source)}
+              >
+                Read source
+              </button>
+            </article>
+          ))}
+        </section>
+      )}
+      {!status.active && !report.sources.length && (
+        <p>
+          {report.phase === "failed"
+            ? "No findings are available. Please try this research again."
+            : "Waiting to continue. Findings will appear here as soon as sources arrive."}
+        </p>
+      )}
+    </section>
   );
 }
 function citationParts(
@@ -2072,7 +2215,9 @@ function Workspace() {
           {report && (
             <>
               <h2>On this page</h2>
-              {(report.evidence_collection && !original
+              {((report.evidence_collection ||
+                report.completeness === "pending") &&
+              !original
                 ? report.sources.map((s) => ({ id: s.id, title: s.title }))
                 : report.sections.slice(0, 50)
               ).map((s, i) => (
@@ -2080,7 +2225,9 @@ function Workspace() {
                   key={s.id}
                   onClick={() => {
                     const target =
-                      report.evidence_collection && !original
+                      (report.evidence_collection ||
+                        report.completeness === "pending") &&
+                      !original
                         ? reader.current?.querySelector("#source-" + s.id)
                         : reader.current?.querySelectorAll("h1,h2,h3")[i];
                     target?.scrollIntoView({
@@ -2102,41 +2249,48 @@ function Workspace() {
                 <button
                   key={v}
                   aria-pressed={tab === v}
-                  disabled={v === 'edit' && (!report || report.completeness === 'pending' || report.phase === 'failed')}
+                  disabled={
+                    v === "edit" &&
+                    (!report ||
+                      report.completeness === "pending" ||
+                      report.phase === "failed")
+                  }
                   onClick={() => setTab(v)}
                 >
                   {v[0].toUpperCase() + v.slice(1)}
                 </button>
               ))}
             </nav>
-            {report && report.completeness !== 'pending' && report.phase !== 'failed' && (
-              <details>
-                <summary>
-                  <Icon name="download" /> Download
-                </summary>
-                <small className="research-export-label">
-                  {tab === "edit" ? "Saved draft" : "Research report"}
-                </small>
-                {["md", "html", "pdf", "docx"].map((f) => (
-                  <button key={f} onClick={() => void download(f)}>
-                    <Icon name="download" />
-                    <span>
-                      {
-                        (
-                          {
-                            md: "Markdown",
-                            html: "Web document",
-                            pdf: "PDF document",
-                            docx: "Word document",
-                          } as any
-                        )[f]
-                      }
-                    </span>
-                    <small>{f.toUpperCase()}</small>
-                  </button>
-                ))}
-              </details>
-            )}
+            {report &&
+              report.completeness !== "pending" &&
+              report.phase !== "failed" && (
+                <details>
+                  <summary>
+                    <Icon name="download" /> Download
+                  </summary>
+                  <small className="research-export-label">
+                    {tab === "edit" ? "Saved draft" : "Research report"}
+                  </small>
+                  {["md", "html", "pdf", "docx"].map((f) => (
+                    <button key={f} onClick={() => void download(f)}>
+                      <Icon name="download" />
+                      <span>
+                        {
+                          (
+                            {
+                              md: "Markdown",
+                              html: "Web document",
+                              pdf: "PDF document",
+                              docx: "Word document",
+                            } as any
+                          )[f]
+                        }
+                      </span>
+                      <small>{f.toUpperCase()}</small>
+                    </button>
+                  ))}
+                </details>
+              )}
           </header>
           <div className="research-stage">
             {!report ? (
@@ -2185,55 +2339,12 @@ function Workspace() {
                       );
                   }}
                 >
-                  {report.phase === "failed" ? (
-                    <div className="research-progress" role="status">
-                      <h1>{report.display_title}</h1>
-                      <p>
-                        Research could not be completed.{" "}
-                        {report.waiting_reason?.replace(/_/g, " ")}. Collected
-                        evidence is available in Sources.
-                      </p>
-                    </div>
-                  ) : report.completeness === "pending" ? (
-                    <div
-                      className="research-progress"
-                      role="status"
-                      aria-live="polite"
-                    >
-                      <h1>{report.display_title}</h1>
-                      <p>
-                        {(
-                          {
-                            queued: "Research queued",
-                            collecting_sources: "Collecting sources",
-                            comparing_evidence: "Comparing evidence",
-                            preparing_report: "Preparing report",
-                            waiting_for_quota: "Waiting for synthesis quota",
-                          } as any
-                        )[report.phase || "queued"] || report.phase}
-                      </p>
-                      {report.phase === "waiting_for_quota" && (
-                        <p>
-                          {report.waiting_reason?.replace(/_/g, " ")}
-                          {report.next_attempt
-                            ? " · Next attempt " +
-                              new Date(
-                                report.next_attempt * 1000,
-                              ).toLocaleString()
-                            : ""}
-                          . Collected sources remain available in Sources.
-                        </p>
-                      )}
-                      {[0, 1, 2].map((n) => (
-                        <div className="research-skeleton" key={n}>
-                          <i />
-                          <i />
-                          <i />
-                          <i />
-                        </div>
-                      ))}
-                    </div>
-                  ) : report.evidence_collection && !original ? (
+                  {report.phase === "failed" ||
+                  report.completeness === "pending" ? (
+                    <PendingResearch report={report} onOpen={openSource} />
+                  ) : (report.evidence_collection ||
+                      report.completeness === "pending") &&
+                    !original ? (
                     <>
                       <h1>{report.display_title || report.query}</h1>
                       <p className="research-evidence-label">

@@ -28,3 +28,10 @@ One Gemini Live transport remains active across workspace/report selection. Focu
 Physical microphone attribution, audible acknowledgement/completion cues, acoustic echo behavior, native YouTube volume changes during real conversation and audible volume restoration require a hardware session. Restricted embeds/autoplay failures retain observed error states; publisher-specific outcomes depend on YouTube availability. Source images were validated with real raster fixtures; provider-specific image availability varies.
 
 The production build retains the pre-existing Calculator eval and large-chunk warnings. Private reports, memories, credentials, recordings, generated bundles and runtime data are excluded from source delivery. Authoritative live stores were backed up before metadata changes.
+
+
+## Follow-up: loading indicators must reveal findings
+
+Pending research now renders collected source passages directly in Reader. Full-page skeleton lines appear only during active processing, after a short initial delay, and disappear as soon as sources are available. A live saved pending report displayed eight findings with zero skeleton regions. The main view no longer displays internal budget identifiers or the retry date; a compact Summary pending state has an optional explanation.
+
+A Working MM:SS counter uses persisted processing segments. Quota pauses freeze the counter and retries resume it without counting the paused interval. Legacy records with unknown timings do not invent elapsed durations. Targeted validation: 36 backend checks, 10 frontend research checks, TypeScript and production build passed.

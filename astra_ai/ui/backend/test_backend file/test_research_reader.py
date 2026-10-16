@@ -111,3 +111,20 @@ def test_explicit_report_links_reference_turns_without_copying_transcripts(tmp_p
     store.link_turn(item['id'],{**explicit,'profile_id':'other','turn_id':'denied'})
     assert len(read(store.path,{})['thread_links'][item['id']])==1
     assert 'conversation' not in read(store.path,{})
+
+
+def test_processing_timer_freezes_during_quota_wait_and_resumes(tmp_path,monkeypatch):
+    store=ResearchArtifacts(tmp_path/'r.json');item=store.reserve('Public subject','detailed',CTX,'timed')
+    stamp=[100.0];monkeypatch.setattr('astra_ai.core.research_learning.time.time',lambda:stamp[0])
+    store.request_state(item['id'],CTX,phase='collecting_sources')
+    stamp[0]=105.0;store.request_state(item['id'],CTX,phase='comparing_evidence',sources=[source()])
+    stamp[0]=107.0;paused=store.request_state(item['id'],CTX,phase='waiting_for_quota')
+    assert paused['processing_seconds']==7 and paused['active_since'] is None
+    stamp[0]=10000.0;restarted=ResearchArtifacts(store.path)
+    assert restarted.request_state(item['id'],CTX)['processing_seconds']==7
+    resumed=restarted.request_state(item['id'],CTX,phase='preparing_report')
+    assert resumed['active_since']==10000 and resumed['processing_seconds']==7
+    stamp[0]=10003.0;done=restarted.request_state(item['id'],CTX,phase='complete')
+    assert done['processing_seconds']==10 and done['active_since'] is None
+    doc=restarted.document(item['id'],CTX,bounded=True)
+    assert doc['processing_seconds']==10 and doc['sources']

@@ -7,7 +7,7 @@ import ts from 'typescript';
 // Exercise the same pure decisions used by the React reader and real player.
 const source = fs.readFileSync(new URL('../src/components/Research/ResearchWorkspace.tsx', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('research.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ['citationParts', 'videoId', 'videoVolumeStep', 'previewPlacement', 'videoTimestamp'];
+const names = ['citationParts', 'videoId', 'videoVolumeStep', 'previewPlacement', 'videoTimestamp', 'researchProgress'];
 const selected = tree.statements.filter(n => ts.isFunctionDeclaration(n) && names.includes(n.name?.text)).map(n => n.getText(tree)).join('\n');
 const context = { URL };
 vm.createContext(context);
@@ -66,4 +66,14 @@ test('only supplied real timestamp parameters produce a seek destination',()=>{
  assert.equal(context.videoTimestamp('https://youtube.com/watch?v=abcdefghijk&t=3m45s'),225);
  assert.equal(context.videoTimestamp('https://youtu.be/abcdefghijk?t=252'),252);
  for(const t of ['-5','invented','100000000'])assert.equal(context.videoTimestamp('https://youtu.be/abcdefghijk?t='+t),null);
+});
+
+test('working timer and skeleton reflect real processing, never a quota pause',()=>{
+ const active=context.researchProgress('collecting_sources',2,100,105000,0);
+ assert.equal(active.time,'00:07');assert.equal(active.skeleton,true);assert.equal(active.label,'Working');
+ assert.equal(context.researchProgress('collecting_sources',0,100,100500,0).skeleton,false);
+ assert.equal(context.researchProgress('preparing_report',2,100,105000,8).skeleton,false);
+ const waiting=context.researchProgress('waiting_for_quota',7,null,9999999,8);
+ assert.equal(waiting.time,'00:07');assert.equal(waiting.active,false);assert.equal(waiting.skeleton,false);assert.equal(waiting.label,'Summary pending');
+ assert.equal(context.researchProgress('queued',0,null,9999999,0).label,'Queued');
 });

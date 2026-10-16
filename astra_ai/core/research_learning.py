@@ -238,7 +238,16 @@ class ResearchArtifacts:
         with self.lock:
             data=read(self.path,{'requests':{}});item=data.get('requests',{}).get(identifier)
             if not item or scope(item)!=scope(context):return {'status':'not_found'}
-            if updates:self.backup_metadata();item.update(updates);atomic(self.path,data)
+            if updates:
+                self.backup_metadata()
+                active={'collecting_sources','comparing_evidence','preparing_report'}
+                next_phase=updates.get('phase',item.get('phase'))
+                if next_phase!=item.get('phase'):
+                    stamp=time.time();started=item.get('active_since')
+                    if item.get('phase') in active and isinstance(started,(int,float)):
+                        item['processing_seconds']=item.get('processing_seconds',0)+max(0,stamp-started)
+                    item['active_since']=stamp if next_phase in active else None
+                item.update(updates);atomic(self.path,data)
             return {'status':'ok',**copy.deepcopy(item)}
 
     def link_turn(self, identifier, context):
@@ -414,7 +423,7 @@ class ResearchArtifacts:
             draft=read(self.path,{'drafts':{}}).get('drafts',{}).get(identifier)
         document={**self.brief(item),'status':'ok','report':item['report'],'sources':sources,'linked_sources':self.report_links(item,context),'sections':sections,'draft':copy.deepcopy(draft),**self.media(identifier,context),'legacy_evidence':'Sourced research excerpts.' in item['report'],'evidence_collection':'Sourced research excerpts.' in item['report'] or 'not a completed synthesis.' in item['report']}
         metadata=self.request_state(identifier,context)
-        document.update(display_title=metadata.get('display_title') or display_title(item['query']),thread_id=metadata.get('thread_id','research-'+identifier),phase=metadata.get('phase','complete'),next_attempt=metadata.get('next_attempt'),waiting_reason=metadata.get('waiting_reason'),image_items=[{k:v for k,v in image.items() if k!='url'} for image in self.images(identifier,context)])
+        document.update(display_title=metadata.get('display_title') or display_title(item['query']),thread_id=metadata.get('thread_id','research-'+identifier),phase=metadata.get('phase','complete'),processing_seconds=metadata.get('processing_seconds'),active_since=metadata.get('active_since'),next_attempt=metadata.get('next_attempt'),waiting_reason=metadata.get('waiting_reason'),image_items=[{k:v for k,v in image.items() if k!='url'} for image in self.images(identifier,context)])
         if bounded:
             document.update(self.reader(identifier,context,revision))
             document['sources']=[{**r,'content':evidence_excerpt(r)} for r in sources]
