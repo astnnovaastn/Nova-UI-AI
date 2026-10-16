@@ -2310,6 +2310,8 @@ async def _aegis_search_web(arguments):
     context=CURRENT_OPERATION.get() or {}
     if not context.get('client_id') and not context.get('background'):return {'status':'rejected','reason':'connected_search_context_required'}
     artifacts,service=get_research_services()
+    if arguments.get('action')=='media':
+        return await service.enrich_media(str(arguments.get('research_id','')),context,str(arguments.get('research_revision','')))
     result=await service.search(arguments,context,context.get('operation_id',''))
     if result.get('research_id') and learning_service and not context.get('guest'):
         item=await asyncio.to_thread(artifacts.get,result['research_id'],context,result['research_revision'])
@@ -2322,7 +2324,7 @@ async def _aegis_search_web(arguments):
 
 
 def _gemini_search_web(arguments: Dict[str, Any]) -> Dict[str, Any]:
-    """Run a focused conversational search through Firecrawl.
+    """Run a scoped conversational search through the active configured providers.
 
     The API key is read only on the backend. Results are normalized and saved
     to the same bounded search-memory store used by the memory tools.
@@ -8344,11 +8346,41 @@ async def research_export(identifier:str,request:Request,revision:str,format:str
     from fastapi.responses import Response
     return Response(body,media_type=mime,headers={'Content-Disposition':f'attachment; filename="research.{format}"','X-Content-Type-Options':'nosniff','Cache-Control':'no-store'})
 
-@app.get('/api/research/{identifier}/sources/{source_id}')
-async def research_source(identifier:str,source_id:str,request:Request):
+@app.get('/api/research/{identifier}/media')
+async def research_media_state(identifier:str,request:Request):
     context=_learning_context(request);artifacts,_=get_research_services()
-    try:body,mime=await asyncio.to_thread(artifacts.source_bytes,identifier,context,source_id)
-    except Exception:raise HTTPException(422,'Source preview unavailable. Open the original source.')
+    result=await asyncio.to_thread(artifacts.media,identifier,context)
+    if result.get('status')=='not_found':raise HTTPException(404,'Research unavailable')
+    if result.get('media_job_id') and result.get('media_status') in {'pending','running'}:
+        job=action_jobs.list(result['media_job_id'],context).get('job',{})
+        if job.get('state') in {'failed','cancelled','canceled'}:
+            item=await asyncio.to_thread(artifacts.get,identifier,context)
+            await asyncio.to_thread(artifacts.media_state,identifier,context,item['artifact']['revision'],status='unavailable',failures=[{'reason':'video_discovery_'+job['state']}])
+            result=await asyncio.to_thread(artifacts.media,identifier,context)
+    return result
+
+@app.post('/api/research/{identifier}/media')
+async def research_media_request(identifier:str,request:Request):
+    context=_learning_context(request)
+    if context.get('guest'):raise HTTPException(403,'Owner research required')
+    body=await request.json();revision=str(body.get('research_revision',''));artifacts,_=get_research_services()
+    if not revision:raise HTTPException(400,'Research revision required')
+    fetched=await asyncio.to_thread(artifacts.get,identifier,context,revision)
+    if fetched['status']!='ok':raise HTTPException(409 if fetched['status']=='conflict' else 404,'Research unavailable or changed')
+    current=await asyncio.to_thread(artifacts.media,identifier,context)
+    if current['media_status'] not in {'idle','pending'}:return {'status':'completed',**current}
+    from astra_ai.memory.shared_memory import stable
+    result=action_jobs.submit([{'name':'search_web','arguments':{'action':'media','research_id':identifier,'research_revision':revision}}],context,'research-media:'+stable(identifier,revision),goal='Find videos for '+fetched['artifact']['query'])
+    if result.get('status') in {'accepted','queued','duplicate','completed'}:
+        await asyncio.to_thread(artifacts.media_state,identifier,context,revision,status='pending',job_id=result.get('job_id',''))
+    return result
+
+@app.get('/api/research/{identifier}/sources/{source_id}')
+async def research_source(identifier:str,source_id:str,request:Request,view:str='',revision:str=''):
+    context=_learning_context(request);artifacts,_=get_research_services()
+    try:body,mime=await asyncio.to_thread(artifacts.source_bytes,identifier,context,source_id,view=='reader',revision)
+    except Exception:raise HTTPException(422,'This source is unavailable for internal reading. Collected evidence remains available.')
+    if _learning_context(request)!=context:raise HTTPException(403,'Research session changed')
     from fastapi.responses import Response
     return Response(body,media_type=mime,headers={'X-Content-Type-Options':'nosniff','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; sandbox"})
 

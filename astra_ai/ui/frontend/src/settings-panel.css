@@ -388,3 +388,6 @@
     grid-template-columns: 1fr;
   }
 }
+
+.settings-sound-controls label {display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;font-size:12px;padding:9px 0;}
+.settings-sound-controls input[type=range] {grid-column:1 / -1;width:100%;accent-color:var(--accent-readable,#aabbe0);}

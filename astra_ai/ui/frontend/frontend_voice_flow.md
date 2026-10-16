@@ -123,3 +123,14 @@ copies itself into Notes by default.
 
 Private stores, credentials, recordings, downloads, backups, and validation artifacts
 are excluded from delivery.
+
+
+## Research redesign validation — 2026-10-16
+
+Research now uses the reclaimed document height, a centered floating research composer, persistent history/chat columns, compact source pills, and a source reader inside the document pane. The report, source IDs, and draft revisions remain independent of supplemental media metadata. Settings contains notification history and separate sound controls; the microphone-adjacent notification launcher is removed.
+
+Validation: full backend run 604 passed / 1 skipped before the final media-title/count adjustment; the subsequent research/workflow/core suite passed 55 tests, including report-linked video deduplication. All 128 frontend tests, all 46 globe tests, TypeScript, and production build passed. Existing Calculator eval and large-bundle warnings remain.
+
+Populated desktop checks used the existing public honeybee report. At 1280×720 the document starts at y=76, and the research composer remains centered in its column. A real NC State article opened in the central pane with structured paragraphs and 28 internal links; returning restored the reading position and source focus. The isolated Gemini Live request changed the rendered view to Sources; its spoken/transcript completion was not confirmed. Media enrichment produced five distinct embedded videos, with no Nova duplicate playback toolbar or ordinary external video links. Native player controls rendered and were exercised, but audible quality, real microphone interruption, and physical-device volume ducking remain manual checks. No claims are made about sub-millisecond recognition or unmeasured hardware performance.
+
+Reader source fetches retain public-address and redirect checks, pinned validated DNS, content limits, and scoped minted follow-on IDs. A media request is recorded before network access; reconnect/restart cannot automatically spend the same report's video-search credit again. Authoritative JSON is backed up before additive media writes.

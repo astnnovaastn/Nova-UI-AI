@@ -1,3 +1,4 @@
+import { mountSoundSettings, showNotificationHistory } from "./notifications";
 import {initVoiceEnrollment} from './voiceEnrollment';
 /**
  * AEGIS — Settings Panel
@@ -146,6 +147,8 @@ function buildPanelHTML(): string {
         <!-- User Preferences -->
         <section class="settings-section" id="section-preferences">
           <h3>User Preferences</h3>
+          <div class="settings-field settings-sound-controls" id="settings-sound-controls"></div>
+          <button class="settings-btn" id="btn-notification-history">Notification history</button>
 
           <div class="settings-field">
             <label>Your Name</label>
@@ -339,6 +342,9 @@ async function loadPreferences() {
 }
 
 function wireEvents() {
+  const soundHost=document.getElementById("settings-sound-controls");
+  if(soundHost) mountSoundSettings(soundHost);
+  document.getElementById("btn-notification-history")?.addEventListener("click", showNotificationHistory);
   // Close
   document.getElementById("btn-memory-workspace")?.addEventListener("click", () => { closeSettings(); window.dispatchEvent(new Event("nova-open-memory")); });
   document.getElementById("settings-close")?.addEventListener("click", closeSettings);

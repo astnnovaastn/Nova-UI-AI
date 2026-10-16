@@ -11,19 +11,62 @@ export type Notice = {
 };
 
 /** Nonblocking owner confirmation: audio/capture continue, model clicks cannot approve. */
-export function confirmOwner(title:string,target:string,revision:string):Promise<boolean>{
- return new Promise(resolve=>{
-  const initialScope=scope,previous=document.activeElement as HTMLElement|null;
-  const dialog=document.createElement('dialog');dialog.className='nova-owner-confirmation';
-  const heading=document.createElement('h2');heading.textContent='Review this change';
-  const description=document.createElement('p');description.textContent=title;
-  const item=document.createElement('p');item.textContent='Target: '+target;
-  const version=document.createElement('details'),label=document.createElement('summary'),hash=document.createElement('code');label.textContent='Current revision';hash.textContent=revision;version.append(label,hash);
-  const controls=document.createElement('div'),cancel=document.createElement('button'),approve=document.createElement('button');cancel.textContent='Keep unchanged';approve.textContent='Approve this change';controls.append(cancel,approve);dialog.append(heading,description,item,version,controls);
-  let settled=false;const finish=(yes:boolean)=>{if(settled)return;settled=true;window.removeEventListener('nova-confirmation-scope-changed',changed);dialog.close();dialog.remove();if(previous?.isConnected)previous.focus();resolve(yes&&scope===initialScope);};
-  const changed=()=>finish(false);window.addEventListener('nova-confirmation-scope-changed',changed);
-  cancel.onclick=e=>{if(e.isTrusted)finish(false);};approve.onclick=e=>{if(e.isTrusted)finish(true);};dialog.addEventListener('cancel',e=>{e.preventDefault();finish(false);});dialog.addEventListener('close',()=>finish(false));document.body.append(dialog);dialog.showModal();cancel.focus();
- });
+export function confirmOwner(
+  title: string,
+  target: string,
+  revision: string,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const initialScope = scope,
+      previous = document.activeElement as HTMLElement | null;
+    const dialog = document.createElement("dialog");
+    dialog.className = "nova-owner-confirmation";
+    const heading = document.createElement("h2");
+    heading.textContent = "Review this change";
+    const description = document.createElement("p");
+    description.textContent = title;
+    const item = document.createElement("p");
+    item.textContent = "Target: " + target;
+    const version = document.createElement("details"),
+      label = document.createElement("summary"),
+      hash = document.createElement("code");
+    label.textContent = "Current revision";
+    hash.textContent = revision;
+    version.append(label, hash);
+    const controls = document.createElement("div"),
+      cancel = document.createElement("button"),
+      approve = document.createElement("button");
+    cancel.textContent = "Keep unchanged";
+    approve.textContent = "Approve this change";
+    controls.append(cancel, approve);
+    dialog.append(heading, description, item, version, controls);
+    let settled = false;
+    const finish = (yes: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("nova-confirmation-scope-changed", changed);
+      dialog.close();
+      dialog.remove();
+      if (previous?.isConnected) previous.focus();
+      resolve(yes && scope === initialScope);
+    };
+    const changed = () => finish(false);
+    window.addEventListener("nova-confirmation-scope-changed", changed);
+    cancel.onclick = (e) => {
+      if (e.isTrusted) finish(false);
+    };
+    approve.onclick = (e) => {
+      if (e.isTrusted) finish(true);
+    };
+    dialog.addEventListener("cancel", (e) => {
+      e.preventDefault();
+      finish(false);
+    });
+    dialog.addEventListener("close", () => finish(false));
+    document.body.append(dialog);
+    dialog.showModal();
+    cancel.focus();
+  });
 }
 const inbox: Notice[] = [];
 const queue: Notice[] = [];
@@ -108,7 +151,7 @@ document.addEventListener("pointerdown", unlock, { passive: true });
 document.addEventListener("keydown", unlock, { passive: true });
 export function noticeScope(value: string) {
   if (scope === value) return;
-  window.dispatchEvent(new CustomEvent('nova-confirmation-scope-changed'));
+  window.dispatchEvent(new CustomEvent("nova-confirmation-scope-changed"));
   try {
     if (scope)
       sessionStorage.setItem(
@@ -221,7 +264,7 @@ export function notify(n: Notice) {
   if (queue.length > 20) queue.splice(0, queue.length - 20);
   showNext();
 }
-function showInbox() {
+export function showNotificationHistory() {
   document.getElementById("nova-notification-inbox")?.remove();
   const panel = document.createElement("aside");
   panel.id = "nova-notification-inbox";
@@ -233,6 +276,25 @@ function showInbox() {
   close.textContent = "Close";
   close.onclick = () => panel.remove();
   panel.append(heading, close);
+  mountSoundSettings(panel);
+  if (!inbox.length) {
+    const empty = document.createElement("p");
+    empty.textContent = "You’re all caught up.";
+    panel.append(empty);
+  }
+  for (const n of inbox) {
+    const b = document.createElement("button");
+    b.textContent = n.title;
+    b.onclick = () => {
+      route(n);
+      panel.remove();
+    };
+    panel.append(b);
+  }
+  document.body.append(panel);
+  close.focus();
+}
+export function mountSoundSettings(host: HTMLElement) {
   for (const name of ["notification", "voice"]) {
     const label = document.createElement("label");
     label.textContent = name === "voice" ? "Voice cues" : "Notification sounds";
@@ -263,33 +325,9 @@ function showInbox() {
     volume.oninput = () =>
       localStorage.setItem("nova-sound-" + name + "-volume", volume.value);
     label.append(toggle, volume);
-    panel.append(label);
+    host.append(label);
   }
-  if (!inbox.length) {
-    const empty = document.createElement("p");
-    empty.textContent = "You’re all caught up.";
-    panel.append(empty);
-  }
-  for (const n of inbox) {
-    const b = document.createElement("button");
-    b.textContent = n.title;
-    b.onclick = () => {
-      route(n);
-      panel.remove();
-    };
-    panel.append(b);
-  }
-  document.body.append(panel);
-  close.focus();
 }
-const launcher = document.createElement("button");
-launcher.id = "nova-notification-button";
-launcher.className = "nova-notification-button";
-launcher.textContent = "◌";
-launcher.title = "Notifications";
-launcher.setAttribute("aria-label", "Open notifications");
-launcher.onclick = showInbox;
-document.body.append(launcher);
 window.addEventListener("nova-notify", (e) =>
   notify((e as CustomEvent<Notice>).detail),
 );

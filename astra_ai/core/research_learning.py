@@ -182,6 +182,8 @@ class ResearchArtifacts:
     def __init__(self, path):
         self.path = Path(path)
         self.lock = StorageLock(self.path.with_suffix('.lock'))
+        self.reader_cache = {}
+        self.reader_links = {}
 
     def get(self, identifier, context, revision=''):
         with self.lock:
@@ -282,7 +284,7 @@ class ResearchArtifacts:
         sections=[{'id':'section-'+str(i),'title':line.lstrip('# ').strip()} for i,line in enumerate(item['report'].splitlines()) if re.match(r'^#{1,3} ',line)]
         with self.lock:
             draft=read(self.path,{'drafts':{}}).get('drafts',{}).get(identifier)
-        return {**self.brief(item),'status':'ok','report':item['report'],'sources':sources,'sections':sections,'draft':copy.deepcopy(draft),'legacy_evidence':'Sourced research excerpts.' in item['report'],'evidence_collection':'Sourced research excerpts.' in item['report'] or 'not a completed synthesis.' in item['report']}
+        return {**self.brief(item),'status':'ok','report':item['report'],'sources':sources,'linked_sources':self.report_links(item,context),'sections':sections,'draft':copy.deepcopy(draft),**self.media(identifier,context),'legacy_evidence':'Sourced research excerpts.' in item['report'],'evidence_collection':'Sourced research excerpts.' in item['report'] or 'not a completed synthesis.' in item['report']}
 
     def save_draft(self, identifier, context, revision, expected_revision, html):
         import bleach,shutil
@@ -373,43 +375,156 @@ class ResearchArtifacts:
         SimpleDocTemplate(output,title=result['query']).build(story)
         return output.getvalue(),'application/pdf'
 
-    def source_bytes(self, identifier, context, source_id):
-        """Fetch only an artifact's public source; no credentials, redirects revalidated."""
-        import socket,ipaddress
-        from urllib.parse import urljoin
+    def report_links(self, item, context):
+        """Only offer follow-on URLs that occur in the preserved source evidence."""
+        pattern=r'https?://[^\s<>\)\]"\x27]+'
+        evidence=set()
+        for row in item['sources']:
+            evidence.add(row['url'])
+            evidence.update(re.findall(pattern,str(row.get('content',''))))
+        from markdown_it import MarkdownIt
+        from bs4 import BeautifulSoup
+        parsed_report=BeautifulSoup(MarkdownIt('commonmark',{'html':False}).render(item['report']),'html.parser')
+        titles={a.get('href'):a.get_text(' ',strip=True) for a in parsed_report.find_all('a',href=True)}
+        found=[];seen=set();cache_scope=stable(scope(context),item['id'],item['revision'])
+        for url in re.findall(pattern,item['report']):
+            parsed=urlsplit(url)
+            if url in seen or url not in evidence or not parsed.hostname or parsed.username or parsed.password:continue
+            seen.add(url);link_id='L'+hashlib.sha256((cache_scope+url).encode()).hexdigest()[:24]
+            self.reader_links[(cache_scope,link_id)]=(url,time.time())
+            found.append({'id':link_id,'url':url,'title':titles.get(url) or ('Related video' if self.video_id(url) else parsed.hostname),'retrieved_at':item['created']})
+            if len(found)==200:break
+        return found
+
+    @staticmethod
+    def video_id(url):
+        parsed=urlsplit(url);host=(parsed.hostname or '').lower()
+        from urllib.parse import parse_qs
+        value=parsed.path.strip('/') if host=='youtu.be' else (parse_qs(parsed.query).get('v',[''])[0] or parsed.path.rsplit('/',1)[-1]) if host=='youtube.com' or host.endswith('.youtube.com') else ''
+        return value if parsed.scheme in {'http','https'} and re.fullmatch(r'[\w-]{11}',value,flags=re.ASCII) else None
+
+    def media(self, identifier, context):
         result=self.get(identifier,context)
-        if result['status']!='ok':raise ValueError('not_found')
-        if not re.fullmatch(r'S[1-9][0-9]*',source_id):raise ValueError('invalid_source')
-        index=int(source_id[1:])-1
-        if index>=len(result['artifact']['sources']):raise ValueError('not_found')
-        url=result['artifact']['sources'][index]['url']
-        import urllib3
+        if result['status']!='ok':return result
+        item=result['artifact']
+        with self.lock:
+            saved=read(self.path,{'media':{}}).get('media',{}).get(identifier,{})
+        found={}
+        for i,source in enumerate(item['sources']):
+            video=self.video_id(source.get('url',''))
+            if video:found[video]={**source,'id':'S'+str(i+1),'video_id':video}
+        for row in self.report_links(item,context):
+            video=self.video_id(row['url'])
+            if video:found.setdefault(video,{**row,'video_id':video})
+        for row in saved.get('items',[]):found.setdefault(row['video_id'],row)
+        return {'media':list(found.values()),'media_revision':saved.get('revision',''),
+                'media_status':saved.get('status','idle'),'media_job_id':saved.get('job_id',''),'media_failures':saved.get('failures',[])}
+
+    def media_state(self, identifier, context, revision, *, status=None, attempted=None, items=None, failures=None, job_id=None):
+        import shutil
+        with self.lock:
+            result=self.get(identifier,context,revision)
+            if result['status']!='ok':return result
+            if context.get('guest'):return {'status':'rejected','reason':'owner_required'}
+            data=read(self.path,{'artifacts':{},'media':{}})
+            previous=data.setdefault('media',{}).get(identifier,{})
+            if status=='pending' and previous.get('status') not in {None,'idle'}:return copy.deepcopy(previous)
+            if attempted and previous.get('attempted'):return {**copy.deepcopy(previous),'already_attempted':True}
+            if self.path.exists() and not self.path.with_suffix('.before-media.bak').exists():shutil.copy2(self.path,self.path.with_suffix('.before-media.bak'))
+            current={**previous,'source_revision':revision,'updated_at':now()}
+            if status is not None:current['status']=status
+            if attempted is not None:current['attempted']=attempted
+            if items is not None:current['items']=items
+            if failures is not None:current['failures']=failures
+            if job_id is not None:current['job_id']=job_id
+            current['revision']=hashlib.sha256(json.dumps(current,sort_keys=True).encode()).hexdigest()
+            data['media'][identifier]=current;atomic(self.path,data)
+            return copy.deepcopy(current)
+
+    @staticmethod
+    def _fetch_public_source(url):
+        import socket,ipaddress,urllib3
+        from urllib.parse import urljoin
         for _ in range(5):
             parsed=urlsplit(url)
             if parsed.scheme not in {'http','https'} or not parsed.hostname or parsed.username or parsed.password or parsed.port not in {None,80,443}:raise ValueError('invalid_source_url')
-            addresses=socket.getaddrinfo(parsed.hostname,parsed.port or (443 if parsed.scheme=='https' else 80),type=socket.SOCK_STREAM)
+            port=parsed.port or (443 if parsed.scheme=='https' else 80)
+            addresses=socket.getaddrinfo(parsed.hostname,port,type=socket.SOCK_STREAM)
             if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):raise ValueError('non_public_source')
-            # Pin the connection to the validated address, retaining TLS SNI/hostname checks.
             ip=addresses[0][4][0]
-            pool=urllib3.HTTPSConnectionPool(ip,port=443,assert_hostname=parsed.hostname,server_hostname=parsed.hostname) if parsed.scheme=='https' else urllib3.HTTPConnectionPool(ip,port=80)
+            pool=urllib3.HTTPSConnectionPool(ip,port=port,assert_hostname=parsed.hostname,server_hostname=parsed.hostname) if parsed.scheme=='https' else urllib3.HTTPConnectionPool(ip,port=port)
             target=parsed.path or '/'
             if parsed.query:target+='?'+parsed.query
-            with pool.request('GET',target,timeout=urllib3.Timeout(connect=5,read=15),redirect=False,retries=False,preload_content=False,headers={'Host':parsed.hostname,'User-Agent':'NovaResearchReader/1.0','Accept':'application/pdf,text/html,text/plain,text/markdown'}) as response:
-                if response.status in {301,302,303,307,308}:url=urljoin(url,response.headers.get('Location',''));continue
-                if response.status!=200:raise ValueError('source_http_error')
-                mime=response.headers.get('Content-Type','').split(';')[0].lower()
-                if mime not in {'application/pdf','text/plain','text/markdown','text/html'}:raise ValueError('unsupported_document')
-                content=bytearray()
-                for chunk in response.stream(65536):
-                    content.extend(chunk)
-                    if len(content)>12_000_000:raise ValueError('document_too_large')
-                if mime=='text/html':
-                    from bs4 import BeautifulSoup
-                    soup=BeautifulSoup(bytes(content),'html.parser')
-                    for node in soup(['script','style','nav','header','footer','iframe','form']):node.decompose()
-                    return soup.get_text('\n',strip=True).encode(),'text/plain; charset=utf-8'
-                return bytes(content),mime
+            try:
+                with pool.request('GET',target,timeout=urllib3.Timeout(connect=5,read=15),redirect=False,retries=False,preload_content=False,headers={'Host':parsed.netloc,'User-Agent':'NovaResearchReader/1.0','Accept':'application/pdf,text/html,text/plain,text/markdown'}) as response:
+                    if response.status in {301,302,303,307,308}:url=urljoin(url,response.headers.get('Location',''));continue
+                    if response.status!=200:raise ValueError('source_http_error')
+                    mime=response.headers.get('Content-Type','').split(';')[0].lower()
+                    if mime not in {'application/pdf','text/plain','text/markdown','text/html'}:raise ValueError('unsupported_document')
+                    content=bytearray()
+                    for chunk in response.stream(65536):
+                        content.extend(chunk)
+                        if len(content)>12_000_000:raise ValueError('document_too_large')
+                    return bytes(content),mime,url
+            finally:pool.close()
         raise ValueError('too_many_redirects')
+
+    def source_bytes(self, identifier, context, source_id, reader=False, revision=''):
+        """Public source reader; follow-on IDs are minted from actual extracted links."""
+        result=self.get(identifier,context,revision)
+        if result['status']!='ok':raise ValueError(result['status'])
+        item=result['artifact'];cache_scope=stable(scope(context),identifier,item['revision'])
+        if re.fullmatch(r'S[1-9][0-9]*',source_id):
+            index=int(source_id[1:])-1
+            if index>=len(item['sources']):raise ValueError('not_found')
+            url=item['sources'][index]['url']
+        elif re.fullmatch(r'L[0-9a-f]{24}',source_id):
+            entry=self.reader_links.get((cache_scope,source_id))
+            if not entry or time.time()-entry[1]>3600:raise ValueError('source_link_expired')
+            url=entry[0]
+        else:raise ValueError('invalid_source')
+        key=(cache_scope,source_id,reader)
+        cached=self.reader_cache.get(key)
+        if cached and time.time()-cached[0]<3600:return cached[1]
+        content,mime,final_url=self._fetch_public_source(url)
+        if mime=='application/pdf':return content,mime
+        import bleach,html
+        from bs4 import BeautifulSoup
+        from urllib.parse import urljoin
+        if mime=='text/markdown':
+            from markdown_it import MarkdownIt
+            content=MarkdownIt('commonmark',{'html':False}).render(content.decode('utf-8',errors='replace')).encode()
+            mime='text/html'
+        if mime=='text/html':
+            soup=BeautifulSoup(content,'html.parser')
+            for node in soup(['script','style','nav','header','footer','iframe','form','noscript','svg','button','input','select']):node.decompose()
+            for node in soup.select('[hidden],[aria-hidden="true"]'):node.decompose()
+            root=soup.find('article') or soup.find('main') or soup.body or soup
+            text=root.get_text('\n',strip=True)
+            links={}
+            for heading in root.find_all(id=True):heading['id']='reader-'+source_id+'-'+str(heading['id'])
+            for anchor in root.find_all('a'):
+                original_href=anchor.get('href','')
+                if original_href.startswith('#'):
+                    anchor.attrs={'href':'#reader-'+source_id+'-'+original_href[1:]}
+                    continue
+                href=urljoin(final_url,original_href)
+                parsed=urlsplit(href)
+                if parsed.scheme not in {'http','https'} or not parsed.hostname or parsed.username or parsed.password or len(links)>=200:
+                    anchor.unwrap();continue
+                link_id='L'+hashlib.sha256((cache_scope+href).encode()).hexdigest()[:24]
+                links[link_id]=href
+                self.reader_links[(cache_scope,link_id)]=(href,time.time())
+                anchor.attrs={'href':'#'+link_id,'data-source-link':link_id}
+            sanitized=bleach.clean(str(root),tags={'p','h1','h2','h3','h4','h5','ul','ol','li','blockquote','pre','code','br','hr','a','table','thead','tbody','tr','th','td','strong','em','b','i','sup','sub'},attributes={'*':['id'],'a':['href','data-source-link'],'th':['colspan','rowspan'],'td':['colspan','rowspan']},protocols={'http','https'},strip=True)
+        else:
+            text=content.decode('utf-8',errors='replace');links={}
+            sanitized=''.join('<p>'+html.escape(p).replace('\n','<br>')+'</p>' for p in text.split('\n\n'))
+        answer=(json.dumps({'html':sanitized,'links':links,'url':final_url}).encode(),'application/json') if reader else (text.encode(),'text/plain; charset=utf-8')
+        self.reader_cache[key]=(time.time(),answer)
+        while len(self.reader_cache)>64 or sum(len(v[1][0]) for v in self.reader_cache.values())>16_000_000:self.reader_cache.pop(next(iter(self.reader_cache)))
+        while len(self.reader_links)>2000:self.reader_links.pop(next(iter(self.reader_links)))
+        return answer
 
 
 class ResearchSearch:
@@ -453,6 +568,48 @@ class ResearchSearch:
         except Exception as error:
             # Requests exceptions may contain URLs and private keys. Keep type only.
             return [], {'provider':provider,'reason':type(error).__name__,'retryable':True}
+
+    def _video_request(self, query):
+        key=self.key_provider('SERPAPI_KEY')
+        if not key:return [],{'reason':'video_provider_not_configured'}
+        try:
+            response=self.transport.get('https://serpapi.com/search.json',params={'api_key':key,'engine':'youtube','search_query':query},timeout=20)
+            if response.status_code!=200:return [],{'reason':'video_provider_quota' if response.status_code in {402,429,432,433} else 'video_provider_unavailable'}
+            payload=response.json()
+            if payload.get('error'):return [],{'reason':'video_provider_reported_error'}
+            videos=[];seen=set()
+            for row in payload.get('video_results',[])[:20]:
+                video=ResearchArtifacts.video_id(str(row.get('link','')))
+                if not video or video in seen:continue
+                # Only actual video results, never channels/playlists or synthetic URLs.
+                seen.add(video)
+                thumb=row.get('thumbnail',{});thumb=thumb.get('static','') if isinstance(thumb,dict) else thumb
+                videos.append({'id':'V'+video,'video_id':video,'title':safe(str(row.get('title','Video'))),'url':'https://www.youtube.com/watch?v='+video,'channel':safe(str((row.get('channel') or {}).get('name',''))),'thumbnail':thumb if str(thumb).startswith('https://') else '', 'published_at':safe(str(row.get('published_date',''))),'retrieved_at':now(),'content':safe(str(row.get('description',''))),'discovery_only':True})
+                if len(videos)==5:break
+            return videos,None if videos else {'reason':'no_relevant_videos_returned'}
+        except Exception as error:return [],{'reason':'video_'+type(error).__name__}
+
+    async def enrich_media(self, identifier, context, revision=''):
+        lock=self.operation_locks.setdefault(stable('media',scope(context),identifier),asyncio.Lock())
+        async with lock:
+            fetched=await asyncio.to_thread(self.artifacts.get,identifier,context,revision)
+            if fetched['status']!='ok':return fetched
+            if context.get('guest'):return {'status':'rejected','reason':'owner_required'}
+            item=fetched['artifact'];existing=await asyncio.to_thread(self.artifacts.media,identifier,context)
+            if existing['media_status'] in {'complete','partial','unavailable'}:return {'status':'completed',**existing,'research_id':identifier,'research_revision':item['revision'],'query':item['query'],'results':[]}
+            claim=await asyncio.to_thread(self.artifacts.media_state,identifier,context,item['revision'],status='running',attempted=True)
+            if claim.get('already_attempted'):
+                # After a crash, the outbound request is uncertain: do not spend again.
+                await asyncio.to_thread(self.artifacts.media_state,identifier,context,item['revision'],status='unavailable',failures=[{'reason':'video_request_interrupted_no_automatic_retry'}])
+            elif len(existing['media'])>=3 or item['mode']!='detailed':
+                await asyncio.to_thread(self.artifacts.media_state,identifier,context,item['revision'],status='complete',items=[])
+            else:
+                async with self.network:rows,error=await asyncio.to_thread(self._video_request,item['query'])
+                present={r['video_id'] for r in existing['media']}
+                rows=[r for r in rows if r['video_id'] not in present][:max(0,5-len(present))]
+                await asyncio.to_thread(self.artifacts.media_state,identifier,context,item['revision'],status='partial' if error else 'complete',items=rows,failures=[error] if error else [])
+            final=await asyncio.to_thread(self.artifacts.media,identifier,context)
+            return {'status':'completed',**final,'research_id':identifier,'research_revision':item['revision'],'query':item['query'],'results':[]}
 
     async def search(self, arguments, context, operation_id=''):
         query=str(arguments.get('query') or '').strip();mode=arguments.get('mode','quick')
@@ -504,4 +661,5 @@ class ResearchSearch:
                 # Evidence-only fallback is explicitly labelled, never impersonates a synthesis.
                 report='# '+query+'\n\n## Collected evidence\n\nThese are source excerpts, not a completed synthesis.\n\n'+'\n\n'.join('### '+row['title']+' ['+'S'+str(i+1)+']\n\n'+row['content'] for i,row in enumerate(sources))+'\n\n## Limitations\nSearch excerpts may be incomplete. Verify time-sensitive claims against the original sources.'
             item=await asyncio.to_thread(self.artifacts.save,query,mode,report,sources,failures,context,operation_id)
+            if mode=='detailed':await self.enrich_media(item['id'],context,item['revision'])
             return self.artifacts.brief(item)

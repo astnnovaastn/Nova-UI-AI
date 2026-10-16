@@ -1,4 +1,4 @@
-import {confirmOwner} from './notifications';
+import { confirmOwner } from "./notifications";
 export type AegisWidgetConnectionState =
   "disconnected" | "connected" | "working" | "failed";
 
@@ -24,12 +24,25 @@ export function registerRichEditor(
     richEditors.delete(element);
   };
 }
+const mediaControls = new WeakMap<
+  HTMLElement,
+  (action: string, value: unknown) => Promise<Record<string, unknown>>
+>();
+export function registerMediaControls(
+  element: HTMLElement,
+  apply: (action: string, value: unknown) => Promise<Record<string, unknown>>,
+) {
+  mediaControls.set(element, apply);
+  return () => {
+    mediaControls.delete(element);
+  };
+}
 const controlIds = new WeakMap<Element, string>();
 const semanticStates = new Map<string, Record<string, unknown>>();
 const eventTimers = new Map<string, number>();
 
 const INTERACTIVE =
-  'button,input,textarea,select,a,[role="button"],[tabindex],[data-aegis-scroll],[contenteditable="true"]';
+  'button,summary,input,textarea,select,a,[role="button"],[tabindex],[data-aegis-scroll],[contenteditable="true"]';
 const SECRET_HINT = /password|secret|token|credential|api[-_ ]?key|webhook/i;
 const MAX_CONTROLS = 80;
 const MAX_TEXT = 1600;
@@ -144,6 +157,8 @@ const controlDescription = (element: Element) => {
       input.disabled || element.getAttribute("aria-disabled") === "true",
     ),
   };
+  if (mediaControls.has(element as HTMLElement))
+    description.interactions = ["play", "pause", "seek", "volume", "focus"];
   if ("type" in input)
     description.input_type = secret ? "redacted" : input.type;
   if (!secret && ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName)) {
@@ -447,7 +462,14 @@ export const interactWithAegisWidget = (
     throw new Error("Control is hidden or disabled.");
   if (isSecret(element))
     throw new Error("Secret controls cannot be observed or operated.");
-  if(/\b(approve|reject|delete|forget|erase|reset|discard|clear all|remove)\b/i.test(labelFor(element)))throw new Error("Use the validated decision or revision-bound application control for this action.");
+  if (
+    /\b(approve|reject|delete|forget|erase|reset|discard|clear all|remove)\b/i.test(
+      labelFor(element),
+    )
+  )
+    throw new Error(
+      "Use the validated decision or revision-bound application control for this action.",
+    );
   const action = clean(payload.action, 40);
   const input = element as HTMLInputElement;
   if (action === "activate") element.click();
@@ -473,14 +495,28 @@ export const interactWithAegisWidget = (
     element.dispatchEvent(new Event("input", { bubbles: true }));
     element.dispatchEvent(new Event("change", { bubbles: true }));
   } else throw new Error(`Unsupported interaction: ${action}`);
-  return { control_id: id, action, label: labelFor(element),status:["set_value","append_value","select","focus"].includes(action)?"completed":"unconfirmed" };
+  return {
+    control_id: id,
+    action,
+    label: labelFor(element),
+    status: ["set_value", "append_value", "select", "focus"].includes(action)
+      ? "completed"
+      : "unconfirmed",
+  };
 };
 
 /** Paginated application discovery uses the same control IDs as widget telemetry. */
 export function applicationControls(offset = 0, limit = 60, query = "") {
-  if(document.querySelector('.nova-owner-confirmation[open]'))return {status:'waiting_for_ui',revision:'owner-confirmation',total:0,controls:[],next_offset:null};
+  if (document.querySelector(".nova-owner-confirmation[open]"))
+    return {
+      status: "waiting_for_ui",
+      revision: "owner-confirmation",
+      total: 0,
+      controls: [],
+      next_offset: null,
+    };
   for (const e of document.querySelectorAll<HTMLElement>(
-    ".memory-chat-messages,.memory-library-content,.memory-history,.research-reader,.research-outline,.research-sources,.research-chat,.research-editor,.settings-content",
+    ".memory-chat-messages,.memory-library-content,.memory-history,.research-reader,.research-outline,.research-sources,.research-chat,.research-edit-pane,.research-source-preview,.research-media,.research-editor,.settings-content",
   )) {
     e.setAttribute("data-aegis-scroll", "true");
     if (!e.getAttribute("aria-label"))
@@ -529,7 +565,11 @@ function observed(element: HTMLElement) {
         ? input.value
         : undefined,
     pressed: element.getAttribute("aria-pressed"),
-    expanded: element.getAttribute("aria-expanded"),
+    expanded:
+      element.getAttribute("aria-expanded") ??
+      (element.tagName === "SUMMARY"
+        ? String(element.closest("details")?.open)
+        : null),
     selected: element.getAttribute("aria-selected"),
     checked: input.checked,
     mediaPlaying:
@@ -607,10 +647,26 @@ export async function applicationControl(payload: Record<string, unknown>) {
     interaction === "activate"
   ) {
     // Only a trusted owner click can approve; capture and playback continue.
-    if (!(await confirmOwner('Aegis requests: '+label,String(payload.control_id),inventory.revision)))
+    if (
+      !(await confirmOwner(
+        "Aegis requests: " + label,
+        String(payload.control_id),
+        inventory.revision,
+      ))
+    )
       return { status: "failed", reason: "user_rejected" };
     if (applicationControls().revision !== inventory.revision)
       return { status: "failed", reason: "stale_ui_revision" };
+  }
+  if (["play", "pause", "seek", "volume"].includes(interaction)) {
+    const apply = mediaControls.get(element);
+    if (!apply) throw Error("This target has no registered media player");
+    const state = await apply(interaction, payload.value);
+    return {
+      ...state,
+      target: payload.control_id,
+      revision: applicationControls().revision,
+    };
   }
   if (interaction === "scroll") {
     const amount = Number(payload.value);
@@ -621,7 +677,11 @@ export async function applicationControl(payload: Record<string, unknown>) {
     element.scrollIntoView({ block: "center", behavior: "smooth" });
   else if (interaction === "focus") element.focus();
   else if (interaction === "activate" || interaction === "toggle") {
-    if (element instanceof HTMLAnchorElement && !/^https?:/.test(element.href))
+    if (
+      element instanceof HTMLAnchorElement &&
+      !/^https?:/.test(element.href) &&
+      !element.getAttribute("href")?.startsWith("#")
+    )
       throw Error("Unsupported link");
     element.click();
   } else if (["set_value", "append_value", "select"].includes(interaction)) {
