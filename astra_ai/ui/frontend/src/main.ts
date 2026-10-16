@@ -1,5 +1,5 @@
 import {applicationControl} from './aegisWidgetProtocol';
-import {notify,noticeScope,cue} from './notifications';
+import {notify,noticeScope,cue,confirmOwner} from './notifications';
 import {notificationSoundEnabled,notificationTarget,newNoticeIds} from './conversation';
 import {VoiceSessionState} from './voiceSession.mjs';
 import {PresenceCapture} from './presenceCapture';
@@ -380,7 +380,7 @@ socket.onMessage((msg) => {
   if(type==='conversation_switched'){if(msg.status==='ok'){const switchingId=String(msg.session_id);conversationReplace((Array.isArray(msg.messages)?msg.messages:[]).map((m:any)=>({id:m.id,role:m.role,text:m.content,status:m.status||'completed'})),switchingId);void conversationLoad(switchingId).catch(e=>showError(e.message)).finally(()=>conversationState({sessionSwitching:false,status:''}));}else{conversationState({sessionSwitching:false,status:String(msg.reason||'Conversation switch failed')});showError(String(msg.reason||'Conversation switch failed'));}if(!isMuted)voiceInput.resume();return;}
   if(type==='speaker_status'){const wasGuest=conversationSnapshot().guest;conversationState({guest:msg.guest===true,status:msg.state==='matched'?(msg.owner?'Main user confirmed · existing memories connected':'Speaker confirmed · separate memories'):'Guest conversation · speaker not confirmed'});if(msg.guest&&!wasGuest)conversationReplace([],conversationSnapshot().sessionId);if(!msg.guest&&wasGuest)void conversationLoad(conversationSnapshot().sessionId).catch(()=>{});return;}
   if(type==='status'&&msg.client_id){conversationState({clientId:String(msg.client_id)});socket.send({type:'conversation_attach',session_id:conversationSnapshot().sessionId});void conversationLoad(conversationSnapshot().sessionId).catch(()=>{});}
-  if(type==='application_confirmation'){const confirmed=window.confirm('Aegis requests: '+String(msg.title)+'\nTarget: '+String(msg.target)+'\nRevision: '+String(msg.revision)+'\nApprove this destructive change?');socket.send({type:'widget_action_result',widget:'application_confirmation',request_id:msg.request_id,revision:msg.revision,confirmed,status:confirmed?'completed':'failed'});return;}
+  if(type==='application_confirmation'){void confirmOwner(String(msg.title),String(msg.target),String(msg.revision)).then(confirmed=>socket.send({type:'widget_action_result',widget:'application_confirmation',request_id:msg.request_id,revision:msg.revision,confirmed,status:confirmed?'completed':'failed'}));return;}
   if(type==='application_control'){void applicationControl(msg).then(result=>socket.send({type:'widget_action_result',widget:'application',command:msg.action,request_id:msg.request_id,...result})).catch(e=>socket.send({type:'widget_action_result',widget:'application',request_id:msg.request_id,status:'failed',detail:e.message}));return;}
   if(type==='research_ready'){window.dispatchEvent(new CustomEvent('nova-research-ready',{detail:msg}));return;}
   if(type==='memory_view_action'){window.dispatchEvent(new CustomEvent('nova-memory-view-action',{detail:msg}));return;}

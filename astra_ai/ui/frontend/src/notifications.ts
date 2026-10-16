@@ -9,6 +9,22 @@ export type Notice = {
   silent?: boolean;
   inboxOnly?: boolean;
 };
+
+/** Nonblocking owner confirmation: audio/capture continue, model clicks cannot approve. */
+export function confirmOwner(title:string,target:string,revision:string):Promise<boolean>{
+ return new Promise(resolve=>{
+  const initialScope=scope,previous=document.activeElement as HTMLElement|null;
+  const dialog=document.createElement('dialog');dialog.className='nova-owner-confirmation';
+  const heading=document.createElement('h2');heading.textContent='Review this change';
+  const description=document.createElement('p');description.textContent=title;
+  const item=document.createElement('p');item.textContent='Target: '+target;
+  const version=document.createElement('details'),label=document.createElement('summary'),hash=document.createElement('code');label.textContent='Current revision';hash.textContent=revision;version.append(label,hash);
+  const controls=document.createElement('div'),cancel=document.createElement('button'),approve=document.createElement('button');cancel.textContent='Keep unchanged';approve.textContent='Approve this change';controls.append(cancel,approve);dialog.append(heading,description,item,version,controls);
+  let settled=false;const finish=(yes:boolean)=>{if(settled)return;settled=true;window.removeEventListener('nova-confirmation-scope-changed',changed);dialog.close();dialog.remove();if(previous?.isConnected)previous.focus();resolve(yes&&scope===initialScope);};
+  const changed=()=>finish(false);window.addEventListener('nova-confirmation-scope-changed',changed);
+  cancel.onclick=e=>{if(e.isTrusted)finish(false);};approve.onclick=e=>{if(e.isTrusted)finish(true);};dialog.addEventListener('cancel',e=>{e.preventDefault();finish(false);});dialog.addEventListener('close',()=>finish(false));document.body.append(dialog);dialog.showModal();cancel.focus();
+ });
+}
 const inbox: Notice[] = [];
 const queue: Notice[] = [];
 let active: Notice | null = null,
@@ -92,6 +108,7 @@ document.addEventListener("pointerdown", unlock, { passive: true });
 document.addEventListener("keydown", unlock, { passive: true });
 export function noticeScope(value: string) {
   if (scope === value) return;
+  window.dispatchEvent(new CustomEvent('nova-confirmation-scope-changed'));
   try {
     if (scope)
       sessionStorage.setItem(

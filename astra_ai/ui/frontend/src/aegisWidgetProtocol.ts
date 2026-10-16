@@ -1,3 +1,4 @@
+import {confirmOwner} from './notifications';
 export type AegisWidgetConnectionState =
   "disconnected" | "connected" | "working" | "failed";
 
@@ -477,6 +478,7 @@ export const interactWithAegisWidget = (
 
 /** Paginated application discovery uses the same control IDs as widget telemetry. */
 export function applicationControls(offset = 0, limit = 60, query = "") {
+  if(document.querySelector('.nova-owner-confirmation[open]'))return {status:'waiting_for_ui',revision:'owner-confirmation',total:0,controls:[],next_offset:null};
   for (const e of document.querySelectorAll<HTMLElement>(
     ".memory-chat-messages,.memory-library-content,.memory-history,.research-reader,.research-outline,.research-sources,.research-chat,.research-editor,.settings-content",
   )) {
@@ -604,18 +606,8 @@ export async function applicationControl(payload: Record<string, unknown>) {
     /\b(delete|forget|erase|reset|discard|clear all|remove)\b/i.test(label) &&
     interaction === "activate"
   ) {
-    // Browser-owned confirmation cannot be accepted through the application's model control API.
-    if (
-      !window.confirm(
-        "Aegis requests: " +
-          label +
-          "\nTarget: " +
-          payload.control_id +
-          "\nVersion: " +
-          inventory.revision +
-          "\nApprove this change?",
-      )
-    )
+    // Only a trusted owner click can approve; capture and playback continue.
+    if (!(await confirmOwner('Aegis requests: '+label,String(payload.control_id),inventory.revision)))
       return { status: "failed", reason: "user_rejected" };
     if (applicationControls().revision !== inventory.revision)
       return { status: "failed", reason: "stale_ui_revision" };

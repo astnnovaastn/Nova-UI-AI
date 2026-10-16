@@ -93,7 +93,7 @@ preferences and volume; their known waveform is included in the echo reference.
 Application discovery returns bounded control pages and a UI revision. Invocation
 checks that revision, availability, permissions, and observable results. Unconfirmed
 writes become uncertain work, not completed work. Destructive changes require an
-actual owner confirmation bound to the operation and current state; generic model
+actual owner confirmation bound to the operation and current state. Reviews use a nonblocking modal so Live capture/playback continue; generic model
 clicks cannot approve proposals.
 
 Research reuses the durable action queue, immutable artifact store, SerpAPI/Tavily,
@@ -106,7 +106,7 @@ copies itself into Notes by default.
 ### Validation and measured limits
 
 - Backend: 596 passed, 1 skipped; five existing framework deprecation warnings.
-- Frontend: 118 passed. Globe: 46 passed. TypeScript and production build passed.
+- Frontend: 120 passed. Globe: 46 passed. TypeScript and production build passed.
 - Browser: public research returned eight sources; shared background quota paused
   synthesis, producing an explicitly partial evidence collection. Source reading,
   draft autosave/recovery, and a real DOCX download were verified.
