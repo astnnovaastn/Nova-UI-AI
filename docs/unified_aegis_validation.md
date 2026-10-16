@@ -215,3 +215,60 @@ surface colors matched. A rotating overview sample retained 3,122 memories and
 sample, not a hardware guarantee. No provider requests or private memory changes
 were required by these presentation corrections. Backend semantic organization
 remains subject to its existing quota pause.
+
+
+## Current-topic and accidental interruption recovery — 15 October
+
+The supplied Egon/German-roots versus old calendar exchange is reproduced using
+fictional temporary stores and a simulated Live provider. Tests verify that a
+silent noise recovery continues the frozen Egon reply, uses its original turn ID,
+and retains source attribution without inventing a new user utterance. A
+completed generation resumes buffered browser audio without another model
+request. Provider/quota failure produces an inspectable pause rather than a
+success or repeated attempt.
+
+Coverage includes one-word input at 0, 50, 100 and 250 ms; interruption
+acknowledgements arriving after the new transcript; preserved next-turn input;
+sustained/unknown voice without ASR; explicit stop, new speech and typed input
+canceling recovery; mute ending capture without stopping playback; bounded
+working context and scoped reconnect seeding; exact queued-PCM sample offset,
+once-only consumption, five-second expiry and a 30-second checkpoint bound.
+Automatic continuation cannot repeat tool mutations. Existing in-flight job
+contexts retain their authorization independently of the conversational resume.
+
+Validation results: 582 backend tests passed, one skipped, five warnings in
+70.80 seconds; 114 frontend tests and 43 globe tests passed. TypeScript and
+production build passed. After the final topic-priority and notice-acknowledgement
+adjustment and late-provider-cancellation checks, 42 focused Live/core/runtime
+tests passed again. Existing Calculator eval
+and bundle-size build warnings remain. Desktop source is updated with the existing
+controller and the previously approved brief reconnect. No private stores, keys,
+recordings, research artifacts or runtime checkpoints are committed.
+
+These are deterministic fixture and desktop checks. Physical microphone noise,
+echo and acoustic word recognition, and the natural-language quality of Gemini's
+live continuation, remain user-device/provider validation. No sub-millisecond
+recognition, exact regenerated voice continuation or universal automatic recovery
+is claimed. The frontend voice path preserves the exact queued samples where a
+valid checkpoint exists. No additional embedding, research or background model
+polling was introduced; generation recovery only occurs after an eligible event.
+
+
+A real Gemini 3.8 Live check used only a temporary fictional calendar/Egon
+conversation, without private saved memory. The follow-up “What were you saying?”
+returned “I was saying that Egon is a powerful name that evokes the sharp edge of
+a sword.” The immediate topic was retained and the old calendar was not substituted.
+This is one provider smoke check, not a general conversational-quality benchmark.
+
+An additional raw-provider interruption probe did not verify automatic recovery:
+a zero-PCM activity probe was rejected by the provider, and a synthetic-silence
+probe was canceled before confirming resumption. Neither is counted as a pass.
+Browser checkpoint/recovery behavior is covered deterministically, but acoustic
+noise, ASR hallucinations and physical-device resumption still require manual
+validation. Any recognized word conservatively cancels automatic resumption.
+
+Final provider-event regressions additionally cover a continuation preempting a
+provider response to empty audio: its cancellation acknowledgement cannot erase
+the saved answer, and stray replies to empty activity remain gated after cached
+playback resumes. Control events are scoped to the logical conversation. The
+updated desktop loaded without frontend console errors during inspection.

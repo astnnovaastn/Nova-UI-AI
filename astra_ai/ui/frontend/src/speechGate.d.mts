@@ -1,1 +1,1 @@
-export class SpeechGate {constructor(options:{onFrame:(data:ArrayBuffer)=>void;onStart?:()=>void;onEnd?:()=>void;rate?:number});reset():void;push(pcm:Int16Array,probability:number):void;}
+export class SpeechGate {constructor(options:{onFrame:(data:ArrayBuffer)=>void;onStart?:()=>void;onEnd?:(event:{speechMs:number})=>void;rate?:number});active:boolean;speechMs:number;reset():void;push(pcm:Int16Array,probability:number):void;}

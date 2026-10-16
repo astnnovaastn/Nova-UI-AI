@@ -1,3 +1,10 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {SpeechGate} from './speechGate.mjs';
 test('Noise and short candidates do not interrupt; confirmed speech retains pre-roll',()=>{let starts=0,ends=0,frames=[];const gate=new SpeechGate({onFrame:p=>frames.push(new Int16Array(p)),onStart:()=>starts++,onEnd:()=>ends++});const p=new Int16Array(512);for(let i=0;i<20;i++)gate.push(p,.05);gate.push(p,.9);gate.push(p,.01);assert.equal(starts,0);assert.equal(frames.length,0);for(let i=0;i<3;i++)gate.push(p,.9);assert.equal(starts,1);assert.ok(frames.length>=7&&frames.length<=8);for(let i=0;i<21;i++)gate.push(p,.01);assert.equal(ends,1);const before=frames.length;for(let i=0;i<30;i++)gate.push(p,.01);assert.equal(frames.length,before);});
 test('Brief natural pauses keep a single speech turn and reset cannot resume audio',()=>{let starts=0,ends=0;const g=new SpeechGate({onFrame:()=>{},onStart:()=>starts++,onEnd:()=>ends++});const p=new Int16Array(512);for(let i=0;i<3;i++)g.push(p,.9);for(let i=0;i<10;i++)g.push(p,.1);for(let i=0;i<3;i++)g.push(p,.9);assert.equal(starts,1);assert.equal(ends,0);g.reset();g.push(p,.01);assert.equal(ends,0);});
+
+test('interruption evidence counts voiced frames rather than the trailing quiet period',()=>{
+ const segments=[],gate=new SpeechGate({onFrame(){},onEnd:event=>segments.push(event.speechMs)}),p=new Int16Array(512);
+ for(let i=0;i<3;i++)gate.push(p,.95);for(let i=0;i<21;i++)gate.push(p,0);
+ for(let i=0;i<12;i++)gate.push(p,.95);for(let i=0;i<21;i++)gate.push(p,0);
+ assert.deepEqual(segments,[96,384]);
+});

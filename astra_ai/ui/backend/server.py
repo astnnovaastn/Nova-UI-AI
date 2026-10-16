@@ -6030,14 +6030,15 @@ async def websocket_endpoint(websocket: WebSocket):
                     if speaker_recognition.status()["enabled"]:speaker_buffers[websocket]=bytearray()
                     else:
                         live=state.live_sessions.get(websocket)
-                        if live:await live.begin_audio()
+                        if live:await live.begin_audio(str(message.get('generation') or '')[:80],message.get('has_checkpoint') is True)
                 elif msg_type == "live_speech_end":
                     if websocket in speaker_buffers:await _finish_speaker_audio(websocket)
                     live=state.live_sessions.get(websocket)
-                    if live:await live.end_audio()
+                    if live:await live.end_audio(message.get('speech_ms'))
                 elif msg_type == "live_text_suspend":
                     live=state.live_sessions.get(websocket)
                     if live:
+                        live._cancel_recovery(clear=True)
                         live._text_suspended=True;live._turn_interrupted=True;live._await_new_input=True
                         live._input_parts.clear();live._output_parts.clear()
                         await ws_manager.send_to_client(websocket,{"type":"live_interrupted","generation":live.audio_generation})
@@ -6063,7 +6064,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 elif msg_type == "mic_state":
                     client=ws_manager.client_id(websocket);mic_states[client]=bool(message.get('muted',True))
                     live=state.live_sessions.get(websocket)
-                    if mic_states[client] and live:await live.end_audio()
+                    if live:
+                        live.working.muted=mic_states[client]
+                        if mic_states[client]:await live.end_audio()
                 elif msg_type == "presence_frame":
                     asyncio.create_task(handle_presence_frame(websocket,message))
                 elif msg_type == "presence_status":

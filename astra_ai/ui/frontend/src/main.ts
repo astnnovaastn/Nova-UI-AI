@@ -37,7 +37,7 @@ const API_HOST = (import.meta.env.VITE_API_URL || "http://localhost:8340").repla
 
 type State = "idle" | "listening" | "thinking" | "speaking";
 let currentState: State = "idle";
-let audioGeneration="", canceledGeneration="";
+let audioGeneration="", canceledGeneration="", heldGeneration="", pendingInterruptionGeneration="";
 let userTranscript="", assistantTranscript="", userMessageId="", assistantMessageId="";
 // Persist microphone mute state in localStorage
 let isMuted = true;
@@ -291,8 +291,13 @@ function setupLiveVoiceInput() {
       }
     },
     (message) => showError(message),
-    () => {socket.send({type:"live_speech_start"});if(isAudioPlaying&&!isMuted){canceledGeneration=audioGeneration;audioPlayer.stop();isAudioPlaying=false;transition("listening");}},
-    () => socket.send({type:"live_speech_end"}),
+    () => {
+      const generation=isAudioPlaying?audioGeneration:'';
+      let checkpoint=false;
+      if(isAudioPlaying&&!isMuted){checkpoint=audioPlayer.holdPcm();heldGeneration=checkpoint?generation:'';canceledGeneration=audioGeneration;isAudioPlaying=false;transition('listening');}
+      socket.send({type:'live_speech_start',generation,has_checkpoint:checkpoint});
+    },
+    (speechMs) => socket.send({type:'live_speech_end',speech_ms:speechMs}),
     (pcm,end)=>audioPlayer.isPlaybackEcho(pcm,end)
   );
 }
@@ -426,6 +431,7 @@ socket.onMessage((msg) => {
     window.dispatchEvent(new CustomEvent('nova-chat-accepted',{detail:{request_id:msg.request_id}}));
   }
   else if (type === 'live_input_transcript') {
+    audioPlayer.discardHeldPcm();heldGeneration=pendingInterruptionGeneration='';conversationState({status:''});
     userTranscript=String(msg.full_text||((userTranscript?userTranscript+' ':'')+String(msg.text||'')));
     userMessageId=String(msg.request_id||('user:'+String(msg.turn_id||'active')));
     conversationMessage('user',userTranscript,msg.final?'completed':'streaming',userMessageId);
@@ -448,14 +454,44 @@ socket.onMessage((msg) => {
     if(msg.memory_status==='failed')conversationState({status:'Reply complete; history storage needs attention.'});
   }
 
+  else if(type==='live_continuation_failed'){
+    if(msg.session_id&&msg.session_id!==conversationSnapshot().sessionId)return;
+    if(String(msg.generation||'')!==audioGeneration)return;
+    audioPlayer.finishPcmTurn();conversationState({status:'Reply paused. Ask me to continue when ready.'});
+  }
+  else if(type==='live_interruption_unresolved'){
+    if(msg.session_id&&msg.session_id!==conversationSnapshot().sessionId||pendingInterruptionGeneration!==String(msg.generation||''))return;
+    pendingInterruptionGeneration='';
+    if(heldGeneration===String(msg.generation||'')){audioPlayer.discardHeldPcm();heldGeneration='';}
+    conversationState({status:'I didn’t catch any words. Please repeat when ready.'});
+  }
+  else if (type === 'live_interruption_recovered') {
+    const recovered=String(msg.generation||'');
+    if(msg.session_id&&msg.session_id!==conversationSnapshot().sessionId||pendingInterruptionGeneration!==recovered)return;
+    pendingInterruptionGeneration='';
+    const resumed=Boolean(recovered&&recovered===heldGeneration&&audioPlayer.resumeHeldPcm());
+    audioPlayer.discardHeldPcm();heldGeneration='';
+    if(msg.output_text)conversationMessage('assistant',String(msg.output_text),msg.continuing?'streaming':'completed','reply:'+String(msg.turn_id));
+    if(resumed){audioGeneration=String(msg.next_generation||recovered);isAudioPlaying=true;transition('speaking');if(!msg.continuing)audioPlayer.finishPcmTurn();}
+    conversationState({status:resumed||msg.continuing?'':'Reply is available above.'});
+  }
   else if (type === "live_interrupted") {
-    canceledGeneration=String(msg.generation||audioGeneration);
-    if(assistantMessageId)conversationMessage('assistant',assistantTranscript,'interrupted',assistantMessageId);
-    userTranscript=assistantTranscript=userMessageId=assistantMessageId='';
-    window.dispatchEvent(new CustomEvent('nova-memory-activity',{detail:{phase:'clear'}}));
-    audioPlayer.stop();
-    isAudioPlaying = false;
-    if (!isMuted && !conversationSnapshot().textBusy) transition("listening");
+    if(msg.session_id&&msg.session_id!==conversationSnapshot().sessionId)return;
+    const canceled=String(msg.generation||audioGeneration);
+    canceledGeneration=canceled;
+    const id=msg.turn_id?'reply:'+String(msg.turn_id):assistantMessageId;
+    const prior=conversationSnapshot().messages.find(item=>item.id===id);
+    if(id&&(prior?.text||assistantTranscript))conversationMessage('assistant',prior?.text||assistantTranscript,'interrupted',id);
+    // A delayed cancellation acknowledgement belongs to its old generation.
+    // It cannot stop or clear input/output already arriving for the next one.
+    if(!msg.duplicate&&(!msg.generation||canceled===audioGeneration||canceled===heldGeneration)){
+      if(!msg.recoverable||canceled!==heldGeneration){audioPlayer.stop();heldGeneration='';}
+      assistantTranscript=assistantMessageId='';
+      if(msg.recoverable){pendingInterruptionGeneration=canceled;conversationState({status:'Checking interruption…'});}
+      window.dispatchEvent(new CustomEvent('nova-memory-activity',{detail:{phase:'clear'}}));
+      isAudioPlaying=false;
+      if(!isMuted&&!conversationSnapshot().textBusy)transition('listening');
+    }
   }
 
   else if (type === "live_error") {
@@ -947,7 +983,7 @@ function recoverTransient(message: string) {
 socket.onClose(() => {
   voiceSession.reset();
   voiceInput?.stop();
-  setConnected(false); conversationState({sessionSwitching:false,connected:false,status:"Reconnecting…"});canceledGeneration=audioGeneration;window.dispatchEvent(new CustomEvent("nova-memory-activity",{detail:{phase:"clear"}})); audioPlayer.stop(); isAudioPlaying = false;
+  setConnected(false); conversationState({sessionSwitching:false,connected:false,status:"Reconnecting…"});canceledGeneration=audioGeneration;heldGeneration=pendingInterruptionGeneration='';window.dispatchEvent(new CustomEvent("nova-memory-activity",{detail:{phase:"clear"}})); audioPlayer.stop(); isAudioPlaying = false;
   statusEl.textContent = 'reconnecting…';
   if (recoveryTimer) clearTimeout(recoveryTimer);
   recoveryTimer = setTimeout(() => { if (!socket.isConnected()) recoverTransient('connection unavailable'); }, 2500);
@@ -1018,7 +1054,7 @@ window.addEventListener('orbWidgetStateChange',(event:Event)=>{const d=(event as
 window.addEventListener('nova-chat-microphone',()=>btnMute.click());
 let memoryChatBusy=false;
 let chatAbort:AbortController|null=null;
-window.addEventListener('nova-chat-cancel',()=>{audioPlayer.stop();isAudioPlaying=false;socket.send({type:'live_text_suspend'});conversationState({textBusy:false,status:'Reply interrupted; tasks remain active.'});});
+window.addEventListener('nova-chat-cancel',()=>{audioPlayer.stop();heldGeneration=pendingInterruptionGeneration='';isAudioPlaying=false;socket.send({type:'live_text_suspend'});conversationState({textBusy:false,status:'Reply interrupted; tasks remain active.'});});
 window.addEventListener('nova-memory-view-result',(event:Event)=>{socket.send({type:'widget_action_result',...(event as CustomEvent).detail,widget:'memory'});});
 window.addEventListener('nova-job-cancel',async(event:Event)=>{const id=String((event as CustomEvent).detail?.job_id||'');if(id){const headers={'X-Nova-Client':conversationSnapshot().clientId};await fetch('/api/jobs/'+encodeURIComponent(id)+'/cancel',{method:'POST',headers});const r=await fetch('/api/jobs',{headers});if(r.ok){const data=await r.json();conversationState({jobs:data.jobs||[]});}}});
 
@@ -1026,13 +1062,13 @@ window.addEventListener('nova-chat-send',(event:Event)=>{
  const d=(event as CustomEvent).detail||{},text=String(d.text||'').trim();
  if(!text||memoryChatBusy||conversationSnapshot().sessionSwitching)return;
  if(!socket.isConnected()){conversationState({status:'Aegis is offline. Your draft is preserved.'});return;}
- canceledGeneration=audioGeneration;audioPlayer.stop();isAudioPlaying=false;
+ canceledGeneration=audioGeneration;heldGeneration=pendingInterruptionGeneration='';audioPlayer.stop();isAudioPlaying=false;
  if(voiceSession.needsStart())startPreferredVoiceSession(!isMuted);
  memoryChatBusy=true;conversationState({state:'thinking',status:'',textBusy:true,sources:[]});
  conversationMessage('user',text,'sending',d.request_id);
  socket.send({type:'live_text',text,request_id:d.request_id,session_id:conversationSnapshot().sessionId,source:'typed_input'});
 });
 
-window.addEventListener('nova-conversation-switch',((e:CustomEvent)=>{if(conversationSnapshot().textBusy||conversationSnapshot().sessionSwitching||!conversationSnapshot().connected)return;conversationState({sessionSwitching:true,status:'Opening conversation…'});conversationInterrupt();audioPlayer.stop();isAudioPlaying=false;voiceInput?.pause();userTranscript=assistantTranscript=userMessageId=assistantMessageId='';socket.send({type:'conversation_switch',session_id:e.detail.session_id});}) as EventListener);
+window.addEventListener('nova-conversation-switch',((e:CustomEvent)=>{if(conversationSnapshot().textBusy||conversationSnapshot().sessionSwitching||!conversationSnapshot().connected)return;conversationState({sessionSwitching:true,status:'Opening conversation…'});conversationInterrupt();audioPlayer.stop();heldGeneration=pendingInterruptionGeneration='';isAudioPlaying=false;voiceInput?.pause();userTranscript=assistantTranscript=userMessageId=assistantMessageId='';socket.send({type:'conversation_switch',session_id:e.detail.session_id});}) as EventListener);
 
 window.addEventListener('nova-voice-enrollment',((e:CustomEvent)=>{if(e.detail.active){canceledGeneration=audioGeneration;audioPlayer.stop();voiceInput?.pause();socket.send({type:'live_text_suspend'});}else if(!isMuted){socket.send({type:'live_text_resume'});voiceInput?.resume();}}) as EventListener);

@@ -849,6 +849,9 @@ export interface AudioPlayer {
   enqueue(base64: string): Promise<void>;
   enqueuePcm(data: ArrayBuffer, sampleRate?: number): Promise<void>;
   finishPcmTurn(): void;
+  holdPcm(): boolean;
+  resumeHeldPcm(): boolean;
+  discardHeldPcm(): void;
   stop(): void;
   getAnalyser(): AnalyserNode;
   onFinished(cb: () => void): void;
@@ -865,11 +868,11 @@ export function createLiveVoiceInput(
   onPcm: (data: ArrayBuffer) => void,
   onError: (msg: string) => void,
   onSpeechStart?: () => void,
-  onSpeechEnd?: () => void,
+  onSpeechEnd?: (speechMs?: number) => void,
   isPlaybackEcho?: (pcm:Int16Array,end:number) => boolean
 ): VoiceInput {
   let detector:Worker|null=null,ready=false,detectionEpoch=0;
-  const gate=new SpeechGate({onFrame:(frame:ArrayBuffer)=>{if(shouldListen&&!paused)onPcm(frame);},onStart:onSpeechStart,onEnd:onSpeechEnd});
+  const gate=new SpeechGate({onFrame:(frame:ArrayBuffer)=>{if(shouldListen&&!paused)onPcm(frame);},onStart:onSpeechStart,onEnd:({speechMs}:{speechMs:number})=>onSpeechEnd?.(speechMs)});
   let shouldListen = false;
   let paused = false;
   let opening: Promise<void> | null = null;
@@ -948,6 +951,7 @@ export function createLiveVoiceInput(
       void open();
     },
     stop() {
+      if(gate.active)onSpeechEnd?.(gate.speechMs);
       shouldListen = false;
       paused = false;
       release();
@@ -990,7 +994,7 @@ export function createGroqVoiceInput(
   onTranscript: (text: string) => void,
   onError: (msg: string) => void,
   onSpeechStart?: () => void,
-  onSpeechEnd?: () => void,
+  onSpeechEnd?: (speechMs?: number) => void,
   onTranscriptionComplete?: () => void
 ): VoiceInput {
   const config = {
@@ -1318,6 +1322,10 @@ export function createAudioPlayer(): AudioPlayer {
   let currentSource: AudioBufferSourceNode | null = null;
   let finishedCallback: (() => void) | null = null;
   const pcmSources = new Set<AudioBufferSourceNode>();
+  const pcmSchedule=new Map<AudioBufferSourceNode,{buffer:AudioBuffer,start:number,offset:number}>();
+  let heldPcm:{buffer:AudioBuffer,offset:number}[]=[];
+  let heldUntil=0;
+  let heldTimer:ReturnType<typeof setTimeout>|null=null;
   let nextPcmStart = 0;
   let pcmTurnOpen = false;
   let playbackEpoch = 0;
@@ -1403,7 +1411,9 @@ export function createAudioPlayer(): AudioPlayer {
       const startAt = Math.max(audioCtx.currentTime + 0.035, nextPcmStart);
       nextPcmStart = startAt + buffer.duration;
       pcmSources.add(source);
+      pcmSchedule.set(source,{buffer,start:startAt,offset:0});
       source.onended = () => {
+        pcmSchedule.delete(source);
         pcmSources.delete(source);
         if (!pcmTurnOpen && pcmSources.size === 0) {
           nextPcmStart = 0;
@@ -1422,7 +1432,38 @@ export function createAudioPlayer(): AudioPlayer {
       }
     },
 
+    holdPcm() {
+      // Keep references only to unplayed audio, capped at thirty seconds.
+      // A real utterance or explicit stop discards this short-lived checkpoint.
+      heldPcm=[];let remaining=30;
+      for(const {buffer,start,offset} of pcmSchedule.values()){
+        const next=offset+Math.max(0,audioCtx.currentTime-start);
+        const duration=buffer.duration-next;
+        if(duration>0&&duration<=remaining){heldPcm.push({buffer,offset:next});remaining-=duration;}
+        else if(duration>0){heldPcm=[];break;}
+      }
+      const saved=heldPcm;this.stop();heldPcm=saved;heldUntil=performance.now()+5000;
+      heldTimer=setTimeout(()=>{heldPcm=[];heldTimer=null;},5000);
+      return heldPcm.length>0;
+    },
+    resumeHeldPcm() {
+      const saved=heldPcm;heldPcm=[];if(heldTimer)clearTimeout(heldTimer);heldTimer=null;
+      if(performance.now()>heldUntil||!saved.length)return false;
+      pcmTurnOpen=true;
+      for(const {buffer,offset} of saved){
+        const source=audioCtx.createBufferSource();source.buffer=buffer;source.connect(analyser);
+        const startAt=Math.max(audioCtx.currentTime+.035,nextPcmStart);
+        nextPcmStart=startAt+buffer.duration-offset;pcmSources.add(source);
+        pcmSchedule.set(source,{buffer,start:startAt,offset});
+        source.onended=()=>{pcmSchedule.delete(source);pcmSources.delete(source);if(!pcmTurnOpen&&!pcmSources.size){nextPcmStart=0;finishedCallback?.();}};
+        echoGuard.add(buffer.getChannelData(0).subarray(Math.floor(offset*buffer.sampleRate)),buffer.sampleRate,performance.now()+(startAt-audioCtx.currentTime)*1000);
+        source.start(startAt,offset);
+      }
+      return true;
+    },
+    discardHeldPcm() {heldPcm=[];heldUntil=0;if(heldTimer)clearTimeout(heldTimer);heldTimer=null;},
     stop() {
+      heldPcm=[];heldUntil=0;if(heldTimer)clearTimeout(heldTimer);heldTimer=null;
       echoGuard.stop(performance.now());
       playbackEpoch++;
       console.log("  [AUDIO] Stopping playback");
@@ -1437,9 +1478,10 @@ export function createAudioPlayer(): AudioPlayer {
       }
       isPlaying = false;
       for (const source of pcmSources) {
+        source.onended=null;
         try { source.stop(); } catch { /* already stopped */ }
       }
-      pcmSources.clear();
+      pcmSources.clear();pcmSchedule.clear();
       pcmTurnOpen = false;
       nextPcmStart = 0;
     },

@@ -6,13 +6,13 @@ import ts from 'typescript';
 import {SpeechGate} from './speechGate.mjs';
 import {EchoGuard} from './echoGuard.mjs';
 function harness(){
- let resolveResume;const sources=[];
- class AudioContext{state='running';currentTime=0;sampleRate=16000;destination={};audioWorklet={addModule:async()=>{}};resume(){return new Promise(r=>{resolveResume=()=>{this.state='running';r();};});}close(){return Promise.resolve();}createAnalyser(){return {connect(){},fftSize:0,smoothingTimeConstant:0};}createBuffer(){return {duration:.04,getChannelData(){return new Float32Array(640);}};}createBufferSource(){const s={connect(){},start(){s.started=true;},stop(){s.stopped=true;},onended:null};sources.push(s);return s;}createMediaStreamSource(){return {connect(){},disconnect(){}};}createGain(){return {gain:{value:0},connect(){},disconnect(){}};}}
+ let resolveResume,wall=0;const sources=[],contexts=[];
+ class AudioContext{constructor(){contexts.push(this);}state='running';currentTime=0;sampleRate=16000;destination={};audioWorklet={addModule:async()=>{}};resume(){return new Promise(r=>{resolveResume=()=>{this.state='running';r();};});}close(){return Promise.resolve();}createAnalyser(){return {connect(){},fftSize:0,smoothingTimeConstant:0};}createBuffer(_,length,rate){const samples=new Float32Array(length);return {duration:length/rate,sampleRate:rate,length,getChannelData(){return samples;}};}createBufferSource(){const s={connect(){},start(...args){s.started=true;s.startArgs=args;},stop(){s.stopped=true;},onended:null};sources.push(s);return s;}createMediaStreamSource(){return {connect(){},disconnect(){}};}createGain(){return {gain:{value:0},connect(){},disconnect(){}};}}
  let worklet;class AudioWorkletNode{port={};constructor(){worklet=this;}connect(){}disconnect(){}}
  class Worker{constructor(){queueMicrotask(()=>this.onmessage?.({data:{type:'ready'}}));}postMessage({pcm,epoch}){if(pcm){const p=new Int16Array(pcm);this.onmessage?.({data:{type:'score',epoch,probability:Math.max(...p)>1000?.95:0,pcm}});}}terminate(){}}
- const context={require:()=>({SpeechGate,EchoGuard}),Worker,URL,performance,queueMicrotask,exports:{},console:{log(){},error(){}},AudioContext,AudioWorkletNode,navigator:{mediaDevices:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})}},Int16Array,Float32Array,ArrayBuffer,Math};
+ const context={require:()=>({SpeechGate,EchoGuard}),Worker,URL,performance:{now:()=>wall},setTimeout,clearTimeout,queueMicrotask,exports:{},console:{log(){},error(){}},AudioContext,AudioWorkletNode,navigator:{mediaDevices:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})}},Int16Array,Float32Array,ArrayBuffer,Math};
  vm.runInNewContext(ts.transpileModule(readFileSync(new URL('./voice.ts',import.meta.url),'utf8').replaceAll('import.meta.url',JSON.stringify('http://localhost/voice.ts')),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,context);
- return {api:context.exports,sources,AudioContext,getWorklet:()=>worklet,resolve:()=>resolveResume()};
+ return {api:context.exports,sources,AudioContext,contexts,advance:ms=>{wall+=ms;},getWorklet:()=>worklet,resolve:()=>resolveResume()};
 }
 test('stopped PCM cannot schedule after asynchronous AudioContext resume',async()=>{
  const h=harness();h.AudioContext.prototype.state='suspended';
@@ -40,4 +40,35 @@ for(const delay of [0,50,100,250])test(`speech ${delay} ms after playback keeps 
  send(first);input.resume();send(first.slice());send(first.slice());
  assert.equal(started,1);assert.ok(frames.some(p=>p.every((v,i)=>v===first[i])));
  assert.ok(frames.length<=7);input.stop();
+});
+
+
+test('false barge resumes only unplayed PCM from the held sample offset',async()=>{
+ const h=harness(),player=h.api.createAudioPlayer();let finished=0;player.onFinished(()=>finished++);
+ await player.enqueuePcm(new Int16Array(2400).fill(1000).buffer);
+ await player.enqueuePcm(new Int16Array(2400).fill(2000).buffer);
+ h.contexts[0].currentTime=.085;
+ assert.equal(player.holdPcm(),true);assert.equal(finished,0);
+ assert.ok(h.sources.slice(0,2).every(s=>s.stopped));
+ h.advance(1500);assert.equal(player.resumeHeldPcm(),true);
+ assert.ok(Math.abs(h.sources[2].startArgs[1]-.05)<.00001);
+ assert.equal(h.sources[3].startArgs[1],0);
+ assert.equal(player.resumeHeldPcm(),false,'checkpoint consumed once');
+ player.finishPcmTurn();h.sources[2].onended();assert.equal(finished,0);h.sources[3].onended();assert.equal(finished,1);
+});
+for(const decision of ['stop','discardHeldPcm'])test(`genuine input or ${decision} prevents old audio resuming`,async()=>{
+ const h=harness(),player=h.api.createAudioPlayer();await player.enqueuePcm(new Int16Array(2400).buffer);
+ assert.ok(player.holdPcm());player[decision]();assert.equal(player.resumeHeldPcm(),false);assert.equal(h.sources.length,1);
+});
+test('audio checkpoint expires and oversized queues cannot be replayed partially',async()=>{
+ const h=harness(),player=h.api.createAudioPlayer();await player.enqueuePcm(new Int16Array(2400).buffer);
+ player.holdPcm();h.advance(5001);assert.equal(player.resumeHeldPcm(),false);
+ await player.enqueuePcm(new Int16Array(24000*31).buffer);assert.equal(player.holdPcm(),false);player.stop();
+});
+test('microphone mute reports an active voice segment without stopping AI playback',async()=>{
+ const h=harness(),ends=[],input=h.api.createLiveVoiceInput(()=>{},()=>{},()=>{},ms=>ends.push(ms));
+ const player=h.api.createAudioPlayer();await player.enqueuePcm(new Int16Array(2400).buffer);
+ input.start();await new Promise(r=>setTimeout(r,0));
+ for(let i=0;i<3;i++)h.getWorklet().port.onmessage({data:new Int16Array(640).fill(4000).buffer});
+ input.stop();assert.deepEqual(ends,[120]);assert.ok(!h.sources[0].stopped);player.stop();
 });

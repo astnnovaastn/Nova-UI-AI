@@ -197,3 +197,55 @@ budget leaves work inspectable and queued; this rollout does not reset quotas.
 On reconnect, bounded research/note handles are restored from completed durable
 steps belonging to the same logical conversation and scope. Full reports and
 unrelated conversation history are not inserted into the working state.
+
+
+## Immediate conversation continuity and accidental interruptions
+
+Live turns now freeze the preceding request/reply and its IDs before a new audio
+activity begins. The bounded WorkingContext records six recent exchanges,
+interrupted/completed state, observation times, last interaction and microphone
+state. A bounded subset accompanies typed turns, completed voice activities and
+late transcription; current exchanges precede supplemental archive evidence.
+Provider resumption retains the current in-memory exchanges; a fresh process
+seeds only the selected scoped logical conversation from retained history.
+Partially spoken replies from an earlier process cannot be reconstructed unless
+they were already retained by the existing transcript/provider resumption paths.
+No new memory engine or production module was introduced.
+
+“Continue” and “what were you saying?” refer to the immediate exchange. Explicit
+user corrections of the topic override mistaken assistant guesses and older
+operation references. A closed widget remains available through its registered
+tools. These prompt changes supply better evidence and priority; they do not
+control hidden reasoning or guarantee every generated answer.
+
+The browser temporarily holds references to unplayed PCM at the current sample
+offset when local voice activity interrupts playback. The checkpoint is bounded
+to 30 seconds and expires after five seconds. Recognized words, typed input,
+explicit stop, conversation switching and disconnect discard it. It is neither
+recorded nor persisted.
+
+Recovery waits 1.5 seconds after activity end, and up to another 0.5 seconds for
+the provider's cancellation completion. Local VAD still uses 650 ms trailing
+silence, so the total pause from a short trigger can exceed two seconds. Only a
+brief trigger with less than 300 ms of voiced evidence and no recognized words
+qualifies. Sustained or unknown voice is not treated as an accidental interruption;
+confirmed voice can still receive replies before delayed ASR. Even one recognized
+word cancels recovery. There are at most two automatic recoveries per reply.
+
+If generation finished and unplayed PCM remains, the browser resumes that audio
+without another model request. If generation was canceled partway through, it
+resumes cached audio and requests the remaining answer from its saved segment.
+Generated continuation may vary in phrasing; only cached PCM resumes at an exact
+sample offset. The continuation is an application event, never a new user fact,
+user message, approval or permission to repeat tools. Already-authorized durable
+work continues separately. Failed continuation drains the buffered playback and
+leaves the session open without retry loops or a false completion claim.
+
+Recovery control events include the logical conversation and generation IDs.
+Delayed cancellation acknowledgements cannot stop newer playback or clear its
+transcript. The frontend applies each checkpoint once and ignores stale or
+other-conversation recovery events. Mute affects capture, not AI playback or jobs.
+
+Google documents that interruption cancels pending generation, and manual VAD
+uses activity-start/end signals; native automatic “resume” is not assumed here:
+https://ai.google.dev/gemini-api/docs/live-api/capabilities
