@@ -2318,10 +2318,10 @@ async def _aegis_search_web(arguments):
         if item['status']=='ok':
             indexed=await asyncio.to_thread(learning_service.import_artifact,item['artifact'],context)
             result['knowledge_index_status']=indexed.get('status')
-    if result.get('status')=='completed' and result.get('research_id') and context.get('client_id') and (arguments.get('mode')=='detailed' or context.get('requested_research')):
+    if result.get('status')=='completed' and not result.get('no_more') and result.get('research_id') and artifacts.get(result['research_id'],context).get('status')=='ok' and context.get('client_id') and (arguments.get('mode')=='detailed' or context.get('requested_research')):
         metadata=await asyncio.to_thread(artifacts.request_state,result['research_id'],context)
         title=metadata.get('display_title') or result['query'][:90]
-        notice_id=await asyncio.to_thread(notice_store.enqueue,'research',result['research_id'],result.get('extension_revision') or result['research_revision'],{'title':'Research ready: '+title},context)
+        notice_id=await asyncio.to_thread(notice_store.enqueue,'research',result['research_id'],result.get('media_revision') or result.get('extension_revision') or result['research_revision'],{'title':'Research ready: '+title},context)
         await ws_manager.send_to_client_id(context['client_id'],{'type':'research_ready','notice_id':notice_id,'research_id':result['research_id'],'research_revision':result['research_revision'],'query':title})
     return result
 
@@ -5589,7 +5589,9 @@ _destructive_confirmations={}
 def _destructive_revision(name,arguments,context):
     from astra_ai.memory.shared_memory import stable,canonical
     target=str(arguments.get('note_id') or arguments.get('record_id') or arguments.get('event_id') or arguments.get('id') or arguments.get('path') or '')
-    if name=='notes_action':snapshot=state.get_note_by_id(target) if target else state.get_notes_state()
+    if name=='research_artifact_action':
+        artifacts,_=get_research_services();snapshot=artifacts.deletion_preview(str(arguments.get('research_id','')),context)
+    elif name=='notes_action':snapshot=state.get_note_by_id(target) if target else state.get_notes_state()
     elif name in {'memory_action','transcript_action','delete_memory','delete_search_memory'}:snapshot=state.live_memory.load().get('_meta',{})
     else:snapshot={'ui':state.widget_connections.context_payload_for(context.get('client_id','')).get('connected_widgets',{}),'target':target}
     return stable(name,canonical(arguments),canonical(snapshot),context.get('profile_id',''),context.get('project_id',''),context.get('session_id',''))
@@ -5610,7 +5612,7 @@ async def _confirm_destructive(name,arguments,context):
     if len(_destructive_confirmations)>200:
         for old in list(_destructive_confirmations)[:50]:_destructive_confirmations.pop(old,None)
     state.register_widget_action(context['client_id'],request_id)
-    await ws_manager.send_to_client_id(context['client_id'],{'type':'application_confirmation','request_id':request_id,'revision':revision,'title':name+': '+action,'target':str(arguments.get('note_id') or arguments.get('record_id') or arguments.get('event_id') or arguments.get('id') or arguments.get('path') or 'selected content')})
+    await ws_manager.send_to_client_id(context['client_id'],{'type':'application_confirmation','request_id':request_id,'revision':revision,'title':'Remove research from history? You can restore it later.' if name=='research_artifact_action' else name+': '+action,'target':str(arguments.get('target_title') or arguments.get('research_id') or arguments.get('note_id') or arguments.get('record_id') or arguments.get('event_id') or arguments.get('id') or arguments.get('path') or 'selected content')})
     result=await state.await_widget_action(context['client_id'],request_id,timeout=5)
     if result and result.get('confirmed') and await asyncio.to_thread(_destructive_revision,name,arguments,context)==revision:
         _destructive_confirmations[key].update(state='approved',used_by=context.get('operation_id'));return None
@@ -5628,6 +5630,8 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
     if name not in names:return {"status":"rejected","reason":"unregistered_tool"}
     if context.get("guest") and name not in {d["name"] for d in MEMORY_TOOL_DECLARATIONS+MEMORY_EVENT_TOOL_DECLARATIONS} | {"search_web","get_system_status"}:
         return {"status":"rejected","reason":"Guest context cannot access owner widgets or private UI."}
+    if (name=='search_web' or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and context.get('research_id') and research_followup(context.get('user_text','')):
+        return await continue_research(context['research_id'],context,operation_id,detail=context.get('user_text',''))
     if (name in {'search_web','notes_action'} or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and action_jobs.task:
         actions=[{'name':name,'arguments':{k:v for k,v in arguments.items() if k!='save_to_notes'}}]
         reserved=None
@@ -5673,10 +5677,9 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
         artifacts,service=get_research_services()
         identifier=str(arguments.get('research_id') or context.get('research_id',''))
         await asyncio.to_thread(artifacts.link_turn,identifier,context)
-        if arguments.get('action')=='expand':
-            fetched=await asyncio.to_thread(artifacts.get,identifier,context)
-            if fetched['status']!='ok':return fetched
-            return action_jobs.submit([{'name':'search_web','arguments':{'action':'expand','research_id':identifier,'research_revision':fetched['artifact']['revision'],'detail':str(arguments.get('detail',''))[:2000]}}],{**context,'requested_research':True},operation_id,goal='Expand research')
+        if arguments.get('action') in {'expand','continue','more_media','more_sources'}:
+            action=arguments.get('action');view='media' if action=='more_media' else 'sources' if action=='more_sources' else ''
+            return await continue_research(identifier,context,operation_id,view=view,detail=str(arguments.get('detail') or context.get('user_text',''))[:2000])
         if arguments.get('action')=='reader':return await asyncio.to_thread(artifacts.reader,identifier,context,str(arguments.get('research_revision','')),arguments.get('offset',0),arguments.get('limit',12000))
         return await asyncio.to_thread(artifacts.page,identifier,context,str(arguments.get('research_revision','')),arguments.get('offset',0),arguments.get('limit',12000))
     if name=="library_action":
@@ -6135,7 +6138,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         snapshot=message.get('snapshot',{})
                         identifier=str(snapshot.get('research_id','')) if snapshot.get('view')=='research' else ''
                         thread=await _research_thread(identifier,{'profile_id':live.profile_id,'project_id':live.project_id}) if identifier else {}
-                        live.research_focus=thread if thread.get('status')=='ok' else {}
+                        live.research_focus={**thread,**{k:snapshot[k] for k in ('reader_cursor','reader_end','research_tab','source_visible_count','media_visible_count') if k in snapshot}} if thread.get('status')=='ok' else {}
                         await ws_manager.send_to_client(websocket,{'type':'research_focus_ack','research_id':live.research_focus.get('research_id',''),'thread_id':live.research_focus.get('thread_id','')})
                     if changed and live and not live.guest and not live._audio_started and not live._input_parts:
                         if not live.guest:await live.refresh_ui(ui_context(ws_manager.client_id(websocket)))
@@ -8341,6 +8344,41 @@ def get_library_service():
     return _library_service
 install_library(app,get_library_service,_learning_context)
 
+def research_followup(text):
+    text=str(text).casefold()
+    return bool(re.search(r'\b(more|expand|continue|additional|further|deeper|add)\b',text)) and not re.search(r'\b(new research|new topic|different topic|start over|instead research)\b',text)
+
+_research_continuation_locks={}
+
+async def continue_research(identifier,context,operation_id,view='',detail=''):
+    artifacts,_=get_research_services();fetched=await asyncio.to_thread(artifacts.get,identifier,context)
+    if fetched['status']!='ok':return fetched
+    item=fetched['artifact']
+    view=view or ('media' if re.search(r'\b(videos?|youtube|media)\b',detail,re.I) else 'sources' if re.search(r'\b(more sources|additional sources)\b',detail,re.I) else 'reader')
+    request_id='research-more-'+operation_id
+    state.register_widget_action(context.get('client_id',''),request_id)
+    await ws_manager.send_to_client_id(context.get('client_id',''),{'type':'research_continue','request_id':request_id,'research_id':identifier,'research_revision':item['revision'],'view':view})
+    observed=await state.await_widget_action(context.get('client_id',''),request_id,timeout=5)
+    if not observed:return {'status':'unconfirmed','reason':'research_view_not_acknowledged','research_id':identifier}
+    if observed.get('status')!='completed':return observed
+    if observed.get('revealed'):return {**observed,'research_id':identifier,'research_revision':item['revision'],'provider_calls':0}
+    if item['completeness']=='pending' and view=='reader':return {'status':'waiting_for_retry','research_id':identifier,'reason':'The original report is still being prepared. Collected findings remain visible.'}
+    key=(context.get('profile_id',''),context.get('project_id',''),identifier)
+    async with _research_continuation_locks.setdefault(key,asyncio.Lock()):
+        # If a continuation is already pending, attach to it rather than spend again.
+        current=await asyncio.to_thread(artifacts.extension_state,identifier,context)
+        if current.get('operation_id')==operation_id and current.get('phase')=='complete':return {**artifacts.brief(item),'duplicate':True}
+        if current.get('phase') in {'queued','collecting_sources','preparing_report','waiting_for_quota'}:
+            return {'status':'queued','research_id':identifier,'job_id':current.get('job_id'),'reason':'The existing continuation is still pending.'}
+        args={'action':'more_media' if view=='media' else 'expand','research_id':identifier,'research_revision':item['revision'],'view':view,'detail':detail[:2000]}
+        await asyncio.to_thread(artifacts.extension_state,identifier,context,phase='queued',view=view,operation_id=operation_id,outbound_started=False,search_checkpoint=None,reason='')
+        result=action_jobs.submit([{'name':'search_web','arguments':args}],{**context,'requested_research':True},operation_id,goal='Continue '+(item.get('display_title') or item['query'][:90]))
+        if result.get('status') in {'accepted','queued','duplicate','completed'}:
+            await asyncio.to_thread(artifacts.extension_state,identifier,context,job_id=result.get('job_id',''))
+            await ws_manager.send_to_client_id(context.get('client_id',''),{'type':'research_refresh','research_id':identifier})
+        else:await asyncio.to_thread(artifacts.extension_state,identifier,context,phase='failed',reason=result.get('reason','continuation_not_admitted'))
+        return {**result,'research_id':identifier,'research_revision':item['revision']}
+
 @app.get('/api/research')
 async def research_listing(request:Request,offset:int=0,limit:int=30):
     context=_learning_context(request);artifacts,_=get_research_services()
@@ -8362,6 +8400,27 @@ async def research_request(request:Request):
     else:await asyncio.to_thread(artifacts.request_state,reserved['id'],context,job_id=result.get('job_id',''))
     return {**result,'research_id':reserved['id'],'thread_id':reserved['thread_id']}
 
+@app.post('/api/research/{identifier}/delete')
+async def research_delete(identifier:str,request:Request):
+    context=_learning_context(request);body=await request.json();artifacts,_=get_research_services()
+    preview=await asyncio.to_thread(artifacts.deletion_preview,identifier,context)
+    if preview['status']!='ok':return preview
+    if str(body.get('revision',''))!=preview['revision']:return JSONResponse({'status':'conflict','reason':'research_changed_review_removal'},status_code=409)
+    operation_id=str(body.get('operation_id') or uuid.uuid4().hex)
+    args={'action':'delete','research_id':identifier,'revision':preview['revision'],'target_title':preview['title']}
+    confirmation=await _confirm_destructive('research_artifact_action',args,{**context,'operation_id':operation_id})
+    if confirmation:return confirmation
+    return await asyncio.to_thread(artifacts.remove,identifier,context,preview['revision'],operation_id)
+
+@app.get('/api/research/{identifier}/delete-preview')
+async def research_delete_preview(identifier:str,request:Request):
+    artifacts,_=get_research_services();return await asyncio.to_thread(artifacts.deletion_preview,identifier,_learning_context(request))
+
+@app.post('/api/research/{identifier}/restore')
+async def research_restore(identifier:str,request:Request):
+    artifacts,_=get_research_services();body=await request.json()
+    return await asyncio.to_thread(artifacts.restore,identifier,_learning_context(request),str(body.get('undo_token','')))
+
 @app.get('/api/research/{identifier}/reader')
 async def research_reader(identifier:str,request:Request,revision:str='',cursor:int=0):
     artifacts,_=get_research_services();return await asyncio.to_thread(artifacts.reader,identifier,_learning_context(request),revision,cursor)
@@ -8376,8 +8435,7 @@ async def _research_thread(identifier,context):
     item=found['artifact'];metadata=await asyncio.to_thread(artifacts.request_state,identifier,context)
     thread_id=metadata.get('thread_id','research-'+identifier)
     with artifacts.lock:
-        from astra_ai.memory.shared_memory import read as read_research_store
-        linked=read_research_store(artifacts.path,{}).get('thread_links',{}).get(identifier,[])
+        linked=artifacts.snapshot().get('thread_links',{}).get(identifier,[])
     def messages():
         from astra_ai.memory.category_policy import matches_scope
         with state.live_memory._lock:
@@ -8394,8 +8452,8 @@ async def research_expand(identifier:str,request:Request):
     context=_learning_context(request);body=await request.json();artifacts,_=get_research_services()
     revision=str(body.get('research_revision',''));fetched=await asyncio.to_thread(artifacts.get,identifier,context,revision)
     if not revision or fetched['status']!='ok':raise HTTPException(409,'Report changed or unavailable')
-    if fetched['artifact']['completeness']=='pending':raise HTTPException(409,'The initial synthesis is still pending')
-    return action_jobs.submit([{'name':'search_web','arguments':{'action':'expand','research_id':identifier,'research_revision':revision,'detail':str(body.get('detail',''))[:2000]}}],{**context,'requested_research':True},str(body.get('operation_id') or uuid.uuid4().hex),goal='Expand '+fetched['artifact']['query'][:90])
+    if str(body.get('view','reader')) not in {'reader','sources','media'}:raise HTTPException(400,'Unknown continuation view')
+    return await continue_research(identifier,context,str(body.get('operation_id') or uuid.uuid4().hex),str(body.get('view','reader')),str(body.get('detail',''))[:2000])
 
 @app.get('/api/research/{identifier}/images/{image_id}')
 async def research_image(identifier:str,image_id:str,request:Request):

@@ -7,9 +7,9 @@ import ts from 'typescript';
 // Exercise the same pure decisions used by the React reader and real player.
 const source = fs.readFileSync(new URL('../src/components/Research/ResearchWorkspace.tsx', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('research.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ['citationParts', 'videoId', 'videoVolumeStep', 'previewPlacement', 'videoTimestamp', 'researchProgress'];
+const names = ['citationParts', 'videoId', 'videoVolumeStep', 'previewPlacement', 'videoTimestamp', 'researchProgress', 'mergeMedia', 'pausePlayers'];
 const selected = tree.statements.filter(n => ts.isFunctionDeclaration(n) && names.includes(n.name?.text)).map(n => n.getText(tree)).join('\n');
-const context = { URL };
+const context = { URL, activePlayers:new Set() };
 vm.createContext(context);
 vm.runInContext(ts.transpileModule(selected, {compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText, context);
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -76,4 +76,17 @@ test('working timer and skeleton reflect real processing, never a quota pause',(
  const waiting=context.researchProgress('waiting_for_quota',7,null,9999999,8);
  assert.equal(waiting.time,'00:07');assert.equal(waiting.active,false);assert.equal(waiting.skeleton,false);assert.equal(waiting.label,'Summary pending');
  assert.equal(context.researchProgress('queued',0,null,9999999,0).label,'Queued');
+});
+
+test('media inventory excludes malformed results and deduplicates native player IDs',()=>{
+ const rows=[null,{title:'Invalid',url:'https://example.org'},{title:'Video',url:'https://youtu.be/abcdefghijk'},{title:'Duplicate',url:'https://youtube.com/watch?v=abcdefghijk'}];
+ const found=plain(context.mergeMedia(rows));assert.equal(found.length,1);assert.equal(found[0].title,'Video');
+});
+
+test('stale native players cannot interrupt pausing the other research videos',()=>{
+ let paused=0;const broken={pauseVideo(){throw Error('iframe was removed');}},working={pauseVideo(){paused++;}},playing={pauseVideo(){throw Error('active player must be excluded');}};
+ context.activePlayers.clear();for(const player of [broken,working,playing])context.activePlayers.add(player);
+ assert.doesNotThrow(()=>context.pausePlayers(playing));assert.equal(paused,1);
+ assert.equal(context.activePlayers.has(broken),false);assert.equal(context.activePlayers.has(playing),true);
+ context.activePlayers.clear();
 });

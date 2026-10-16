@@ -382,6 +382,8 @@ socket.onMessage((msg) => {
   if(type==='status'&&msg.client_id){conversationState({clientId:String(msg.client_id)});socket.send({type:'conversation_attach',session_id:conversationSnapshot().sessionId});void conversationLoad(conversationSnapshot().sessionId).catch(()=>{});}
   if(type==='application_confirmation'){void confirmOwner(String(msg.title),String(msg.target),String(msg.revision)).then(confirmed=>socket.send({type:'widget_action_result',widget:'application_confirmation',request_id:msg.request_id,revision:msg.revision,confirmed,status:confirmed?'completed':'failed'}));return;}
   if(type==='application_control'){void applicationControl(msg).then(result=>socket.send({type:'widget_action_result',widget:'application',command:msg.action,request_id:msg.request_id,...result})).catch(e=>socket.send({type:'widget_action_result',widget:'application',request_id:msg.request_id,status:'failed',detail:e.message}));return;}
+  if(type==='research_continue'){window.dispatchEvent(new CustomEvent('nova-research-continue',{detail:msg}));return;}
+  if(type==='research_refresh'){window.dispatchEvent(new CustomEvent('nova-research-refresh',{detail:msg}));return;}
   if(type==='research_ready'){window.dispatchEvent(new CustomEvent('nova-research-ready',{detail:msg}));return;}
   if(type==='memory_view_action'){window.dispatchEvent(new CustomEvent('nova-memory-view-action',{detail:msg}));return;}
   if(type==='jobs_snapshot'){conversationState({jobs:Array.isArray(msg.jobs)?msg.jobs as any:[]});return;}
@@ -1066,6 +1068,7 @@ window.addEventListener('nova-chat-microphone',()=>btnMute.click());
 let memoryChatBusy=false;
 let chatAbort:AbortController|null=null;
 window.addEventListener('nova-chat-cancel',()=>{audioPlayer.stop();heldGeneration=pendingInterruptionGeneration='';isAudioPlaying=false;socket.send({type:'live_text_suspend'});conversationState({textBusy:false,status:'Reply interrupted; tasks remain active.'});});
+window.addEventListener('nova-research-result',(event:Event)=>socket.send({type:'widget_action_result',...(event as CustomEvent).detail,widget:'application'}));
 window.addEventListener('nova-memory-view-result',(event:Event)=>{socket.send({type:'widget_action_result',...(event as CustomEvent).detail,widget:'memory'});});
 window.addEventListener('nova-job-cancel',async(event:Event)=>{const id=String((event as CustomEvent).detail?.job_id||'');if(id){const headers={'X-Nova-Client':conversationSnapshot().clientId};await fetch('/api/jobs/'+encodeURIComponent(id)+'/cancel',{method:'POST',headers});const r=await fetch('/api/jobs',{headers});if(r.ok){const data=await r.json();conversationState({jobs:data.jobs||[]});}}});
 

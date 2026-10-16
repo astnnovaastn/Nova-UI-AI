@@ -93,7 +93,8 @@
   font-weight: 500;
   margin: 10px 10px 13px;
 }
-.research-outline > button {
+.research-outline > button,
+.research-history-item > button {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -106,7 +107,8 @@
   padding: 12px;
   border-radius: 12px;
 }
-.research-outline > button.selected {
+.research-outline > button.selected,
+.research-history-item > button.selected {
   background: color-mix(in srgb, var(--r-fg) 6%, var(--r-panel));
 }
 .research-outline strong {
@@ -1530,4 +1532,83 @@
   .research-working-dot.active {
     animation: none;
   }
+}
+
+.research-selection-loading {
+  position: absolute;
+  right: 18px;
+  top: 12px;
+  z-index: 8;
+  border-radius: 20px;
+  padding: 5px 10px;
+  font-size: 11px;
+  background: var(--r-panel);
+  color: var(--r-muted);
+  box-shadow: 0 3px 14px #0002;
+}
+
+.research-history-item {
+  position: relative;
+}
+.research-history-item > button {
+  width: 100%;
+  padding-right: 31px;
+}
+.research-history-menu {
+  position: absolute;
+  right: 6px;
+  top: 9px;
+  z-index: 2;
+  font-size: 11px;
+}
+.research-history-menu summary {
+  list-style: none;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--r-muted);
+}
+.research-history-menu summary:hover,
+.research-history-menu[open] summary {
+  background: var(--r-edge);
+  color: var(--r-fg);
+}
+.research-history-menu > button {
+  position: absolute;
+  right: 0;
+  top: 29px;
+  width: 150px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  background: var(--r-panel);
+  box-shadow: 0 8px 25px #0004;
+}
+.research-removed {
+  padding: 8px;
+  font-size: 11px;
+  color: var(--r-muted);
+}
+.research-removed summary {
+  cursor: pointer;
+}
+.research-removed button {
+  display: block;
+  font-size: 11px;
+  margin-top: 6px;
+  text-align: left;
+}
+.research-continuation {
+  margin: 22px 0;
+}
+.research-continuation p {
+  font-size: 12px;
+  color: var(--r-muted);
+}
+.research-continuation .research-skeleton {
+  margin: 14px 0;
 }

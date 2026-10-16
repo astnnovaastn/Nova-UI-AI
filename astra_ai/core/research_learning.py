@@ -206,14 +206,55 @@ def evidence_excerpt(source, limit=1800):
     useful=[p.strip() for p in paragraphs if len(p.strip())>=100 and p.count('](')*45/max(1,len(p))<.2 and not re.match(r'^(?:\s*#|jump to|search|contents|cookie|share|sign in)',p,re.I)]
     return ('\n\n'.join(useful[:2]) if useful else text)[:limit]
 
+def article_root(soup):
+    """Select article prose and remove publisher chrome before minting reader links."""
+    for node in list(soup.select('script,style,nav,header,footer,aside,form,iframe,noscript,svg,button,input,select,[hidden],[aria-hidden="true"],[role="navigation"],[role="banner"],[role="contentinfo"],[role="dialog"],[role="menu"]')):
+        node.decompose()
+    chrome=re.compile(r'(?:^|[\s_-])(nav(?:igation|bar)?|menu|breadcrumb|sidebar|cookie|consent|newsletter|subscribe|social|share|advert(?:isement)?|ad-slot|related|recommended|site-header|site-footer|toolbar|pagination)(?:$|[\s_-])',re.I)
+    for node in list(soup.find_all(['div','section','ul','ol'])):
+        if not node.attrs:continue
+        identity=' '.join([str(node.get('id','')),*node.get('class',[])])
+        if chrome.search(identity):node.decompose()
+    candidates=soup.select('[itemprop="articleBody"],.entry-content,.post-content,.article-content,.article-body,.story-body')
+    if not candidates:candidates=soup.find_all('article') or soup.find_all('main')
+    def score(node):
+        prose=sum(len(p.get_text(' ',strip=True)) for p in node.find_all(['p','td','pre']))
+        links=sum(len(a.get_text(' ',strip=True)) for a in node.find_all('a'))
+        return prose-links*.8
+    root=max(candidates,key=score) if candidates else soup.body or soup
+    # Some publishers put block paragraphs inside bare anchors instead of marking a nav.
+    for anchor in list(root.find_all('a')):
+        text=anchor.get_text(' ',strip=True)
+        menu_label=re.fullmatch(r'(?:Introduction|How to Play|Play Game|Menu|Partner with us|Add on google|Home News)',text,re.I)
+        block=anchor.find(['p','div']) or (anchor.parent.name in {'p','li'} and anchor.parent.get_text(' ',strip=True)==text)
+        if menu_label and block:anchor.decompose()
+    for node in list(root.find_all(['ul','ol','div','p'])):
+        if not node.parent:continue
+        text=node.get_text(' ',strip=True);links=node.find_all('a');linked=sum(len(a.get_text(' ',strip=True)) for a in links)
+        heading=node.find_previous(['h1','h2','h3','h4'])
+        bibliography=heading and re.search(r'references|bibliography|sources|further reading',heading.get_text(),re.I)
+        if not bibliography and len(links)>=3 and linked/max(1,len(text))>.72 and not node.find(['p','pre','table']):node.decompose();continue
+        if node.name=='p' and linked>=len(text)*.9 and re.fullmatch(r'(?:Introduction|How to Play|Play Game|Menu|Partner with us|Add on google|Home News)',text,re.I):node.decompose()
+    return root
+
 class ResearchArtifacts:
     def __init__(self, path):
         self.path = Path(path)
         self.lock = StorageLock(self.path.with_suffix('.lock'))
         self.reader_cache = {}
         self.reader_links = {}
+        self._snapshot_key=None;self._snapshot=None;self._document_cache={};self._link_cache={}
         import threading
         self.image_worker=threading.BoundedSemaphore(1)
+
+    def snapshot(self):
+        # The file remains authoritative. Any atomic replacement invalidates all projections.
+        stat=self.path.stat() if self.path.exists() else None
+        key=(stat.st_mtime_ns,stat.st_size) if stat else None
+        if self._snapshot is None or key!=self._snapshot_key:
+            self._snapshot=read(self.path,{'artifacts':{},'imports':{}});self._snapshot_key=key
+            self._document_cache.clear();self._link_cache.clear()
+        return self._snapshot
 
     def backup_metadata(self):
         import shutil
@@ -236,7 +277,7 @@ class ResearchArtifacts:
 
     def request_state(self, identifier, context, **updates):
         with self.lock:
-            data=read(self.path,{'requests':{}});item=data.get('requests',{}).get(identifier)
+            data=read(self.path,{'requests':{}}) if updates else self.snapshot();item=data.get('requests',{}).get(identifier)
             if not item or scope(item)!=scope(context):return {'status':'not_found'}
             if updates:
                 self.backup_metadata()
@@ -249,6 +290,49 @@ class ResearchArtifacts:
                     item['active_since']=stamp if next_phase in active else None
                 item.update(updates);atomic(self.path,data)
             return {'status':'ok',**copy.deepcopy(item)}
+
+    def extension_state(self, identifier, context, **updates):
+        with self.lock:
+            fetched=self.get(identifier,context)
+            if fetched['status']!='ok':return fetched
+            data=read(self.path,{}) if updates else self.snapshot()
+            activity=data.get('extension_activity',{}).get(identifier,{})
+            if updates:
+                self.backup_metadata();activity={**activity,**updates,'updated':now()};data.setdefault('extension_activity',{})[identifier]=activity;atomic(self.path,data)
+            return copy.deepcopy(activity)
+
+    def source_catalog(self, item):
+        rows=copy.deepcopy(item['sources']);seen={r['url'] for r in rows}
+        for extension in self.snapshot().get('extensions',{}).get(item['id'],[]):
+            for row in extension.get('sources',[]):
+                if row.get('url') and row['url'] not in seen:seen.add(row['url']);rows.append(copy.deepcopy(row))
+        return rows
+
+    def deletion_preview(self, identifier, context):
+        result=self.get(identifier,context)
+        if result['status']!='ok':return result
+        item=result['artifact'];data=self.snapshot()
+        revision=stable(item['revision'],[e['revision'] for e in data.get('extensions',{}).get(identifier,[])],data.get('drafts',{}).get(identifier,{}).get('revision',''),data.get('requests',{}).get(identifier,{}).get('phase',''))
+        return {'status':'ok','research_id':identifier,'revision':revision,'title':item.get('display_title') or display_title(item['query'])}
+
+    def remove(self, identifier, context, revision, operation_id):
+        with self.lock:
+            current=self.deletion_preview(identifier,context)
+            if current['status']!='ok':return current
+            if current['revision']!=revision:return {'status':'conflict','reason':'research_changed_review_removal'}
+            data=read(self.path,{'artifacts':{},'requests':{}});self.backup_metadata()
+            token=stable(identifier,operation_id,uuid.uuid4().hex)
+            data.setdefault('removed',{})[identifier]={'token':token,'removed_at':now()};atomic(self.path,data)
+            return {'status':'completed','research_id':identifier,'undo_token':token}
+
+    def restore(self, identifier, context, token):
+        with self.lock:
+            data=read(self.path,{'artifacts':{},'requests':{}});item=data.get('artifacts',{}).get(identifier) or data.get('requests',{}).get(identifier)
+            if not item or scope(item)!=scope(context):return {'status':'not_found'}
+            removed=data.get('removed',{}).get(identifier)
+            if not removed or removed['token']!=token:return {'status':'conflict','reason':'removal_changed'}
+            self.backup_metadata();data['removed'].pop(identifier);atomic(self.path,data)
+            return {'status':'completed','research_id':identifier}
 
     def link_turn(self, identifier, context):
         """Reference an explicitly discussed report without copying/learning a turn twice."""
@@ -263,10 +347,10 @@ class ResearchArtifacts:
         terms=lambda text:{w for w in re.findall(r'[a-z0-9]{3,}',text.casefold()) if w not in {'the','and','research','about','information','search','please','could','would','with'}}
         wanted=terms(query)
         if len(wanted)<2:return []
-        with self.lock:items=list(read(self.path,{'artifacts':{}})['artifacts'].values())
+        with self.lock:items=list(self.snapshot()['artifacts'].values())
         candidates=[]
         for item in items:
-            if scope(item)!=scope(context):continue
+            if scope(item)!=scope(context) or item['id'] in self.snapshot().get('removed',{}):continue
             overlap=len(wanted & terms(item['query']))/max(1,len(wanted))
             if overlap<.6:continue
             for row in item['sources'][:8]:
@@ -286,7 +370,7 @@ class ResearchArtifacts:
             body=reader_text(item['report'])
             body=re.sub(r'\A# [^\n]+', '# '+title, body, count=1)
         with self.lock:
-            extensions=read(self.path,{}).get('extensions',{}).get(identifier,[])
+            extensions=self.snapshot().get('extensions',{}).get(identifier,[])
         body+=''.join('\n\n'+e['report'] for e in extensions)
         # Complete Markdown blocks only; fenced code remains one block.
         blocks=[];current=[];fence=False
@@ -296,39 +380,43 @@ class ResearchArtifacts:
             if not line.strip() and not fence:blocks.append(''.join(current));current=[]
         if current:blocks.append(''.join(current))
         cursor=max(0,int(cursor));limit=max(1000,min(20000,int(limit)));page=[];size=0;end=cursor
+        major=0
         for block in blocks[cursor:]:
+            if re.match(r'^## ',block.lstrip()):
+                major+=1
+                if major>10 and page:break
             if size+len(block)>limit and page:break
             # A pathological oversized block is explicitly omitted, never sliced into invalid markup.
             if len(block)>20000:page.append('\n[Oversized block is available in the full export.]\n')
             else:page.append(block)
             size+=len(page[-1]);end+=1
-        return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'extension_revision':stable(*[e['revision'] for e in extensions]),'report':''.join(page),'next_cursor':end if end<len(blocks) else None,'display_title':title,'cursor':cursor}
+        return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'extension_revision':stable(*[e['revision'] for e in extensions]),'report':''.join(page),'next_cursor':end if end<len(blocks) else None,'display_title':title,'cursor':cursor,'reader_end':end}
 
-    def append_extension(self, identifier, context, revision, operation_id, report):
+    def append_extension(self, identifier, context, revision, operation_id, report, sources=None):
         with self.lock:
             fetched=self.get(identifier,context,revision)
             if fetched['status']!='ok':return fetched
             data=read(self.path,{});rows=data.setdefault('extensions',{}).setdefault(identifier,[])
             existing=next((e for e in rows if e['operation_id']==operation_id),None)
             if existing:return {'status':'completed','extension_revision':existing['revision'],'research_id':identifier,'research_revision':revision}
-            self.backup_metadata();entry={'revision':stable(report),'report':reader_text(report),'operation_id':operation_id,'created':now()};rows.append(entry);atomic(self.path,data)
+            self.backup_metadata();entry={'revision':stable(report),'report':reader_text(report),'sources':sources or [],'operation_id':operation_id,'created':now()};rows.append(entry);atomic(self.path,data)
             return {'status':'completed','extension_revision':entry['revision'],'research_id':identifier,'research_revision':revision}
 
     def get(self, identifier, context, revision=''):
         with self.lock:
-            data=read(self.path, {'artifacts': {}, 'imports': {}})
+            data=self.snapshot()
             item=data['artifacts'].get(identifier)
             pending=data.get('requests',{}).get(identifier)
             if not item and pending:item={**pending,'revision':stable(identifier,'pending'),'report':'','summary':'','sources':pending.get('sources',[]),'failures':pending.get('failures',[]),'completeness':'failed' if pending.get('phase')=='failed' else 'pending'}
-            if not item or scope(item) != scope(context):return {'status': 'not_found'}
+            if not item or scope(item) != scope(context) or identifier in data.get('removed',{}):return {'status': 'not_found'}
             if revision and revision != item['revision']:return {'status': 'conflict', 'reason': 'research_revision_changed'}
             return {'status': 'ok', 'artifact': copy.deepcopy(item)}
 
     def find(self, query, mode, context, operation_id='', freshness=3600):
         with self.lock:
-            rows = read(self.path, {'artifacts': {}, 'imports': {}})['artifacts'].values()
+            data=self.snapshot();rows=data['artifacts'].values()
             for item in sorted(rows, key=lambda r:r['created'], reverse=True):
-                if scope(item) != scope(context):continue
+                if scope(item) != scope(context) or item['id'] in data.get('removed',{}):continue
                 if operation_id and item.get('operation_id') == operation_id:
                     if (item['query'], item['mode']) != (query, mode):raise ValueError('operation_id_reused')
                     return copy.deepcopy(item)
@@ -406,28 +494,45 @@ class ResearchArtifacts:
 
     def listing(self, context, offset=0, limit=30):
         with self.lock:
-            data=read(self.path,{'artifacts':{}})
-            rows=[r for r in data['artifacts'].values() if scope(r)==scope(context)]
+            data=self.snapshot()
+            rows=[r for r in data['artifacts'].values() if scope(r)==scope(context) and r['id'] not in data.get('removed',{})]
             for identifier,pending in data.get('requests',{}).items():
-                if identifier not in data['artifacts'] and scope(pending)==scope(context):rows.append(self.get(identifier,context)['artifact'])
+                if identifier not in data['artifacts'] and identifier not in data.get('removed',{}) and scope(pending)==scope(context):rows.append(self.get(identifier,context)['artifact'])
             rows.sort(key=lambda r:r['created'],reverse=True)
-            return {'status':'ok','total':len(rows),'items':[self.brief(r) for r in rows[max(0,offset):max(0,offset)+max(1,min(50,limit))]]}
+            removed=[]
+            for identifier,entry in data.get('removed',{}).items():
+                row=data['artifacts'].get(identifier) or data.get('requests',{}).get(identifier)
+                if not row or scope(row)!=scope(context):continue
+                if 'report' not in row:row={**row,'report':'','summary':'','revision':stable(identifier,'pending'),'sources':row.get('sources',[]),'failures':row.get('failures',[]),'completeness':'pending'}
+                removed.append({**self.brief(row),'undo_token':entry['token']})
+            return {'status':'ok','removed':removed[-20:],'total':len(rows),'items':[self.brief(r) for r in rows[max(0,offset):max(0,offset)+max(1,min(50,limit))]]}
 
     def document(self, identifier, context, revision='', bounded=False):
+        with self.lock:
+            self.snapshot();cache_key=(scope(context),identifier,revision,bounded)
+            cached=self._document_cache.get(cache_key) if bounded else None
+            if cached and time.time()-cached[0]<30:return copy.deepcopy(cached[1])
         result=self.get(identifier,context,revision)
         if result['status']!='ok':return result
         item=result['artifact']
-        sources=[{**s,'id':'S'+str(i+1)} for i,s in enumerate(item['sources'])]
+        sources=[{**s,'id':'S'+str(i+1)} for i,s in enumerate(self.source_catalog(item))]
         sections=[{'id':'section-'+str(i),'title':line.lstrip('# ').strip()} for i,line in enumerate(item['report'].splitlines()) if re.match(r'^#{1,3} ',line)]
         with self.lock:
-            draft=read(self.path,{'drafts':{}}).get('drafts',{}).get(identifier)
+            draft=self.snapshot().get('drafts',{}).get(identifier)
         document={**self.brief(item),'status':'ok','report':item['report'],'sources':sources,'linked_sources':self.report_links(item,context),'sections':sections,'draft':copy.deepcopy(draft),**self.media(identifier,context),'legacy_evidence':'Sourced research excerpts.' in item['report'],'evidence_collection':'Sourced research excerpts.' in item['report'] or 'not a completed synthesis.' in item['report']}
+        extensions=self.snapshot().get('extensions',{}).get(identifier,[])
+        if extensions:document['evidence_collection']=False
         metadata=self.request_state(identifier,context)
+        document['extension_activity']=self.extension_state(identifier,context)
         document.update(display_title=metadata.get('display_title') or display_title(item['query']),thread_id=metadata.get('thread_id','research-'+identifier),phase=metadata.get('phase','complete'),processing_seconds=metadata.get('processing_seconds'),active_since=metadata.get('active_since'),next_attempt=metadata.get('next_attempt'),waiting_reason=metadata.get('waiting_reason'),image_items=[{k:v for k,v in image.items() if k!='url'} for image in self.images(identifier,context)])
         if bounded:
             document.update(self.reader(identifier,context,revision))
             document['sources']=[{**r,'content':evidence_excerpt(r)} for r in sources]
             document['summary']=document['summary'][:1000]
+        if bounded:
+            with self.lock:
+                self._document_cache[cache_key]=(time.time(),copy.deepcopy(document))
+                while len(self._document_cache)>24:self._document_cache.pop(next(iter(self._document_cache)))
         return document
 
 
@@ -524,6 +629,9 @@ class ResearchArtifacts:
 
     def report_links(self, item, context):
         """Only offer follow-on URLs that occur in the preserved source evidence."""
+        cache_key=(scope(context),item['id'],item['revision'])
+        cached=self._link_cache.get(cache_key)
+        if cached and time.time()-cached[0]<1800:return copy.deepcopy(cached[1])
         pattern=r'https?://[^\s<>\)\]"\x27]+'
         evidence=set()
         for row in item['sources']:
@@ -541,6 +649,7 @@ class ResearchArtifacts:
             self.reader_links[(cache_scope,link_id)]=(url,time.time())
             found.append({'id':link_id,'url':url,'title':titles.get(url) or ('Related video' if self.video_id(url) else parsed.hostname),'retrieved_at':item['created']})
             if len(found)==200:break
+        self._link_cache[cache_key]=(time.time(),copy.deepcopy(found))
         return found
 
     @staticmethod
@@ -555,9 +664,9 @@ class ResearchArtifacts:
         if result['status']!='ok':return result
         item=result['artifact']
         with self.lock:
-            saved=read(self.path,{'media':{}}).get('media',{}).get(identifier,{})
+            saved=self.snapshot().get('media',{}).get(identifier,{})
         found={}
-        for i,source in enumerate(item['sources']):
+        for i,source in enumerate(self.source_catalog(item)):
             video=self.video_id(source.get('url',''))
             if video:found[video]={**source,'id':'S'+str(i+1),'video_id':video}
         for row in self.report_links(item,context):
@@ -652,8 +761,9 @@ class ResearchArtifacts:
         item=result['artifact'];cache_scope=stable(scope(context),identifier,item['revision'])
         if re.fullmatch(r'S[1-9][0-9]*',source_id):
             index=int(source_id[1:])-1
-            if index>=len(item['sources']):raise ValueError('not_found')
-            url=item['sources'][index]['url']
+            catalog=self.source_catalog(item)
+            if index>=len(catalog):raise ValueError('not_found')
+            url=catalog[index]['url']
         elif re.fullmatch(r'L[0-9a-f]{24}',source_id):
             entry=self.reader_links.get((cache_scope,source_id))
             if not entry or time.time()-entry[1]>3600:raise ValueError('source_link_expired')
@@ -673,9 +783,7 @@ class ResearchArtifacts:
             mime='text/html'
         if mime=='text/html':
             soup=BeautifulSoup(content,'html.parser')
-            for node in soup(['script','style','nav','header','footer','iframe','form','noscript','svg','button','input','select']):node.decompose()
-            for node in soup.select('[hidden],[aria-hidden="true"]'):node.decompose()
-            root=soup.find('article') or soup.find('main') or soup.body or soup
+            root=article_root(soup)
             text=root.get_text('\n',strip=True)
             links={}
             for heading in root.find_all(id=True):heading['id']='reader-'+source_id+'-'+str(heading['id'])
@@ -751,7 +859,7 @@ class ResearchSearch:
             # Requests exceptions may contain URLs and private keys. Keep type only.
             return [], {'provider':provider,'reason':type(error).__name__,'retryable':True}
 
-    def _video_request(self, query):
+    def _video_request(self, query, exclude=()):
         key=self.key_provider('SERPAPI_KEY')
         if not key:return [],{'reason':'video_provider_not_configured'}
         try:
@@ -759,7 +867,7 @@ class ResearchSearch:
             if response.status_code!=200:return [],{'reason':'video_provider_quota' if response.status_code in {402,429,432,433} else 'video_provider_unavailable'}
             payload=response.json()
             if payload.get('error'):return [],{'reason':'video_provider_reported_error'}
-            videos=[];seen=set()
+            videos=[];seen=set(exclude)
             for row in payload.get('video_results',[])[:20]:
                 video=ResearchArtifacts.video_id(str(row.get('link','')))
                 if not video or video in seen:continue
@@ -793,22 +901,77 @@ class ResearchSearch:
             final=await asyncio.to_thread(self.artifacts.media,identifier,context)
             return {'status':'completed',**final,'research_id':identifier,'research_revision':item['revision'],'query':item['query'],'results':[]}
 
-    async def search(self, arguments, context, operation_id=''):
-        if arguments.get('action')=='expand':
-            identifier=str(arguments.get('research_id',''));revision=str(arguments.get('research_revision',''))
+    async def more_media(self, arguments, context, operation_id):
+        identifier=str(arguments.get('research_id',''));revision=str(arguments.get('research_revision',''))
+        async with self.operation_locks.setdefault(stable('more-media',scope(context),identifier,operation_id),asyncio.Lock()):
             fetched=await asyncio.to_thread(self.artifacts.get,identifier,context,revision)
             if fetched['status']!='ok':return fetched
-            item=fetched['artifact']
-            if not self.synthesize:return {'status':'failed','reason':'synthesis_unavailable'}
+            item=fetched['artifact'];state=await asyncio.to_thread(self.artifacts.extension_state,identifier,context)
+            if state.get('operation_id')==operation_id and state.get('outbound_started'):
+                if state.get('phase')=='complete':return {**self.artifacts.brief(item),'added_media':state.get('added',0),'no_more':not state.get('added')}
+                return {'status':'unconfirmed','reason':'video_request_interrupted_no_automatic_repeat','research_id':identifier}
+            existing=await asyncio.to_thread(self.artifacts.media,identifier,context)
+            await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='collecting_sources',view='media',operation_id=operation_id,outbound_started=True)
+            async with self.network:rows,error=await asyncio.to_thread(self._video_request,display_title(item['query']),[r['video_id'] for r in existing['media']])
+            if error and error.get('reason')=='no_relevant_videos_returned':error=None
+            seen={r['video_id'] for r in existing['media']};rows=[r for r in rows if r['video_id'] not in seen]
+            # The provider's returned results are authoritative; never invent extra videos.
+            with self.artifacts.lock:saved=copy.deepcopy(self.artifacts.snapshot().get('media',{}).get(identifier,{}).get('items',[]))
+            if rows:await asyncio.to_thread(self.artifacts.media_state,identifier,context,item['revision'],status='complete',items=[*saved,*rows])
+            await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed' if error else 'complete',view='media',operation_id=operation_id,added=len(rows),reason=error.get('reason') if error else 'no_more_videos' if not rows else '',outbound_started=True)
+            return {**self.artifacts.brief(item),'status':'failed' if error else 'completed','reason':error.get('reason') if error else '', 'added_media':len(rows),'media_revision':self.artifacts.media(identifier,context).get('media_revision'),'no_more':not rows}
+
+    async def expand_report(self, arguments, context, operation_id):
+        identifier=str(arguments.get('research_id',''));revision=str(arguments.get('research_revision',''))
+        async with self.operation_locks.setdefault(stable('expand',scope(context),identifier,operation_id),asyncio.Lock()):
+            fetched=await asyncio.to_thread(self.artifacts.get,identifier,context,revision)
+            if fetched['status']!='ok':return fetched
+            item=fetched['artifact'];activity=await asyncio.to_thread(self.artifacts.extension_state,identifier,context)
             with self.artifacts.lock:
-                entries=read(self.artifacts.path,{}).get('extensions',{}).get(identifier,[])
+                entries=self.artifacts.snapshot().get('extensions',{}).get(identifier,[])
                 existing=next((e for e in entries if e['operation_id']==operation_id),None)
             if existing:return {**self.artifacts.brief(item),'extension_revision':existing['revision']}
-            try:report=await self.synthesize('Extend the existing report with additional supported detail; do not repeat its overview. Original subject: '+item['query']+'\nRequested detail: '+str(arguments.get('detail',''))[:2000]+'\nExisting outline: '+item['report'][:2500],item['sources'])
-            except BudgetPaused as exc:return {'status':'waiting_for_quota','next_attempt':max(time.time()+5,exc.until),'reason':exc.reason,'research_id':identifier}
-            if not report:return {'status':'failed','reason':'synthesis_unavailable'}
-            result=await asyncio.to_thread(self.artifacts.append_extension,identifier,context,revision,operation_id,report)
+            detail=str(arguments.get('detail',''))[:2000];view=arguments.get('view','reader')
+            sources=await asyncio.to_thread(self.artifacts.source_catalog,item);additional=[]
+            # Only an explicit need for fresher or absent evidence spends another retrieval request.
+            fresh=bool(re.search(r'\b(latest|today|current|recent|updated|new sources|fresh)\b',detail,re.I))
+            terms=set(re.findall(r'[a-z]{4,}',detail.casefold()))-{'more','details','information','please','about','sources','report','research','continue','expand','additional','give','provide','want','would','could'}
+            evidence=' '.join([item['query'],*[r.get('content','')[:4000] for r in sources]]).casefold()
+            missing=len(terms)>=3 and sum(t not in evidence for t in terms)>len(terms)*.65
+            checkpoint=activity.get('search_checkpoint') if activity.get('operation_id')==operation_id else None
+            if checkpoint is not None:additional=checkpoint
+            elif fresh or missing or view=='sources':
+                if activity.get('operation_id')==operation_id and activity.get('outbound_started'):return {'status':'unconfirmed','reason':'reconcile_extension_search_before_retry','research_id':identifier}
+                await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='collecting_sources',view=view,operation_id=operation_id,outbound_started=True,search_checkpoint=None)
+                query=(display_title(item['query'])+' '+detail)[:600]
+                async with self.network:rows,error=await asyncio.to_thread(self._request,query,'detailed',8)
+                if error:
+                    await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed',reason=error['reason'])
+                    return {'status':'failed','reason':error['reason'],'research_id':identifier}
+                seen={r['url'] for r in sources};additional=[r for r in rows if r['url'] not in seen]
+                await asyncio.to_thread(self.artifacts.extension_state,identifier,context,search_checkpoint=additional)
+            sources=[*sources,*additional]
+            if view=='sources':
+                result=await asyncio.to_thread(self.artifacts.append_extension,identifier,context,revision,operation_id,'',additional)
+                await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='complete',view=view,operation_id=operation_id,added=len(additional),reason='no_more_sources' if not additional else '')
+                return {**self.artifacts.brief(item),**result,'no_more':not additional,'added_sources':len(additional)}
+            if not self.synthesize:return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
+            await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='preparing_report',view=view,operation_id=operation_id)
+            try:report=await self.synthesize('Continue this same research with additional supported detail. Do not repeat the existing overview or already composed findings. Original subject: '+item['query']+'\nRequested detail: '+detail+'\nAlready composed: '+item['report'][:4000]+'\nPrior extensions: '+' '.join(e['report'][:1000] for e in entries[-3:]),sources)
+            except BudgetPaused as exc:
+                await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='waiting_for_quota',view=view,operation_id=operation_id,reason=exc.reason)
+                return {'status':'waiting_for_quota','next_attempt':max(time.time()+5,exc.until),'reason':exc.reason,'research_id':identifier}
+            except Exception:
+                await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed',reason='extension_unavailable')
+                return {'status':'failed','reason':'extension_unavailable','research_id':identifier}
+            if not report:return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
+            result=await asyncio.to_thread(self.artifacts.append_extension,identifier,context,revision,operation_id,report,additional)
+            await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='complete',view=view,operation_id=operation_id)
             return {**self.artifacts.brief(item),**result}
+
+    async def search(self, arguments, context, operation_id=''):
+        if arguments.get('action')=='expand':return await self.expand_report(arguments,context,operation_id)
+        if arguments.get('action')=='more_media':return await self.more_media(arguments,context,operation_id)
         pending=None
         if arguments.get('research_id'):
             pending=await asyncio.to_thread(self.artifacts.request_state,str(arguments['research_id']),context)

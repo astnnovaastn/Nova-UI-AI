@@ -113,6 +113,14 @@ type Report = {
   legacy_evidence?: boolean;
   evidence_collection?: boolean;
   display_title?: string;
+  reader_end?: number;
+  extension_revision?: string;
+  extension_activity?: {
+    phase?: string;
+    view?: string;
+    reason?: string;
+    job_id?: string;
+  };
   next_cursor?: number | null;
   thread_id?: string;
   phase?: string;
@@ -178,6 +186,8 @@ function openResearch(id?: string) {
 }
 function Icon({ name }: { name: string }) {
   const paths: Record<string, string> = {
+    more: "M5 12h.01M12 12h.01M19 12h.01",
+    trash: "M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7",
     arrow: "M12 19V5m-6 6 6-6 6 6",
     close: "m6 6 12 12M6 18 18 6",
     depth: "M4 6h16M7 12h10M10 18h4",
@@ -1357,7 +1367,15 @@ function loadYouTube() {
       youtube = null;
       reject(Error("Video player unavailable"));
     };
-    window.onYouTubeIframeAPIReady = resolve;
+    const timeout = window.setTimeout(() => {
+      youtube = null;
+      reject(Error("Video player timed out. Please reopen Media to retry."));
+    }, 12000);
+    window.onYouTubeIframeAPIReady = () => {
+      clearTimeout(timeout);
+      resolve();
+    };
+    script.addEventListener("error", () => clearTimeout(timeout));
     document.head.append(script);
   }));
 }
@@ -1425,6 +1443,42 @@ function videoVolumeStep(
 }
 const videoPositions = new Map<string, number>(),
   activePlayers = new Set<any>();
+function pausePlayers(except?: any) {
+  for (const p of activePlayers) {
+    if (p === except) continue;
+    try {
+      p.pauseVideo();
+    } catch {
+      activePlayers.delete(p);
+    }
+  }
+}
+class MediaBoundary extends React.Component<
+  { children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? (
+      <p role="status">
+        This player could not load. Other research content is still available.
+      </p>
+    ) : (
+      this.props.children
+    );
+  }
+}
+function mergeMedia(rows: Source[]): Source[] {
+  const found = new Map<string, Source>();
+  for (const source of rows) {
+    const id = source && videoId(source.url);
+    if (id && !found.has(id)) found.set(id, source);
+  }
+  return [...found.values()];
+}
 function Video({ source }: { source: Source }) {
   const target = useRef<HTMLDivElement>(null),
     player = useRef<any>(null),
@@ -1438,6 +1492,10 @@ function Video({ source }: { source: Source }) {
     let unregister: (() => void) | undefined;
     const id = videoId(source.url);
     if (!id) return;
+    const readyTimeout = window.setTimeout(() => {
+      if (!canceled)
+        setError("This video could not connect. Try reopening Media.");
+    }, 18000);
     let duckState: VideoDuckState = { normal: null, manualOverride: false };
     const duck = () => {
       const p = player.current;
@@ -1476,7 +1534,9 @@ function Video({ source }: { source: Source }) {
     void loadYouTube()
       .then(() => {
         if (canceled || !target.current) return;
-        player.current = new window.YT.Player(target.current, {
+        const mount = document.createElement("div");
+        target.current.replaceChildren(mount);
+        player.current = new window.YT.Player(mount, {
           videoId: id,
           playerVars: {
             origin: location.origin,
@@ -1486,6 +1546,7 @@ function Video({ source }: { source: Source }) {
           },
           events: {
             onReady: () => {
+              clearTimeout(readyTimeout);
               if (!canceled) {
                 player.current
                   ?.getIframe()
@@ -1548,8 +1609,7 @@ function Video({ source }: { source: Source }) {
               setPlaying(Number(e.data) === 1);
               if (Number(e.data) === 1) {
                 setBlocked(false);
-                for (const other of activePlayers)
-                  if (other !== player.current) other.pauseVideo();
+                pausePlayers(player.current);
                 duck();
               }
             },
@@ -1575,11 +1635,15 @@ function Video({ source }: { source: Source }) {
       tick();
       canceled = true;
       clearInterval(interval);
+      clearTimeout(readyTimeout);
       window.removeEventListener("nova-user-speaking", speech);
       window.removeEventListener("nova-conversation", duck);
       unregister?.();
       activePlayers.delete(player.current);
-      player.current?.destroy();
+      try {
+        player.current?.destroy();
+      } catch {}
+      player.current = null;
     };
   }, [source.url]);
   return (
@@ -1590,7 +1654,8 @@ function Video({ source }: { source: Source }) {
       data-video-id={videoId(source.url)}
       data-playing={playing}
     >
-      {error ? <p role="status">{error}</p> : <div ref={target} />}{" "}
+      <div ref={target} hidden={!!error} />
+      {error && <p role="status">{error}</p>}
       {blocked && (
         <p role="status">Use the video's play button to begin playback.</p>
       )}
@@ -1640,6 +1705,46 @@ function initialDraft(report: Report) {
     doc.body.append(heading, p);
   }
   return clean(doc.body.innerHTML);
+}
+function ContinuationStatus({
+  activity,
+  view,
+}: {
+  activity: Report["extension_activity"];
+  view: string;
+}) {
+  if (!activity || activity.view !== view) return null;
+  const active = ["queued", "collecting_sources", "preparing_report"].includes(
+    activity.phase || "",
+  );
+  return (
+    <section
+      className="research-continuation"
+      aria-label="Research continuation"
+    >
+      <p role="status">
+        {active
+          ? "Adding more " + (view === "reader" ? "details" : view) + "…"
+          : activity.phase === "waiting_for_quota"
+            ? "More details are pending. Your current findings remain available."
+            : activity.reason === "no_more_videos"
+              ? "No more relevant videos were returned for this topic."
+              : activity.reason === "no_more_sources"
+                ? "No additional sources were returned."
+                : activity.phase === "failed"
+                  ? "Additional results could not be retrieved. Your current findings are preserved."
+                  : ""}
+      </p>
+      {active && (
+        <div className="research-skeleton" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+          <i />
+        </div>
+      )}
+    </section>
+  );
 }
 function Workspace() {
   const [open, setOpen] = useState(
@@ -1714,6 +1819,331 @@ function Workspace() {
     window.addEventListener("nova-chat-accepted", accepted);
     return () => window.removeEventListener("nova-chat-accepted", accepted);
   }, []);
+  const reportCache = useRef(new Map<string, { report: Report; at: number }>()),
+    reportLoads = useRef(new Map<string, Promise<Report>>());
+  const [selectionLoading, setSelectionLoading] = useState("");
+  function loadReport(id: string) {
+    const key = conversationSnapshot().clientId + ":" + id;
+    const cached = reportCache.current.get(key);
+    if (cached && Date.now() - cached.at < 30000)
+      return Promise.resolve(cached.report);
+    let pending = reportLoads.current.get(key);
+    if (!pending) {
+      const client = conversationSnapshot().clientId;
+      pending = api("/" + encodeURIComponent(id) + "/document")
+        .then((d) => {
+          if (
+            conversationSnapshot().clientId === client &&
+            !conversationSnapshot().guest
+          ) {
+            reportCache.current.set(key, { report: d, at: Date.now() });
+            while (reportCache.current.size > 12)
+              reportCache.current.delete(
+                reportCache.current.keys().next().value!,
+              );
+          }
+          return d;
+        })
+        .finally(() => reportLoads.current.delete(key));
+      reportLoads.current.set(key, pending);
+    }
+    return pending;
+  }
+  useEffect(() => {
+    reportCache.current.clear();
+    reportLoads.current.clear();
+  }, [chat.clientId, chat.guest]);
+  useEffect(() => {
+    if (report)
+      reportCache.current.set(chat.clientId + ":" + report.research_id, {
+        report,
+        at: Date.now(),
+      });
+  }, [report, chat.clientId]);
+  useEffect(() => {
+    if (!open || !chat.clientId || chat.guest) return;
+    let canceled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        for (const item of items.slice(0, 5)) {
+          if (canceled) return;
+          try {
+            await loadReport(item.research_id);
+          } catch {}
+        }
+      })();
+    }, 350);
+    return () => {
+      canceled = true;
+      clearTimeout(timer);
+    };
+  }, [open, items, chat.clientId]);
+  const reportRef = useRef(report);
+  reportRef.current = report;
+  const [sourceLimit, setSourceLimit] = useState(10),
+    [mediaLimit, setMediaLimit] = useState(3),
+    [removed, setRemoved] = useState<any[]>([]),
+    [deleting, setDeleting] = useState("");
+  const continueSeen = useRef(new Map<string, any>());
+  const continuePending = useRef(new Set<string>());
+  async function reloadReport(id: string) {
+    const old = reportRef.current;
+    const d = await api("/" + id + "/document");
+    if (
+      old?.research_id === id &&
+      old.report &&
+      old.research_revision === d.research_revision
+    ) {
+      if (old.extension_revision === d.extension_revision) {
+        d.report = old.report;
+        d.next_cursor = old.next_cursor;
+        d.reader_end = old.reader_end;
+      } else if (old.reader_end != null) {
+        const added = await api(
+          "/" +
+            id +
+            "/reader?revision=" +
+            old.research_revision +
+            "&cursor=" +
+            old.reader_end,
+        );
+        d.report = old.report + added.report;
+        d.next_cursor = added.next_cursor;
+        d.reader_end = added.reader_end;
+      }
+      d.draft = old.draft;
+    }
+    setReport((current) => (current?.research_id === id ? d : current));
+    reportCache.current.set(chat.clientId + ":" + id, {
+      report: d,
+      at: Date.now(),
+    });
+  }
+  async function requestMore(view: string) {
+    if (!report) return;
+    try {
+      await api("/" + report.research_id + "/expand", {
+        method: "POST",
+        body: JSON.stringify({
+          research_revision: report.research_revision,
+          view,
+          operation_id: crypto.randomUUID(),
+        }),
+      });
+      await reloadReport(report.research_id);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+  async function removeReport(item: any) {
+    if (deleting) return;
+    setDeleting(item.research_id);
+    try {
+      const preview = await api("/" + item.research_id + "/delete-preview");
+      const operation_id = crypto.randomUUID();
+      let result;
+      do {
+        result = await api("/" + item.research_id + "/delete", {
+          method: "POST",
+          body: JSON.stringify({ revision: preview.revision, operation_id }),
+        });
+        if (result.status === "waiting_for_ui")
+          await new Promise((resolve) => setTimeout(resolve, 750));
+      } while (result.status === "waiting_for_ui");
+      if (result.status !== "completed")
+        throw Error(result.reason || "Removal was not confirmed");
+      reportCache.current.delete(chat.clientId + ":" + item.research_id);
+      if (lastSelection.current === item.research_id) {
+        ++loadEpoch.current;
+        lastSelection.current = "";
+        setReport(null);
+        setPreview(null);
+        sessionStorage.removeItem("nova-selected-research");
+      }
+      notify({
+        id: "research-removed:" + operation_id,
+        title: "Research removed",
+        message: "Undo removal",
+        event: "nova-research-restore",
+        target: {
+          research_id: item.research_id,
+          undo_token: result.undo_token,
+        },
+      });
+      void refresh();
+    } catch (e: any) {
+      if (e.data?.reason !== "user_rejected") setError(e.message);
+    } finally {
+      setDeleting("");
+    }
+  }
+  useEffect(() => {
+    const restore = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      void api("/" + d.research_id + "/restore", {
+        method: "POST",
+        body: JSON.stringify({ undo_token: d.undo_token }),
+      })
+        .then(() => refresh())
+        .catch((err) => setError(err.message));
+    };
+    window.addEventListener("nova-research-restore", restore);
+    return () => window.removeEventListener("nova-research-restore", restore);
+  }, [chat.clientId]);
+  useEffect(() => {
+    const refreshEvent = (e: Event) => {
+      void reloadReport((e as CustomEvent).detail.research_id).catch(() => {});
+    };
+    window.addEventListener("nova-research-refresh", refreshEvent);
+    return () =>
+      window.removeEventListener("nova-research-refresh", refreshEvent);
+  }, [chat.clientId]);
+  useEffect(() => {
+    const handler = async (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      const send = (result: any) =>
+        window.dispatchEvent(
+          new CustomEvent("nova-research-result", {
+            detail: { request_id: d.request_id, ...result },
+          }),
+        );
+      if (continueSeen.current.has(d.request_id)) {
+        send(continueSeen.current.get(d.request_id));
+        return;
+      }
+      const current = reportRef.current;
+      if (
+        !open ||
+        !current ||
+        current.research_id !== d.research_id ||
+        current.research_revision !== d.research_revision
+      ) {
+        send({ status: "unconfirmed", reason: "research_focus_changed" });
+        return;
+      }
+      if (continuePending.current.has(d.request_id)) {
+        send({ status: "unconfirmed", reason: "continuation_in_progress" });
+        return;
+      }
+      continuePending.current.add(d.request_id);
+      try {
+        let revealed = false;
+        if (d.view === "reader" && current.next_cursor != null) {
+          await more();
+          if (reportRef.current?.research_id !== d.research_id) {
+            send({ status: "unconfirmed", reason: "research_focus_changed" });
+            return;
+          }
+          setTab("reader");
+          revealed = true;
+        } else if (
+          d.view === "reader" &&
+          current.completeness === "pending" &&
+          sourceLimit < current.sources.length
+        ) {
+          setSourceLimit((v) => Math.min(v + 10, current.sources.length));
+          revealed = true;
+        } else if (
+          d.view === "sources" &&
+          sourceLimit < current.sources.length
+        ) {
+          setSourceLimit((v) => Math.min(v + 10, current.sources.length));
+          setTab("sources");
+          revealed = true;
+        } else if (
+          d.view === "media" &&
+          mediaLimit <
+            mergeMedia([
+              ...(current.sources || []),
+              ...(current.media || []),
+              ...(current.linked_sources || []),
+            ]).length
+        ) {
+          setMediaLimit((v) => v + 3);
+          setTab("media");
+          revealed = true;
+        }
+        if (["reader", "sources", "media"].includes(d.view)) {
+          setPreview(null);
+          setTab(d.view);
+        }
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+        const result = {
+          status: "completed",
+          revealed,
+          research_id: d.research_id,
+          observed: {
+            view: d.view,
+            reader_characters: reportRef.current?.report.length || 0,
+            source_count: document.querySelectorAll(
+              ".research-sources:not([hidden]) .research-source-row",
+            ).length,
+            media_count: document.querySelectorAll(
+              ".research-media:not([hidden]) .research-video",
+            ).length,
+          },
+        };
+        continueSeen.current.set(d.request_id, result);
+        if (continueSeen.current.size > 100)
+          continueSeen.current.delete(
+            continueSeen.current.keys().next().value!,
+          );
+        send(result);
+      } catch (err: any) {
+        send({ status: "failed", reason: err.message });
+      } finally {
+        continuePending.current.delete(d.request_id);
+      }
+    };
+    window.addEventListener("nova-research-continue", handler);
+    return () => window.removeEventListener("nova-research-continue", handler);
+  }, [
+    open,
+    report?.research_id,
+    report?.next_cursor,
+    sourceLimit,
+    mediaLimit,
+    chat.clientId,
+  ]);
+  useEffect(() => {
+    if (open && report)
+      updateUiContext({
+        reader_cursor: report.next_cursor ?? null,
+        reader_end: report.reader_end ?? 0,
+        research_tab: tab,
+        source_visible_count: Math.min(sourceLimit, report.sources.length),
+        media_visible_count: mediaLimit,
+      });
+  }, [
+    open,
+    report?.research_id,
+    report?.next_cursor,
+    report?.reader_end,
+    tab,
+    sourceLimit,
+    mediaLimit,
+  ]);
+  useEffect(() => {
+    if (
+      !open ||
+      !report ||
+      ![
+        "queued",
+        "collecting_sources",
+        "preparing_report",
+        "waiting_for_quota",
+      ].includes(report.extension_activity?.phase || "")
+    )
+      return;
+    const id = report.research_id;
+    const timer = setInterval(
+      () => void reloadReport(id).catch(() => {}),
+      2000,
+    );
+    return () => clearInterval(timer);
+  }, [open, report?.research_id, report?.extension_activity?.phase]);
   async function refresh() {
     const client = conversationSnapshot().clientId;
     if (!client || conversationSnapshot().guest) return;
@@ -1725,6 +2155,7 @@ function Workspace() {
       )
         return;
       setItems(d.items);
+      setRemoved(d.removed || []);
       setTotal(d.total);
     } catch (e: any) {
       setError(e.message);
@@ -1734,6 +2165,7 @@ function Workspace() {
     const client = conversationSnapshot().clientId,
       epoch = ++loadEpoch.current;
     setError("");
+    setSelectionLoading(id);
     try {
       if (report) {
         sessionStorage.setItem(
@@ -1741,8 +2173,10 @@ function Workspace() {
           JSON.stringify({ scroll: reader.current?.scrollTop || 0, message }),
         );
       }
-      const d = await api("/" + encodeURIComponent(id) + "/document");
-      const thread = await api("/" + encodeURIComponent(id) + "/conversation");
+      const threadLoad = api(
+        "/" + encodeURIComponent(id) + "/conversation",
+      ).catch(() => null);
+      const d = await loadReport(id);
       if (
         epoch !== loadEpoch.current ||
         client !== conversationSnapshot().clientId ||
@@ -1751,7 +2185,21 @@ function Workspace() {
         return;
       setImageView(null);
       setReport(d);
-      conversationResearch(id, thread.messages || []);
+      void threadLoad
+        .then((thread) => {
+          if (
+            thread &&
+            client === conversationSnapshot().clientId &&
+            !conversationSnapshot().guest
+          )
+            conversationResearch(id, thread.messages || []);
+        })
+        .catch(() => {
+          if (epoch === loadEpoch.current)
+            setError(
+              "Report opened. Conversation history is temporarily unavailable.",
+            );
+        });
       const saved = JSON.parse(
         sessionStorage.getItem("nova-research-view:" + client + ":" + id) ||
           "{}",
@@ -1761,6 +2209,8 @@ function Workspace() {
         if (reader.current) reader.current.scrollTop = saved.scroll || 0;
       });
       setReaderChars(20000);
+      setSourceLimit(10);
+      setMediaLimit(3);
       setOriginal(false);
       setEditOpened(false);
       setExpandedVideo("");
@@ -1779,6 +2229,8 @@ function Workspace() {
       });
     } catch (e: any) {
       if (epoch === loadEpoch.current) setError(e.message);
+    } finally {
+      if (epoch === loadEpoch.current) setSelectionLoading("");
     }
   }
   useEffect(() => {
@@ -1840,15 +2292,7 @@ function Workspace() {
       const d = (e as CustomEvent).detail;
       void refresh();
       if (lastSelection.current === d.research_id)
-        void api("/" + d.research_id + "/document")
-          .then((next) =>
-            setReport((old) =>
-              old && old.research_id === d.research_id
-                ? { ...next, draft: old.draft }
-                : old,
-            ),
-          )
-          .catch(() => {});
+        void reloadReport(d.research_id).catch(() => {});
       notify({
         id: d.notice_id || "research:" + d.research_id,
         title: "Research ready",
@@ -1934,30 +2378,20 @@ function Workspace() {
               ...old,
               report: old.report + d.report,
               next_cursor: d.next_cursor,
+              reader_end: d.reader_end,
+              extension_revision: d.extension_revision,
             }
           : old,
       );
       setReaderChars((v) => v + 20000);
+      return true;
     } catch (e: any) {
       setError(e.message);
+      throw e;
     }
   }
   async function expand() {
-    if (!report) return;
-    try {
-      await api("/" + report.research_id + "/expand", {
-        method: "POST",
-        body: JSON.stringify({
-          research_revision: report.research_revision,
-          operation_id: crypto.randomUUID(),
-        }),
-      });
-      setError(
-        "Expansion is queued using saved evidence. The report will be available when synthesis completes.",
-      );
-    } catch (e: any) {
-      setError(e.message);
-    }
+    await requestMore("reader");
   }
   function closePreview() {
     setPreview(null);
@@ -1986,7 +2420,7 @@ function Workspace() {
     if (el && chatNearEnd.current) el.scrollTop = el.scrollHeight;
   }, [chat.researchMessages, report?.research_id]);
   useEffect(() => {
-    for (const player of activePlayers) player.pauseVideo();
+    pausePlayers();
   }, [tab, open, preview]);
   useEffect(() => {
     if (
@@ -2036,16 +2470,12 @@ function Workspace() {
     }, 2000);
     return () => clearInterval(timer);
   }, [open, report?.research_id, report?.media_status, chat.clientId]);
-  const media = [
-    ...new Map(
-      [
-        ...(report?.sources || []).filter((s) => videoId(s.url)),
-        ...(report?.media || []),
-        ...(report?.linked_sources || []).filter((s) => videoId(s.url)),
-        ...extraMedia,
-      ].map((s) => [videoId(s.url), s]),
-    ).values(),
-  ];
+  const media = mergeMedia([
+    ...(report?.sources || []),
+    ...(report?.media || []),
+    ...(report?.linked_sources || []),
+    ...extraMedia,
+  ]);
   function openSource(source: Source) {
     if (videoId(source.url)) {
       const timestamp = videoTimestamp(source.url);
@@ -2182,24 +2612,51 @@ function Workspace() {
         <aside className="research-outline">
           <h2>Your research</h2>
           {items.map((item) => (
-            <button
-              className={
-                report?.research_id === item.research_id
-                  ? "research-history-row selected"
-                  : "research-history-row"
-              }
-              aria-current={
-                report?.research_id === item.research_id ? "true" : undefined
-              }
-              key={item.research_id}
-              onClick={() => void select(item.research_id)}
-            >
-              <strong>{item.query}</strong>
-              <small>
-                {new Date(item.retrieved_at).toLocaleDateString()} ·{" "}
-                {item.completeness}
-              </small>
-            </button>
+            <div className="research-history-item" key={item.research_id}>
+              <button
+                className={
+                  report?.research_id === item.research_id
+                    ? "research-history-row selected"
+                    : "research-history-row"
+                }
+                aria-current={
+                  report?.research_id === item.research_id ? "true" : undefined
+                }
+                key={item.research_id}
+                onPointerEnter={() => {
+                  void loadReport(item.research_id).catch(() => {});
+                }}
+                onFocus={() => {
+                  void loadReport(item.research_id).catch(() => {});
+                }}
+                onClick={() => void select(item.research_id)}
+              >
+                <strong>{item.query}</strong>
+                <small>
+                  {new Date(item.retrieved_at).toLocaleDateString()} ·{" "}
+                  {item.completeness}
+                </small>
+              </button>
+              <details className="research-history-menu">
+                <summary
+                  aria-label={
+                    "Options for " + (item.display_title || item.query)
+                  }
+                >
+                  <Icon name="more" />
+                </summary>
+                <button
+                  disabled={!!deleting}
+                  onClick={(e) => {
+                    e.currentTarget.closest("details")?.removeAttribute("open");
+                    void removeReport(item);
+                  }}
+                >
+                  <Icon name="trash" />
+                  Remove research
+                </button>
+              </details>
+            </div>
           ))}
           <nav>
             <button disabled={!offset} onClick={() => setOffset((v) => v - 30)}>
@@ -2212,6 +2669,25 @@ function Workspace() {
               Next
             </button>
           </nav>
+          {!!removed.length && (
+            <details className="research-removed">
+              <summary>Recently removed ({removed.length})</summary>
+              {removed.map((item) => (
+                <button
+                  key={item.research_id}
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new CustomEvent("nova-research-restore", {
+                        detail: item,
+                      }),
+                    )
+                  }
+                >
+                  Restore {item.display_title || item.query}
+                </button>
+              ))}
+            </details>
+          )}
           {report && (
             <>
               <h2>On this page</h2>
@@ -2292,7 +2768,12 @@ function Workspace() {
                 </details>
               )}
           </header>
-          <div className="research-stage">
+          <div className="research-stage" aria-busy={!!selectionLoading}>
+            {selectionLoading && (
+              <span className="research-selection-loading" role="status">
+                Opening research…
+              </span>
+            )}
             {!report ? (
               <div className="research-empty">
                 <span>✧</span>
@@ -2341,7 +2822,13 @@ function Workspace() {
                 >
                   {report.phase === "failed" ||
                   report.completeness === "pending" ? (
-                    <PendingResearch report={report} onOpen={openSource} />
+                    <PendingResearch
+                      report={{
+                        ...report,
+                        sources: report.sources.slice(0, sourceLimit),
+                      }}
+                      onOpen={openSource}
+                    />
                   ) : (report.evidence_collection ||
                       report.completeness === "pending") &&
                     !original ? (
@@ -2396,7 +2883,9 @@ function Workspace() {
                         onImage={setImageView}
                       />
                       {report.next_cursor != null && (
-                        <button onClick={() => void more()}>Show more</button>
+                        <button onClick={() => void more().catch(() => {})}>
+                          Show more
+                        </button>
                       )}
                     </>
                   )}
@@ -2432,6 +2921,10 @@ function Workspace() {
                       ))}
                     </section>
                   )}
+                  <ContinuationStatus
+                    activity={report.extension_activity}
+                    view="reader"
+                  />
                   <h2 className="research-sources-heading">Sources</h2>
                   <div className="research-source-chips">
                     {report.sources.map((source) => (
@@ -2465,7 +2958,7 @@ function Workspace() {
                   className="research-sources"
                   hidden={tab !== "sources" || !!preview}
                 >
-                  {report.sources.map((source) => (
+                  {report.sources.slice(0, sourceLimit).map((source) => (
                     <article className="research-source-row" key={source.id}>
                       <span className="research-publication">
                         <SourceIcon source={source} />
@@ -2506,10 +2999,24 @@ function Workspace() {
                       {tab === "sources" &&
                         !preview &&
                         expandedVideo === source.id && (
-                          <Video source={source} />
+                          <MediaBoundary key={source.url}>
+                            <Video source={source} />
+                          </MediaBoundary>
                         )}
                     </article>
                   ))}
+                  <button
+                    className="research-inline-action"
+                    onClick={() => void requestMore("sources")}
+                  >
+                    {sourceLimit < report.sources.length
+                      ? "Show more sources"
+                      : "Find more sources"}
+                  </button>
+                  <ContinuationStatus
+                    activity={report.extension_activity}
+                    view="sources"
+                  />
                 </div>
                 <div
                   className="research-media"
@@ -2524,8 +3031,10 @@ function Workspace() {
                   )}
                   {tab === "media" &&
                     !preview &&
-                    media.map((s) => (
-                      <Video key={s.video_id || s.id} source={s} />
+                    media.slice(0, mediaLimit).map((s) => (
+                      <MediaBoundary key={s.video_id || s.id}>
+                        <Video source={s} />
+                      </MediaBoundary>
                     ))}
                   {!media.length &&
                     !["pending", "running"].includes(
@@ -2543,6 +3052,18 @@ function Workspace() {
                         .join(" · ")}
                     </p>
                   )}
+                  <button
+                    className="research-inline-action"
+                    onClick={() => void requestMore("media")}
+                  >
+                    {mediaLimit < media.length
+                      ? "Show more videos"
+                      : "Find more videos"}
+                  </button>
+                  <ContinuationStatus
+                    activity={report.extension_activity}
+                    view="media"
+                  />
                 </div>
               </>
             )}

@@ -128,3 +128,110 @@ def test_processing_timer_freezes_during_quota_wait_and_resumes(tmp_path,monkeyp
     assert done['processing_seconds']==10 and done['active_since'] is None
     doc=restarted.document(item['id'],CTX,bounded=True)
     assert doc['processing_seconds']==10 and doc['sources']
+
+
+def test_history_projection_cache_invalidates_after_external_save_and_is_scoped(tmp_path):
+    store=ResearchArtifacts(tmp_path/'r.json');item=store.save('Subject','quick','# Subject\n\nEvidence [S1].',[source()],[],CTX,'op')
+    first=store.document(item['id'],CTX,bounded=True)
+    other=ResearchArtifacts(store.path);other.save_draft(item['id'],CTX,item['revision'],'','<p>External edit</p>')
+    second=store.document(item['id'],CTX,bounded=True)
+    assert first['draft'] is None and second['draft']['html']=='<p>External edit</p>'
+    assert store.document(item['id'],{**CTX,'profile_id':'other'},bounded=True)['status']=='not_found'
+
+
+def test_article_reader_removes_unmarked_menus_but_preserves_article_links_and_tables(tmp_path,monkeypatch):
+    store=ResearchArtifacts(tmp_path/'r.json');item=store.save('Article','quick','# Article',[source()],[],CTX,'op')
+    markup=b'<body><div class="site-menu"><ul><li><a href="/news">News</a></li><li><a href="/crypto">Crypto</a></li><li><a href="/about">About</a></li></ul></div><main><h1>Introduction</h1><p><a href="/play">How to Play</a></p><p><a href="/game">Play Game</a></p><a href="/menu"><p>Menu</p></a><p>A detailed article passage with a <a href="/study">supporting study</a>.</p><table><tr><td>Actual data</td></tr></table><div class="newsletter">Subscribe now</div><h2>References</h2><ul><li><a href="/ref1">Paper one</a></li><li><a href="/ref2">Paper two</a></li><li><a href="/ref3">Paper three</a></li></ul></main></body>'
+    monkeypatch.setattr(store,'_fetch_public_source',lambda url:(markup,'text/html',url))
+    import json
+    data=json.loads(store.source_bytes(item['id'],CTX,'S1',True)[0]);html=data['html']
+    assert 'Crypto' not in html and 'How to Play' not in html and 'Subscribe' not in html and '>Menu<' not in html
+    assert 'supporting study' in html and 'Actual data' in html and 'Paper three' in html
+    assert len(data['links'])==4
+
+
+def test_research_removal_is_revision_checked_recoverable_and_scope_isolated(tmp_path):
+    store=ResearchArtifacts(tmp_path/'r.json');item=store.save('Subject','quick','# Subject',[source()],[],CTX,'op')
+    preview=store.deletion_preview(item['id'],CTX)
+    assert store.remove(item['id'],CTX,'stale','delete')['status']=='conflict'
+    removed=store.remove(item['id'],CTX,preview['revision'],'delete')
+    assert store.get(item['id'],CTX)['status']=='not_found' and store.listing(CTX)['total']==0
+    assert store.listing(CTX)['removed'][0]['undo_token']==removed['undo_token']
+    assert store.restore(item['id'],{**CTX,'project_id':'other'},removed['undo_token'])['status']=='not_found'
+    assert store.restore(item['id'],CTX,'wrong')['status']=='conflict'
+    assert store.restore(item['id'],CTX,removed['undo_token'])['status']=='completed'
+    assert store.get(item['id'],CTX)['artifact']['report']=='# Subject'
+
+
+def test_expansion_appends_new_scoped_citations_without_new_report_or_draft_changes(tmp_path):
+    store=ResearchArtifacts(tmp_path/'r.json');item=store.save('Subject','detailed','# Subject\n\nOriginal [S1].',[source()],[],CTX,'op')
+    draft=store.save_draft(item['id'],CTX,item['revision'],'','<p>My draft</p>')['draft']
+    requests=[]
+    class Transport:
+        def post(self,*a,**kw):requests.append(kw);return SimpleNamespace(status_code=200,headers={},json=lambda:{'results':[{**source('New evidence'),'url':'https://example.org/new'}]})
+    async def synthesize(q,rows):return '## Further findings\n\nNew support [S2].'
+    service=ResearchSearch(store,lambda k:'fixture',Transport(),synthesize)
+    result=asyncio.run(service.search({'action':'expand','research_id':item['id'],'research_revision':item['revision'],'detail':'Include the latest evidence'},CTX,'extend'))
+    assert result['research_id']==item['id'] and store.listing(CTX)['total']==1 and len(requests)==1
+    doc=store.document(item['id'],CTX,bounded=True)
+    assert [r['id'] for r in doc['sources']]==['S1','S2'] and 'New support' in doc['report']
+    assert doc['draft']==draft and store.get(item['id'],CTX)['artifact']['report']==item['report']
+    again=asyncio.run(service.search({'action':'expand','research_id':item['id'],'research_revision':item['revision']},CTX,'extend'))
+    assert again['status']=='completed' and len(requests)==1
+
+
+def test_expansion_quota_retry_uses_search_checkpoint(tmp_path):
+    store=ResearchArtifacts(tmp_path/'r.json');item=store.save('Subject','detailed','# Subject [S1]',[source()],[],CTX,'op');calls=[]
+    class Transport:
+        def post(self,*a,**kw):calls.append(kw);return SimpleNamespace(status_code=200,headers={},json=lambda:{'results':[{**source(),'url':'https://example.org/fresh'}]})
+    async def paused(*a):raise BudgetPaused(9999999999,'budget')
+    arguments={'action':'expand','research_id':item['id'],'research_revision':item['revision'],'detail':'latest details'}
+    service=ResearchSearch(store,lambda k:'fixture',Transport(),paused)
+    first=asyncio.run(service.search(arguments,CTX,'extend'));assert first['status']=='waiting_for_quota'
+    async def done(*a):return '## Update\n\nSupported [S2].'
+    service=ResearchSearch(ResearchArtifacts(store.path),lambda k:'fixture',Transport(),done)
+    assert asyncio.run(service.search(arguments,CTX,'extend'))['status']=='completed' and len(calls)==1
+
+
+def test_more_videos_deduplicates_and_persists_one_request_per_operation(tmp_path):
+    store=ResearchArtifacts(tmp_path/'r.json');item=store.save('Public subject','detailed','# Subject',[source()],[],CTX,'op');calls=[]
+    store.media_state(item['id'],CTX,item['revision'],status='complete',items=[{'video_id':'abcdefghijk','url':'https://youtu.be/abcdefghijk','title':'Existing'}])
+    class Transport:
+        def get(self,*a,**kw):
+            calls.append(kw)
+            return SimpleNamespace(status_code=200,json=lambda:{'video_results':[{'title':'Existing','link':'https://youtu.be/abcdefghijk'},{'title':'New evidence','link':'https://youtu.be/12345678901'}]})
+    arguments={'action':'more_media','research_id':item['id'],'research_revision':item['revision']}
+    service=ResearchSearch(store,lambda k:'fixture',Transport())
+    first=asyncio.run(service.search(arguments,CTX,'videos'))
+    assert first['status']=='completed' and first['added_media']==1 and first['research_id']==item['id']
+    service=ResearchSearch(ResearchArtifacts(store.path),lambda k:'fixture',Transport())
+    again=asyncio.run(service.search(arguments,CTX,'videos'))
+    assert again['added_media']==1 and len(calls)==1
+    none=asyncio.run(service.search(arguments,CTX,'videos-two'))
+    assert none['status']=='completed' and none['no_more'] and len(calls)==2
+    assert store.get(item['id'],CTX)['artifact']['report']=='# Subject' and store.listing(CTX)['total']==1
+
+
+@pytest.mark.parametrize('revealed',[True,False])
+def test_continuation_reveals_saved_content_before_queueing_same_report(tmp_path,revealed):
+    import ast,re
+    from pathlib import Path
+    store=ResearchArtifacts(tmp_path/'r.json');item=store.save('Subject','detailed','# Subject',[source()],[],CTX,'op');submitted=[];sent=[]
+    async def wait(*a,**kw):return {'status':'completed','revealed':revealed}
+    async def send(client,payload):sent.append(payload)
+    def submit(actions,context,operation_id,**kwargs):
+        submitted.append(actions)
+        # Simulate a worker advancing immediately after admission. Enqueue must not reset its checkpoint.
+        store.extension_state(item['id'],CTX,phase='collecting_sources',search_checkpoint=[source()])
+        return {'status':'queued','job_id':'job'}
+    source_path=Path(__file__).parents[1]/'server.py';tree=ast.parse(source_path.read_text(encoding='utf-8'))
+    node=next(n for n in tree.body if isinstance(n,ast.AsyncFunctionDef) and n.name=='continue_research')
+    env={'_research_continuation_locks':{},'asyncio':asyncio,'re':re,'get_research_services':lambda:(store,None),'state':SimpleNamespace(register_widget_action=lambda *a:None,await_widget_action=wait),'ws_manager':SimpleNamespace(send_to_client_id=send),'action_jobs':SimpleNamespace(submit=submit)}
+    exec(compile(ast.Module(body=[node],type_ignores=[]),str(source_path),'exec'),env)
+    result=asyncio.run(env['continue_research'](item['id'],CTX,'continuation',detail='more information'))
+    assert result['research_id']==item['id'] and store.listing(CTX)['total']==1
+    if revealed:assert not submitted and result['provider_calls']==0
+    else:
+        assert submitted[0][0]['arguments']['research_id']==item['id']
+        activity=store.extension_state(item['id'],CTX)
+        assert activity['phase']=='collecting_sources' and activity['search_checkpoint']==[source()]

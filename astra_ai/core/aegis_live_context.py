@@ -135,8 +135,12 @@ def safe_text(value, limit=600):
 def sanitize_ui(payload):
     if not isinstance(payload, dict): return {}
     clean = {"version":1,"revision":max(0,int(payload.get("revision",0))),"view":payload.get("view") if payload.get("view") in {"dashboard","memory","research"} else "dashboard"}
-    for key in ("category","selected_id","selected_kind","title","summary","research_id","research_revision","thread_id"):
+    for key in ("category","selected_id","selected_kind","title","summary","research_id","research_revision","thread_id","research_tab"):
         if isinstance(payload.get(key),str): clean[key]=safe_text(payload[key])
+    for key in ("reader_cursor","reader_end","source_visible_count","media_visible_count"):
+        value=payload.get(key)
+        if value is None:clean[key]=None
+        elif isinstance(value,int) and not isinstance(value,bool) and 0<=value<=100000:clean[key]=value
     clean["widgets"]=[safe_text(v,60) for v in payload.get("widgets",[])[:12] if isinstance(v,str)] if isinstance(payload.get("widgets"),list) else []
     clean["filters"]={k:safe_text(payload["filters"][k],80) for k in ("category","lifecycle","profile_id","project_id") if k in payload.get("filters",{})} if isinstance(payload.get("filters"),dict) else {}
     while len(json.dumps(clean,ensure_ascii=False))>4000: clean.pop("summary",None); break
