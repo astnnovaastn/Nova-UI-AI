@@ -1,0 +1,113 @@
+"""Reader projections, pending checkpoints and scoped versioned report extensions."""
+import asyncio,io
+from types import SimpleNamespace
+import pytest
+from astra_ai.core.research_learning import ResearchArtifacts,ResearchSearch,display_title,reader_text
+from astra_ai.core.background_budget import BudgetPaused
+
+CTX={'profile_id':'owner','project_id':'project','session_id':'main','turn_id':'origin','user_text':'Please research honeybee communication'}
+def source(content='Real supported evidence.'):
+    return {'title':'Source','url':'https://example.org/article','retrieved_at':'2026-10-16T10:00:00Z','content':content}
+
+@pytest.mark.parametrize('brief',[
+ 'Hey, can you search information about honeybee communication?',
+ 'Create an exhaustive, multimedia research report titled "The Global AI Race 2026–2030"\nRESEARCH REQUIREMENTS: '+('Instructions. '*500),
+ 'A subject '+('word '*200),
+])
+def test_conservative_titles_are_separate_and_bounded(brief):
+    title=display_title(brief)
+    assert len(title)<=90 and '\n' not in title
+    assert 'RESEARCH REQUIREMENTS' not in title
+
+def test_long_brief_reservation_is_scoped_and_idempotent(tmp_path):
+    store=ResearchArtifacts(tmp_path/'reports.json');brief='Subject\n'+('Detailed instruction. '*500)
+    one=store.reserve(brief,'detailed',CTX,'op');two=store.reserve(brief,'detailed',CTX,'op')
+    assert one['id']==two['id'] and one['thread_id']==two['thread_id']
+    assert one['query']==brief and one['origin_turn_id']=='origin'
+    assert store.get(one['id'],{**CTX,'project_id':'other'})['status']=='not_found'
+    assert store.reserve('x'*12001,'detailed',CTX,'too-long')['status']=='rejected'
+    assert store.reserve('Another subject','detailed',CTX,'op')['status']=='conflict'
+    assert store.listing(CTX)['items'][0]['research_id']==one['id']
+
+def test_quota_restart_uses_checkpoint_without_another_search(tmp_path):
+    calls=[]
+    class Transport:
+        def post(self,*args,**kwargs):
+            calls.append(kwargs);return SimpleNamespace(status_code=200,headers={},json=lambda:{'results':[source()]})
+    async def paused(*args):raise BudgetPaused(9999999999,'daily_budget')
+    store=ResearchArtifacts(tmp_path/'reports.json')
+    first=asyncio.run(ResearchSearch(store,lambda k:'fixture',Transport(),paused).search({'query':'Public honeybee topic','mode':'detailed'},CTX,'op'))
+    assert first['status']=='waiting_for_quota' and len(calls)==1
+    doc=store.document(first['research_id'],CTX,bounded=True)
+    assert doc['phase']=='waiting_for_quota' and doc['sources'][0]['content']=='Real supported evidence.' and doc['report']==''
+    async def done(*args):return '# Honeybee Communication\n\nSupported finding [S1].'
+    restarted=ResearchArtifacts(store.path)
+    result=asyncio.run(ResearchSearch(restarted,lambda k:'fixture',Transport(),done).search({'research_id':first['research_id']},CTX,'ignored'))
+    assert result['status']=='completed' and len(calls)==1
+    assert restarted.document(result['research_id'],CTX)['phase']=='complete'
+    assert store.path.with_suffix('.before-reader-threads.bak').exists()
+
+def test_bounded_reader_pages_preserve_markup_and_require_no_providers(tmp_path):
+    store=ResearchArtifacts(tmp_path/'reports.json')
+    text='# Topic\n\n'+''.join('## Section '+str(i)+'\n\n'+'A supported paragraph [S1]. '*250+'\n\n' for i in range(8))+'```python\nx = "[S1]"\n```\n'
+    item=store.save('Please research this subject','detailed',text,[source()],[],CTX,'op')
+    cursor=0;parts=[]
+    while cursor is not None:
+        page=store.reader(item['id'],CTX,item['revision'],cursor)
+        assert len(page['report'])<=20000
+        parts.append(page['report']);cursor=page['next_cursor']
+    joined=''.join(parts)
+    assert 'Section 7' in joined and '```python\nx = "[S1]"\n```' in joined
+    assert len(store.document(item['id'],CTX,bounded=True)['report'])<=20000
+    assert store.get(item['id'],CTX)['artifact']['report']==text
+
+def test_extension_is_deduplicated_and_preserves_archive_and_draft(tmp_path):
+    store=ResearchArtifacts(tmp_path/'reports.json');item=store.save('Topic','detailed','# Topic\n\nOriginal [S1].',[source()],[],CTX,'op')
+    draft=store.save_draft(item['id'],CTX,item['revision'],'','<p>Personal edits</p>')['draft']
+    for _ in range(2):assert store.append_extension(item['id'],CTX,item['revision'],'extend','# More\n\nMore evidence [S1].')['status']=='completed'
+    assert store.reader(item['id'],CTX)['report'].count('More evidence')==1
+    assert store.get(item['id'],CTX)['artifact']['report']==item['report']
+    assert store.document(item['id'],CTX)['draft']==draft
+    assert store.reader(item['id'],{**CTX,'profile_id':'other'})['status']=='not_found'
+
+def test_legacy_reader_does_not_dump_request_or_entire_source(tmp_path):
+    store=ResearchArtifacts(tmp_path/'reports.json');brief='Create a report titled "Clean Topic"\nREQUIREMENTS: '+('long instruction '*500)
+    raw='# '+brief+'\n\nSourced research excerpts.\n'+('full webpage '*5000)
+    item=store.save(brief,'detailed',raw,[source('A valid excerpt. '*2000)],[],CTX,'legacy')
+    page=store.reader(item['id'],CTX)
+    assert page['report'].startswith('# Clean Topic') and 'long instruction' not in page['report'] and 'full webpage' not in page['report']
+    assert store.get(item['id'],CTX)['artifact']['report']==raw
+
+def test_cleanup_preserves_unicode_code_math_and_quoted_evidence():
+    text='“Quoted” — x² = α + β. https://example.org\n```json\n{"report":"literal"}\n```'
+    assert reader_text(text)==text
+    assert reader_text('{"report":"Clean \u0000 text"}')=='Clean  text'
+
+def test_image_ids_are_scoped_validated_and_decode_limited(tmp_path,monkeypatch):
+    from PIL import Image
+    store=ResearchArtifacts(tmp_path/'reports.json');row=source();row['images']=[{'url':'https://example.org/image.png','caption':'Related image'}]
+    item=store.save('Topic','quick','# Topic',[row],[],CTX,'image')
+    image=store.images(item['id'],CTX)[0];out=io.BytesIO();Image.new('RGB',(320,180)).save(out,format='PNG');body=out.getvalue();calls=[]
+    def fetch(url,image=False):calls.append(url);return body,'image/png',url
+    monkeypatch.setattr(store,'_fetch_public_source',fetch)
+    assert store.image_bytes(item['id'],CTX,image['id'])[0]==body
+    assert store.image_bytes(item['id'],CTX,image['id'])[0]==body and len(calls)==1
+    with pytest.raises(ValueError):store.image_bytes(item['id'],{**CTX,'profile_id':'other'},image['id'])
+    with pytest.raises(ValueError):store.image_bytes(item['id'],CTX,'https://127.0.0.1/secret')
+
+def test_related_evidence_preserves_origin_and_cannot_cross_scope(tmp_path):
+    store=ResearchArtifacts(tmp_path/'reports.json');item=store.save('Honeybee communication dance','detailed','# Bees',[source()],[],CTX,'old')
+    reused=store.related_evidence('Honeybee communication',CTX)
+    assert reused[0]['origin_research_id']==item['id'] and reused[0]['retrieved_at']==source()['retrieved_at']
+    assert not store.related_evidence('Honeybee communication',{**CTX,'project_id':'other'})
+
+
+def test_explicit_report_links_reference_turns_without_copying_transcripts(tmp_path):
+    from astra_ai.memory.shared_memory import read
+    store=ResearchArtifacts(tmp_path/'r.json');item=store.save('Topic','quick','# Topic',[source()],[],CTX,'op')
+    explicit={**CTX,'user_text':'Read the previous research report'}
+    store.link_turn(item['id'],explicit);store.link_turn(item['id'],explicit)
+    assert read(store.path,{})['thread_links'][item['id']]==[{'session_id':'main','turn_id':'origin'}]
+    store.link_turn(item['id'],{**explicit,'profile_id':'other','turn_id':'denied'})
+    assert len(read(store.path,{})['thread_links'][item['id']])==1
+    assert 'conversation' not in read(store.path,{})

@@ -93,8 +93,9 @@ export function cue(kind: "notification" | "voice", key: string) {
   if (cued.size > 500) cued.delete(cued.values().next().value!);
   const t = audio.currentTime,
     volume = Math.max(0, Math.min(1, pref(kind + "-volume", 0.35)));
-  const tones =
-    kind === "voice"
+  const tones = key.startsWith("research-submitted:")
+    ? [[520, 0]]
+    : kind === "voice"
       ? [
           [620, 0],
           [780, 0.06],

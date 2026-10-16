@@ -40,3 +40,20 @@ test('failed automatic continuation drains held playback and cannot finish a new
  const {ctx,calls}=liveControlHarness();ctx.handle({type:'live_continuation_failed',session_id:'current',generation:'old-generation'});assert.equal(calls.finish,0);
  ctx.handle({type:'live_continuation_failed',session_id:'current',generation:'new-generation'});assert.equal(calls.finish,1);
 });
+
+test('research histories stay separate from main chat and late answers retain their report',()=>{
+ const h=harness();h.api.conversationMessage('user','Main conversation','completed','main');
+ h.api.updateUiContext({view:'research',research_id:'first'});h.api.requestConversation('First report follow-up','first-turn');
+ h.api.updateUiContext({view:'research',research_id:'second'});h.api.requestConversation('Second report follow-up','second-turn');
+ h.api.conversationMessage('assistant','Late first answer','completed','reply:first-turn');
+ h.api.conversationMessage('assistant','Second answer','completed','reply:second-turn');
+ assert.equal(h.api.conversationResearch('first')[0].text,'Late first answer');
+ assert.equal(h.api.conversationResearch('second')[0].text,'Second answer');
+ assert.deepEqual(Array.from(h.api.conversationSnapshot().messages,m=>m.id),['main']);
+});
+test('canonical research hydration deduplicates optimistic turn IDs without assigning main messages',()=>{
+ const h=harness();h.api.conversationMessage('user','Question','completed','turn','report');
+ h.api.conversationResearch('report',[{id:'canonical-hash',turn_id:'turn',role:'user',content:'Question'}]);
+ assert.equal(h.api.conversationResearch('report').length,1);
+ h.api.conversationState({clientId:'new-owner'});assert.equal(h.api.conversationResearch('report').length,0);
+});

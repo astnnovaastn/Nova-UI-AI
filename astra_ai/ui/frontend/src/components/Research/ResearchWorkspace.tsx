@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useMemo,
+} from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -12,11 +18,12 @@ import * as pdfjs from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
   conversationSnapshot,
+  conversationResearch,
   requestConversation,
   requestMicrophone,
   updateUiContext,
 } from "../../conversation";
-import { notify } from "../../notifications";
+import { notify, cue } from "../../notifications";
 import {
   registerRichEditor,
   registerMediaControls,
@@ -105,6 +112,18 @@ type Report = {
   media_failures?: { reason: string }[];
   legacy_evidence?: boolean;
   evidence_collection?: boolean;
+  display_title?: string;
+  next_cursor?: number | null;
+  thread_id?: string;
+  phase?: string;
+  next_attempt?: number;
+  waiting_reason?: string;
+  image_items?: {
+    id: string;
+    caption: string;
+    source_id: string;
+    publication: string;
+  }[];
   research_id: string;
   research_revision: string;
   query: string;
@@ -154,6 +173,75 @@ function openResearch(id?: string) {
   window.dispatchEvent(
     new CustomEvent("nova-open-research", { detail: { research_id: id } }),
   );
+}
+function Icon({ name }: { name: string }) {
+  const paths: Record<string, string> = {
+    arrow: "M12 19V5m-6 6 6-6 6 6",
+    close: "m6 6 12 12M6 18 18 6",
+    depth: "M4 6h16M7 12h10M10 18h4",
+    plus: "M12 5v14M5 12h14",
+    download: "M12 3v12m-5-5 5 5 5-5M5 17v4h14v-4",
+    play: "m9 5 11 7-11 7Z",
+    bold: "M6 12h7a4 4 0 0 0 0-8H6v16h8a4 4 0 0 0 0-8",
+    italic: "M10 4h10M4 20h10M15 4 9 20",
+    strike: "M4 12h16M17 6c-2-4-10-3-10 1m0 9c2 4 10 3 10-1",
+    heading: "M5 4v16M19 4v16M5 12h14",
+    list: "M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1",
+    ordered: "M10 5h11M10 12h11M10 19h11M3 3v5M2 8h3M2 14c3-4 5 0 0 4h4",
+    quote: "M4 6h6v7H4c0 4 2 5 4 5M14 6h6v7h-6c0 4 2 5 4 5",
+    code: "m8 6-6 6 6 6m8-12 6 6-6 6",
+    link: "m9 15 6-6M8 17l-1 1a4 4 0 0 1-6-6l4-4m8-1 1-1a4 4 0 0 1 6 6l-4 4",
+    image: "M3 3h18v18H3ZM3 17l6-7 5 5 3-3 4 5",
+    table: "M3 3h18v18H3ZM3 9h18M3 15h18M9 3v18M15 3v18",
+    citation: "M4 4h16v16H4Zm4 5v6m8-6v6",
+    undo: "M9 4 3 10l6 6M3 10h11a6 6 0 0 1 6 6",
+    redo: "m15 4 6 6-6 6m6-6H10a6 6 0 0 0-6 6",
+    save: "M4 3h13l4 4v14H3V3Zm3 0v6h10V3M7 21v-8h10v8",
+  };
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={paths[name] || paths.link} />
+    </svg>
+  );
+}
+function previewPlacement(
+  trigger: DOMRect,
+  width: number,
+  height: number,
+  viewWidth: number,
+  viewHeight: number,
+) {
+  const edge = 12,
+    gap = 10,
+    below = viewHeight - trigger.bottom - edge,
+    above = trigger.top - edge;
+  let top =
+    below >= height
+      ? trigger.bottom + gap
+      : above >= height
+        ? trigger.top - height - gap
+        : edge;
+  let left = Math.max(edge, Math.min(trigger.left, viewWidth - width - edge));
+  if (below < height && above < height) {
+    if (viewWidth - trigger.right > width + gap) left = trigger.right + gap;
+    else if (trigger.left > width + gap) left = trigger.left - width - gap;
+    else
+      top = below >= above ? trigger.bottom + gap : trigger.top - height - gap;
+  }
+  return {
+    left,
+    top: Math.max(edge, Math.min(top, viewHeight - height - edge)),
+  };
 }
 function DraftEditor({
   report,
@@ -274,6 +362,13 @@ function DraftEditor({
       clearTimeout(saveTimer.current);
     };
   }, [editor]);
+  useEffect(() => {
+    document
+      .querySelectorAll<HTMLButtonElement>(".research-editor-toolbar button")
+      .forEach((b) => {
+        if (!b.title) b.title = b.textContent?.trim() || "";
+      });
+  });
   if (!editor) return null;
   return (
     <div
@@ -288,32 +383,48 @@ function DraftEditor({
         {(["bold", "italic", "strike"] as const).map((mark) => (
           <button
             key={mark}
+            title={mark}
+            aria-label={mark}
             aria-pressed={editor.isActive(mark)}
             onClick={() => editor.chain().focus().toggleMark(mark).run()}
           >
-            {mark}
+            <Icon name={mark} />
+            <span className="research-sr-only">{mark}</span>
           </button>
         ))}
         <button
+          aria-pressed={editor.isActive("heading", { level: 2 })}
           onClick={() =>
             editor.chain().focus().toggleHeading({ level: 2 }).run()
           }
         >
-          Heading
-        </button>
-        <button onClick={() => editor.chain().focus().toggleBulletList().run()}>
-          List
+          <Icon name="heading" />
+          <span className="research-sr-only">Heading</span>
         </button>
         <button
+          aria-pressed={editor.isActive("bulletList")}
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+        >
+          <Icon name="list" />
+          <span className="research-sr-only">List</span>
+        </button>
+        <button
+          aria-pressed={editor.isActive("orderedList")}
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
         >
-          Numbered
+          <Icon name="ordered" />
+          <span className="research-sr-only">Numbered</span>
         </button>
-        <button onClick={() => editor.chain().focus().toggleBlockquote().run()}>
-          Quote
+        <button
+          aria-pressed={editor.isActive("blockquote")}
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        >
+          <Icon name="quote" />
+          <span className="research-sr-only">Quote</span>
         </button>
         <button onClick={() => editor.chain().focus().toggleCodeBlock().run()}>
-          Code
+          <Icon name="code" />
+          <span className="research-sr-only">Code</span>
         </button>
         <button
           onClick={() => {
@@ -322,7 +433,8 @@ function DraftEditor({
               editor.chain().focus().setLink({ href }).run();
           }}
         >
-          Link
+          <Icon name="link" />
+          <span className="research-sr-only">Link</span>
         </button>
         <button
           onClick={() => {
@@ -331,7 +443,8 @@ function DraftEditor({
               editor.chain().focus().setImage({ src }).run();
           }}
         >
-          Image
+          <Icon name="image" />
+          <span className="research-sr-only">Image</span>
         </button>
         <button
           onClick={() =>
@@ -342,7 +455,8 @@ function DraftEditor({
               .run()
           }
         >
-          Table
+          <Icon name="table" />
+          <span className="research-sr-only">Table</span>
         </button>
         <button
           onClick={() => {
@@ -363,19 +477,31 @@ function DraftEditor({
                 .run();
           }}
         >
-          Citation
+          <Icon name="citation" />
+          <span className="research-sr-only">Citation</span>
         </button>
-        <button onClick={() => editor.chain().focus().undo().run()}>
-          Undo
+        <button
+          title="Undo"
+          disabled={!editor.can().undo()}
+          onClick={() => editor.chain().focus().undo().run()}
+        >
+          <Icon name="undo" />
+          <span className="research-sr-only">Undo</span>
         </button>
-        <button onClick={() => editor.chain().focus().redo().run()}>
-          Redo
+        <button
+          title="Redo"
+          disabled={!editor.can().redo()}
+          onClick={() => editor.chain().focus().redo().run()}
+        >
+          <Icon name="redo" />
+          <span className="research-sr-only">Redo</span>
         </button>
         <button
           disabled={pending.current || conflict}
           onClick={() => void save()}
         >
-          Save
+          <Icon name="save" />
+          <span className="research-sr-only">Save</span>
         </button>
       </div>
       <div className="research-draft-state" role="status">
@@ -450,29 +576,35 @@ function SourceChip({
     top: number;
   } | null>(null);
   const button = useRef<HTMLButtonElement>(null),
-    timer = useRef<number>(0);
+    timer = useRef<number>(0),
+    card = useRef<HTMLDivElement>(null);
   const show = () => {
     clearTimeout(timer.current);
-    const r = button.current?.getBoundingClientRect();
-    if (r)
-      setPosition({
-        left: Math.max(12, Math.min(r.left, innerWidth - 344)),
-        top: Math.max(
-          12,
-          Math.min(
-            r.bottom + 8,
-            innerHeight - Math.min(380, innerHeight * 0.45) - 12,
-          ),
-        ),
-      });
+    if (!position) setPosition({ left: 12, top: 12 });
   };
+  useLayoutEffect(() => {
+    if (!position || !card.current || !button.current) return;
+    const r = card.current.getBoundingClientRect();
+    const next = previewPlacement(
+      button.current.getBoundingClientRect(),
+      r.width,
+      r.height,
+      innerWidth,
+      innerHeight,
+    );
+    if (position.left !== next.left || position.top !== next.top)
+      setPosition(next);
+  }, [position]);
   const hide = () => {
-    timer.current = window.setTimeout(() => setPosition(null), 140);
+    timer.current = window.setTimeout(() => setPosition(null), 300);
   };
   useEffect(() => () => clearTimeout(timer.current), []);
   useEffect(() => {
     if (!position) return;
-    const close = () => setPosition(null);
+    const close = (e: Event) => {
+      if (e.target instanceof Node && card.current?.contains(e.target)) return;
+      setPosition(null);
+    };
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
     return () => {
@@ -495,7 +627,17 @@ function SourceChip({
         aria-label={"Read source: " + source.title}
         aria-expanded={!!position}
         onKeyDown={(e) => {
-          if (e.key === "Escape") setPosition(null);
+          if (e.key === "Escape") {
+            setPosition(null);
+            e.stopPropagation();
+          }
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            show();
+            requestAnimationFrame(() =>
+              card.current?.querySelector<HTMLButtonElement>("button")?.focus(),
+            );
+          }
         }}
         onClick={() => {
           setPosition(null);
@@ -510,6 +652,26 @@ function SourceChip({
         createPortal(
           <div
             className="research-citation-preview"
+            ref={card}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.stopPropagation();
+                setPosition(null);
+                button.current?.focus();
+              }
+              if (["ArrowDown", "ArrowUp"].includes(e.key)) {
+                e.preventDefault();
+                const all = Array.from(
+                  card.current?.querySelectorAll<HTMLButtonElement>("button") ||
+                    [],
+                );
+                all[
+                  (all.indexOf(document.activeElement as HTMLButtonElement) +
+                    (e.key === "ArrowDown" ? 1 : all.length - 1)) %
+                    all.length
+                ]?.focus();
+              }
+            }}
             style={{ left: position.left, top: position.top }}
             role="group"
             aria-label="Supporting sources"
@@ -522,6 +684,7 @@ function SourceChip({
               <button
                 key={s.id}
                 onClick={() => {
+                  button.current?.focus({ preventScroll: true });
                   setPosition(null);
                   onClick(s);
                 }}
@@ -530,8 +693,24 @@ function SourceChip({
                   <SourceIcon source={s} />
                   {publication(s)}
                 </span>
+                {s.thumbnail && (
+                  <img
+                    className="research-preview-image"
+                    src={s.thumbnail}
+                    alt=""
+                    loading="lazy"
+                    onError={(e) => (e.currentTarget.hidden = true)}
+                  />
+                )}
                 <strong>{s.title}</strong>
+                {videoId(s.url) && <small>Video description · YouTube</small>}
                 <span>{sourceExcerpt(s).slice(0, 240)}</span>
+                {videoId(s.url) && videoTimestamp(s.url) !== null && (
+                  <small>
+                    Play at {Math.floor(videoTimestamp(s.url)! / 60)}:
+                    {String(videoTimestamp(s.url)! % 60).padStart(2, "0")}
+                  </small>
+                )}
                 {s.retrieved_at && (
                   <small>
                     Retrieved {new Date(s.retrieved_at).toLocaleDateString()}
@@ -561,21 +740,153 @@ function citationParts(
   });
 }
 // Transform parsed text nodes only: citations cannot modify code, HTML attributes or URLs.
+type ResearchImage = {
+  id: string;
+  caption: string;
+  source_id: string;
+  publication: string;
+};
+function EvidenceImage({
+  image,
+  reportId,
+  onOpen,
+}: {
+  image: ResearchImage;
+  reportId: string;
+  onOpen: () => void;
+}) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    let active = true,
+      blob = "";
+    const controller = new AbortController();
+    fetch("/api/research/" + reportId + "/images/" + image.id, {
+      headers: headers(),
+      signal: controller.signal,
+    })
+      .then((r) => {
+        if (!r.ok) throw Error();
+        return r.blob();
+      })
+      .then((b) => {
+        blob = URL.createObjectURL(b);
+        if (active) setUrl(blob);
+        else URL.revokeObjectURL(blob);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+      controller.abort();
+      if (blob) URL.revokeObjectURL(blob);
+    };
+  }, [reportId, image.id]);
+  if (!url) return null;
+  return (
+    <figure className="research-evidence-image">
+      <button onClick={onOpen} aria-label={"Enlarge image: " + image.caption}>
+        <img src={url} alt={image.caption} />
+      </button>
+      <figcaption>
+        {image.caption}
+        <small>{image.publication}</small>
+      </figcaption>
+    </figure>
+  );
+}
+function ImageViewer({
+  image,
+  reportId,
+  onClose,
+  onSource,
+}: {
+  image: ResearchImage;
+  reportId: string;
+  onClose: () => void;
+  onSource: () => void;
+}) {
+  const close = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const origin = document.activeElement as HTMLElement;
+    close.current?.focus();
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
+      if (e.key === "Tab") {
+        const buttons = Array.from(
+          document.querySelectorAll<HTMLButtonElement>(
+            ".research-image-viewer button",
+          ),
+        );
+        const first = buttons[0],
+          last = buttons[buttons.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    window.addEventListener("keydown", key, true);
+    return () => {
+      window.removeEventListener("keydown", key, true);
+      origin?.focus({ preventScroll: true });
+    };
+  }, []);
+  return createPortal(
+    <div
+      className="research-image-viewer"
+      role="dialog"
+      aria-modal="true"
+      aria-label={image.caption}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <section>
+        <button
+          ref={close}
+          className="research-image-close"
+          aria-label="Close image"
+          onClick={onClose}
+        >
+          <Icon name="close" />
+        </button>
+        <EvidenceImage image={image} reportId={reportId} onOpen={() => {}} />
+        <button className="research-inline-action" onClick={onSource}>
+          Read image source
+        </button>
+      </section>
+    </div>,
+    document.body,
+  );
+}
 function ReportContent({
   text,
   sources,
   onOpen,
   onUnknown,
+  images = [],
+  reportId = "",
+  onImage,
 }: {
   text: string;
   sources: Source[];
   onOpen: (s: Source) => void;
   onUnknown: (url: string) => void;
+  images?: ResearchImage[];
+  reportId?: string;
+  onImage?: (image: ResearchImage) => void;
 }) {
   const doc = useMemo(
     () => new DOMParser().parseFromString(markdown(text), "text/html"),
     [text],
   );
+  const placed = new Set<string>();
   function render(node: Node, key: string, literal = false): React.ReactNode {
     if (node.nodeType === Node.TEXT_NODE) {
       const value = node.textContent || "";
@@ -638,12 +949,18 @@ function ReportContent({
           )[a.name] || a.name
         ] = a.value;
     }
-    if (tag === "img") {
-      props.loading = "lazy";
-      return React.createElement(tag, props);
-    }
+    if (tag === "img") return null; // Report images use scoped, validated artifact IDs.
     if (["br", "hr"].includes(tag)) return React.createElement(tag, props);
-    return React.createElement(
+    const related =
+      !literal && ["p", "li"].includes(tag)
+        ? images.find(
+            (image) =>
+              !placed.has(image.id) &&
+              node.textContent?.includes("[" + image.source_id + "]"),
+          )
+        : undefined;
+    if (related) placed.add(related.id);
+    const content = React.createElement(
       tag,
       props,
       ...Array.from(node.childNodes).map((n, i) =>
@@ -653,6 +970,18 @@ function ReportContent({
           literal || ["pre", "code", "blockquote"].includes(tag),
         ),
       ),
+    );
+    return related ? (
+      <React.Fragment key={key}>
+        <EvidenceImage
+          image={related}
+          reportId={reportId}
+          onOpen={() => onImage?.(related)}
+        />
+        {content}
+      </React.Fragment>
+    ) : (
+      content
     );
   }
   return (
@@ -775,7 +1104,7 @@ function DocumentPreview({
           aria-label="Close source preview"
           title="Return to report"
         >
-          ×
+          <Icon name="close" />
         </button>
       </header>
       <div className="research-source-meta">
@@ -888,6 +1217,25 @@ function loadYouTube() {
     window.onYouTubeIframeAPIReady = resolve;
     document.head.append(script);
   }));
+}
+function videoTimestamp(url: string): number | null {
+  try {
+    const value =
+      new URL(url).searchParams.get("t") ||
+      new URL(url).searchParams.get("start");
+    if (!value) return null;
+    if (/^\d+$/.test(value)) {
+      const n = Number(value);
+      return n <= 86400 ? n : null;
+    }
+    const m = value.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+    if (!m || !m.slice(1).some(Boolean)) return null;
+    const n =
+      Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3] || 0);
+    return n <= 86400 ? n : null;
+  } catch {
+    return null;
+  }
 }
 function videoId(url: string) {
   try {
@@ -1134,7 +1482,7 @@ function initialDraft(report: Report) {
   if (!report.evidence_collection) return markdown(report.report);
   const doc = document.implementation.createHTMLDocument("");
   const h = doc.createElement("h1");
-  h.textContent = report.query;
+  h.textContent = report.display_title || report.query;
   doc.body.append(h);
   for (const source of report.sources) {
     const heading = doc.createElement("h2"),
@@ -1172,6 +1520,7 @@ function Workspace() {
     [chat, setChat] = useState(conversationSnapshot()),
     [message, setMessage] = useState(""),
     [readerChars, setReaderChars] = useState(20000),
+    [imageView, setImageView] = useState<ResearchImage | null>(null),
     [original, setOriginal] = useState(false),
     [editOpened, setEditOpened] = useState(false),
     [expandedVideo, setExpandedVideo] = useState(""),
@@ -1192,6 +1541,36 @@ function Workspace() {
     )
       sessionStorage.setItem("nova-research-query:" + chat.clientId, query);
   }, [query, chat.clientId, chat.guest]);
+  const pendingMessage = useRef<{
+    id: string;
+    reportId: string;
+    text: string;
+  } | null>(null);
+  useEffect(() => {
+    const accepted = (event: Event) => {
+      const item = pendingMessage.current;
+      if (!item || (event as CustomEvent).detail?.request_id !== item.id)
+        return;
+      const key =
+        "nova-research-view:" +
+        conversationSnapshot().clientId +
+        ":" +
+        item.reportId;
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(key) || "{}");
+        if (saved.message === item.text)
+          sessionStorage.setItem(
+            key,
+            JSON.stringify({ ...saved, message: "" }),
+          );
+      } catch {}
+      if (lastSelection.current === item.reportId)
+        setMessage((old) => (old === item.text ? "" : old));
+      pendingMessage.current = null;
+    };
+    window.addEventListener("nova-chat-accepted", accepted);
+    return () => window.removeEventListener("nova-chat-accepted", accepted);
+  }, []);
   async function refresh() {
     const client = conversationSnapshot().clientId;
     if (!client || conversationSnapshot().guest) return;
@@ -1213,14 +1592,31 @@ function Workspace() {
       epoch = ++loadEpoch.current;
     setError("");
     try {
+      if (report) {
+        sessionStorage.setItem(
+          "nova-research-view:" + client + ":" + report.research_id,
+          JSON.stringify({ scroll: reader.current?.scrollTop || 0, message }),
+        );
+      }
       const d = await api("/" + encodeURIComponent(id) + "/document");
+      const thread = await api("/" + encodeURIComponent(id) + "/conversation");
       if (
         epoch !== loadEpoch.current ||
         client !== conversationSnapshot().clientId ||
         conversationSnapshot().guest
       )
         return;
+      setImageView(null);
       setReport(d);
+      conversationResearch(id, thread.messages || []);
+      const saved = JSON.parse(
+        sessionStorage.getItem("nova-research-view:" + client + ":" + id) ||
+          "{}",
+      );
+      setMessage(saved.message || "");
+      requestAnimationFrame(() => {
+        if (reader.current) reader.current.scrollTop = saved.scroll || 0;
+      });
       setReaderChars(20000);
       setOriginal(false);
       setEditOpened(false);
@@ -1233,7 +1629,7 @@ function Workspace() {
         view: "research",
         research_id: id,
         research_revision: d.research_revision,
-        title: d.query,
+        title: d.display_title || d.query,
         selected_id: id,
         selected_kind: "research",
         category: "",
@@ -1300,8 +1696,18 @@ function Workspace() {
     const ready = (e: Event) => {
       const d = (e as CustomEvent).detail;
       void refresh();
+      if (lastSelection.current === d.research_id)
+        void api("/" + d.research_id + "/document")
+          .then((next) =>
+            setReport((old) =>
+              old && old.research_id === d.research_id
+                ? { ...next, draft: old.draft }
+                : old,
+            ),
+          )
+          .catch(() => {});
       notify({
-        id: "research:" + d.research_id,
+        id: d.notice_id || "research:" + d.research_id,
         title: "Research ready",
         message: d.query || "Open your sourced report",
         kind: "research",
@@ -1309,10 +1715,7 @@ function Workspace() {
         target: d,
       });
       if (
-        ((document.body.classList.contains("research-workspace-open") &&
-          !lastSelection.current &&
-          !document.querySelector('[data-draft-dirty="true"]')) ||
-          researchMayNavigate()) &&
+        researchMayNavigate() &&
         !["speaking", "thinking"].includes(conversationSnapshot().state)
       )
         openResearch(d.research_id);
@@ -1331,6 +1734,88 @@ function Workspace() {
       window.removeEventListener("nova-research-ready", ready);
     };
   }, []);
+  useEffect(() => {
+    if (open)
+      updateUiContext({
+        view: "research",
+        research_id: report?.research_id || "",
+        research_revision: report?.research_revision || "",
+      });
+  }, [open, report?.research_id, report?.research_revision]);
+  useEffect(() => {
+    if (report)
+      sessionStorage.setItem(
+        "nova-research-view:" + chat.clientId + ":" + report.research_id,
+        JSON.stringify({ message, scroll: reader.current?.scrollTop || 0 }),
+      );
+  }, [message, report?.research_id]);
+  useEffect(() => {
+    if (
+      !open ||
+      !report ||
+      ![
+        "queued",
+        "collecting_sources",
+        "comparing_evidence",
+        "preparing_report",
+        "waiting_for_quota",
+      ].includes(report.phase || "")
+    )
+      return;
+    const id = report.research_id;
+    const interval = setInterval(() => {
+      void api("/" + id + "/document")
+        .then((d) => {
+          setReport((old) => (old?.research_id === id ? d : old));
+          void refresh();
+        })
+        .catch(() => {});
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [open, report?.research_id, report?.phase]);
+  async function more() {
+    if (!report) return;
+    const id = report.research_id;
+    try {
+      const d = await api(
+        "/" +
+          id +
+          "/reader?revision=" +
+          report.research_revision +
+          "&cursor=" +
+          report.next_cursor,
+      );
+      setReport((old) =>
+        old?.research_id === id
+          ? {
+              ...old,
+              report: old.report + d.report,
+              next_cursor: d.next_cursor,
+            }
+          : old,
+      );
+      setReaderChars((v) => v + 20000);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+  async function expand() {
+    if (!report) return;
+    try {
+      await api("/" + report.research_id + "/expand", {
+        method: "POST",
+        body: JSON.stringify({
+          research_revision: report.research_revision,
+          operation_id: crypto.randomUUID(),
+        }),
+      });
+      setError(
+        "Expansion is queued using saved evidence. The report will be available when synthesis completes.",
+      );
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
   function closePreview() {
     setPreview(null);
     requestAnimationFrame(() =>
@@ -1356,7 +1841,7 @@ function Workspace() {
   useEffect(() => {
     const el = chatReader.current;
     if (el && chatNearEnd.current) el.scrollTop = el.scrollHeight;
-  }, [chat.messages]);
+  }, [chat.researchMessages, report?.research_id]);
   useEffect(() => {
     for (const player of activePlayers) player.pauseVideo();
   }, [tab, open, preview]);
@@ -1420,6 +1905,9 @@ function Workspace() {
   ];
   function openSource(source: Source) {
     if (videoId(source.url)) {
+      const timestamp = videoTimestamp(source.url);
+      if (timestamp !== null)
+        videoPositions.set(videoId(source.url)!, timestamp);
       if (!media.some((s) => videoId(s.url) === videoId(source.url)))
         setExtraMedia((old) => [...old, source]);
       setPreview(null);
@@ -1450,6 +1938,12 @@ function Workspace() {
   async function start(e: React.FormEvent) {
     e.preventDefault();
     if (!query.trim() || busy) return;
+    if (query.trim().length > 12000) {
+      setError(
+        "Research brief must contain at most 12,000 characters. Please shorten it before submitting.",
+      );
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -1465,11 +1959,12 @@ function Workspace() {
       if (!["accepted", "queued", "duplicate", "completed"].includes(d.status))
         throw Error(d.reason || "Research could not start");
       lastSelection.current = "";
-      notify({
-        id: "research-job:" + d.job_id,
-        title: mode === "detailed" ? "Research started" : "Search started",
-        target: { view: "tasks", id: "job:" + d.job_id },
-      });
+      cue("notification", "research-submitted:" + d.job_id);
+      setQuery("");
+      if (d.research_id) {
+        await select(d.research_id);
+        void refresh();
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -1525,6 +2020,20 @@ function Workspace() {
             Retry
           </button>
         </p>
+      )}
+      {imageView && report && (
+        <ImageViewer
+          image={imageView}
+          reportId={report.research_id}
+          onClose={() => setImageView(null)}
+          onSource={() => {
+            setImageView(null);
+            const source = report.sources.find(
+              (s) => s.id === imageView.source_id,
+            );
+            if (source) openSource(source);
+          }}
+        />
       )}
       <div className="research-layout">
         <aside className="research-outline">
@@ -1593,18 +2102,37 @@ function Workspace() {
                 <button
                   key={v}
                   aria-pressed={tab === v}
+                  disabled={v === 'edit' && (!report || report.completeness === 'pending' || report.phase === 'failed')}
                   onClick={() => setTab(v)}
                 >
                   {v[0].toUpperCase() + v.slice(1)}
                 </button>
               ))}
             </nav>
-            {report && (
+            {report && report.completeness !== 'pending' && report.phase !== 'failed' && (
               <details>
-                <summary>Download</summary>
+                <summary>
+                  <Icon name="download" /> Download
+                </summary>
+                <small className="research-export-label">
+                  {tab === "edit" ? "Saved draft" : "Research report"}
+                </small>
                 {["md", "html", "pdf", "docx"].map((f) => (
                   <button key={f} onClick={() => void download(f)}>
-                    {f.toUpperCase()}
+                    <Icon name="download" />
+                    <span>
+                      {
+                        (
+                          {
+                            md: "Markdown",
+                            html: "Web document",
+                            pdf: "PDF document",
+                            docx: "Word document",
+                          } as any
+                        )[f]
+                      }
+                    </span>
+                    <small>{f.toUpperCase()}</small>
                   </button>
                 ))}
               </details>
@@ -1643,10 +2171,71 @@ function Workspace() {
                   hidden={tab !== "reader" || !!preview}
                   ref={reader}
                   className="research-reader"
+                  onScroll={(e) => {
+                    if (report)
+                      sessionStorage.setItem(
+                        "nova-research-view:" +
+                          chat.clientId +
+                          ":" +
+                          report.research_id,
+                        JSON.stringify({
+                          message,
+                          scroll: e.currentTarget.scrollTop,
+                        }),
+                      );
+                  }}
                 >
-                  {report.evidence_collection && !original ? (
+                  {report.phase === "failed" ? (
+                    <div className="research-progress" role="status">
+                      <h1>{report.display_title}</h1>
+                      <p>
+                        Research could not be completed.{" "}
+                        {report.waiting_reason?.replace(/_/g, " ")}. Collected
+                        evidence is available in Sources.
+                      </p>
+                    </div>
+                  ) : report.completeness === "pending" ? (
+                    <div
+                      className="research-progress"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <h1>{report.display_title}</h1>
+                      <p>
+                        {(
+                          {
+                            queued: "Research queued",
+                            collecting_sources: "Collecting sources",
+                            comparing_evidence: "Comparing evidence",
+                            preparing_report: "Preparing report",
+                            waiting_for_quota: "Waiting for synthesis quota",
+                          } as any
+                        )[report.phase || "queued"] || report.phase}
+                      </p>
+                      {report.phase === "waiting_for_quota" && (
+                        <p>
+                          {report.waiting_reason?.replace(/_/g, " ")}
+                          {report.next_attempt
+                            ? " · Next attempt " +
+                              new Date(
+                                report.next_attempt * 1000,
+                              ).toLocaleString()
+                            : ""}
+                          . Collected sources remain available in Sources.
+                        </p>
+                      )}
+                      {[0, 1, 2].map((n) => (
+                        <div className="research-skeleton" key={n}>
+                          <i />
+                          <i />
+                          <i />
+                          <i />
+                        </div>
+                      ))}
+                    </div>
+                  ) : report.evidence_collection && !original ? (
                     <>
-                      <h1>{report.query}</h1>
+                      <h1>{report.display_title || report.query}</h1>
                       <p className="research-evidence-label">
                         Source collection · Read the supporting passages below,
                         or inspect the full original report. Synthesis is not
@@ -1658,43 +2247,57 @@ function Workspace() {
                           id={"source-" + source.id}
                           key={source.id}
                         >
-                          <SourceChip
-                            source={source}
-                            onClick={() => openSource(source)}
-                          />
                           <h2>{source.title}</h2>
-                          <p>{sourceExcerpt(source)}</p>
-                          <button onClick={() => openSource(source)}>
+                          <p>
+                            {sourceExcerpt(source)}{" "}
+                            <SourceChip
+                              source={source}
+                              onClick={() => openSource(source)}
+                            />
+                          </p>
+                          <button
+                            className="research-inline-action"
+                            onClick={() => openSource(source)}
+                          >
                             Read source
                           </button>
                         </article>
                       ))}
-                      <button onClick={() => setOriginal(true)}>
-                        Read original saved report
+                      <button
+                        className="research-inline-action"
+                        onClick={() => setOriginal(true)}
+                      >
+                        View saved report
                       </button>
                     </>
                   ) : (
                     <>
                       <ReportContent
-                        text={report.report.slice(0, readerChars)}
+                        text={report.report}
                         sources={[
                           ...report.sources,
                           ...(report.linked_sources || []),
                         ]}
                         onOpen={openSource}
                         onUnknown={openUnknown}
+                        images={report.image_items || []}
+                        reportId={report.research_id}
+                        onImage={setImageView}
                       />
-                      {report.report.length > readerChars && (
-                        <button
-                          onClick={() => setReaderChars((v) => v + 20000)}
-                        >
-                          Continue reading ·{" "}
-                          {report.report.length - readerChars} characters
-                          remaining
-                        </button>
+                      {report.next_cursor != null && (
+                        <button onClick={() => void more()}>Show more</button>
                       )}
                     </>
                   )}
+                  {report.next_cursor == null &&
+                    report.completeness !== "pending" && (
+                      <button
+                        className="research-inline-action"
+                        onClick={() => void expand()}
+                      >
+                        Expand this report
+                      </button>
+                    )}
                   {!!media.length && (
                     <section
                       className="research-related-media"
@@ -1713,11 +2316,12 @@ function Workspace() {
                             {video.title}
                             <small>{video.channel || "YouTube"}</small>
                           </span>
-                          <span aria-hidden="true">▷</span>
+                          <Icon name="play" />
                         </button>
                       ))}
                     </section>
                   )}
+                  <h2 className="research-sources-heading">Sources</h2>
                   <div className="research-source-chips">
                     {report.sources.map((source) => (
                       <SourceChip
@@ -1842,12 +2446,15 @@ function Workspace() {
             )}
           </div>
           <form className="research-query" onSubmit={start}>
+            <span id="research-brief-limit" className="research-sr-only">
+              Research brief: up to 12,000 characters.
+            </span>
             <textarea
               aria-label="Research topic"
               placeholder="What would you like to research?"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              maxLength={600}
+              aria-describedby="research-brief-limit"
               rows={1}
               onKeyDown={(e) => {
                 if (
@@ -1861,10 +2468,32 @@ function Workspace() {
               }}
             />
             <div className="research-query-actions">
+              <button
+                type="button"
+                className="research-new"
+                aria-label="New research"
+                title="New research"
+                onClick={() => {
+                  ++loadEpoch.current;
+                  setReport(null);
+                  setPreview(null);
+                  setMessage("");
+                  setQuery("");
+                  lastSelection.current = "";
+                  sessionStorage.removeItem("nova-selected-research");
+                  updateUiContext({
+                    view: "research",
+                    research_id: "",
+                    research_revision: "",
+                  });
+                }}
+              >
+                <Icon name="plus" />
+              </button>
               <details>
                 <summary aria-label="Research depth">
                   {mode === "detailed" ? "Detailed" : "Quick"}
-                  <span aria-hidden="true">⌄</span>
+                  <Icon name="depth" />
                 </summary>
                 <div role="group" aria-label="Research depth options">
                   {["quick", "detailed"].map((v) => (
@@ -1891,7 +2520,7 @@ function Workspace() {
                   busy || !chat.connected || chat.guest || !query.trim()
                 }
               >
-                {busy ? "…" : "↑"}
+                {busy ? "…" : <Icon name="arrow" />}
               </button>
             </div>
           </form>
@@ -1912,7 +2541,10 @@ function Workspace() {
                 el.scrollHeight - el.scrollTop - el.clientHeight < 70;
             }}
           >
-            {chat.messages.map((m) => (
+            {(report
+              ? chat.researchMessages[report.research_id] || []
+              : []
+            ).map((m) => (
               <article key={m.id} data-speaker={m.role}>
                 <small>{m.role === "user" ? "You" : "Aegis"}</small>
                 <p>{m.text}</p>
@@ -1923,8 +2555,13 @@ function Workspace() {
             onSubmit={(e) => {
               e.preventDefault();
               if (message.trim()) {
-                requestConversation(message);
-                setMessage("");
+                const id = crypto.randomUUID();
+                pendingMessage.current = {
+                  id,
+                  reportId: report?.research_id || "",
+                  text: message,
+                };
+                requestConversation(message, id);
               }
             }}
           >
@@ -1947,9 +2584,11 @@ function Workspace() {
               </button>
               <button
                 aria-label="Send message to Aegis"
-                disabled={!chat.connected || !message.trim()}
+                disabled={
+                  !chat.connected || !report || chat.textBusy || !message.trim()
+                }
               >
-                ↑
+                <Icon name="arrow" />
               </button>
             </div>
           </form>

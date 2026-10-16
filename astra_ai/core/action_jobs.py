@@ -261,7 +261,7 @@ class ActionJobs:
                     return None
                 job["actions"][index].update(state=state,result=result,**extra);job["sequence"]+=1;job["updated"]=now()
                 self.write(data)
-                return {"type":"job_progress","job_id":jid,"sequence":job["sequence"],"state":job["state"],"title":job.get("title") or ", ".join(a["name"].replace("_"," ") for a in job["actions"][:3]),"step":job["actions"][index]["name"].replace("_"," "),"action_index":index,"action_state":state,"completed":sum(a["state"]=="completed" for a in job["actions"]),"total":len(job["actions"]),"client_id":job["context"].get("client_id",""),"scope":{k:job["context"].get(k,"" if k!="guest" else False) for k in ("profile_id","project_id","guest","session_id","background")}}
+                return {"type":"job_progress","job_id":jid,"sequence":job["sequence"],"state":job["state"],"title":job.get("title") or ", ".join(a["name"].replace("_"," ") for a in job["actions"][:3]),"step":job["actions"][index]["name"].replace("_"," "),"action_index":index,"action_state":state,"completed":sum(a["state"]=="completed" for a in job["actions"]),"total":len(job["actions"]),"client_id":job["context"].get("client_id",""),"scope":{k:job["context"].get(k,"" if k!="guest" else False) for k in ("profile_id","project_id","guest","session_id","background","requested_research")}}
         event=await asyncio.to_thread(update)
         if event and result and result.get('notification'):event['notification']=result['notification'];event['research_id']=result.get('research_id','')
         if event:
@@ -284,7 +284,7 @@ class ActionJobs:
                 self.write(data)
                 if previous!=j["state"]:
                     j["sequence"]+=1;self.write(data)
-                    return {"type":"job_progress","job_id":jid,"state":j["state"],"sequence":j["sequence"],"completed":sum(a["state"]=="completed" for a in j["actions"]),"total":len(j["actions"]),"client_id":j["context"].get("client_id",""),"scope":{k:j["context"].get(k,"" if k!="guest" else False) for k in ("profile_id","project_id","guest","session_id","background")}}
+                    return {"type":"job_progress","job_id":jid,"state":j["state"],"sequence":j["sequence"],"completed":sum(a["state"]=="completed" for a in j["actions"]),"total":len(j["actions"]),"client_id":j["context"].get("client_id",""),"scope":{k:j["context"].get(k,"" if k!="guest" else False) for k in ("profile_id","project_id","guest","session_id","background","requested_research")}}
         event=await asyncio.to_thread(update)
         if event:
             try:await self.notify(event.pop("client_id"),event)

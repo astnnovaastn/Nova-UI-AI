@@ -349,7 +349,7 @@ function showWorkNotices(items:any[]){
  if(snap.guest)return;const fresh=newNoticeIds(items,seenWorkNotices);try{sessionStorage.setItem('nova-notice-seen:'+scope,JSON.stringify([...seenWorkNotices]));}catch{}
  const inboxOnly=!workNoticeBaseline,silent=inboxOnly||!notificationSoundEnabled();workNoticeBaseline=true;
  const freshIds=new Set(fresh.map(item=>String(item.id)));
- for(const item of items)notify({id:String(item.id),title:item.title||'Your task has an update',kind:item.kind,target:notificationTarget(item),silent,inboxOnly:inboxOnly||!freshIds.has(String(item.id))});
+ for(const item of items)notify(item.kind==='research'?{id:String(item.id),title:'Research ready',message:item.title?.replace(/^Research ready: /,''),kind:'research',event:'nova-open-research',target:{research_id:item.target},silent,inboxOnly:inboxOnly||!freshIds.has(String(item.id))}:{id:String(item.id),title:item.title||'Your task has an update',kind:item.kind,target:notificationTarget(item),silent,inboxOnly:inboxOnly||!freshIds.has(String(item.id))});
 }
 window.addEventListener('nova-conversation',()=>{const s=conversationSnapshot();noticeScope(s.sessionId+':'+s.guest);});
 let noticePlaying='',noticeComplete='';
@@ -403,7 +403,7 @@ socket.onMessage((msg) => {
   if(type==='live_audio_generation'){audioGeneration=String(msg.generation||'');return;}
   if(type==='memory_globe_changed'){window.dispatchEvent(new CustomEvent('nova-memory-globe-changed',{detail:msg}));return;}
   if(type==='memory_activity'){window.dispatchEvent(new CustomEvent('nova-memory-activity',{detail:msg}));return;}
-  if(type==='research_status'){conversationState({status:msg.phase==='searching'?'Searching current information…':msg.phase==='failed'?'Current-information search unavailable.':'',sources:Array.isArray(msg.sources)?msg.sources.map((s:any)=>({title:String(s.title||''),url:String(s.url||'')})):[]});window.dispatchEvent(new CustomEvent('nova-research-status',{detail:msg}));return;}
+  if(type==='research_status'){conversationState({status:msg.phase==='searching'?'Searching current information…':msg.phase==='failed'?'Current-information search unavailable.':msg.phase==='waiting'?'Research is waiting to continue.':'',sources:Array.isArray(msg.sources)?msg.sources.map((s:any)=>({title:String(s.title||''),url:String(s.url||'')})):[]});window.dispatchEvent(new CustomEvent('nova-research-status',{detail:msg}));return;}
 
   if (type === "memory_changed") { window.dispatchEvent(new CustomEvent("nova-memory-changed", { detail: msg })); return; }
 
@@ -444,17 +444,17 @@ socket.onMessage((msg) => {
     userTranscript=String(msg.full_text||((userTranscript?userTranscript+' ':'')+String(msg.text||'')));
     userMessageId=String(msg.request_id||('user:'+String(msg.turn_id||'active')));
     if(userTranscript.trim())cue('voice','user:'+userMessageId);
-    conversationMessage('user',userTranscript,msg.final?'completed':'streaming',userMessageId);
+    conversationMessage('user',userTranscript,msg.final?'completed':'streaming',userMessageId,String(msg.research_id||''));
   }
   else if (type === 'live_output_transcript') {
     assistantTranscript=String(msg.full_text||((assistantTranscript?assistantTranscript+' ':'')+String(msg.text||'')));
     assistantMessageId='reply:'+String(msg.turn_id||'active');
-    conversationMessage('assistant',assistantTranscript,'streaming',assistantMessageId);
+    conversationMessage('assistant',assistantTranscript,'streaming',assistantMessageId,String(msg.research_id||''));
   }
   else if (type === 'live_generation_complete') {
     const turn=String(msg.turn_id||'active');
-    if(msg.input_text)conversationMessage('user',String(msg.input_text),'completed',String(msg.request_id||'user:'+turn));
-    if(msg.output_text)conversationMessage('assistant',String(msg.output_text),'completed','reply:'+turn);
+    if(msg.input_text)conversationMessage('user',String(msg.input_text),'completed',String(msg.request_id||'user:'+turn),String(msg.research_id||''));
+    if(msg.output_text)conversationMessage('assistant',String(msg.output_text),'completed','reply:'+turn,String(msg.research_id||''));
     if(!msg.reconciled&&(!msg.generation||String(msg.generation)===audioGeneration))audioPlayer.finishPcmTurn();
     userTranscript=assistantTranscript=userMessageId=assistantMessageId='';
     conversationState({textBusy:false});
@@ -1077,7 +1077,8 @@ window.addEventListener('nova-chat-send',(event:Event)=>{
  if(voiceSession.needsStart())startPreferredVoiceSession(!isMuted);
  memoryChatBusy=true;conversationState({state:'thinking',status:'',textBusy:true,sources:[]});
  conversationMessage('user',text,'sending',d.request_id);
- socket.send({type:'live_text',text,request_id:d.request_id,session_id:conversationSnapshot().sessionId,source:'typed_input'});
+ socket.send({type:'ui_context',snapshot:uiSnapshot()});
+ socket.send({type:'live_text',text,request_id:d.request_id,session_id:conversationSnapshot().sessionId,source:'typed_input',research_id:d.research_id||''});
 });
 
 window.addEventListener('nova-conversation-switch',((e:CustomEvent)=>{if(conversationSnapshot().textBusy||conversationSnapshot().sessionSwitching||!conversationSnapshot().connected)return;conversationState({sessionSwitching:true,status:'Opening conversation…'});conversationInterrupt();audioPlayer.stop();heldGeneration=pendingInterruptionGeneration='';isAudioPlaying=false;voiceInput?.pause();userTranscript=assistantTranscript=userMessageId=assistantMessageId='';socket.send({type:'conversation_switch',session_id:e.detail.session_id});}) as EventListener);

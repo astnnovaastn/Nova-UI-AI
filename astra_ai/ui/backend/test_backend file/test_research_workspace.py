@@ -53,8 +53,9 @@ def test_synthesis_failure_preserves_evidence_and_reports_partial(tmp_path):
     async def unavailable(*a):raise RuntimeError('quota fixture')
     store=ResearchArtifacts(tmp_path/'r.json');service=ResearchSearch(store,lambda k:'fixture',Transport(),synthesize=unavailable)
     result=asyncio.run(service.search({'query':'A public topic','mode':'detailed'},CTX,'public-op'))
-    assert result['completeness']=='partial' and result['failures'][0]['reason']=='synthesis_unavailable'
-    doc=store.document(result['research_id'],CTX);assert 'Actual evidence' in doc['report'] and 'not a completed synthesis' in doc['report']
+    assert result['status']=='failed' and result['reason']=='synthesis_unavailable'
+    doc=store.document(result['research_id'],CTX);assert doc['sources'][0]['content']=='Actual evidence' and doc['phase']=='failed'
+    assert not doc['report']
 
 def test_synthesis_replaces_presentation_without_discarding_evidence(tmp_path):
     class Transport:

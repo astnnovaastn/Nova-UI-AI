@@ -7,7 +7,7 @@ import ts from 'typescript';
 // Exercise the same pure decisions used by the React reader and real player.
 const source = fs.readFileSync(new URL('../src/components/Research/ResearchWorkspace.tsx', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('research.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ['citationParts', 'videoId', 'videoVolumeStep'];
+const names = ['citationParts', 'videoId', 'videoVolumeStep', 'previewPlacement', 'videoTimestamp'];
 const selected = tree.statements.filter(n => ts.isFunctionDeclaration(n) && names.includes(n.name?.text)).map(n => n.getText(tree)).join('\n');
 const context = { URL };
 vm.createContext(context);
@@ -50,4 +50,20 @@ test('native manual volume changes survive further speech events and restoration
 test('muted or paused video is not started or newly ducked by conversation', () => {
   assert.deepEqual(plain(context.videoVolumeStep(idle,{...speaking,muted:true})),idle);
   assert.deepEqual(plain(context.videoVolumeStep(idle,{...speaking,playing:false})),idle);
+});
+
+test('citation preview chooses measured space without obscuring its trigger',()=>{
+ for(const t of [{left:200,right:280,top:50,bottom:72},{left:1100,right:1190,top:650,bottom:672},{left:400,right:480,top:330,bottom:352}]){
+ const p=context.previewPlacement(t,332,240,1280,720);
+ assert.ok(p.left>=12&&p.left+332<=1268&&p.top>=12&&p.top+240<=708);
+ const overlap=p.left<t.right&&p.left+332>t.left&&p.top<t.bottom&&p.top+240>t.top;
+ assert.equal(overlap,false);
+ }
+});
+
+test('only supplied real timestamp parameters produce a seek destination',()=>{
+ assert.equal(context.videoTimestamp('https://youtube.com/watch?v=abcdefghijk'),null);
+ assert.equal(context.videoTimestamp('https://youtube.com/watch?v=abcdefghijk&t=3m45s'),225);
+ assert.equal(context.videoTimestamp('https://youtu.be/abcdefghijk?t=252'),252);
+ for(const t of ['-5','invented','100000000'])assert.equal(context.videoTimestamp('https://youtu.be/abcdefghijk?t='+t),null);
 });

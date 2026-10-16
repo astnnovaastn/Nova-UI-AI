@@ -2313,13 +2313,16 @@ async def _aegis_search_web(arguments):
     if arguments.get('action')=='media':
         return await service.enrich_media(str(arguments.get('research_id','')),context,str(arguments.get('research_revision','')))
     result=await service.search(arguments,context,context.get('operation_id',''))
-    if result.get('research_id') and learning_service and not context.get('guest'):
+    if result.get('status')=='completed' and result.get('research_id') and learning_service and not context.get('guest'):
         item=await asyncio.to_thread(artifacts.get,result['research_id'],context,result['research_revision'])
         if item['status']=='ok':
             indexed=await asyncio.to_thread(learning_service.import_artifact,item['artifact'],context)
             result['knowledge_index_status']=indexed.get('status')
-    if result.get('research_id') and context.get('client_id') and (arguments.get('mode')=='detailed' or context.get('requested_research')):
-        await ws_manager.send_to_client_id(context['client_id'],{'type':'research_ready','research_id':result['research_id'],'research_revision':result['research_revision'],'query':result['query']})
+    if result.get('status')=='completed' and result.get('research_id') and context.get('client_id') and (arguments.get('mode')=='detailed' or context.get('requested_research')):
+        metadata=await asyncio.to_thread(artifacts.request_state,result['research_id'],context)
+        title=metadata.get('display_title') or result['query'][:90]
+        notice_id=await asyncio.to_thread(notice_store.enqueue,'research',result['research_id'],result.get('extension_revision') or result['research_revision'],{'title':'Research ready: '+title},context)
+        await ws_manager.send_to_client_id(context['client_id'],{'type':'research_ready','notice_id':notice_id,'research_id':result['research_id'],'research_revision':result['research_revision'],'query':title})
     return result
 
 
@@ -5627,12 +5630,20 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
         return {"status":"rejected","reason":"Guest context cannot access owner widgets or private UI."}
     if (name in {'search_web','notes_action'} or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and action_jobs.task:
         actions=[{'name':name,'arguments':{k:v for k,v in arguments.items() if k!='save_to_notes'}}]
+        reserved=None
+        if name=='search_web' and not arguments.get('action') and not arguments.get('research_id'):
+            artifacts,_=get_research_services()
+            reserved=await asyncio.to_thread(artifacts.reserve,str(arguments.get('query','')),arguments.get('mode','quick'),context,operation_id)
+            if reserved.get('status')!='ok':return reserved
+            actions[0]['arguments']={k:v for k,v in actions[0]['arguments'].items() if k!='query'}|{'research_id':reserved['id']}
+            context={**context,'requested_research':True}
         if name=='search_web' and arguments.get('save_to_notes') is True:
             actions.append({'name':'notes_action','arguments':{'action':'import_research'},'depends_on':[0],
                             'result_refs':{'research_id':{'action_index':0,'result_path':'/research_id'},'research_revision':{'action_index':0,'result_path':'/research_revision'}}})
         submitted=await asyncio.to_thread(action_jobs.submit,actions,context,operation_id,str(arguments.get('query') or arguments.get('action') or name)[:180])
         if submitted.get('status') not in {'queued','duplicate'}:return submitted
         jid=submitted['job_id']
+        if reserved:await asyncio.to_thread(artifacts.request_state,reserved['id'],context,job_id=jid)
         deadline=time.monotonic()+90
         while time.monotonic()<deadline:
             snapshot=await asyncio.to_thread(action_jobs.list,jid,context)
@@ -5641,9 +5652,9 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
                 failed=next((a for a in steps if a.get('state') in {'failed','uncertain','canceled'}),None)
                 outcome=(failed or step).get('result') or {'status':job['state']}
                 return {**outcome,'job_id':jid}
-            if job.get('paused') or job.get('state') in {'waiting_for_retry','waiting_for_ui'}:return {'status':job.get('state'),'job_id':jid,'reason':'Work continues in the durable task queue.'}
+            if job.get('paused') or job.get('state') in {'waiting_for_retry','waiting_for_ui'}:return {'status':job.get('state'),'job_id':jid,**({'research_id':reserved['id'],'thread_id':reserved['thread_id']} if reserved else {}),'reason':'Work continues in the durable task queue.'}
             await asyncio.sleep(.1)
-        return {'status':'running','job_id':jid,'reason':'Inspect the existing task; do not submit it again.'}
+        return {'status':'running','job_id':jid,**({'research_id':reserved['id'],'thread_id':reserved['thread_id']} if reserved else {}),'reason':'Inspect the existing task; do not submit it again.'}
     confirmation=await _confirm_destructive(name,arguments,{**context,'operation_id':operation_id})
     if confirmation:return confirmation
     if name=="run_action_batch":return await asyncio.to_thread(action_jobs.submit,arguments.get("actions"),context,operation_id,arguments.get("goal", ""))
@@ -5659,8 +5670,15 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
     if name=='approve_memory' or name=='memory_action' and arguments.get('action') in {'approve','reject'}:
         return await get_library_service().decision('memory:'+str(arguments.get('approval_id','')),{'decision':'approved' if arguments.get('approved') is True or arguments.get('action')=='approve' else 'rejected','version':arguments.get('version'),'confirmation_quote':arguments.get('confirmation_quote')},context,voice=True)
     if name=='research_artifact_action':
-        artifacts,_=get_research_services()
-        return await asyncio.to_thread(artifacts.page,str(arguments.get('research_id','')),context,str(arguments.get('research_revision','')),arguments.get('offset',0),arguments.get('limit',12000))
+        artifacts,service=get_research_services()
+        identifier=str(arguments.get('research_id') or context.get('research_id',''))
+        await asyncio.to_thread(artifacts.link_turn,identifier,context)
+        if arguments.get('action')=='expand':
+            fetched=await asyncio.to_thread(artifacts.get,identifier,context)
+            if fetched['status']!='ok':return fetched
+            return action_jobs.submit([{'name':'search_web','arguments':{'action':'expand','research_id':identifier,'research_revision':fetched['artifact']['revision'],'detail':str(arguments.get('detail',''))[:2000]}}],{**context,'requested_research':True},operation_id,goal='Expand research')
+        if arguments.get('action')=='reader':return await asyncio.to_thread(artifacts.reader,identifier,context,str(arguments.get('research_revision','')),arguments.get('offset',0),arguments.get('limit',12000))
+        return await asyncio.to_thread(artifacts.page,identifier,context,str(arguments.get('research_revision','')),arguments.get('offset',0),arguments.get('limit',12000))
     if name=="library_action":
         library=get_library_service();view=arguments.get('view','memories');action=arguments.get('action','list')
         if view=='memories':
@@ -5700,7 +5718,7 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
         logger.exception("Registered Aegis action failed: %s",name)
         result={"status":"failed","reason":"action_unavailable"}
     if memory:await ws_manager.send_to_client_id(client_id,activity(name,arguments,result,**{**refs,"sequence":2}))
-    if name=="search_web":await ws_manager.send_to_client_id(client_id,{"type":"research_status","phase":"completed" if result.get("status")=="completed" else "failed","sources":result.get("results",[])})
+    if name=="search_web":await ws_manager.send_to_client_id(client_id,{"type":"research_status","phase":"completed" if result.get("status")=="completed" else "waiting" if result.get("status") in {"waiting_for_quota","waiting_for_retry","running","queued"} else "failed","sources":result.get("results",[])})
     return result
 
 learning_service=None
@@ -5799,7 +5817,7 @@ async def _notify_job_progress(client_id,event):
     expected=(scope.get('profile_id',''),scope.get('project_id',''),bool(scope.get('guest')))
     if current!=expected:return
     if event.get('state') in {'completed','failed','waiting_for_retry'}:
-        if not scope.get('background') or event.get('state')=='failed':
+        if (not scope.get('background') and not scope.get('requested_research')) or event.get('state')=='failed':
             await asyncio.to_thread(notice_store.enqueue,'job','job:'+str(event.get('job_id')),event.get('state'),event,scope)
     if scope.get('session_id')!=(getattr(live,'session_id',None) or CHAT_SESSIONS.get(client_id,'')):event.pop('notification',None);event.pop('research_id',None)
     await ws_manager.send_to_client_id(client_id,event)
@@ -5943,7 +5961,7 @@ async def _start_gemini_voice(websocket: WebSocket, *, reset_retry: bool = True,
         from astra_ai.core.aegis_ai import CURRENT_OPERATION
         live=state.live_sessions.get(websocket)
         captured=CURRENT_OPERATION.get()
-        ctx={"client_id":client_id,"session_id":getattr(live,"session_id",CHAT_SESSIONS.get(client_id,"")),"turn_id":getattr(live,"_turn_id",""),"user_text":" ".join(getattr(live,"_input_parts",[])),"guest":bool(getattr(live,"guest",False)),"profile_id":getattr(live,"profile_id",""),"project_id":getattr(live,"project_id","")}
+        ctx={"client_id":client_id,"session_id":getattr(live,"session_id",CHAT_SESSIONS.get(client_id,"")),"turn_id":getattr(live,"_turn_id",""),"user_text":" ".join(getattr(live,"_input_parts",[])),"guest":bool(getattr(live,"guest",False)),"profile_id":getattr(live,"profile_id",""),"project_id":getattr(live,"project_id",""),**{k:v for k,v in getattr(live,"_turn_focus",{}).items() if k in {"research_id","thread_id"}}}
         if captured:ctx={**ctx,**captured,"client_id":client_id}
         return await _dispatch_aegis_tool(name,arguments,ctx,str(captured.get("operation_id") or uuid.uuid4().hex) if captured else uuid.uuid4().hex)
 
@@ -5954,7 +5972,7 @@ async def _start_gemini_voice(websocket: WebSocket, *, reset_retry: bool = True,
     session = AegisCore(guest_memory if guest else state.live_memory).live_session(
         api_key=state.gemini_api_key,
         memory_file=guest_memory.transcript_path if guest else state.memory_file,
-        send_json=lambda message: ws_manager.send_to_client(websocket, message),
+        send_json=lambda message: ws_manager.send_to_client(websocket, {**{k:v for k,v in getattr(state.live_sessions.get(websocket),"_turn_focus",{}).items() if k in {"research_id","thread_id"}},**message}),
         send_bytes=lambda payload: ws_manager.send_bytes_to_client(websocket, payload),
         on_failure=hard_failure,
         client_id=client_id,
@@ -5962,6 +5980,10 @@ async def _start_gemini_voice(websocket: WebSocket, *, reset_retry: bool = True,
         status_provider=status_provider,
     )
     session.guest=guest
+    focused=ui_context(client_id).get('snapshot',{})
+    if not guest and focused.get('view')=='research' and focused.get('research_id'):
+        thread=await _research_thread(str(focused['research_id']),{'profile_id':session.profile_id,'project_id':session.project_id})
+        if thread.get('status')=='ok':session.research_focus=thread
     session._speaker_context=("Confirmed enrolled additional speaker; separate memories, no owner context." if speaker_profile else "Unconfirmed guest; no access to owner memories.") if guest else "Main account user context, connected to the existing owner memories and standing rules. Main user is a role, not the person’s name; identity details come from saved memory."
     if guest:session.profile_id=("speaker-"+speaker_profile) if speaker_profile else "guest-"+client_id
     session.session_id=("guest-" if guest else "")+CHAT_SESSIONS.get(client_id,session.session_id)
@@ -6109,6 +6131,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 elif msg_type == "ui_context":
                     changed=set_ui(ws_manager.client_id(websocket),message.get("snapshot",{}))
                     live=state.live_sessions.get(websocket)
+                    if changed and live and not live.guest:
+                        snapshot=message.get('snapshot',{})
+                        identifier=str(snapshot.get('research_id','')) if snapshot.get('view')=='research' else ''
+                        thread=await _research_thread(identifier,{'profile_id':live.profile_id,'project_id':live.project_id}) if identifier else {}
+                        live.research_focus=thread if thread.get('status')=='ok' else {}
+                        await ws_manager.send_to_client(websocket,{'type':'research_focus_ack','research_id':live.research_focus.get('research_id',''),'thread_id':live.research_focus.get('thread_id','')})
                     if changed and live and not live.guest and not live._audio_started and not live._input_parts:
                         if not live.guest:await live.refresh_ui(ui_context(ws_manager.client_id(websocket)))
                 elif msg_type == "live_start":
@@ -6156,6 +6184,9 @@ async def websocket_endpoint(websocket: WebSocket):
                             await ws_manager.send_to_client(websocket,{'type':'live_error','message':'Invalid request identifier.'})
                             continue
                         if source=='search_widget':text='Search in the Search widget for '+str(message.get('display_query') or text)
+                        if str(message.get('research_id') or '') != str((getattr(session,'research_focus',{}) or {}).get('research_id','')):
+                            await ws_manager.send_to_client(websocket,{'type':'live_error','message':'Research focus changed. Your message was not submitted; select the report and retry.'})
+                            continue
                         accepted=await session.send_text(text,request_id=rid)
                         if source=='search_widget':await ws_manager.send_to_client(websocket,{'type':'typed_transcript_status','request_id':rid,'source':source,'status':'accepted' if accepted.get('status') in {'accepted','duplicate'} else 'failed'})
                 elif msg_type == "transcript":
@@ -8320,15 +8351,69 @@ async def research_request(request:Request):
     context=_learning_context(request)
     if context.get('guest'):raise HTTPException(403,'Owner research required')
     body=await request.json()
-    arguments={'query':body.get('query',''),'mode':body.get('mode','detailed'),'subquestions':body.get('subquestions',[])}
+    artifacts,_=get_research_services()
+    query=body.get('query','');mode=body.get('mode','detailed')
     operation_id=str(body.get('operation_id') or uuid.uuid4().hex)
-    result=action_jobs.submit([{'name':'search_web','arguments':arguments}],{**context,'requested_research':True},operation_id,goal=arguments['query'])
-    return result
+    reserved=await asyncio.to_thread(artifacts.reserve,query,mode,context,operation_id)
+    if reserved['status']!='ok':return JSONResponse(reserved,status_code=400)
+    result=action_jobs.submit([{'name':'search_web','arguments':{'research_id':reserved['id'],'mode':mode,'subquestions':body.get('subquestions',[])}}],{**context,'requested_research':True},operation_id,goal=reserved['display_title'])
+    if result.get('status') not in {'accepted','queued','duplicate','completed'}:
+        await asyncio.to_thread(artifacts.request_state,reserved['id'],context,phase='failed',waiting_reason=result.get('reason','job_not_admitted'))
+    else:await asyncio.to_thread(artifacts.request_state,reserved['id'],context,job_id=result.get('job_id',''))
+    return {**result,'research_id':reserved['id'],'thread_id':reserved['thread_id']}
+
+@app.get('/api/research/{identifier}/reader')
+async def research_reader(identifier:str,request:Request,revision:str='',cursor:int=0):
+    artifacts,_=get_research_services();return await asyncio.to_thread(artifacts.reader,identifier,_learning_context(request),revision,cursor)
+
+@app.get('/api/research/{identifier}/conversation')
+async def research_conversation(identifier:str,request:Request):
+    return await _research_thread(identifier,_learning_context(request))
+
+async def _research_thread(identifier,context):
+    artifacts,_=get_research_services();found=await asyncio.to_thread(artifacts.get,identifier,context)
+    if found['status']!='ok':return found
+    item=found['artifact'];metadata=await asyncio.to_thread(artifacts.request_state,identifier,context)
+    thread_id=metadata.get('thread_id','research-'+identifier)
+    with artifacts.lock:
+        from astra_ai.memory.shared_memory import read as read_research_store
+        linked=read_research_store(artifacts.path,{}).get('thread_links',{}).get(identifier,[])
+    def messages():
+        from astra_ai.memory.category_policy import matches_scope
+        with state.live_memory._lock:
+            rows=[r for r in state.live_memory._messages() if matches_scope(r,context.get('profile_id',''),context.get('project_id','')) and (r.get('session_id')==thread_id or metadata.get('origin_turn_id') and r.get('session_id')==metadata.get('origin_session_id') and r.get('turn_id')==metadata['origin_turn_id'] or {'session_id':r.get('session_id'),'turn_id':r.get('turn_id')} in linked)]
+        # Reference the initiating turn; do not append it or learn it again.
+        if metadata.get('origin_text') and not any(r.get('role')=='user' and r.get('turn_id')==metadata.get('origin_turn_id') for r in rows):
+            rows.insert(0,{'id':'origin:'+identifier,'role':'user','content':metadata['origin_text'],'timestamp':metadata.get('created'),'origin_session_id':metadata.get('origin_session_id'),'attribution':'initiating_request'})
+        return rows[-100:]
+    rows=await asyncio.to_thread(messages)
+    return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'summary':item['summary'][:1600]}
+
+@app.post('/api/research/{identifier}/expand')
+async def research_expand(identifier:str,request:Request):
+    context=_learning_context(request);body=await request.json();artifacts,_=get_research_services()
+    revision=str(body.get('research_revision',''));fetched=await asyncio.to_thread(artifacts.get,identifier,context,revision)
+    if not revision or fetched['status']!='ok':raise HTTPException(409,'Report changed or unavailable')
+    if fetched['artifact']['completeness']=='pending':raise HTTPException(409,'The initial synthesis is still pending')
+    return action_jobs.submit([{'name':'search_web','arguments':{'action':'expand','research_id':identifier,'research_revision':revision,'detail':str(body.get('detail',''))[:2000]}}],{**context,'requested_research':True},str(body.get('operation_id') or uuid.uuid4().hex),goal='Expand '+fetched['artifact']['query'][:90])
+
+@app.get('/api/research/{identifier}/images/{image_id}')
+async def research_image(identifier:str,image_id:str,request:Request):
+    artifacts,_=get_research_services();context=_learning_context(request)
+    try:body,mime=await asyncio.to_thread(artifacts.image_bytes,identifier,context,image_id)
+    except Exception:raise HTTPException(422,'Source image unavailable')
+    if _learning_context(request)!=context:raise HTTPException(403,'Research session changed')
+    from fastapi.responses import Response
+    return Response(body,media_type=mime,headers={'X-Content-Type-Options':'nosniff','Cache-Control':'private, max-age=300'})
 
 @app.get('/api/research/{identifier}/document')
 async def research_document(identifier:str,request:Request,revision:str=''):
     context=_learning_context(request);artifacts,_=get_research_services()
-    result=await asyncio.to_thread(artifacts.document,identifier,context,revision)
+    metadata=await asyncio.to_thread(artifacts.request_state,identifier,context)
+    if metadata.get('job_id') and metadata.get('phase') not in {'complete','failed'}:
+        job=action_jobs.list(metadata['job_id'],context).get('job',{})
+        if job.get('state') in {'failed','canceled','cancelled'}:await asyncio.to_thread(artifacts.request_state,identifier,context,phase='failed',waiting_reason='research_'+job['state'])
+    result=await asyncio.to_thread(artifacts.document,identifier,context,revision,True)
     if result['status']=='not_found':raise HTTPException(404,'Research unavailable')
     return result
 

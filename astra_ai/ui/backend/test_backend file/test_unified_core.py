@@ -347,3 +347,41 @@ def test_completed_playback_recovery_suppresses_provider_reply_to_empty_activity
         assert audio==[] and len(list(session.memory_manager._messages()))==before
         assert not any(e.get('text')=='Unrelated reply to noise' for e in events)
     asyncio.run(scenario())
+
+
+def test_research_reply_pins_thread_before_report_switch(tmp_path):
+    async def scenario():
+        sent=[];session=make_session(tmp_path,sent)
+        session.research_focus={'research_id':'first','thread_id':'research-first','messages':[]}
+        await session._pin_research()
+        session._input_parts=['First report follow-up'];session._output_parts=['First report answer']
+        frozen=session._detach_turn()
+        session.research_focus={'research_id':'second','thread_id':'research-second','messages':[]}
+        await session._pin_research()
+        session._speech_active=True
+        await session._complete_turn(frozen)
+        rows=list(session.memory_manager._messages())
+        assert {r['session_id'] for r in rows}=={'research-first'}
+        assert next(e for e in sent if e['type']=='live_generation_complete')['research_id']=='first'
+        assert session._turn_focus['research_id']=='second'
+    asyncio.run(scenario())
+
+
+def test_shared_ui_context_preserves_research_focus_without_inventing_views():
+    from astra_ai.core.aegis_live_context import sanitize_ui
+    snapshot=sanitize_ui({'view':'research','research_id':'report','research_revision':'revision','thread_id':'research-report','revision':5})
+    assert snapshot['view']=='research' and snapshot['research_id']=='report' and snapshot['thread_id']=='research-report'
+    assert sanitize_ui({'view':'arbitrary'})['view']=='dashboard'
+
+
+def test_leaving_research_restores_main_context_without_restarting_live(tmp_path):
+    async def scenario():
+        session=make_session(tmp_path,[])
+        session.memory_manager.append_turn('Main topic','Main answer',session.session_id,'main-turn')
+        session.research_focus={'research_id':'report','thread_id':'research-report','messages':[]}
+        await session._pin_research();session.working.begin('Report question','research-turn')
+        session.research_focus={};await session._pin_research()
+        assert not session._turn_focus
+        assert session.working.snapshot()['recent_exchanges'][-1]['user']=='Main topic'
+        assert not session.working.latest_request
+    asyncio.run(scenario())

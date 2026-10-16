@@ -232,3 +232,6 @@ astra_ai/nova-memory-server/src/storage/backups
 **/recall.sqlite3*
 **/semantic.sqlite3*
 **/memory-runtime/
+
+# Scoped research evidence, checkpoints and pre-migration backups are private runtime data.
+astra_ai/memory/research_artifacts/
