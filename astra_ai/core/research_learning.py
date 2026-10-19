@@ -261,17 +261,19 @@ class ResearchArtifacts:
         backup=self.path.with_suffix('.before-reader-threads.bak')
         if self.path.exists() and not backup.exists():shutil.copy2(self.path,backup)
 
-    def reserve(self, query, mode, context, operation_id):
+    def reserve(self, query, mode, context, operation_id, kind="research", source_research_id=""):
         if not isinstance(query,str) or not 1<=len(query.strip())<=12000 or mode not in {'quick','detailed'}:return {'status':'rejected','reason':'Research brief must contain 1–12,000 characters.'}
         if safe(query)!=query:return {'status':'rejected','reason':'credentials_not_allowed_in_search'}
+        if kind not in {'research','documentary','chat'}:return {'status':'rejected','reason':'invalid_entry_kind'}
+        if source_research_id and self.get(source_research_id,context)['status']!='ok':return {'status':'not_found'}
         identifier=stable('research-artifact',scope(context),operation_id)
         with self.lock:
             data=read(self.path,{'artifacts':{},'imports':{}});requests=data.setdefault('requests',{})
             old=requests.get(identifier)
-            if old and (old['query'],old['mode'])!=(query,mode):return {'status':'conflict','reason':'operation_id_reused'}
+            if old and (old['query'],old['mode'],old.get('kind','research'),old.get('source_research_id',''))!=(query,mode,kind,source_research_id):return {'status':'conflict','reason':'operation_id_reused'}
             if not old:
                 self.backup_metadata()
-                requests[identifier]={'id':identifier,'query':query,'mode':mode,'operation_id':operation_id,'display_title':display_title(query),'thread_id':'research-'+identifier,'phase':'queued','created':now(),'created_epoch':time.time(),'origin_session_id':context.get('session_id',''),'origin_turn_id':context.get('turn_id',''),'origin_text':context.get('user_text') or query,**{k:context.get(k,False if k=='guest' else '') for k in ('profile_id','project_id','guest','session_id')}}
+                requests[identifier]={'kind':kind,'source_research_id':source_research_id,'id':identifier,'query':query,'mode':mode,'operation_id':operation_id,'display_title':display_title(query),'thread_id':'research-'+identifier,'phase':'queued','created':now(),'created_epoch':time.time(),'origin_session_id':context.get('session_id',''),'origin_turn_id':context.get('turn_id',''),'origin_text':context.get('user_text') or query,**{k:context.get(k,False if k=='guest' else '') for k in ('profile_id','project_id','guest','session_id')}}
                 atomic(self.path,data)
             return {'status':'ok',**copy.deepcopy(requests[identifier])}
 
@@ -336,7 +338,7 @@ class ResearchArtifacts:
 
     def link_turn(self, identifier, context):
         """Reference an explicitly discussed report without copying/learning a turn twice."""
-        if not context.get('turn_id') or not context.get('session_id') or not re.search(r'\b(research|report|previous|earlier|investigation)\b',context.get('user_text',''),re.I):return
+        if not context.get('turn_id') or not context.get('session_id') or not (context.get('referenced_research_id')==identifier or re.search(r'\b(research|report|previous|earlier|investigation)\b',context.get('user_text',''),re.I)):return
         with self.lock:
             if self.get(identifier,context)['status']!='ok':return
             data=read(self.path,{});links=data.setdefault('thread_links',{}).setdefault(identifier,[])
@@ -443,13 +445,13 @@ class ResearchArtifacts:
                 if old['query']!=query or old['mode']!=mode:raise ValueError('operation_id_reused')
                 return copy.deepcopy(old)
             metadata=data.get('requests',{}).get(item['id'],{})
-            item.update({k:metadata[k] for k in ('display_title','thread_id','phase') if k in metadata})
+            item.update({k:metadata[k] for k in ('display_title','thread_id','phase','kind','source_research_id') if k in metadata})
             data['artifacts'][item['id']]=item;atomic(self.path, data)
         return copy.deepcopy(item)
 
     @staticmethod
     def brief(item):
-        return {'status': 'waiting_for_quota' if item.get('completeness')=='pending' else 'failed' if item.get('completeness')=='failed' else 'completed' if item['sources'] else 'failed', 'research_id': item['id'],
+        return {'status': 'waiting_for_quota' if item.get('completeness')=='pending' else 'failed' if item.get('completeness')=='failed' else 'completed' if item['sources'] or item.get('kind') in {'documentary','chat'} else 'failed', 'kind':item.get('kind','research'), 'source_research_id':item.get('source_research_id',''), 'research_id': item['id'],
                 'research_revision': item['revision'], 'query': item['query'], 'summary': item['summary'],
                 'results': [{k:r[k] for k in ('title','url','retrieved_at')} for r in item['sources']],
                 'completeness': item['completeness'], 'failures': item['failures'],
@@ -524,7 +526,10 @@ class ResearchArtifacts:
         if extensions:document['evidence_collection']=False
         metadata=self.request_state(identifier,context)
         document['extension_activity']=self.extension_state(identifier,context)
+        document['document_revisions']=metadata.get('document_revisions',[])
         document.update(display_title=metadata.get('display_title') or display_title(item['query']),thread_id=metadata.get('thread_id','research-'+identifier),phase=metadata.get('phase','complete'),processing_seconds=metadata.get('processing_seconds'),active_since=metadata.get('active_since'),next_attempt=metadata.get('next_attempt'),waiting_reason=metadata.get('waiting_reason'),image_items=[{k:v for k,v in image.items() if k!='url'} for image in self.images(identifier,context)])
+        from .research_documents import DocumentFiles
+        document.update(DocumentFiles(self).presentation(identifier,context))
         if bounded:
             document.update(self.reader(identifier,context,revision))
             document['sources']=[{**r,'content':evidence_excerpt(r)} for r in sources]

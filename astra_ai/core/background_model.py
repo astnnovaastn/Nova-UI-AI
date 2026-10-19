@@ -28,7 +28,7 @@ class BackgroundModel:
             return safe(result['summary'])[:4000]
         except ModelUnavailable:return ''
 
-    async def report(self,query,sources):
+    async def report(self,query,sources,kind='research'):
         """One budgeted synthesis; original excerpts remain in the artifact."""
         import asyncio
         def passages(source):
@@ -45,7 +45,8 @@ class BackgroundModel:
             return '\n\n'.join(p for _,p in sorted(picked)) or text[:limit]
         evidence=[{'id':'S'+str(i+1),'title':s['title'],'url':s['url'],'retrieved_at':s.get('retrieved_at'),'origin_research_id':s.get('origin_research_id'),'historical':s.get('historical',False),'content':passages(s)} for i,s in enumerate(sources)]
         schema={'type':'object','additionalProperties':False,'properties':{'report':{'type':'string'}},'required':['report']}
-        result=await asyncio.to_thread(self.structured,'Write a clear, substantial, source-grounded research report in Markdown. Answer the actual question. Begin with a concise subject headline, normally 8–12 words and at most 90 characters; never repeat the research request or its instructions as the headline. Target 12,000–18,000 characters when evidence supports it, with a ceiling of 20,000 characters at a complete section boundary. Shorter is better than weak or repeated evidence. Preserve dates and originating report references of reused evidence; historical evidence is not a current claim. Compare independent sources, check coverage of the requested subject, and identify gaps. Use useful headings, an overview, detailed findings, and limitations. Cite factual paragraphs using [S1], [S2], etc from supplied evidence. Never invent citations, URLs, dates or facts. Distinguish source claims from analysis; preserve code and math when relevant. Use plain professional prose without decorative emojis. Do not concatenate raw webpages or pad length. Do not instruct the assistant to save anything in Notes.',{'query':query,'evidence':evidence},schema,6000)
+        purpose=('Write an illustrated written documentary document, not a film script. Default to approximately 2,000–3,000 words when evidence supports it; honour the requested length. Plan a coherent introduction, substantive chapters, conclusion, limitations and references. Use a clear narrative supported by the supplied evidence. Do not invent illustrations, image descriptions or quotations. ' if kind=='documentary' else 'Write a clear, substantial, source-grounded research report. Target 12,000–18,000 characters when evidence supports it, with a ceiling of 20,000 at a complete section boundary. ')
+        result=await asyncio.to_thread(self.structured,purpose+'Use Markdown. Answer the actual question. Begin with a concise subject headline, normally 8–12 words and at most 90 characters; never repeat the request or its instructions as the headline. Shorter is better than weak or repeated evidence. Preserve dates and originating report references of reused evidence; historical evidence is not a current claim. Compare independent sources, check coverage, and identify gaps. Cite factual paragraphs using [S1], [S2], etc from supplied evidence. Never invent citations, URLs, dates or facts. Distinguish source claims from analysis; preserve code and math when relevant. Use plain professional prose without decorative emojis. Do not concatenate raw webpages or pad length. Do not instruct the assistant to save anything in Notes.',{'query':query,'evidence':evidence},schema,6000)
         report=safe(result['report'])
         citations=re.findall(r'\[S(\d+)\]',report) if report else []
         if not citations or any(int(i)<1 or int(i)>len(sources) for i in citations):raise ModelUnavailable('Unverifiable report citations')

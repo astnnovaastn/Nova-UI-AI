@@ -2310,6 +2310,15 @@ async def _aegis_search_web(arguments):
     context=CURRENT_OPERATION.get() or {}
     if not context.get('client_id') and not context.get('background'):return {'status':'rejected','reason':'connected_search_context_required'}
     artifacts,service=get_research_services()
+    if str(arguments.get('action','')).startswith('document_'):
+        from astra_ai.ui.backend.document_api import run_document_job
+        result=await run_document_job(artifacts,service,background_model,learning_service.cpu,arguments,context)
+        if context.get('client_id'):
+            await ws_manager.send_to_client_id(context['client_id'],{'type':'research_refresh','research_id':arguments.get('research_id')})
+        if result.get('status')=='completed' and arguments.get('action')=='document_compose':
+            notice_id=await asyncio.to_thread(notice_store.enqueue,'research',result['research_id'],result['research_revision'],{'title':'Document ready: '+result['display_title']},context)
+            await ws_manager.send_to_client_id(context.get('client_id',''),{'type':'research_ready','notice_id':notice_id,'research_id':result['research_id'],'research_revision':result['research_revision'],'query':result['display_title']})
+        return result
     if arguments.get('action')=='media':
         return await service.enrich_media(str(arguments.get('research_id','')),context,str(arguments.get('research_revision','')))
     result=await service.search(arguments,context,context.get('operation_id',''))
@@ -5676,7 +5685,11 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
     if name=='research_artifact_action':
         artifacts,service=get_research_services()
         identifier=str(arguments.get('research_id') or context.get('research_id',''))
-        await asyncio.to_thread(artifacts.link_turn,identifier,context)
+        await asyncio.to_thread(artifacts.link_turn,identifier,{**context,'referenced_research_id':identifier})
+        action=arguments.get('action')
+        if action in {'create_documentary','read_attachment','preview_document','apply_document','preview_pdf'}:
+            from astra_ai.ui.backend.document_api import document_tool
+            return await document_tool(artifacts,context,arguments,operation_id,action_jobs)
         if arguments.get('action') in {'expand','continue','more_media','more_sources'}:
             action=arguments.get('action');view='media' if action=='more_media' else 'sources' if action=='more_sources' else ''
             return await continue_research(identifier,context,operation_id,view=view,detail=str(arguments.get('detail') or context.get('user_text',''))[:2000])
@@ -8394,6 +8407,9 @@ async def research_request(request:Request):
     artifacts,_=get_research_services()
     query=body.get('query','');mode=body.get('mode','detailed')
     operation_id=str(body.get('operation_id') or uuid.uuid4().hex)
+    if body.get('kind') in {'documentary','chat'}:
+        from astra_ai.core.research_documents import create_entry
+        return await asyncio.to_thread(create_entry,artifacts,context,body['kind'],query,operation_id,str(body.get('source_research_id','')))
     reserved=await asyncio.to_thread(artifacts.reserve,query,mode,context,operation_id)
     if reserved['status']!='ok':return JSONResponse(reserved,status_code=400)
     result=action_jobs.submit([{'name':'search_web','arguments':{'research_id':reserved['id'],'mode':mode,'subquestions':body.get('subquestions',[])}}],{**context,'requested_research':True},operation_id,goal=reserved['display_title'])
@@ -8450,7 +8466,10 @@ async def _research_thread(identifier,context):
     document=await asyncio.to_thread(artifacts.reader,identifier,context,item['revision'],0,8000)
     sources=await asyncio.to_thread(artifacts.source_catalog,item)
     from astra_ai.core.research_learning import evidence_excerpt
-    return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'kind':item.get('kind','research'),'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'summary':document.get('report','')[:7000] or item['summary'][:1600],'evidence':[{'id':'S'+str(i+1),'title':r['title'],'excerpt':evidence_excerpt(r,500)} for i,r in enumerate(sources[:6])]}
+    from astra_ai.core.research_documents import DocumentFiles
+    files=await asyncio.to_thread(DocumentFiles(artifacts).listing,identifier,context)
+    draft=artifacts.snapshot().get('drafts',{}).get(identifier,{})
+    return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'kind':item.get('kind','research'),'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'draft_revision':draft.get('revision',''),'attachments':[{k:f.get(k) for k in ('id','name','mime','page_count','status','revision','pdf_revision','needs_ocr')} for f in files],'summary':document.get('report','')[:4000] or item['summary'][:1600],'evidence':[{'id':'S'+str(i+1),'title':r['title'][:180],'excerpt':evidence_excerpt(r,400),'attachment_id':r.get('attachment_id'),'page':r.get('page')} for i,r in enumerate(sources[:6])]}
 
 async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     snapshot=snapshot if snapshot is not None else ui_context(client_id).get('snapshot',{})
@@ -8467,7 +8486,7 @@ async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     artifacts,_=get_research_services()
     found=await asyncio.to_thread(artifacts.get,identifier,context)
     if found.get('status')!='ok':return {}
-    item=found['artifact'];key=(identifier,item['revision'],context['profile_id'],context['project_id'],snapshot.get('selection_revision'),snapshot.get('reader_end'),snapshot.get('research_tab'))
+    item=found['artifact'];key=(identifier,item['revision'],artifacts._snapshot_key,context['profile_id'],context['project_id'],snapshot.get('selection_revision'),snapshot.get('reader_end'),snapshot.get('research_tab'))
     cached=getattr(live,'_research_context_cache',None) if live else None
     if hydrate and cached and cached[0]==key and time.monotonic()-cached[1]<20:return cached[2]
     focus=await _research_thread(identifier,context) if hydrate else {'research_id':identifier,'research_revision':item['revision'],'thread_id':item.get('thread_id','research-'+identifier)}
@@ -8477,7 +8496,7 @@ async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     if not hydrate:return focus
     cursor=max(0,int(snapshot.get('reader_end') or 0)-6)
     visible=await asyncio.to_thread(artifacts.reader,identifier,context,focus['research_revision'],cursor,4000)
-    focus['visible_section']=visible.get('report','')[:4000]
+    focus['visible_section']=visible.get('report','')[:2400]
     if live:live._research_context_cache=(key,time.monotonic(),focus)
     return focus
 
@@ -8570,6 +8589,9 @@ async def research_detail(identifier:str,request:Request,revision:str='',offset:
     if _learning_context(request)!=context:raise HTTPException(403,'Research session changed')
     if result['status']=='not_found':raise HTTPException(404,'Research unavailable')
     return result
+
+from astra_ai.ui.backend.document_api import install as install_documents
+install_documents(app,get_research_services,_learning_context,lambda:action_jobs)
 
 
 

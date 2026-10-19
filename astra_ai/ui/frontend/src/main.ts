@@ -1062,8 +1062,7 @@ initMemoryWorkspace({getAnalyser: () => audioPlayer.getAnalyser()});
 void import('./components/Research/ResearchWorkspace').then(m=>m.default());
 
 // Component-owned, allowlisted UI state; no credential or document scraping.
-let uiTimer:ReturnType<typeof setTimeout>|null=null;
-window.addEventListener('nova-ui-context',()=>{if(uiTimer)clearTimeout(uiTimer);socket.send({type:'ui_context',snapshot:uiSnapshot()});});
+window.addEventListener('nova-ui-context',()=>{socket.send({type:'ui_context',snapshot:uiSnapshot()});});
 window.addEventListener('orbWidgetStateChange',(event:Event)=>{const d=(event as CustomEvent).detail||{};updateUiContext({widgets:Object.entries(d).filter(([,v])=>v===true).map(([k])=>k).slice(0,12)});});
 window.addEventListener('nova-chat-microphone',()=>btnMute.click());
 let memoryChatBusy=false;

@@ -29,6 +29,7 @@ import {
   registerMediaControls,
 } from "../../aegisWidgetProtocol";
 import "./ResearchWorkspace.css";
+import {AttachmentAssets,AttachmentReader,Attachment,AttachmentDestination,attachmentHeaders,documentApi} from './DocumentAttachments';
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 const clean = (html: string) =>
   DOMPurify.sanitize(html, {
@@ -93,6 +94,9 @@ async function api(path: string, options: RequestInit = {}) {
   return d;
 }
 type Source = {
+  attachment_id?:string;
+  origin_research_id?:string;
+  page?:number;
   id: string;
   title: string;
   url: string;
@@ -105,6 +109,10 @@ type Source = {
   published_at?: string;
 };
 type Report = {
+  kind?:'research'|'documentary'|'chat';
+  attachments?:Attachment[];
+  attachment_images?:ResearchImage[];
+  document_revisions?:{id:string;status:string}[];
   linked_sources?: Source[];
   media?: Source[];
   media_revision?: string;
@@ -186,6 +194,7 @@ function openResearch(id?: string) {
 }
 function Icon({ name }: { name: string }) {
   const paths: Record<string, string> = {
+    mic: "M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0ZM5 10v2a7 7 0 0 0 14 0v-2M12 19v3",
     more: "M5 12h.01M12 12h.01M19 12h.01",
     trash: "M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7",
     arrow: "M12 19V5m-6 6 6-6 6 6",
@@ -553,6 +562,7 @@ function DraftEditor({
   );
 }
 function publication(source: Source) {
+  if(source.attachment_id)return source.title.split(" · Page")[0];
   try {
     return new URL(source.url).hostname.replace(/^www\./, "");
   } catch {
@@ -715,6 +725,7 @@ function SourceChip({
                   />
                 )}
                 <strong>{s.title}</strong>
+                {s.attachment_id&&<small>Page {s.page||1} · View in document</small>}
                 {videoId(s.url) && <small>Video description · YouTube</small>}
                 <span>{sourceExcerpt(s).slice(0, 240)}</span>
                 {videoId(s.url) && videoTimestamp(s.url) !== null && (
@@ -894,6 +905,7 @@ function citationParts(
 }
 // Transform parsed text nodes only: citations cannot modify code, HTML attributes or URLs.
 type ResearchImage = {
+  url?:string;
   id: string;
   caption: string;
   source_id: string;
@@ -913,7 +925,7 @@ function EvidenceImage({
     let active = true,
       blob = "";
     const controller = new AbortController();
-    fetch("/api/research/" + reportId + "/images/" + image.id, {
+    fetch(image.url?.startsWith('/api/research/'+reportId+'/attachments/')?image.url:"/api/research/" + reportId + "/images/" + image.id, {
       headers: headers(),
       signal: controller.signal,
     })
@@ -937,7 +949,7 @@ function EvidenceImage({
   return (
     <figure className="research-evidence-image">
       <button onClick={onOpen} aria-label={"Enlarge image: " + image.caption}>
-        <img src={url} alt={image.caption} />
+        <img src={url} alt={image.caption} onError={()=>setUrl('')} />
       </button>
       <figcaption>
         {image.caption}
@@ -1125,14 +1137,14 @@ function ReportContent({
       ),
     );
     return related ? (
-      <React.Fragment key={key}>
+      <div className="research-illustrated-block" key={key}>
         <EvidenceImage
           image={related}
           reportId={reportId}
           onOpen={() => onImage?.(related)}
         />
         {content}
-      </React.Fragment>
+      </div>
     ) : (
       content
     );
@@ -1774,6 +1786,8 @@ function Workspace() {
     [expandedVideo, setExpandedVideo] = useState(""),
     [extraMedia, setExtraMedia] = useState<Source[]>([]);
   const scopeRef = useRef("");
+  const [entryKind,setEntryKind]=useState<'research'|'documentary'|'chat'>('research'),[attachment,setAttachment]=useState<AttachmentDestination|null>(null),[uploading,setUploading]=useState(false),[documentEdit,setDocumentEdit]=useState<any>(null),[editorGeneration,setEditorGeneration]=useState(0);
+  const uploadInput=useRef<HTMLInputElement>(null),queryDrafts=useRef<Record<string,string>>({});
   const originFocus = useRef<HTMLElement | null>(null),
     chatReader = useRef<HTMLDivElement>(null),
     chatNearEnd = useRef(true),
@@ -1913,7 +1927,7 @@ function Workspace() {
         d.next_cursor = added.next_cursor;
         d.reader_end = added.reader_end;
       }
-      d.draft = old.draft;
+      if(document.querySelector('[data-draft-dirty="true"]'))d.draft = old.draft;
     }
     setReport((current) => (current?.research_id === id ? d : current));
     reportCache.current.set(chat.clientId + ":" + id, {
@@ -2169,7 +2183,7 @@ function Workspace() {
     setError("");
     setSelectionLoading(id);setFailedSelection('');
     if(report)sessionStorage.setItem('nova-research-view:'+client+':'+report.research_id,JSON.stringify({scroll:reader.current?.scrollTop||0,message}));
-    lastSelection.current=id;setPreview(null);setImageView(null);setMessage('');
+    lastSelection.current=id;setPreview(null);setImageView(null);setAttachment(null);setDocumentEdit(null);setEditorGeneration(0);setMessage('');
     const cached=reportCache.current.get(client+':'+id);
     setReport(cached&&Date.now()-cached.at<30000?cached.report:null);
     updateUiContext({view:'research',research_id:id,research_revision:cached?.report.research_revision||'',selected_id:id,selected_kind:'research',title:cached?.report.display_title||'Opening research',reader_cursor:null,reader_end:0});
@@ -2186,6 +2200,7 @@ function Workspace() {
         return;
       setImageView(null);
       setReport(d);
+      setEntryKind(d.kind||'research');
       void threadLoad
         .then((thread) => {
           if (
@@ -2396,6 +2411,7 @@ function Workspace() {
   }
   function closePreview() {
     setPreview(null);
+    setAttachment(null);setDocumentEdit(null);
     requestAnimationFrame(() =>
       originFocus.current?.focus({ preventScroll: true }),
     );
@@ -2478,6 +2494,13 @@ function Workspace() {
     ...extraMedia,
   ]);
   function openSource(source: Source) {
+    if(source.attachment_id&&report){
+      const reportId=report.research_id,originId=source.origin_research_id||reportId;
+      originFocus.current=document.activeElement as HTMLElement;
+      const show=(files:Attachment[])=>{const file=files.find(f=>f.id===source.attachment_id);if(lastSelection.current!==reportId)return;if(file)setAttachment({file,page:source.page||1,excerpt:source.content,originId});else setError('The original attachment is unavailable.')};
+      if(originId===reportId)show(report.attachments||[]);else void documentApi('/'+originId+'/attachments').then(d=>show(d.attachments||[])).catch(e=>setError(e.message));
+      return;
+    }
     if (videoId(source.url)) {
       const timestamp = videoTimestamp(source.url);
       if (timestamp !== null)
@@ -2521,6 +2544,12 @@ function Workspace() {
     setBusy(true);
     setError("");
     try {
+      if(entryKind==='documentary'){
+        let identifier=report?.kind==='documentary'&&report.phase==='draft'?report.research_id:'';
+        if(!identifier){const entry=await api('',{method:'POST',body:JSON.stringify({kind:'documentary',query,operation_id:crypto.randomUUID()})});identifier=entry.research_id;}
+        const result=await api('/'+identifier+'/compose',{method:'POST',body:JSON.stringify({query})});
+        cue('notification','document-submitted:'+result.job_id);setQuery('');reportCache.current.delete(chat.clientId+':'+identifier);await select(identifier);void refresh();return;
+      }
       const d = await api("", {
         method: "POST",
         body: JSON.stringify({
@@ -2544,6 +2573,34 @@ function Workspace() {
     } finally {
       setBusy(false);
     }
+  }
+  async function newEntry(kind:'research'|'documentary'|'chat',sourceId=''){
+    if(report)sessionStorage.setItem('nova-research-view:'+chat.clientId+':'+report.research_id,JSON.stringify({message,scroll:reader.current?.scrollTop||0}));
+    queryDrafts.current[entryKind]=query;setQuery(queryDrafts.current[kind]||'');setError('');
+    if(kind!=='research'){
+      try{const d=await api('',{method:'POST',body:JSON.stringify({kind,source_research_id:sourceId,query:sourceId?'An illustrated written documentary based on '+(report?.display_title||'this research'):kind==='chat'?'New chat':'New documentary',operation_id:crypto.randomUUID()})});await select(d.research_id);void refresh();}catch(e:any){setError(e.message)}return;
+    }
+    ++loadEpoch.current;setReport(null);setPreview(null);setAttachment(null);setDocumentEdit(null);setEditorGeneration(0);setMessage('');setEntryKind(kind);setSelectionLoading('');setFailedSelection('');lastSelection.current='';sessionStorage.removeItem('nova-selected-research');updateUiContext({view:'research',research_id:'',research_revision:'',thread_id:''});
+  }
+  async function uploadFiles(list:FileList|null){
+    if(!list?.length)return;const selected=Array.from(list);setUploading(true);setError('');
+    try{
+      if(selected.length>5||selected.some(f=>f.size>25*1024*1024))throw Error('Choose up to five files, each at most 25 MB.');
+      let identifier=report?.research_id;
+      if(!identifier){const created=await api('',{method:'POST',body:JSON.stringify({kind:'documentary',query:'New documentary',operation_id:crypto.randomUUID()})});identifier=created.research_id;}
+      for(const file of selected){const response=await fetch('/api/research/'+identifier+'/attachments',{method:'POST',headers:{...attachmentHeaders(),'Content-Type':'application/octet-stream','X-File-Name':encodeURIComponent(file.name)},body:file});const d=await response.json();if(!response.ok||!['queued','duplicate','completed'].includes(d.status))throw Error(d.detail||d.reason||'File could not be attached.');}
+      reportCache.current.delete(chat.clientId+':'+identifier);await select(identifier!);setTab('assets');void refresh();
+    }catch(e:any){setError(e.message)}finally{setUploading(false);if(uploadInput.current)uploadInput.current.value='';}
+  }
+  function entryMenu(){return (<details className="research-new-menu"><summary aria-label="New entry or attach files" title="New entry or attach files"><Icon name="plus"/></summary><div>{(['chat','research','documentary'] as const).map(kind=><button key={kind} type="button" onClick={e=>{e.currentTarget.closest('details')?.removeAttribute('open');void newEntry(kind)}}>New {kind}</button>)}{report&&report.kind==='research'&&<button type="button" onClick={()=>void newEntry('documentary',report.research_id)}>Turn into documentary</button>}<button type="button" disabled={uploading} onClick={e=>{e.currentTarget.closest('details')?.removeAttribute('open');uploadInput.current?.click()}}>{uploading?'Attaching…':'Attach files'}</button></div></details>);}
+  function sendFollowup(){
+    if(!report||!message.trim()||chat.textBusy)return;const id=crypto.randomUUID();pendingMessage.current={id,reportId:report.research_id,text:message};requestConversation(message,id);
+  }
+  async function applyDocumentEdit(){
+    if(!report||!documentEdit)return;if(document.querySelector('[data-draft-dirty="true"]')){setError("Save the current draft before applying this preview.");return;}try{const d=await api('/'+report.research_id+'/document-edits/'+(documentEdit.edit_id||documentEdit.id)+'/apply',{method:'POST',body:'{}'});setReport(old=>old?{...old,draft:d.draft}:old);setDocumentEdit(null);setEditorGeneration(n=>n+1);setTab('edit');setEditOpened(true);}catch(e:any){setError(e.message)}
+  }
+  async function previewCopy(text:string){
+    if(!report)return;try{const d=await api('/'+report.research_id+'/document-edits',{method:'POST',body:JSON.stringify({markdown:text,draft_revision:report.draft?.revision||''})});setDocumentEdit(d);setAttachment(null);}catch(e:any){setError(e.message)}
   }
   async function download(format: string) {
     if (!report) return;
@@ -2616,7 +2673,7 @@ function Workspace() {
             <div className="research-history-item" key={item.research_id}>
               <button
                 className={
-                  report?.research_id === item.research_id
+                  (selectionLoading||report?.research_id) === item.research_id
                     ? "research-history-row selected"
                     : "research-history-row"
                 }
@@ -2635,7 +2692,7 @@ function Workspace() {
                 <strong>{item.query}</strong>
                 <small>
                   {new Date(item.retrieved_at).toLocaleDateString()} ·{" "}
-                  {item.completeness}
+                  {item.phase==="draft"?"draft":item.kind==="chat"?"chat":item.kind==="documentary"?"documentary · "+item.completeness:item.completeness}
                 </small>
               </button>
               <details className="research-history-menu">
@@ -2722,19 +2779,19 @@ function Workspace() {
         <main className="research-document">
           <header className="research-document-tools">
             <nav aria-label="Report views">
-              {["reader", "edit", "sources", "media"].map((v) => (
+              {(report?.kind==="chat"?[]:report?.kind==="documentary"?["reader","edit","sources","assets"]:["reader", "edit", "sources", "media",...((report?.attachments?.length||0)>0?["assets"]:[])]).map((v) => (
                 <button
                   key={v}
                   aria-pressed={tab === v}
                   disabled={
                     v === "edit" &&
                     (!report ||
-                      report.completeness === "pending" ||
+                      (report.completeness === "pending" && report.phase!=="draft") ||
                       report.phase === "failed")
                   }
                   onClick={() => setTab(v)}
                 >
-                  {v[0].toUpperCase() + v.slice(1)}
+                  {v==="reader"&&report?.kind==="documentary"?"Document":v[0].toUpperCase() + v.slice(1)}
                 </button>
               ))}
             </nav>
@@ -2746,7 +2803,7 @@ function Workspace() {
                     <Icon name="download" /> Download
                   </summary>
                   <small className="research-export-label">
-                    {tab === "edit" ? "Saved draft" : "Research report"}
+                    {tab === "edit" ? "Saved draft" : report.kind==="documentary"?"Authored document":"Research report"}
                   </small>
                   {["md", "html", "pdf", "docx"].map((f) => (
                     <button key={f} onClick={() => void download(f)}>
@@ -2793,6 +2850,8 @@ function Workspace() {
                     </p>
                   ))}
               </div>
+            ) : report.kind==="chat" ? (
+              <section className="research-central-chat"><div className="research-chat" role="log" aria-label="Standalone conversation">{(chat.researchMessages[report.research_id]||[]).map(m=><article key={m.id} data-speaker={m.role}><small>{m.role==="user"?"You":"Aegis"}</small><p>{m.text}</p></article>)}</div><form onSubmit={e=>{e.preventDefault();sendFollowup()}}>{entryMenu()}<textarea aria-label="Message Aegis" placeholder="Start a conversation…" value={message} onChange={e=>setMessage(e.target.value)}/><button type="button" aria-label={chat.muted?"Unmute microphone":"Mute microphone"} onClick={requestMicrophone}><Icon name="mic"/></button><button aria-label="Send message" disabled={!chat.connected||chat.textBusy||!message.trim()}><Icon name="arrow"/></button></form></section>
             ) : (
               <>
                 {report.completeness === "partial" && (
@@ -2804,7 +2863,7 @@ function Workspace() {
                   </div>
                 )}
                 <div
-                  hidden={tab !== "reader" || !!preview}
+                  hidden={tab !== "reader" || !!preview || !!attachment || !!documentEdit}
                   ref={reader}
                   className="research-reader"
                   onScroll={(e) => {
@@ -2821,7 +2880,7 @@ function Workspace() {
                       );
                   }}
                 >
-                  {report.phase === "failed" ||
+                  {report.kind==="documentary"&&report.phase==="draft"?<section className="document-draft-intro"><h1>{report.display_title==="New documentary"?"Create a written documentary":report.display_title}</h1><p>Add source documents or describe a subject below. Aegis will organise the evidence into an illustrated introduction, chapters, conclusion and references.</p><button className="research-inline-action" onClick={()=>uploadInput.current?.click()}>Attach source documents</button></section>:report.phase === "failed" ||
                   report.completeness === "pending" ? (
                     <PendingResearch
                       report={{
@@ -2879,7 +2938,7 @@ function Workspace() {
                         ]}
                         onOpen={openSource}
                         onUnknown={openUnknown}
-                        images={report.image_items || []}
+                        images={[...(report.image_items||[]),...(report.attachment_images||[])].slice(0,4)}
                         reportId={report.research_id}
                         onImage={setImageView}
                       />
@@ -2940,10 +2999,11 @@ function Workspace() {
                 {editOpened && (
                   <div
                     className="research-edit-pane"
-                    hidden={tab !== "edit" || !!preview}
+                    hidden={tab !== "edit" || !!preview || !!attachment || !!documentEdit}
                   >
+                    {!!report.document_revisions?.some(r=>r.status==='preview')&&<div className="document-edit-proposals">{report.document_revisions.filter(r=>r.status==='preview').map((r,i)=><button key={r.id} onClick={()=>void documentApi('/'+report.research_id+'/document-edits/'+r.id).then(d=>setDocumentEdit(d)).catch(e=>setError(e.message))}>Review AI edit {i+1}</button>)}</div>}
                     <DraftEditor
-                      key={report.research_id}
+                      key={report.research_id+":"+editorGeneration}
                       report={report}
                       onSaved={(draft) =>
                         setReport((old) =>
@@ -2957,7 +3017,7 @@ function Workspace() {
                 )}
                 <div
                   className="research-sources"
-                  hidden={tab !== "sources" || !!preview}
+                  hidden={tab !== "sources" || !!preview || !!attachment || !!documentEdit}
                 >
                   {report.sources.slice(0, sourceLimit).map((source) => (
                     <article className="research-source-row" key={source.id}>
@@ -3021,7 +3081,7 @@ function Workspace() {
                 </div>
                 <div
                   className="research-media"
-                  hidden={tab !== "media" || !!preview}
+                  hidden={tab !== "media" || !!preview || !!attachment || !!documentEdit}
                 >
                   {["pending", "running"].includes(
                     report.media_status || "",
@@ -3068,6 +3128,9 @@ function Workspace() {
                 </div>
               </>
             )}
+            {report&&tab==='assets'&&!attachment&&!documentEdit&&!preview&&<AttachmentAssets reportId={report.research_id} files={report.attachments||[]} onOpen={setAttachment} onUpload={()=>uploadInput.current?.click()}/>}
+            {attachment&&report&&<AttachmentReader key={report.research_id+':'+attachment.file.id} reportId={report.research_id} destination={attachment} onClose={closePreview} onChanged={()=>void reloadReport(report.research_id)} onCopy={text=>void previewCopy(text)}/>}
+            {documentEdit&&report&&<section className="document-copy-preview"><header><h2>Review editable copy</h2><button onClick={()=>void applyDocumentEdit()}>Apply to draft</button><button aria-label="Close preview" onClick={closePreview}><Icon name="close"/></button></header><div dangerouslySetInnerHTML={{__html:clean(documentEdit.html)}}/></section>}
             {preview && report && (
               <DocumentPreview
                 key={preview.id}
@@ -3078,13 +3141,14 @@ function Workspace() {
               />
             )}
           </div>
-          <form className="research-query" onSubmit={start}>
+          <input ref={uploadInput} type="file" hidden multiple accept=".pdf,.docx,.txt,.md,.markdown,.png,.jpg,.jpeg,.webp" onChange={e=>void uploadFiles(e.target.files)}/>
+          <form className="research-query" hidden={report?.kind==="chat"} onSubmit={start}>
             <span id="research-brief-limit" className="research-sr-only">
               Research brief: up to 12,000 characters.
             </span>
             <textarea
               aria-label="Research topic"
-              placeholder="What would you like to research?"
+              placeholder={entryKind==="documentary"?"What should this document explain?":"What would you like to research?"}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               aria-describedby="research-brief-limit"
@@ -3101,28 +3165,7 @@ function Workspace() {
               }}
             />
             <div className="research-query-actions">
-              <button
-                type="button"
-                className="research-new"
-                aria-label="New research"
-                title="New research"
-                onClick={() => {
-                  ++loadEpoch.current;
-                  setReport(null);
-                  setPreview(null);
-                  setMessage("");
-                  setQuery("");
-                  lastSelection.current = "";
-                  sessionStorage.removeItem("nova-selected-research");
-                  updateUiContext({
-                    view: "research",
-                    research_id: "",
-                    research_revision: "",
-                  });
-                }}
-              >
-                <Icon name="plus" />
-              </button>
+              {entryMenu()}
               <details>
                 <summary aria-label="Research depth">
                   {mode === "detailed" ? "Detailed" : "Quick"}
@@ -3158,7 +3201,7 @@ function Workspace() {
             </div>
           </form>
         </main>
-        <aside className="research-assistant">
+        <aside className="research-assistant" hidden={report?.kind==="chat"}>
           <header>
             <span className="research-eyebrow">AEGIS</span>
             <span className="research-chat-label">Research conversation</span>
@@ -3185,18 +3228,7 @@ function Workspace() {
             ))}
           </div>
           <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (message.trim()) {
-                const id = crypto.randomUUID();
-                pendingMessage.current = {
-                  id,
-                  reportId: report?.research_id || "",
-                  text: message,
-                };
-                requestConversation(message, id);
-              }
-            }}
+            onSubmit={(e) => {e.preventDefault();sendFollowup()}}
           >
             <textarea
               aria-label="Message Aegis about research"
