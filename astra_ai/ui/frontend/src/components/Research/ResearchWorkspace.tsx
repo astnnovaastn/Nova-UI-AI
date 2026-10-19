@@ -9,7 +9,7 @@ import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { Mark, mergeAttributes } from "@tiptap/core";
+import { Mark, Node as TiptapNode, mergeAttributes } from "@tiptap/core";
 import { TableKit } from "@tiptap/extension-table";
 import Image from "@tiptap/extension-image";
 import DOMPurify from "dompurify";
@@ -96,7 +96,7 @@ const ScopedImage = Image.extend({
       let blob = "";
       const controller = new AbortController();
       if (
-        /^\/api\/research\/[a-f0-9]{32}\/attachments\/[a-f0-9]{32}\/images\/A[a-f0-9]{24}$/.test(
+        /^\/api\/research\/[a-f0-9]{32}\/(?:attachments\/[a-f0-9]{32}\/images\/A[a-f0-9]{24}|images\/I[a-f0-9]{24})$/.test(
           src,
         )
       ) {
@@ -134,7 +134,7 @@ function IllustratedPreview({ html }: { html: string }) {
       .forEach((img) => {
         const src = img.dataset.asset || "";
         if (
-          !/^\/api\/research\/[a-f0-9]{32}\/attachments\/[a-f0-9]{32}\/images\/A[a-f0-9]{24}$/.test(
+          !/^\/api\/research\/[a-f0-9]{32}\/(?:attachments\/[a-f0-9]{32}\/images\/A[a-f0-9]{24}|images\/I[a-f0-9]{24})$/.test(
             src,
           )
         ) {
@@ -234,12 +234,16 @@ type Report = {
   processing_seconds?: number;
   active_since?: number | null;
   waiting_reason?: string;
-  image_items?: {
-    id: string;
-    caption: string;
-    source_id: string;
-    publication: string;
-  }[];
+  image_items?: ResearchImage[];
+  images_prepared?: boolean;
+  image_sources?: Source[];
+  research_cards?: { id: string; title: string; revision: string }[];
+  extensions?: {
+    report: string;
+    next_cursor: number | null;
+    reader_end: number;
+    blocks: { id: string; text: string }[];
+  };
   research_id: string;
   research_revision: string;
   query: string;
@@ -372,6 +376,214 @@ function previewPlacement(
     top: Math.max(edge, Math.min(top, viewHeight - height - edge)),
   };
 }
+const PageBreak = TiptapNode.create({
+  name: "pageBreak",
+  group: "block",
+  atom: true,
+  parseHTML: () => [{ tag: "div[data-page-break]" }],
+  renderHTML: () => [
+    "div",
+    { "data-page-break": "true", class: "document-page-break" },
+  ],
+});
+const DocumentVideo = TiptapNode.create({
+  name: "documentVideo",
+  group: "block",
+  atom: true,
+  addAttributes() {
+    return {
+      url: { default: "", parseHTML: (e) => e.getAttribute("data-video-url") },
+      title: {
+        default: "Video",
+        parseHTML: (e) => e.getAttribute("data-video-title"),
+      },
+    };
+  },
+  parseHTML: () => [{ tag: "div[data-video-url]" }],
+  renderHTML: ({ node }) => [
+    "div",
+    { "data-video-url": node.attrs.url, "data-video-title": node.attrs.title },
+  ],
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement("div"),
+        root = createRoot(dom);
+      if (videoId(node.attrs.url))
+        root.render(
+          <Video
+            source={{
+              id: node.attrs.url,
+              url: node.attrs.url,
+              title: node.attrs.title,
+            }}
+          />,
+        );
+      return {
+        dom,
+        destroy() {
+          queueMicrotask(() => root.unmount());
+        },
+      };
+    };
+  },
+});
+function PDFExportPreview({
+  preview,
+  onClose,
+}: {
+  preview: { url: string; name: string };
+  onClose: () => void;
+}) {
+  const [doc, setDoc] = useState<any>(null),
+    [page, setPage] = useState(1),
+    [width, setWidth] = useState(700),
+    [error, setError] = useState("");
+  const canvas = useRef<HTMLCanvasElement>(null),
+    host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const task = pdfjs.getDocument({ url: preview.url });
+    let active = true;
+    task.promise
+      .then((pdf) => {
+        if (active) setDoc(pdf);
+      })
+      .catch(() => {
+        if (active)
+          setError(
+            "The PDF preview could not be rendered. You can still download the file.",
+          );
+      });
+    return () => {
+      active = false;
+      void task.destroy();
+    };
+  }, [preview.url]);
+  useEffect(() => {
+    if (!host.current) return;
+    const observer = new ResizeObserver((entries) =>
+      setWidth(Math.max(200, entries[0].contentRect.width - 32)),
+    );
+    observer.observe(host.current);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!doc || !canvas.current) return;
+    let active = true,
+      render: any;
+    doc
+      .getPage(page)
+      .then((pdfPage: any) => {
+        if (!active || !canvas.current) return;
+        const viewport = pdfPage.getViewport({
+            scale: Math.min(
+              width / pdfPage.getViewport({ scale: 1 }).width,
+              1.5,
+            ),
+          }),
+          ratio = Math.min(devicePixelRatio || 1, 2),
+          target = canvas.current;
+        target.width = viewport.width * ratio;
+        target.height = viewport.height * ratio;
+        target.style.width = viewport.width + "px";
+        target.style.height = viewport.height + "px";
+        render = pdfPage.render({
+          canvasContext: target.getContext("2d"),
+          viewport,
+          transform: [ratio, 0, 0, ratio, 0, 0],
+        });
+        return render.promise;
+      })
+      .catch(() => {
+        if (active) setError("This preview page could not be rendered.");
+      });
+    return () => {
+      active = false;
+      render?.cancel();
+    };
+  }, [doc, page, width]);
+  return (
+    <div
+      className="document-export-preview"
+      role="dialog"
+      aria-modal="true"
+      aria-label="PDF export preview"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+    >
+      <header>
+        <strong>PDF preview</strong>
+        <button
+          disabled={!doc || page <= 1}
+          onClick={() => setPage((p) => p - 1)}
+        >
+          Previous page
+        </button>
+        <span>
+          Page {page} of {doc?.numPages || "…"}
+        </span>
+        <button
+          disabled={!doc || page >= doc.numPages}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          Next page
+        </button>
+        <a href={preview.url} download={preview.name}>
+          Download PDF
+        </a>
+        <button autoFocus aria-label="Close PDF preview" onClick={onClose}>
+          <Icon name="close" />
+        </button>
+      </header>
+      <div className="document-export-pages" ref={host}>
+        {error && <p role="alert">{error}</p>}
+        {!doc && !error && <p role="status">Preparing PDF preview…</p>}
+        <canvas ref={canvas} aria-label={"PDF preview page " + page} />
+      </div>
+    </div>
+  );
+}
+function DocumentPaperPreview({
+  report,
+  onLink,
+}: {
+  report: Report;
+  onLink: (url: string) => void;
+}) {
+  const editor = useEditor({
+    editable: false,
+    extensions: [
+      StarterKit,
+      TableKit,
+      ScopedImage,
+      Citation,
+      PageBreak,
+      DocumentVideo,
+    ],
+    content: report.draft?.html || "<p></p>",
+    editorProps: { attributes: { "aria-label": "Document preview" } },
+  });
+  useEffect(() => {
+    if (editor) editor.commands.setContent(report.draft?.html || "<p></p>");
+  }, [editor, report.draft?.revision]);
+  return (
+    <div
+      className="document-paper-editor document-paper-preview"
+      onClick={(e) => {
+        const link = (e.target as Element).closest("a");
+        if (link) {
+          e.preventDefault();
+          onLink(link.getAttribute("href") || "");
+        }
+      }}
+    >
+      <EditorContent editor={editor} />
+    </div>
+  );
+}
 function DraftEditor({
   report,
   onSaved,
@@ -392,7 +604,25 @@ function DraftEditor({
     [state, setState] = useState("Saved"),
     [conflict, setConflict] = useState(false);
   const editor = useEditor({
-    extensions: [StarterKit, TableKit, ScopedImage, Citation],
+    extensions: [
+      StarterKit,
+      TableKit,
+      ScopedImage,
+      Citation,
+      PageBreak,
+      DocumentVideo,
+    ],
+    onSelectionUpdate: ({ editor }) =>
+      updateUiContext({
+        editor_selection: editor.state.doc
+          .textBetween(
+            editor.state.selection.from,
+            editor.state.selection.to,
+            " ",
+          )
+          .slice(0, 600),
+        editor_draft_revision: revision.current,
+      }),
     editorProps: {
       attributes: { "aria-label": "Research draft", role: "textbox" },
     },
@@ -443,6 +673,7 @@ function DraftEditor({
       saved = true;
       revision.current = d.draft.revision;
       onSaved(d.draft);
+      updateUiContext({ editor_draft_revision: revision.current });
       if (!dirty.current) sessionStorage.removeItem(key);
       else
         sessionStorage.setItem(
@@ -501,7 +732,10 @@ function DraftEditor({
   if (!editor) return null;
   return (
     <div
-      className="research-editor"
+      className={
+        "research-editor" +
+        (report.kind === "documentary" ? " document-paper-editor" : "")
+      }
       data-draft-dirty={dirty.current || pending.current ? "true" : "false"}
     >
       <div
@@ -567,9 +801,33 @@ function DraftEditor({
         </button>
         <button
           onClick={() => {
-            const src = prompt("Image URL");
-            if (src && /^https?:\/\//.test(src))
-              editor.chain().focus().setImage({ src }).run();
+            const images = [
+              ...(report.image_items || []),
+              ...(report.attachment_images || []),
+            ];
+            if (!images.length) {
+              alert("Attach an image or collect source images first.");
+              return;
+            }
+            const choice = prompt(
+              images.map((image, i) => i + 1 + ". " + image.caption).join("\n"),
+              "1",
+            );
+            const image = images[Number(choice) - 1];
+            if (image)
+              editor
+                .chain()
+                .focus()
+                .setImage({
+                  src:
+                    image.url ||
+                    "/api/research/" +
+                      report.research_id +
+                      "/images/" +
+                      image.id,
+                  alt: image.caption,
+                })
+                .run();
           }}
         >
           <Icon name="image" />
@@ -609,6 +867,37 @@ function DraftEditor({
           <Icon name="citation" />
           <span className="research-sr-only">Citation</span>
         </button>
+        {report.kind === "documentary" && (
+          <button
+            title="Insert video"
+            aria-label="Insert video"
+            onClick={() => {
+              const url = prompt("YouTube video URL");
+              if (url && videoId(url))
+                editor
+                  .chain()
+                  .focus()
+                  .insertContent({
+                    type: "documentVideo",
+                    attrs: { url, title: "Supporting video" },
+                  })
+                  .run();
+            }}
+          >
+            <Icon name="play" />
+          </button>
+        )}
+        {report.kind === "documentary" && (
+          <button
+            title="Page break"
+            aria-label="Insert page break"
+            onClick={() =>
+              editor.chain().focus().insertContent({ type: "pageBreak" }).run()
+            }
+          >
+            Page break
+          </button>
+        )}
         <button
           title="Undo"
           disabled={!editor.can().undo()}
@@ -1009,17 +1298,27 @@ function citationParts(
   literal = false,
 ): (string | Source[])[] {
   if (literal) return [value];
-  return value.split(/((?:\[S\d+\](?:[ \t]*)){1,})/g).map((part) => {
-    const ids = [
-      ...new Set([...part.matchAll(/\[S(\d+)\]/g)].map((m) => "S" + m[1])),
-    ];
-    const refs = ids.map((id) => sources.find((s) => s.id === id));
-    if (ids.length && refs.every(Boolean)) return refs as Source[];
-    return part.replace(/^(?:\p{Extended_Pictographic}\uFE0F?\s+)+/u, "");
-  });
+  return value
+    .split(/((?:\[S\d+(?:\s*[,;]\s*S\d+)*\](?:[ \t]*)){1,})/g)
+    .map((part) => {
+      const ids = [
+        ...new Set(
+          [...part.matchAll(/\[(S\d+(?:\s*[,;]\s*S\d+)*)\]/g)].flatMap(
+            (m) => m[1].match(/S\d+/g) || [],
+          ),
+        ),
+      ];
+      const refs = ids.map((id) => sources.find((s) => s.id === id));
+      if (ids.length && refs.every(Boolean)) return refs as Source[];
+      return part.replace(/^(?:\p{Extended_Pictographic}\uFE0F?\s+)+/u, "");
+    });
 }
 // Transform parsed text nodes only: citations cannot modify code, HTML attributes or URLs.
 type ResearchImage = {
+  width?: number;
+  height?: number;
+  placement_text?: string;
+  layout?: string;
   url?: string;
   id: string;
   caption: string;
@@ -1042,7 +1341,7 @@ function EvidenceImage({
     const controller = new AbortController();
     fetch(
       image.url &&
-        /^\/api\/research\/[a-f0-9]{32}\/attachments\/[a-f0-9]{32}\/images\/A[a-f0-9]{24}$/.test(
+        /^\/api\/research\/[a-f0-9]{32}\/(?:attachments\/[a-f0-9]{32}\/images\/A[a-f0-9]{24}|images\/I[a-f0-9]{24})$/.test(
           image.url,
         )
         ? image.url
@@ -1246,15 +1545,44 @@ function ReportContent({
     }
     if (tag === "img") return null; // Report images use scoped, validated artifact IDs.
     if (["br", "hr"].includes(tag)) return React.createElement(tag, props);
-    const related =
+    const passage = (node.textContent || "")
+      .replace(/\[S\d+(?:\s*[,;]\s*S\d+)*\]/g, "")
+      .trim();
+    const relatedImages =
       !literal && ["p", "li"].includes(tag)
-        ? images.find(
-            (image) =>
-              !placed.has(image.id) &&
-              node.textContent?.includes("[" + image.source_id + "]"),
-          )
-        : undefined;
-    if (related) placed.add(related.id);
+        ? images
+            .filter(
+              (image) =>
+                !placed.has(image.id) &&
+                (image.placement_text
+                  ? passage.includes(image.placement_text.slice(0, 60))
+                  : node.textContent?.includes("[" + image.source_id + "]")),
+            )
+            .slice(0, 4)
+        : [];
+    relatedImages.forEach((image) => placed.add(image.id));
+    const related = relatedImages[0];
+    const illustration = (
+      <div
+        className={
+          "research-image-composition " +
+          (relatedImages.length > 1
+            ? "gallery"
+            : related?.layout === "wide"
+              ? "wide"
+              : "aside")
+        }
+      >
+        {relatedImages.map((image) => (
+          <EvidenceImage
+            key={image.id}
+            image={image}
+            reportId={reportId}
+            onOpen={() => onImage?.(image)}
+          />
+        ))}
+      </div>
+    );
     const content = React.createElement(
       tag,
       props,
@@ -1270,23 +1598,14 @@ function ReportContent({
       return React.createElement(
         "li",
         { ...props, className: "research-illustrated-block" },
-        <EvidenceImage
-          key={key + ":image"}
-          image={related}
-          reportId={reportId}
-          onOpen={() => onImage?.(related)}
-        />,
+        illustration,
         ...Array.from(node.childNodes).map((n, i) =>
           render(n, key + ":" + i, literal),
         ),
       );
     return related ? (
       <div className="research-illustrated-block" key={key}>
-        <EvidenceImage
-          image={related}
-          reportId={reportId}
-          onOpen={() => onImage?.(related)}
-        />
+        {illustration}
         {content}
       </div>
     ) : (
@@ -1317,7 +1636,8 @@ function DocumentPreview({
     [pages, setPages] = useState(0),
     [current, setCurrent] = useState(source),
     [links, setLinks] = useState<Record<string, string>>({}),
-    [trail, setTrail] = useState<Source[]>([]);
+    [trail, setTrail] = useState<Source[]>([]),
+    [sourceImage, setSourceImage] = useState<ResearchImage | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null),
     pdf = useRef<any>(null),
     heading = useRef<HTMLHeadingElement>(null);
@@ -1439,6 +1759,28 @@ function DocumentPreview({
         >
           ← Previous source
         </button>
+      )}
+      {!!report.image_items?.some((i) => i.source_id === current.id) && (
+        <div className="research-image-composition gallery">
+          {report.image_items
+            .filter((i) => i.source_id === current.id)
+            .map((image) => (
+              <EvidenceImage
+                key={image.id}
+                image={image}
+                reportId={report.research_id}
+                onOpen={() => setSourceImage(image)}
+              />
+            ))}
+        </div>
+      )}
+      {sourceImage && (
+        <ImageViewer
+          image={sourceImage}
+          reportId={report.research_id}
+          onClose={() => setSourceImage(null)}
+          onSource={() => setSourceImage(null)}
+        />
       )}
       {error ? (
         <>
@@ -1843,7 +2185,33 @@ function sourceExcerpt(source: Source) {
   );
 }
 function initialDraft(report: Report) {
-  if (!report.evidence_collection) return markdown(report.report);
+  if (report.kind === "documentary" && report.phase === "draft")
+    return "<p></p>";
+  if (!report.evidence_collection) {
+    const doc = new DOMParser().parseFromString(
+      markdown(report.report + (report.extensions?.report || "")),
+      "text/html",
+    );
+    for (const image of [
+      ...(report.image_items || []),
+      ...(report.attachment_images || []),
+    ].slice(0, 4)) {
+      const p = Array.from(doc.querySelectorAll("p,li")).find((p) =>
+        image.placement_text
+          ? p.textContent?.includes(image.placement_text.slice(0, 50))
+          : p.textContent?.includes("[" + image.source_id + "]"),
+      );
+      if (p) {
+        const img = doc.createElement("img");
+        img.src =
+          image.url ||
+          "/api/research/" + report.research_id + "/images/" + image.id;
+        img.alt = image.caption;
+        p.before(img);
+      }
+    }
+    return doc.body.innerHTML;
+  }
   const doc = document.implementation.createHTMLDocument("");
   const h = doc.createElement("h1");
   h.textContent = report.display_title || report.query;
@@ -2080,6 +2448,38 @@ function Workspace() {
       clearTimeout(timer);
     };
   }, [open, items, chat.clientId]);
+  const [exportPreview, setExportPreview] = useState<{
+    url: string;
+    name: string;
+  } | null>(null);
+  useEffect(
+    () => () => {
+      if (exportPreview) URL.revokeObjectURL(exportPreview.url);
+    },
+    [exportPreview],
+  );
+  const illustrationRequests = useRef(new Set<string>());
+  useEffect(() => {
+    if (
+      !report ||
+      report.kind !== "research" ||
+      report.completeness === "pending" ||
+      report.images_prepared
+    )
+      return;
+    const key = chat.clientId + ":" + report.research_id;
+    if (illustrationRequests.current.has(key)) return;
+    illustrationRequests.current.add(key);
+    void api("/" + report.research_id + "/images/enrich", {
+      method: "POST",
+      body: "{}",
+    }).catch(() => {});
+  }, [
+    report?.research_id,
+    report?.images_prepared,
+    report?.completeness,
+    chat.clientId,
+  ]);
   const reportRef = useRef(report);
   reportRef.current = report;
   const [sourceLimit, setSourceLimit] = useState(10),
@@ -2090,33 +2490,48 @@ function Workspace() {
   const continuePending = useRef(new Set<string>());
   async function reloadReport(id: string) {
     const old = reportRef.current;
+    const follow =
+      !!reader.current &&
+      reader.current.scrollHeight -
+        reader.current.scrollTop -
+        reader.current.clientHeight <
+        90 &&
+      !window.getSelection()?.toString();
     const d = await api("/" + id + "/document");
     if (
       old?.research_id === id &&
       old.report &&
       old.research_revision === d.research_revision
     ) {
-      if (old.extension_revision === d.extension_revision) {
-        d.report = old.report;
-        d.next_cursor = old.next_cursor;
-        d.reader_end = old.reader_end;
-      } else if (old.reader_end != null) {
+      d.report = old.report;
+      d.next_cursor = old.next_cursor;
+      d.reader_end = old.reader_end;
+      if (old.extension_revision === d.extension_revision && old.extensions)
+        d.extensions = old.extensions;
+      else if (old.extensions?.reader_end) {
         const added = await api(
           "/" +
             id +
-            "/reader?revision=" +
+            "/reader?stream=extensions&revision=" +
             old.research_revision +
             "&cursor=" +
-            old.reader_end,
+            old.extensions.reader_end,
         );
-        d.report = old.report + added.report;
-        d.next_cursor = added.next_cursor;
-        d.reader_end = added.reader_end;
+        d.extensions = {
+          ...added,
+          report: old.extensions.report + added.report,
+          blocks: [...old.extensions.blocks, ...added.blocks],
+        };
       }
       if (document.querySelector('[data-draft-dirty="true"]'))
         d.draft = old.draft;
     }
     setReport((current) => (current?.research_id === id ? d : current));
+    if (follow && old?.extension_revision !== d.extension_revision)
+      requestAnimationFrame(() => {
+        if (reportRef.current?.research_id === id && reader.current)
+          reader.current.scrollTop = reader.current.scrollHeight;
+      });
     reportCache.current.set(chat.clientId + ":" + id, {
       report: d,
       at: Date.now(),
@@ -2125,7 +2540,7 @@ function Workspace() {
   async function requestMore(view: string) {
     if (!report) return;
     try {
-      await api("/" + report.research_id + "/expand", {
+      const outcome = await api("/" + report.research_id + "/expand", {
         method: "POST",
         body: JSON.stringify({
           research_revision: report.research_revision,
@@ -2133,6 +2548,16 @@ function Workspace() {
           operation_id: crypto.randomUUID(),
         }),
       });
+      if (
+        ![
+          "accepted",
+          "queued",
+          "duplicate",
+          "completed",
+          "waiting_for_quota",
+        ].includes(outcome.status)
+      )
+        throw Error(outcome.reason || "Expansion could not be started.");
       await reloadReport(report.research_id);
     } catch (e: any) {
       setError(e.message);
@@ -2238,6 +2663,12 @@ function Workspace() {
             return;
           }
           setTab("reader");
+          revealed = true;
+        } else if (
+          d.view === "reader" &&
+          current.extensions?.next_cursor != null
+        ) {
+          await moreExtensions();
           revealed = true;
         } else if (
           d.view === "reader" &&
@@ -2371,6 +2802,7 @@ function Workspace() {
     }
   }
   async function select(id: string) {
+    setTab("reader");
     const destination = researchDestination(location.hash);
     if (destination && destination.id !== id)
       history.replaceState(null, "", location.pathname + location.search);
@@ -2597,7 +3029,8 @@ function Workspace() {
   }, [open, report?.research_id, report?.phase]);
   async function more() {
     if (!report) return;
-    const id = report.research_id;
+    const id = report.research_id,
+      requestedCursor = report.next_cursor;
     try {
       const d = await api(
         "/" +
@@ -2605,10 +3038,11 @@ function Workspace() {
           "/reader?revision=" +
           report.research_revision +
           "&cursor=" +
-          report.next_cursor,
+          report.next_cursor +
+          "&stream=base",
       );
       setReport((old) =>
-        old?.research_id === id
+        old?.research_id === id && old.next_cursor === requestedCursor
           ? {
               ...old,
               report: old.report + d.report,
@@ -2624,6 +3058,31 @@ function Workspace() {
       setError(e.message);
       throw e;
     }
+  }
+  async function moreExtensions() {
+    if (!report?.extensions || report.extensions.next_cursor == null) return;
+    const id = report.research_id,
+      requestedCursor = report.extensions.next_cursor,
+      next = await api(
+        "/" +
+          id +
+          "/reader?stream=extensions&revision=" +
+          report.research_revision +
+          "&cursor=" +
+          report.extensions.next_cursor,
+      );
+    setReport((old) =>
+      old?.research_id === id && old.extensions?.next_cursor === requestedCursor
+        ? {
+            ...old,
+            extensions: {
+              ...next,
+              report: old.extensions!.report + next.report,
+              blocks: [...old.extensions!.blocks, ...next.blocks],
+            },
+          }
+        : old,
+    );
   }
   async function expand() {
     await requestMore("reader");
@@ -2866,7 +3325,7 @@ function Workspace() {
                 (report?.display_title || "this research")
               : kind === "chat"
                 ? "New chat"
-                : "New documentary",
+                : "New document",
             operation_id: crypto.randomUUID(),
           }),
         });
@@ -2913,12 +3372,13 @@ function Workspace() {
           method: "POST",
           body: JSON.stringify({
             kind: "documentary",
-            query: "New documentary",
+            query: "New document",
             operation_id: crypto.randomUUID(),
           }),
         });
         identifier = created.research_id;
       }
+      let uploaded: Attachment | null = null;
       for (const file of selected) {
         const response = await fetch(
           "/api/research/" + identifier + "/attachments",
@@ -2938,10 +3398,12 @@ function Workspace() {
           !["queued", "duplicate", "completed"].includes(d.status)
         )
           throw Error(d.detail || d.reason || "File could not be attached.");
+        uploaded = d.attachment;
       }
       reportCache.current.delete(chat.clientId + ":" + identifier);
       await select(identifier!);
       setTab("assets");
+      if (uploaded) setAttachment({ file: uploaded });
       void refresh();
     } catch (e: any) {
       setError(e.message);
@@ -2969,7 +3431,7 @@ function Workspace() {
                 void newEntry(kind);
               }}
             >
-              New {kind}
+              New {kind === "documentary" ? "document" : kind}
             </button>
           ))}
           {report && report.kind === "research" && (
@@ -2977,7 +3439,7 @@ function Workspace() {
               type="button"
               onClick={() => void newEntry("documentary", report.research_id)}
             >
-              Turn into documentary
+              Turn into document
             </button>
           )}
           <button
@@ -3044,7 +3506,14 @@ function Workspace() {
       setError(e.message);
     }
   }
+  function closeExportPreview() {
+    setExportPreview(null);
+    requestAnimationFrame(() =>
+      originFocus.current?.focus({ preventScroll: true }),
+    );
+  }
   async function download(format: string) {
+    originFocus.current = document.activeElement as HTMLElement;
     if (!report) return;
     if (tab === "edit" && document.querySelector('[data-draft-dirty="true"]')) {
       setError("Save your draft before downloading the current version.");
@@ -3069,6 +3538,10 @@ function Workspace() {
       a.href = url;
       a.download =
         report.query.replace(/[^\w -]/g, "").slice(0, 80) + "." + format;
+      if (format === "pdf") {
+        setExportPreview({ url, name: a.download });
+        return;
+      }
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e: any) {
@@ -3082,6 +3555,12 @@ function Workspace() {
       data-aegis-widget="research"
       aria-label="Research workspace"
     >
+      {exportPreview && (
+        <PDFExportPreview
+          preview={exportPreview}
+          onClose={closeExportPreview}
+        />
+      )}
       {error && (
         <p className="research-error" role="alert">
           {error}
@@ -3102,9 +3581,10 @@ function Workspace() {
           onClose={() => setImageView(null)}
           onSource={() => {
             setImageView(null);
-            const source = report.sources.find(
-              (s) => s.id === imageView.source_id,
-            );
+            const source = [
+              ...report.sources,
+              ...(report.image_sources || []),
+            ].find((s) => s.id === imageView.source_id);
             if (source) openSource(source);
           }}
         />
@@ -3446,11 +3926,25 @@ function Workspace() {
                       );
                   }}
                 >
-                  {report.kind === "documentary" && report.phase === "draft" ? (
+                  {report.kind === "documentary" && report.draft?.html ? (
+                    <DocumentPaperPreview
+                      report={report}
+                      onLink={(url) => {
+                        const source = report.sources.find(
+                          (s) => s.url === url,
+                        );
+                        if (source) openSource(source);
+                        else openUnknown(url);
+                      }}
+                    />
+                  ) : report.kind === "documentary" &&
+                    report.phase === "draft" ? (
                     <section className="document-draft-intro">
                       <h1>
-                        {report.display_title === "New documentary"
-                          ? "Create a written documentary"
+                        {["New documentary", "New document"].includes(
+                          report.display_title || "",
+                        )
+                          ? "Create a document"
                           : report.display_title}
                       </h1>
                       <p>
@@ -3458,6 +3952,15 @@ function Workspace() {
                         will organise the evidence into an illustrated
                         introduction, chapters, conclusion and references.
                       </p>
+                      <button
+                        className="research-inline-action"
+                        onClick={() => {
+                          setEditOpened(true);
+                          setTab("edit");
+                        }}
+                      >
+                        Create blank document
+                      </button>
                       <button
                         className="research-inline-action"
                         onClick={() => uploadInput.current?.click()}
@@ -3520,6 +4023,7 @@ function Workspace() {
                         sources={[
                           ...report.sources,
                           ...(report.linked_sources || []),
+                          ...(report.image_sources || []),
                         ]}
                         onOpen={openSource}
                         onUnknown={openUnknown}
@@ -3573,6 +4077,45 @@ function Workspace() {
                     activity={report.extension_activity}
                     view="reader"
                   />
+                  {!!report.extensions?.report && (
+                    <section
+                      className="research-extension"
+                      aria-label="Additional research"
+                    >
+                      {(
+                        report.extensions.blocks || [
+                          {
+                            id: report.extension_revision || "extension",
+                            text: report.extensions.report,
+                          },
+                        ]
+                      ).map((block) => (
+                        <div
+                          className="research-extension-block"
+                          key={block.id}
+                        >
+                          <ReportContent
+                            text={block.text}
+                            sources={[
+                              ...report.sources,
+                              ...(report.linked_sources || []),
+                            ]}
+                            onOpen={openSource}
+                            onUnknown={openUnknown}
+                            reportId={report.research_id}
+                          />
+                        </div>
+                      ))}
+                      {report.extensions.next_cursor != null && (
+                        <button
+                          className="research-inline-action"
+                          onClick={() => void moreExtensions()}
+                        >
+                          Show more findings
+                        </button>
+                      )}
+                    </section>
+                  )}
                   <h2 className="research-sources-heading">Sources</h2>
                   <div className="research-source-chips">
                     {report.sources.map((source) => (
@@ -3902,7 +4445,7 @@ function Workspace() {
                   entryKind === "documentary"
                     ? busy
                       ? "Preparing document"
-                      : "Write documentary"
+                      : "Write document"
                     : busy
                       ? "Starting research"
                       : "Start research"
@@ -3939,6 +4482,31 @@ function Workspace() {
               <article key={m.id} data-speaker={m.role}>
                 <small>{m.role === "user" ? "You" : "Aegis"}</small>
                 <p>{m.text}</p>
+              </article>
+            ))}
+            {report?.research_cards?.map((card) => (
+              <article key={card.id} className="document-research-card">
+                <Icon name="citation" />
+                <strong>{card.title}</strong>
+                <small>Saved research · available for insertion</small>
+                <button
+                  className="research-inline-action"
+                  onClick={() => {
+                    setMessage(
+                      "Insert the saved research “" +
+                        card.title +
+                        "” into this document at the current selection, or append it if nothing is selected.",
+                    );
+                  }}
+                >
+                  Use in document
+                </button>
+                <button
+                  className="research-inline-action"
+                  onClick={() => void select(card.id)}
+                >
+                  Read research
+                </button>
               </article>
             ))}
           </div>

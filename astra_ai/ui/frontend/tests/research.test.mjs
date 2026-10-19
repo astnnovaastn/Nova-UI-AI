@@ -45,6 +45,19 @@ const sources = [
   { id: "S2", title: "Second" },
 ];
 
+test("Gemini grouped citations become pills while literal source-like text stays intact", () => {
+  assert.deepEqual(
+    plain(
+      context.citationParts("S1 is a label. Supported [S1, S2; S1].", sources),
+    ),
+    ["S1 is a label. Supported ", [sources[0], sources[1]], "."],
+  );
+  assert.deepEqual(
+    plain(context.citationParts("Unknown [S1, S999].", sources)),
+    ["Unknown ", "[S1, S999]", "."],
+  );
+});
+
 test("adjacent citations group in evidence order and repeated references deduplicate", () => {
   const parts = plain(
     context.citationParts("A supported claim [S2] [S1][S2].", sources),

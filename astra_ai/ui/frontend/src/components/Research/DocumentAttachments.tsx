@@ -171,7 +171,9 @@ export function AttachmentReader({
 }) {
   const [file, setFile] = useState(destination.file),
     id = destination.originId || reportId;
-  const [editing, setEditing] = useState(false),
+  const [editing, setEditing] = useState(
+      destination.file.mime === "application/pdf" && !destination.readonly,
+    ),
     [action, setAction] = useState("move_object"),
     [selected, setSelected] = useState<any>(null),
     [rect, setRect] = useState([50, 200, 300, 100]),
@@ -183,11 +185,23 @@ export function AttachmentReader({
     [job, setJob] = useState(""),
     [copyStart, setCopyStart] = useState(1),
     [copyEnd, setCopyEnd] = useState(file.page_count || 1);
+  const objectDrag = useRef<{
+    x: number;
+    y: number;
+    rect: number[];
+    resize: boolean;
+  } | null>(null);
+  const objectGhost = useRef<HTMLCanvasElement>(null);
   const closeHandler = useRef(onClose);
   closeHandler.current = onClose;
   const regionStart = useRef<number[] | null>(null),
     copyRangeEdited = useRef(false);
   useEffect(() => setFile(destination.file), [destination.file]);
+  useEffect(() => {
+    if (!["queued", "processing"].includes(file.status)) return;
+    const timer = setInterval(onChanged, 1500);
+    return () => clearInterval(timer);
+  }, [file.status, file.id, onChanged]);
   const [page, setPage] = useState(destination.page || 1),
     [data, setData] = useState<any>(null),
     [error, setError] = useState(""),
@@ -196,6 +210,7 @@ export function AttachmentReader({
     [offset, setOffset] = useState(0),
     [image, setImage] = useState(""),
     [pageReady, setPageReady] = useState(false),
+    [zoom, setZoom] = useState(1),
     [copying, setCopying] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null),
     host = useRef<HTMLDivElement>(null),
@@ -268,7 +283,7 @@ export function AttachmentReader({
     return () => {
       active = false;
     };
-  }, [id, file.id, page, revision, offset]);
+  }, [id, file.id, page, revision, offset, file.status]);
   useEffect(() => {
     if (file.mime !== "application/pdf") return;
     const task = pdfjs.getDocument({
@@ -304,7 +319,8 @@ export function AttachmentReader({
       .getPage(page)
       .then(async (p: any) => {
         if (!active || !canvas.current) return;
-        const scale = Math.min(width / p.getViewport({ scale: 1 }).width, 1.6);
+        const scale =
+          Math.min(width / p.getViewport({ scale: 1 }).width, 1.6) * zoom;
         const viewport = p.getViewport({ scale });
         const dpr = Math.min(
           devicePixelRatio || 1,
@@ -333,7 +349,7 @@ export function AttachmentReader({
       active = false;
       task?.cancel();
     };
-  }, [pdf, page, width]);
+  }, [pdf, page, width, zoom]);
   useEffect(() => {
     if (!file.mime.startsWith("image/") || !file.images?.[0]) return;
     let active = true,
@@ -564,8 +580,37 @@ export function AttachmentReader({
       setBusy(false);
     }
   }
+  useEffect(() => {
+    if (
+      !selected ||
+      selected.type !== "image" ||
+      !objectGhost.current ||
+      !canvas.current ||
+      !data
+    )
+      return;
+    const source = canvas.current,
+      target = objectGhost.current,
+      r = selected.rect;
+    target.width = Math.max(1, (r[2] / data.width) * source.width);
+    target.height = Math.max(1, (r[3] / data.height) * source.height);
+    target
+      .getContext("2d")
+      ?.drawImage(
+        source,
+        (r[0] / data.width) * source.width,
+        ((data.height - r[1] - r[3]) / data.height) * source.height,
+        target.width,
+        target.height,
+        0,
+        0,
+        target.width,
+        target.height,
+      );
+  }, [selected, data, pageReady, preview]);
   function nativeObject(o: any) {
     setSelected(o);
+    if (o.type === "text") setAction("replace_text");
     setRect(o.rect.map((v: number) => Math.round(v * 10) / 10));
     setEditText(o.text || "");
     setFontSize(o.font_size || 12);
@@ -621,89 +666,95 @@ export function AttachmentReader({
           <CloseIcon />
         </button>
       </header>
-      <div className="document-file-actions">
-        <button
-          onClick={() =>
-            void downloadAttachment(id, file, revision).catch((e) =>
-              setError(e.message),
-            )
-          }
-        >
-          Download{" "}
-          {revision === file.revision
-            ? "original"
-            : preview
-              ? "preview PDF"
-              : "edited PDF"}
-        </button>
-        {revision !== file.revision && (
+      <details className="document-file-options">
+        <summary>File · Download & copy</summary>
+        <div className="document-file-actions">
           <button
             onClick={() =>
-              void downloadAttachment(id, file).catch((e) =>
+              void downloadAttachment(id, file, revision).catch((e) =>
                 setError(e.message),
               )
             }
           >
-            Download original PDF
+            Download{" "}
+            {revision === file.revision
+              ? "original"
+              : preview
+                ? "preview PDF"
+                : "edited PDF"}
           </button>
-        )}
-        <button
-          hidden={!allowCopy}
-          disabled={busy || file.needs_ocr}
-          onClick={() => void copy()}
-        >
-          {copying ? "Preparing copy…" : "Create editable copy"}
-        </button>
-      </div>
-      <details className="document-copy-options" hidden={!allowCopy}>
-        <summary>Editable copy options</summary>
-        {file.mime === "application/pdf" ? (
-          <div>
-            <label>
-              From page
-              <input
-                aria-label="Copy from page"
-                type="number"
-                min="1"
-                max={data?.page_count || file.page_count}
-                value={copyStart}
-                onChange={(e) => {
-                  copyRangeEdited.current = true;
-                  setCopyStart(
-                    Math.max(1, Math.min(copyEnd, Number(e.target.value) || 1)),
-                  );
-                }}
-              />
-            </label>
-            <label>
-              Through page
-              <input
-                aria-label="Copy through page"
-                type="number"
-                min={copyStart}
-                max={data?.page_count || file.page_count}
-                value={copyEnd}
-                onChange={(e) => {
-                  copyRangeEdited.current = true;
-                  setCopyEnd(
-                    Math.max(
-                      copyStart,
-                      Math.min(
-                        data?.page_count || file.page_count,
-                        Number(e.target.value) || 1,
+          {revision !== file.revision && (
+            <button
+              onClick={() =>
+                void downloadAttachment(id, file).catch((e) =>
+                  setError(e.message),
+                )
+              }
+            >
+              Download original PDF
+            </button>
+          )}
+          <button
+            hidden={!allowCopy}
+            disabled={busy || file.needs_ocr}
+            onClick={() => void copy()}
+          >
+            {copying ? "Preparing copy…" : "Editable paper copy"}
+          </button>
+        </div>
+        <details className="document-copy-options" hidden={!allowCopy}>
+          <summary>Editable copy options</summary>
+          {file.mime === "application/pdf" ? (
+            <div>
+              <label>
+                From page
+                <input
+                  aria-label="Copy from page"
+                  type="number"
+                  min="1"
+                  max={data?.page_count || file.page_count}
+                  value={copyStart}
+                  onChange={(e) => {
+                    copyRangeEdited.current = true;
+                    setCopyStart(
+                      Math.max(
+                        1,
+                        Math.min(copyEnd, Number(e.target.value) || 1),
                       ),
-                    ),
-                  );
-                }}
-              />
-            </label>
-          </div>
-        ) : null}
-        <p>
-          Choose a chapter or select text in the document below. Each
-          editable-copy preview supports up to 30,000 characters; originals
-          remain fully available.
-        </p>
+                    );
+                  }}
+                />
+              </label>
+              <label>
+                Through page
+                <input
+                  aria-label="Copy through page"
+                  type="number"
+                  min={copyStart}
+                  max={data?.page_count || file.page_count}
+                  value={copyEnd}
+                  onChange={(e) => {
+                    copyRangeEdited.current = true;
+                    setCopyEnd(
+                      Math.max(
+                        copyStart,
+                        Math.min(
+                          data?.page_count || file.page_count,
+                          Number(e.target.value) || 1,
+                        ),
+                      ),
+                    );
+                  }}
+                />
+              </label>
+            </div>
+          ) : null}
+          <p>
+            Choose a chapter or select text in the document below. Each
+            editable-copy preview supports up to 30,000 characters; originals
+            remain fully available.
+          </p>
+        </details>
       </details>
       {file.mime === "application/pdf" && !destination.readonly && (
         <div className="pdf-layout-toolbar">
@@ -715,7 +766,7 @@ export function AttachmentReader({
               setSelected(null);
             }}
           >
-            {editing ? "Close layout tools" : "Edit PDF layout"}
+            {editing ? "Read only" : "Original layout editing"}
           </button>
           <label>
             Revision{" "}
@@ -769,108 +820,112 @@ export function AttachmentReader({
         </div>
       )}
       {editing && !preview && (
-        <section className="pdf-layout-tools" aria-label="PDF layout tools">
-          <p>
-            Select a native text/image object, or drag a clear page region to
-            insert content. Coordinates use PDF points from the bottom left.
-          </p>
-          {file.needs_ocr && (
+        <details className="pdf-edit-inspector">
+          <summary>Insert & object options</summary>
+          <section className="pdf-layout-tools" aria-label="PDF layout tools">
             <p>
-              Scanned pages have no native text objects. You can position
-              images, add a text box, or add a page.
+              Click text to edit it on the page, select an image to reposition
+              it, or drag an area to insert content. Use an editable paper copy
+              for flowing rewrites.
             </p>
-          )}
-          <label>
-            Change{" "}
-            <select
-              aria-label="PDF change type"
-              value={action}
-              disabled={busy}
-              onChange={(e) => setAction(e.target.value)}
-            >
-              <option value="move_object">Move object</option>
-              <option value="resize_object">Resize object</option>
-              <option value="replace_text">Replace native text</option>
-              <option value="replace_image">Replace image</option>
-              <option value="remove_object">Remove object</option>
-              <option value="insert_text">Insert text box</option>
-              <option value="insert_image">Insert image</option>
-              <option value="add_page">Add page after this page</option>
-            </select>
-          </label>
-          <small>
-            {selected
-              ? `Selected ${selected.type}: ${selected.id}`
-              : "No native object selected"}
-          </small>
-          {action !== "add_page" && (
-            <div className="pdf-rectangle">
-              {["X", "Y", "Width", "Height"].map((name, index) => (
-                <label key={name}>
-                  {name}
-                  <input
-                    type="number"
-                    aria-label={"PDF " + name}
-                    value={rect[index]}
-                    disabled={busy}
-                    onChange={(e) =>
-                      setRect((old) =>
-                        old.map((v, i) =>
-                          i === index ? Number(e.target.value) : v,
-                        ),
-                      )
-                    }
-                  />
-                </label>
-              ))}
-            </div>
-          )}
-          {["replace_text", "insert_text"].includes(action) && (
-            <>
-              <label>
-                Text
-                <textarea
-                  aria-label="PDF replacement text"
-                  value={editText}
-                  disabled={busy}
-                  onChange={(e) => setEditText(e.target.value)}
-                />
-              </label>
-              {action === "insert_text" && (
-                <label>
-                  Font size
-                  <input
-                    type="number"
-                    min="6"
-                    max="72"
-                    value={fontSize}
-                    onChange={(e) => setFontSize(Number(e.target.value))}
-                  />
-                </label>
-              )}
-            </>
-          )}
-          {["insert_image", "replace_image"].includes(action) && (
+            {file.needs_ocr && (
+              <p>
+                Scanned pages have no native text objects. You can position
+                images, add a text box, or add a page.
+              </p>
+            )}
             <label>
-              Attached image
+              Change{" "}
               <select
-                aria-label="Image to insert"
-                value={asset}
-                onChange={(e) => setAsset(e.target.value)}
+                aria-label="PDF change type"
+                value={action}
+                disabled={busy}
+                onChange={(e) => setAction(e.target.value)}
               >
-                <option value="">Choose an illustration</option>
-                {imageChoices.map((image) => (
-                  <option key={image.value} value={image.value}>
-                    {image.label}
-                  </option>
-                ))}
+                <option value="move_object">Move object</option>
+                <option value="resize_object">Resize object</option>
+                <option value="replace_text">Replace native text</option>
+                <option value="replace_image">Replace image</option>
+                <option value="remove_object">Remove object</option>
+                <option value="insert_text">Insert text box</option>
+                <option value="insert_image">Insert image</option>
+                <option value="add_page">Add page after this page</option>
               </select>
             </label>
-          )}
-          <button disabled={busy} onClick={() => void prepare()}>
-            {busy ? "Preparing PDF preview…" : "Preview PDF changes"}
-          </button>
-        </section>
+            <small>
+              {selected
+                ? `Selected ${selected.type}: ${selected.id}`
+                : "No native object selected"}
+            </small>
+            {action !== "add_page" && (
+              <div className="pdf-rectangle">
+                {["X", "Y", "Width", "Height"].map((name, index) => (
+                  <label key={name}>
+                    {name}
+                    <input
+                      type="number"
+                      aria-label={"PDF " + name}
+                      value={rect[index]}
+                      disabled={busy}
+                      onChange={(e) =>
+                        setRect((old) =>
+                          old.map((v, i) =>
+                            i === index ? Number(e.target.value) : v,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+            {["replace_text", "insert_text"].includes(action) && (
+              <>
+                <label>
+                  Text
+                  <textarea
+                    aria-label="PDF replacement text"
+                    value={editText}
+                    disabled={busy}
+                    onChange={(e) => setEditText(e.target.value)}
+                  />
+                </label>
+                {action === "insert_text" && (
+                  <label>
+                    Font size
+                    <input
+                      type="number"
+                      min="6"
+                      max="72"
+                      value={fontSize}
+                      onChange={(e) => setFontSize(Number(e.target.value))}
+                    />
+                  </label>
+                )}
+              </>
+            )}
+            {["insert_image", "replace_image"].includes(action) && (
+              <label>
+                Attached image
+                <select
+                  aria-label="Image to insert"
+                  value={asset}
+                  onChange={(e) => setAsset(e.target.value)}
+                >
+                  <option value="">Choose an illustration</option>
+                  {imageChoices.map((image) => (
+                    <option key={image.value} value={image.value}>
+                      {image.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button disabled={busy} onClick={() => void prepare()}>
+              {busy ? "Preparing PDF preview…" : "Preview PDF changes"}
+            </button>
+          </section>
+        </details>
       )}
       {error && (
         <p role="alert" className="document-error">
@@ -878,6 +933,20 @@ export function AttachmentReader({
         </p>
       )}
       <div className="document-page-toolbar">
+        <label>
+          Zoom{" "}
+          <select
+            aria-label="Document zoom"
+            value={zoom}
+            onChange={(e) => setZoom(Number(e.target.value))}
+          >
+            {[0.75, 1, 1.25, 1.5].map((v) => (
+              <option key={v} value={v}>
+                {Math.round(v * 100)}%
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           disabled={page <= 1}
           onClick={() => {
@@ -973,8 +1042,53 @@ export function AttachmentReader({
                     }
                     aria-label={`Select ${o.type} object ${o.id}: ${(o.text || "Image").slice(0, 60)}`}
                     aria-pressed={selected?.id === o.id}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={() => nativeObject(o)}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      if (o.type !== "image") return;
+                      nativeObject(o);
+                      setAction("move_object");
+                      objectDrag.current = {
+                        x: e.clientX,
+                        y: e.clientY,
+                        rect: o.rect,
+                        resize: false,
+                      };
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                    }}
+                    onPointerMove={(e) => {
+                      const drag = objectDrag.current;
+                      if (!drag || !data) return;
+                      const box = host.current?.getBoundingClientRect();
+                      if (!box) return;
+                      const scale =
+                        (canvas.current?.getBoundingClientRect().width ||
+                          box.width) / data.width;
+                      setRect([
+                        Math.max(
+                          0,
+                          Math.min(
+                            data.width - drag.rect[2],
+                            drag.rect[0] + (e.clientX - drag.x) / scale,
+                          ),
+                        ),
+                        Math.max(
+                          0,
+                          Math.min(
+                            data.height - drag.rect[3],
+                            drag.rect[1] - (e.clientY - drag.y) / scale,
+                          ),
+                        ),
+                        drag.rect[2],
+                        drag.rect[3],
+                      ]);
+                    }}
+                    onPointerUp={() => {
+                      objectDrag.current = null;
+                    }}
+                    onClick={() => {
+                      if (o.type !== "image" || selected?.id !== o.id)
+                        nativeObject(o);
+                    }}
                     style={{
                       left: (o.rect[0] / data.width) * 100 + "%",
                       top:
@@ -986,6 +1100,109 @@ export function AttachmentReader({
                     }}
                   />
                 ))}
+            {editing &&
+              !preview &&
+              selected?.type === "image" &&
+              data?.width && (
+                <div
+                  className="pdf-image-transform"
+                  style={{
+                    left: (rect[0] / data.width) * 100 + "%",
+                    top:
+                      ((data.height - rect[1] - rect[3]) / data.height) * 100 +
+                      "%",
+                    width: (rect[2] / data.width) * 100 + "%",
+                    height: (rect[3] / data.height) * 100 + "%",
+                  }}
+                >
+                  <canvas ref={objectGhost} />
+                  <button
+                    aria-label="Resize selected PDF image"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      objectDrag.current = {
+                        x: e.clientX,
+                        y: e.clientY,
+                        rect: [...rect],
+                        resize: true,
+                      };
+                      setAction("resize_object");
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                    }}
+                    onPointerMove={(e) => {
+                      const drag = objectDrag.current;
+                      if (!drag?.resize) return;
+                      const scale =
+                        (canvas.current?.getBoundingClientRect().width || 600) /
+                        data.width;
+                      const height = Math.max(
+                        10,
+                        Math.min(
+                          drag.rect[1] + drag.rect[3],
+                          drag.rect[3] + (e.clientY - drag.y) / scale,
+                        ),
+                      );
+                      setRect([
+                        drag.rect[0],
+                        drag.rect[1] + drag.rect[3] - height,
+                        Math.max(
+                          10,
+                          Math.min(
+                            data.width - drag.rect[0],
+                            drag.rect[2] + (e.clientX - drag.x) / scale,
+                          ),
+                        ),
+                        height,
+                      ]);
+                    }}
+                    onPointerUp={() => {
+                      objectDrag.current = null;
+                    }}
+                  >
+                    ↘
+                  </button>
+                  <button
+                    className="pdf-preview-transform"
+                    disabled={busy}
+                    onClick={() => void prepare()}
+                  >
+                    Preview image change
+                  </button>
+                </div>
+              )}
+            {editing &&
+              !preview &&
+              selected?.type === "text" &&
+              action === "replace_text" &&
+              data?.width && (
+                <div
+                  className="pdf-inline-text"
+                  style={{
+                    left: (rect[0] / data.width) * 100 + "%",
+                    top:
+                      ((data.height - rect[1] - rect[3]) / data.height) * 100 +
+                      "%",
+                    width: Math.max((rect[2] / data.width) * 100, 12) + "%",
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <textarea
+                    aria-label="Edit selected PDF text"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    style={{ fontSize: fontSize * zoom }}
+                  />
+                  <button disabled={busy} onClick={() => void prepare()}>
+                    Preview change
+                  </button>
+                  <button
+                    aria-label="Cancel text edit"
+                    onClick={() => setSelected(null)}
+                  >
+                    <CloseIcon />
+                  </button>
+                </div>
+              )}
             {editing &&
               ["insert_text", "insert_image"].includes(action) &&
               data?.width && (

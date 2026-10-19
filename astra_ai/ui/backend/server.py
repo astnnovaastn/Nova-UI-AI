@@ -2291,9 +2291,10 @@ def _save_search_record(query: str, summary: str, results: Any, record_id: Optio
 
 _research_services = {}
 background_model=None
+research_model=None
 async def _synthesize_research(query,sources):
-    if background_model is None:return ''
-    return await background_model.report(query.removeprefix('[DOCUMENTARY]\n'),sources,kind='documentary' if query.startswith('[DOCUMENTARY]\n') else 'research')
+    if research_model is None:return ''
+    return await research_model.report(query.removeprefix('[DOCUMENTARY]\n'),sources,kind='documentary' if query.startswith('[DOCUMENTARY]\n') else 'research')
 
 
 def get_research_services():
@@ -2302,7 +2303,7 @@ def get_research_services():
     key=str(path.resolve())
     if key not in _research_services:
         artifacts=ResearchArtifacts(path)
-        _research_services[key]=(artifacts,ResearchSearch(artifacts,_get_env_value,synthesize=_synthesize_research))
+        _research_services[key]=(artifacts,ResearchSearch(artifacts,_get_env_value,synthesize=_synthesize_research,illustrate=True))
     return _research_services[key]
 
 async def _aegis_search_web(arguments):
@@ -2312,7 +2313,7 @@ async def _aegis_search_web(arguments):
     artifacts,service=get_research_services()
     if str(arguments.get('action','')).startswith('document_'):
         from astra_ai.ui.backend.document_api import run_document_job
-        result=await run_document_job(artifacts,service,background_model,learning_service.cpu,arguments,context)
+        result=await run_document_job(artifacts,service,research_model,learning_service.cpu,arguments,context)
         if context.get('client_id'):
             await ws_manager.send_to_client_id(context['client_id'],{'type':'research_refresh','research_id':arguments.get('research_id')})
         if result.get('status')=='completed' and arguments.get('action')=='document_compose':
@@ -2322,12 +2323,24 @@ async def _aegis_search_web(arguments):
     if arguments.get('action')=='media':
         return await service.enrich_media(str(arguments.get('research_id','')),context,str(arguments.get('research_revision','')))
     result=await service.search(arguments,context,context.get('operation_id',''))
-    if result.get('status')=='completed' and result.get('research_id') and learning_service and not context.get('guest'):
+    if result.get('image_enrichment'):
+        await ws_manager.send_to_client_id(context.get('client_id',''),{'type':'research_refresh','research_id':result['research_id']})
+    if result.get('status')=='completed' and result.get('research_id'):
+        child=await asyncio.to_thread(artifacts.request_state,result['research_id'],context)
+        parent_id=child.get('document_parent_id')
+        if parent_id:
+            with artifacts.lock:
+                parent=artifacts.request_state(parent_id,context)
+                if parent.get('status')=='ok':
+                    cards=parent.get('research_cards',[])
+                    if not any(c['id']==result['research_id'] for c in cards):artifacts.request_state(parent_id,context,research_cards=[*cards,{'id':result['research_id'],'title':child.get('display_title',result.get('query','Research')),'revision':result['research_revision']}])
+            await ws_manager.send_to_client_id(context.get('client_id',''),{'type':'research_refresh','research_id':parent_id})
+    if result.get('status')=='completed' and not result.get('image_enrichment') and result.get('research_id') and learning_service and not context.get('guest'):
         item=await asyncio.to_thread(artifacts.get,result['research_id'],context,result['research_revision'])
         if item['status']=='ok':
             indexed=await asyncio.to_thread(learning_service.import_artifact,item['artifact'],context)
             result['knowledge_index_status']=indexed.get('status')
-    if result.get('status')=='completed' and not result.get('no_more') and result.get('research_id') and artifacts.get(result['research_id'],context).get('status')=='ok' and context.get('client_id') and (arguments.get('mode')=='detailed' or context.get('requested_research')):
+    if result.get('status')=='completed' and not result.get('image_enrichment') and not result.get('no_more') and result.get('research_id') and artifacts.get(result['research_id'],context).get('status')=='ok' and context.get('client_id') and (arguments.get('mode')=='detailed' or context.get('requested_research')):
         metadata=await asyncio.to_thread(artifacts.request_state,result['research_id'],context)
         title=metadata.get('display_title') or result['query'][:90]
         notice_id=await asyncio.to_thread(notice_store.enqueue,'research',result['research_id'],result.get('media_revision') or result.get('extension_revision') or result['research_revision'],{'title':'Research ready: '+title},context)
@@ -5239,10 +5252,15 @@ async def lifespan(app: FastAPI):
     from astra_ai.core.background_model import BackgroundModel
     from astra_ai.core.research_learning import ResearchLearning
     from astra_ai.core.learned_capabilities import LearnedCapabilities
-    global learning_service,capability_service,background_budget,learning_warm_task,background_model
+    global learning_service,capability_service,background_budget,learning_warm_task,background_model,research_model
     learned_root=Path(__file__).resolve().parents[2]/'core'/'learned'
     background_budget=BackgroundBudget(state.live_memory.memory_path.parent/'background_budget.json')
     background_model=BackgroundModel(_get_groq_api_key,background_budget)
+    from astra_ai.core.research_model import GeminiResearchModel,resume_legacy_research_waits
+    research_budget=BackgroundBudget(state.live_memory.memory_path.parent/'research_gemini_budget.json')
+    research_budget.slot=background_budget.slot
+    research_model=GeminiResearchModel(lambda:state.gemini_api_key,research_budget,lambda:_get_env_value('GEMINI_TEXT_MODEL') or MODEL_STATUS['text'].get('effective') or TEXT_FALLBACK)
+    await asyncio.to_thread(resume_legacy_research_waits,action_jobs)
     state.memory_organizer.background_budget=background_budget
     from astra_ai.memory.organizer_runtime import OrganizationReview, GeminiMergeReviewer
     state.memory_organizer.organization_review=OrganizationReview(state.live_memory,GeminiMergeReviewer(lambda:state.gemini_api_key,background_budget))
@@ -5639,7 +5657,11 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
     if name not in names:return {"status":"rejected","reason":"unregistered_tool"}
     if context.get("guest") and name not in {d["name"] for d in MEMORY_TOOL_DECLARATIONS+MEMORY_EVENT_TOOL_DECLARATIONS} | {"search_web","get_system_status"}:
         return {"status":"rejected","reason":"Guest context cannot access owner widgets or private UI."}
-    if (name=='search_web' or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and context.get('research_id') and research_followup(context.get('user_text','')):
+    selected_document=False
+    if context.get('research_id'):
+        selected_artifacts,_=get_research_services()
+        selected_document=selected_artifacts.get(context['research_id'],context).get('artifact',{}).get('kind')=='documentary'
+    if not selected_document and (name=='search_web' or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and context.get('research_id') and research_followup(context.get('user_text','')):
         return await continue_research(context['research_id'],context,operation_id,detail=context.get('user_text',''))
     if (name in {'search_web','notes_action'} or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and action_jobs.task:
         actions=[{'name':name,'arguments':{k:v for k,v in arguments.items() if k!='save_to_notes'}}]
@@ -5649,6 +5671,7 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
             reserved=await asyncio.to_thread(artifacts.reserve,str(arguments.get('query','')),arguments.get('mode','quick'),context,operation_id)
             if reserved.get('status')!='ok':return reserved
             actions[0]['arguments']={k:v for k,v in actions[0]['arguments'].items() if k!='query'}|{'research_id':reserved['id']}
+            if selected_document:await asyncio.to_thread(artifacts.request_state,reserved['id'],context,document_parent_id=context['research_id'])
             context={**context,'requested_research':True}
         if name=='search_web' and arguments.get('save_to_notes') is True:
             actions.append({'name':'notes_action','arguments':{'action':'import_research'},'depends_on':[0],
@@ -5764,7 +5787,10 @@ async def _background_search(query):
     artifacts,service=get_research_services()
     from astra_ai.memory.shared_memory import stable
     scoped={**context,'background':True}
-    result=await service.search({'query':query,'mode':'quick','max_results':4},scoped,str(context.get('operation_id',''))+':question:'+stable(query))
+    from astra_ai.core.research_learning import ResearchSearch
+    learner_search=ResearchSearch(artifacts,_get_env_value,synthesize=background_model.report if background_model else None)
+    learner_search.network=service.network
+    result=await learner_search.search({'query':query,'mode':'quick','max_results':4},scoped,str(context.get('operation_id',''))+':question:'+stable(query))
     if result.get('research_id'):
         full=await asyncio.to_thread(artifacts.get,result['research_id'],scoped,result['research_revision'])
         if full['status']=='ok':result={**result,'results':full['artifact']['sources']}
@@ -8439,9 +8465,19 @@ async def research_restore(identifier:str,request:Request):
     artifacts,_=get_research_services();body=await request.json()
     return await asyncio.to_thread(artifacts.restore,identifier,_learning_context(request),str(body.get('undo_token','')))
 
+@app.post('/api/research/{identifier}/images/enrich')
+async def research_images(identifier:str,request:Request):
+    context=_learning_context(request);artifacts,_=get_research_services();found=await asyncio.to_thread(artifacts.get,identifier,context)
+    if found['status']!='ok':return found
+    metadata=await asyncio.to_thread(artifacts.request_state,identifier,context)
+    if metadata.get('images_prepared') and metadata.get('image_enrichment_version')==3:return {'status':'completed','research_id':identifier}
+    result=action_jobs.submit([{'name':'search_web','arguments':{'action':'images','research_id':identifier}}],context,'research-images-v3-'+identifier,goal='Prepare research illustrations')
+    return {**result,'research_id':identifier}
+
 @app.get('/api/research/{identifier}/reader')
-async def research_reader(identifier:str,request:Request,revision:str='',cursor:int=0):
-    artifacts,_=get_research_services();return await asyncio.to_thread(artifacts.reader,identifier,_learning_context(request),revision,cursor)
+async def research_reader(identifier:str,request:Request,revision:str='',cursor:int=0,stream:str='all'):
+    if stream not in {'all','base','extensions'}:raise HTTPException(400,'Invalid reader stream')
+    artifacts,_=get_research_services();return await asyncio.to_thread(artifacts.reader,identifier,_learning_context(request),revision,cursor,20000,stream)
 
 @app.get('/api/research/{identifier}/conversation')
 async def research_conversation(identifier:str,request:Request):
@@ -8469,7 +8505,7 @@ async def _research_thread(identifier,context):
     from astra_ai.core.research_documents import DocumentFiles
     files=await asyncio.to_thread(DocumentFiles(artifacts).listing,identifier,context)
     draft=artifacts.snapshot().get('drafts',{}).get(identifier,{})
-    return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'kind':item.get('kind','research'),'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'draft_revision':draft.get('revision',''),'attachments':[{k:f.get(k) for k in ('id','name','mime','page_count','status','revision','pdf_revision','needs_ocr')} for f in files],'summary':document.get('report','')[:4000] or item['summary'][:1600],'evidence':[{'id':'S'+str(i+1),'title':r['title'][:180],'excerpt':evidence_excerpt(r,400),'attachment_id':r.get('attachment_id'),'page':r.get('page')} for i,r in enumerate(sources[:6])]}
+    return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'kind':item.get('kind','research'),'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'draft_revision':draft.get('revision',''),'draft_excerpt':re.sub('<[^>]+>',' ',draft.get('html',''))[:5000],'research_cards':metadata.get('research_cards',[]),'attachments':[{k:f.get(k) for k in ('id','name','mime','page_count','status','revision','pdf_revision','needs_ocr')} for f in files],'summary':document.get('report','')[:4000] or item['summary'][:1600],'evidence':[{'id':'S'+str(i+1),'title':r['title'][:180],'excerpt':evidence_excerpt(r,400),'attachment_id':r.get('attachment_id'),'page':r.get('page')} for i,r in enumerate(sources[:6])]}
 
 async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     snapshot=snapshot if snapshot is not None else ui_context(client_id).get('snapshot',{})
@@ -8486,7 +8522,7 @@ async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     artifacts,_=get_research_services()
     found=await asyncio.to_thread(artifacts.get,identifier,context)
     if found.get('status')!='ok':return {}
-    item=found['artifact'];key=(identifier,item['revision'],artifacts._snapshot_key,context['profile_id'],context['project_id'],snapshot.get('selection_revision'),snapshot.get('reader_end'),snapshot.get('research_tab'),snapshot.get('attachment_id'),snapshot.get('attachment_page'),snapshot.get('attachment_revision'))
+    item=found['artifact'];key=(identifier,item['revision'],artifacts._snapshot_key,context['profile_id'],context['project_id'],snapshot.get('selection_revision'),snapshot.get('reader_end'),snapshot.get('research_tab'),snapshot.get('attachment_id'),snapshot.get('attachment_page'),snapshot.get('attachment_revision'),snapshot.get('editor_selection'),snapshot.get('editor_draft_revision'))
     cached=getattr(live,'_research_context_cache',None) if live else None
     if hydrate and cached and cached[0]==key and time.monotonic()-cached[1]<20:return cached[2]
     focus=await _research_thread(identifier,context) if hydrate else {'research_id':identifier,'research_revision':item['revision'],'thread_id':item.get('thread_id','research-'+identifier)}
@@ -8497,6 +8533,7 @@ async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     cursor=max(0,int(snapshot.get('reader_end') or 0)-6)
     visible=await asyncio.to_thread(artifacts.reader,identifier,context,focus['research_revision'],cursor,4000)
     focus['visible_section']=visible.get('report','')[:2400]
+    if snapshot.get('editor_draft_revision')==focus.get('draft_revision'):focus['editor_selection']=snapshot.get('editor_selection','')
     if snapshot.get('attachment_id'):
         from astra_ai.core.research_documents import DocumentFiles
         files=DocumentFiles(artifacts);file_id=snapshot['attachment_id'];origin=snapshot.get('attachment_origin_id') or identifier

@@ -174,7 +174,8 @@ def test_expansion_appends_new_scoped_citations_without_new_report_or_draft_chan
     result=asyncio.run(service.search({'action':'expand','research_id':item['id'],'research_revision':item['revision'],'detail':'Include the latest evidence'},CTX,'extend'))
     assert result['research_id']==item['id'] and store.listing(CTX)['total']==1 and len(requests)==1
     doc=store.document(item['id'],CTX,bounded=True)
-    assert [r['id'] for r in doc['sources']]==['S1','S2'] and 'New support' in doc['report']
+    assert [r['id'] for r in doc['sources']]==['S1','S2'] and 'New support' in doc['extensions']['report']
+    assert 'New support' not in doc['report']
     assert doc['draft']==draft and store.get(item['id'],CTX)['artifact']['report']==item['report']
     again=asyncio.run(service.search({'action':'expand','research_id':item['id'],'research_revision':item['revision']},CTX,'extend'))
     assert again['status']=='completed' and len(requests)==1

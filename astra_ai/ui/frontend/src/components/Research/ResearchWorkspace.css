@@ -11,13 +11,7 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(
-      ellipse at 30% 0,
-      color-mix(in srgb, var(--accent-readable, #8a9ec5) 8%, transparent),
-      transparent 60%
-    ),
-    var(--r-bg);
+  background: var(--r-bg);
   color: var(--r-fg);
   font:
     13px/1.6 system-ui,
@@ -1323,13 +1317,16 @@
   display: block;
   height: 12px;
   border-radius: 20px;
-  background: linear-gradient(
-    100deg,
-    color-mix(in srgb, var(--r-fg) 8%, transparent) 20%,
-    color-mix(in srgb, var(--r-fg) 18%, transparent) 45%,
-    color-mix(in srgb, var(--r-fg) 8%, transparent) 70%
-  );
-  background-size: 240% 100%;
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--r-fg) 8%, transparent);
+}
+.research-skeleton i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 35%;
+  background: color-mix(in srgb, var(--r-fg) 12%, transparent);
   animation: research-shimmer 2s ease-in-out infinite;
 }
 .research-skeleton i:first-child {
@@ -1340,14 +1337,14 @@
 }
 @keyframes research-shimmer {
   from {
-    background-position: 100% 0;
+    transform: translateX(-120%);
   }
   to {
-    background-position: -140% 0;
+    transform: translateX(400%);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .research-skeleton i {
+  .research-skeleton i::after {
     animation: none;
   }
 }
@@ -1612,4 +1609,229 @@
 .research-continuation .research-skeleton {
   margin: 14px 0;
 }
-.research-opening{padding:32px;min-height:300px}.research-opening>p{color:var(--text-secondary,#b4b4af);font-size:14px;margin-bottom:28px}
+.research-opening {
+  padding: 32px;
+  min-height: 300px;
+}
+.research-opening > p {
+  color: var(--text-secondary, #b4b4af);
+  font-size: 14px;
+  margin-bottom: 28px;
+}
+.research-image-composition {
+  margin: 14px 0 22px;
+}
+.research-image-composition .research-evidence-image {
+  float: none;
+  width: auto;
+  margin: 0;
+}
+.research-image-composition.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+.research-image-composition.gallery img {
+  height: 170px;
+  max-height: 190px;
+  width: 100%;
+  object-fit: contain;
+}
+.research-image-composition.aside {
+  float: inline-start;
+  width: min(31%, 260px);
+  margin-inline-end: 24px;
+}
+.research-image-composition.wide {
+  max-width: 760px;
+}
+.research-image-composition.wide img {
+  max-height: 340px;
+  width: 100%;
+}
+.research-illustrated-block {
+  display: flow-root;
+}
+.research-evidence-card {
+  border-bottom: 0;
+  margin-bottom: 26px;
+}
+.research-prose hr {
+  border: 0;
+  height: 0;
+  margin: 26px 0;
+}
+.research-extension {
+  margin-block: 30px;
+  animation: research-reveal 240ms ease-out;
+}
+@keyframes research-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.research-source-preview > header > button {
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 6px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+}
+.document-paper-editor {
+  padding: 0 20px 130px;
+  background: #242522;
+  min-height: 100%;
+}
+.document-paper-editor .research-editor-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 -20px 18px;
+  padding: 10px 20px;
+  background: var(--r-panel, #30312e);
+}
+.document-paper-editor .tiptap {
+  box-sizing: border-box;
+  width: min(100%, 794px);
+  min-height: 1000px;
+  margin-inline: auto;
+  padding: 54px 58px;
+  color: #252725;
+  background: #fff;
+  box-shadow: 0 2px 8px #0002;
+  font-size: 16px;
+  line-height: 1.75;
+}
+.document-paper-editor .tiptap a {
+  color: #9b4932;
+}
+.document-paper-editor .tiptap h1,
+.document-paper-editor .tiptap h2,
+.document-paper-editor .tiptap h3 {
+  color: #202520;
+}
+.document-page-break {
+  break-after: page;
+  border-top: 1px dashed #7777;
+  margin: 40px -20px;
+  height: 24px;
+}
+.document-page-break::after {
+  content: "Page break";
+  display: block;
+  text-align: center;
+  font-size: 11px;
+  color: #777;
+}
+@container (max-width:650px) {
+  .research-image-composition.aside {
+    float: none;
+    width: min(100%, 300px);
+    margin-inline-end: 0;
+  }
+  .document-paper-editor .tiptap {
+    padding: 28px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .research-extension {
+    animation: none;
+  }
+}
+.document-research-card {
+  padding: 14px !important;
+  background: var(--r-panel, #30312e);
+  border-radius: 10px;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 8px;
+}
+.document-research-card small,
+.document-research-card button {
+  grid-column: 2;
+}
+.document-research-card svg {
+  width: 17px;
+  height: 17px;
+}
+.document-export-preview {
+  position: fixed;
+  inset: 5vh 8vw;
+  z-index: 220;
+  display: flex;
+  flex-direction: column;
+  background: var(--r-panel, #30312e);
+  border: 1px solid var(--r-edge, #ffffff20);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 20px 80px #0008;
+}
+.document-export-preview header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 16px;
+}
+.document-export-preview header a {
+  margin-left: auto;
+  color: inherit;
+  font-size: 13px;
+}
+.document-export-preview header button {
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  border: 0;
+  border-radius: 7px;
+  color: inherit;
+  background: #ffffff0a;
+  cursor: pointer;
+}
+.document-export-preview iframe {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #ddd;
+}
+.research-extension-block {
+  animation: research-reveal 240ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .research-extension-block {
+    animation: none;
+  }
+}
+.document-export-pages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  background: #d5d6d3;
+}
+.document-export-pages canvas {
+  display: block;
+  margin: 0 auto;
+  max-width: none;
+  background: white;
+}
+.document-export-preview header button:not([aria-label]) {
+  width: auto;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+.document-export-preview header span {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.document-paper-preview {
+  padding-top: 24px;
+}

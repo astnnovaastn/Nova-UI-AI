@@ -47,7 +47,7 @@ async def run_document_job(artifacts,search,model,cpu,args,context):
         return {'status':'rejected','reason':'unsupported_document_operation'}
     except (ValueError,OSError) as error:return {'status':'failed','reason':str(error)[:180]}
 
-def authored_preview(files,identifier,context,markdown,expected_revision,operation_id):
+def authored_preview(files,identifier,context,markdown,expected_revision,operation_id,placement="replace",selected_text="",section_heading=""):
     from markdown_it import MarkdownIt
     import bleach
     files.require(identifier,context)
@@ -60,10 +60,41 @@ def authored_preview(files,identifier,context,markdown,expected_revision,operati
     soup=BeautifulSoup(html,'html.parser')
     for image in soup.find_all('img'):
         match=re.fullmatch(r'/api/research/([0-9a-f]{32})/attachments/([0-9a-f]{32})/images/(A[0-9a-f]{24})',image.get('src',''))
-        if not match:image.decompose();continue
+        if not match:
+            research=re.fullmatch(r'/api/research/([0-9a-f]{32})/images/(I[0-9a-f]{24})',image.get('src',''))
+            if not research or research[1]!=identifier or not any(i['id']==research[2] for i in files.artifacts.images(identifier,context)):image.decompose()
+            continue
         row=files.get(match[1],context,match[2])
         if not row or not any(i['id']==match[3] for i in [*row.get('images',[]),*[i for r in row.get('pdf_revisions',[]) for i in r.get('images',[])]]):image.decompose()
+    if placement not in {'replace','append','selection','section'}:raise ValueError('invalid_document_placement')
+    previous=BeautifulSoup((current.get('draft') or {}).get('html',''),'html.parser')
+    fragments=list(soup.contents)
+    if placement=='append':
+        for fragment in fragments:previous.append(fragment)
+        soup=previous
+    elif placement=='section':
+        headings=[h for h in previous.find_all(['h1','h2','h3','h4']) if h.get_text(' ',strip=True).casefold()==section_heading.strip().casefold()]
+        if len(headings)!=1:raise ValueError('document_section_is_missing_or_ambiguous')
+        anchor=headings[0]
+        for fragment in fragments:anchor.insert_after(fragment);anchor=fragment
+        soup=previous
+    elif placement=='selection':
+        if not selected_text or len(selected_text)>600:raise ValueError('select_a_short_document_passage')
+        matches=[n for n in previous.find_all(string=True) if selected_text in str(n)]
+        if len(matches)!=1 or str(matches[0]).count(selected_text)!=1:raise ValueError('selection_changed_or_crosses_formatted_blocks')
+        node=matches[0];before,after=str(node).split(selected_text,1)
+        # Insert at a text position. Block fragments are split out of the containing paragraph.
+        parent=node.parent
+        if parent.name in {'p','h1','h2','h3','h4'} and parent.get_text()==str(node):
+            from bs4 import NavigableString
+            if before:parent.insert_before(BeautifulSoup('<p></p>','html.parser').p);parent.previous_sibling.string=before
+            for fragment in fragments:parent.insert_before(fragment)
+            if after:parent.insert_before(BeautifulSoup('<p></p>','html.parser').p);parent.previous_sibling.string=after
+            parent.decompose()
+        else:raise ValueError('select_a_plain_text_paragraph_or_use_append')
+        soup=previous
     html=str(soup)
+    if len(html)>1_000_000:raise ValueError('document_too_large')
     folder=files.root/identifier/'authored';folder.mkdir(parents=True,exist_ok=True)
     proposal={'id':operation_id,'html':html,'expected_revision':expected_revision,'source_revision':current['research_revision']}
     atomic(folder/(operation_id+'.json'),proposal)
@@ -108,7 +139,7 @@ async def document_tool(artifacts,context,args,operation_id,jobs):
             result=await asyncio.to_thread(files.page,identifier,context,file_id,int(args.get('page',1)),revision,int(args.get('offset',0)),3500,int(args.get('object_offset',0)),20)
             result.pop('attachment',None)
             return {**result,'pdf_revision':revision}
-        if action=='preview_document':return await asyncio.to_thread(authored_preview,files,identifier,context,str(args.get('markdown','')),str(args.get('draft_revision','')),operation_id)
+        if action=='preview_document':return await asyncio.to_thread(authored_preview,files,identifier,context,str(args.get('markdown','')),str(args.get('draft_revision','')),operation_id,str(args.get('placement','append')),str(args.get('selected_text','')),str(args.get('section_heading','')))
         if action=='apply_document':return await asyncio.to_thread(authored_apply,files,identifier,context,str(args.get('edit_id','')))
         if action=='preview_pdf':
             edit_id=uuid.uuid4().hex;file_id=str(args.get('attachment_id',''))

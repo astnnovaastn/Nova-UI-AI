@@ -11,6 +11,7 @@ from astra_ai.memory.shared_memory import atomic, read, stable, now, StorageLock
 MAX_FILE=25*1024*1024
 PDF_MIME='application/pdf'
 DOCX_MIME='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+PPTX_MIME='application/vnd.openxmlformats-officedocument.presentationml.presentation'
 PDF_LOCK=threading.RLock() # PDFium is not thread-safe, including read-only native operations.
 
 def export_illustrations(artifacts,identifier,context,soup,document,draft=False):
@@ -146,12 +147,12 @@ class DocumentFiles:
     def identify(name, body):
         suffix=Path(name).suffix.lower()
         if body.startswith(b'%PDF-'):return PDF_MIME
-        if body.startswith(b'PK') and suffix=='.docx':
+        if body.startswith(b'PK') and suffix in {'.docx','.pptx'}:
             with zipfile.ZipFile(io.BytesIO(body)) as archive:
                 entries=archive.infolist()
                 if len(entries)>5000 or sum(f.file_size for f in entries)>100*1024*1024 or any(f.file_size>max(1,f.compress_size)*1000 for f in entries):raise ValueError('document_archive_too_large')
-                if not {'[Content_Types].xml','word/document.xml'}<=set(archive.namelist()):raise ValueError('invalid_docx')
-            return DOCX_MIME
+                if not {'[Content_Types].xml','ppt/presentation.xml' if suffix=='.pptx' else 'word/document.xml'}<=set(archive.namelist()):raise ValueError('invalid_office_document')
+            return PPTX_MIME if suffix==".pptx" else DOCX_MIME
         if body.startswith((b'\x89PNG',b'\xff\xd8\xff')) or body[:4]==b'RIFF' and body[8:12]==b'WEBP':
             from PIL import Image
             with Image.open(io.BytesIO(body)) as image:
@@ -257,6 +258,20 @@ class DocumentFiles:
                         except (ValueError,OSError):pass
                 text='\n\n'.join(parts);truncated=len(text)>500000
                 pages=[{'page':1,'page_label':'Document blocks (original pagination unavailable)','text':reader_text(text[:500000]),'objects':blocks,'scanned':False}]
+            elif mime==PPTX_MIME:
+                import xml.etree.ElementTree as ET
+                with zipfile.ZipFile(io.BytesIO(body)) as archive:
+                    slides=sorted([n for n in archive.namelist() if re.fullmatch(r'ppt/slides/slide\d+\.xml',n)],key=lambda n:int(re.search(r'(\d+)\.xml',n)[1]))
+                    if len(slides)>100:raise ValueError('presentation_exceeds_100_slides')
+                    pages=[];total=0
+                    for number,name in enumerate(slides,1):
+                        root=ET.fromstring(archive.read(name));text='\n'.join(n.text or '' for n in root.iter() if n.tag.endswith('}t'));total+=len(text)
+                        if total>500000:raise ValueError('presentation_text_too_large')
+                        pages.append({'page':number,'page_label':f'Slide {number}','text':text,'objects':[],'scanned':not text.strip()})
+                    for name in archive.namelist():
+                        if name.startswith('ppt/media/') and name.lower().endswith(('.png','.jpg','.jpeg','.webp')) and len(images)<20:
+                            try:images.append(self._image(folder,archive.read(name),None,'Presentation illustration'))
+                            except (ValueError,OSError):pass
             elif mime.startswith('image/'):
                 images=[self._image(folder,body,1,row['name'])];pages=[{'page':1,'text':'','objects':[],'scanned':True}]
             else:

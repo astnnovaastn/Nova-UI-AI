@@ -185,7 +185,7 @@ def display_title(brief):
     if explicit:text=explicit.group(1)
     else:
         text=re.split(r'\n|(?i:research requirements|requirements:)|(?<=[.!?])\s+',text)[0]
-        text=re.sub(r'^(?:(?:hey|hi|please)[,! ]*|(?:can|could|would) you |(?:search|research|find|write|create|prepare|investigate) (?:for |about |information (?:on|about) |an? |exhaustive[, ]*|multimedia |research report |report (?:on|about) )*)+', '',text,flags=re.I).strip(' :,."')
+        text=re.sub(r'^(?:(?:hey|hi|please)\b[,! ]*|(?:can|could|would) you |(?:search|research|find|write|create|prepare|investigate) (?:for |about |information (?:on|about) |an? |exhaustive[, ]*|multimedia |research report |report (?:on|about) )*)+', '',text,flags=re.I).strip(' :,."')
     text=' '.join(text.split()) or 'Research findings'
     if len(text)>90:text=text[:87].rsplit(' ',1)[0].rstrip(',:;')+'…'
     return text[0].upper()+text[1:]
@@ -280,6 +280,12 @@ class ResearchArtifacts:
     def request_state(self, identifier, context, **updates):
         with self.lock:
             data=read(self.path,{'requests':{}}) if updates else self.snapshot();item=data.get('requests',{}).get(identifier)
+            if not item and updates:
+                legacy=data.get('artifacts',{}).get(identifier)
+                if legacy and scope(legacy)==scope(context):
+                    item={k:legacy[k] for k in ('id','query','mode','operation_id','created','created_epoch','profile_id','project_id','guest','session_id') if k in legacy}
+                    item.update(kind=legacy.get('kind','research'),thread_id='research-'+identifier,phase='complete',display_title=display_title(legacy['query']))
+                    data.setdefault('requests',{})[identifier]=item
             if not item or scope(item)!=scope(context):return {'status':'not_found'}
             if updates:
                 self.backup_metadata()
@@ -360,11 +366,15 @@ class ResearchArtifacts:
                 candidates.append({**row,'origin_research_id':item['id'],'origin_query':item['query'],'historical':time.time()-item['created_epoch']>86400})
         return candidates[:16]
 
-    def reader(self, identifier, context, revision='', cursor=0, limit=20000):
+    def reader(self, identifier, context, revision='', cursor=0, limit=20000, stream='all'):
         result=self.get(identifier,context,revision)
         if result['status']!='ok':return result
         item=result['artifact'];metadata=self.request_state(identifier,context)
         title=metadata.get('display_title') or display_title(item['query'])
+        headline=re.search(r'^# (.+)',item['report'],re.M)
+        if headline:
+            corrected=display_title(headline[1])
+            if corrected.casefold().startswith('hi') and title.casefold()==corrected[2:].casefold():title=corrected
         evidence='Sourced research excerpts.' in item['report'] or 'not a completed synthesis.' in item['report']
         if evidence:
             body='# '+title+'\n\n## Collected evidence\n\nSource excerpts are available below; this archived collection is not a completed synthesis.\n\n'+'\n\n'.join('### '+r['title']+'\n\n'+evidence_excerpt(r,1400)+' [S'+str(i+1)+']' for i,r in enumerate(item['sources']))
@@ -373,7 +383,8 @@ class ResearchArtifacts:
             body=re.sub(r'\A# [^\n]+', '# '+title, body, count=1)
         with self.lock:
             extensions=self.snapshot().get('extensions',{}).get(identifier,[])
-        body+=''.join('\n\n'+e['report'] for e in extensions)
+        if stream=='extensions':body=''
+        if stream!='base':body+=''.join('\n\n'+e['report'] for e in extensions)
         # Complete Markdown blocks only; fenced code remains one block.
         blocks=[];current=[];fence=False
         for line in body.splitlines(keepends=True):
@@ -392,7 +403,7 @@ class ResearchArtifacts:
             if len(block)>20000:page.append('\n[Oversized block is available in the full export.]\n')
             else:page.append(block)
             size+=len(page[-1]);end+=1
-        return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'extension_revision':stable(*[e['revision'] for e in extensions]),'report':''.join(page),'next_cursor':end if end<len(blocks) else None,'display_title':title,'cursor':cursor,'reader_end':end}
+        return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'extension_revision':stable(*[e['revision'] for e in extensions]),'report':''.join(page),'next_cursor':end if end<len(blocks) else None,'display_title':title,'cursor':cursor,'reader_end':end,'stream':stream,'blocks':[{'id':stable(item['revision'],stream,cursor+i,b),'text':b} for i,b in enumerate(page)]}
 
     def append_extension(self, identifier, context, revision, operation_id, report, sources=None):
         with self.lock:
@@ -527,11 +538,15 @@ class ResearchArtifacts:
         metadata=self.request_state(identifier,context)
         document['extension_activity']=self.extension_state(identifier,context)
         document['document_revisions']=metadata.get('document_revisions',[])
+        document['research_cards']=metadata.get('research_cards',[])
+        document['images_prepared']=metadata.get('images_prepared',False) and metadata.get('image_enrichment_version')==3
+        document['image_sources']=[{'id':r['source_id'],'url':r['source_url'],'title':r['caption'],'content':'Image attribution page; not claim evidence.'} for r in self.images(identifier,context) if r.get('source_id','').startswith('P')]
         document.update(display_title=metadata.get('display_title') or display_title(item['query']),thread_id=metadata.get('thread_id','research-'+identifier),phase=metadata.get('phase','complete'),processing_seconds=metadata.get('processing_seconds'),active_since=metadata.get('active_since'),next_attempt=metadata.get('next_attempt'),waiting_reason=metadata.get('waiting_reason'),image_items=[{k:v for k,v in image.items() if k!='url'} for image in self.images(identifier,context)])
         from .research_documents import DocumentFiles
         document.update(DocumentFiles(self).presentation(identifier,context))
         if bounded:
-            document.update(self.reader(identifier,context,revision))
+            document.update(self.reader(identifier,context,revision,stream='base'))
+            document['extensions']=self.reader(identifier,context,revision,stream='extensions')
             document['sources']=[{**r,'content':evidence_excerpt(r)} for r in sources]
             document['summary']=document['summary'][:1000]
         if bounded:
@@ -548,7 +563,7 @@ class ResearchArtifacts:
         if result['status']!='ok':return result
         if context.get('guest'):return {'status':'rejected','reason':'owner_required'}
         if not isinstance(html,str) or len(html)>1_000_000:return {'status':'rejected','reason':'draft_too_large'}
-        html=bleach.clean(html,tags={'p','h1','h2','h3','h4','strong','em','u','s','ul','ol','li','blockquote','pre','code','br','hr','a','table','thead','tbody','tr','th','td','img','span'},attributes={'a':['href','title','data-citation'],'img':['src','alt','title'],'th':['colspan','rowspan'],'td':['colspan','rowspan'],'span':['data-citation']},protocols={'https','http'},strip=True)
+        html=bleach.clean(html,tags={'p','h1','h2','h3','h4','strong','em','u','s','ul','ol','li','blockquote','pre','code','br','hr','a','table','thead','tbody','tr','th','td','img','span','div'},attributes={'a':['href','title','data-citation'],'img':['src','alt','title'],'th':['colspan','rowspan'],'td':['colspan','rowspan'],'span':['data-citation'],'div':['data-page-break','data-video-url','data-video-title']},protocols={'https','http'},strip=True)
         with self.lock:
             data=read(self.path,{'artifacts':{},'imports':{}});drafts=data.setdefault('drafts',{});previous=drafts.get(identifier)
             if (previous or {}).get('revision','')!=expected_revision:return {'status':'conflict','reason':'draft_revision_changed','draft':previous}
@@ -596,7 +611,10 @@ class ResearchArtifacts:
             from docx.opc.constants import RELATIONSHIP_TYPE
             from docx.shared import Inches
             doc=Document();doc.core_properties.title=title
-            for node in soup.find_all(['h1','h2','h3','p','li','blockquote','pre','table','img']):
+            for node in soup.find_all(['h1','h2','h3','p','li','blockquote','pre','table','img','div']):
+                if node.name=='div':
+                    if node.get('data-page-break'):doc.add_page_break()
+                    continue
                 if node.name=='img':
                     doc.add_picture(io.BytesIO(illustrations[node['data-export-image']]),width=Inches(2.6))
                     if node.get('alt'):doc.add_paragraph(node['alt'],style='Caption')
@@ -620,7 +638,7 @@ class ResearchArtifacts:
             for source in result['sources']:
                 paragraph=doc.add_paragraph('['+source['id']+'] ');link=OxmlElement('w:hyperlink');link.set(qn('r:id'),paragraph.part.relate_to(source['url'],RELATIONSHIP_TYPE.HYPERLINK,is_external=True));run=OxmlElement('w:r');value=OxmlElement('w:t');value.text=source['title'];run.append(value);link.append(run);paragraph._p.append(link)
             doc.save(output);return output.getvalue(),'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle,Image as ReportImage
+        from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle,Image as ReportImage,PageBreak
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
@@ -630,7 +648,10 @@ class ResearchArtifacts:
         if font.exists():
             if 'NovaExport' not in pdfmetrics.getRegisteredFontNames():pdfmetrics.registerFont(TTFont('NovaExport',str(font)))
             for style in styles.byName.values():style.fontName='NovaExport'
-        for node in soup.find_all(['h1','h2','h3','p','li','blockquote','pre','table','img']):
+        for node in soup.find_all(['h1','h2','h3','p','li','blockquote','pre','table','img','div']):
+            if node.name=='div':
+                if node.get('data-page-break'):story.append(PageBreak())
+                continue
             if node.name=='img':
                 image=ReportImage(io.BytesIO(illustrations[node['data-export-image']]))
                 scale=min(190/image.imageWidth,180/image.imageHeight,1);image.drawWidth=image.imageWidth*scale;image.drawHeight=image.imageHeight*scale;image.hAlign='LEFT';story.extend([image,Spacer(1,6)])
@@ -754,8 +775,10 @@ class ResearchArtifacts:
     def images(self, identifier, context):
         fetched=self.get(identifier,context)
         if fetched['status']!='ok':return []
+        metadata=self.request_state(identifier,context)
+        if metadata.get('images_prepared'):return metadata.get('selected_images',[])
         images=[];seen=set()
-        for index,source in enumerate(fetched['artifact']['sources']):
+        for index,source in enumerate(self.source_catalog(fetched['artifact'])):
             for row in source.get('images',[]):
                 url=str(row.get('url',''));parsed=urlsplit(url)
                 if parsed.scheme not in {'http','https'} or not parsed.hostname or parsed.username or parsed.password or url in seen:continue
@@ -785,7 +808,11 @@ class ResearchArtifacts:
         result=self.get(identifier,context,revision)
         if result['status']!='ok':raise ValueError(result['status'])
         item=result['artifact'];cache_scope=stable(scope(context),identifier,item['revision'])
-        if re.fullmatch(r'S[1-9][0-9]*',source_id):
+        if re.fullmatch(r'P[0-9a-f]{24}',source_id):
+            image=next((r for r in self.images(identifier,context) if r.get('source_id')==source_id),None)
+            if not image:raise ValueError('not_found')
+            url=image['source_url']
+        elif re.fullmatch(r'S[1-9][0-9]*',source_id):
             index=int(source_id[1:])-1
             catalog=self.source_catalog(item)
             if index>=len(catalog):raise ValueError('not_found')
@@ -838,9 +865,9 @@ class ResearchArtifacts:
 
 
 class ResearchSearch:
-    def __init__(self, artifacts, key_provider, transport=requests, synthesize=None):
+    def __init__(self, artifacts, key_provider, transport=requests, synthesize=None, illustrate=False):
         self.artifacts=artifacts;self.key_provider=key_provider;self.transport=transport
-        self.synthesize=synthesize
+        self.synthesize=synthesize;self.illustrate=illustrate
         self.network=asyncio.Semaphore(4);self.operation_locks={};self.provider_states={}
 
     def _request(self, query, mode, count):
@@ -996,6 +1023,14 @@ class ResearchSearch:
             return {**self.artifacts.brief(item),**result}
 
     async def search(self, arguments, context, operation_id=''):
+        if arguments.get('action')=='images':
+            identifier=str(arguments.get('research_id',''));found=await asyncio.to_thread(self.artifacts.get,identifier,context)
+            if found['status']!='ok':return found
+            from .research_illustrations import prepare_images,place_images
+            async with self.operation_locks.setdefault(stable('illustrate',scope(context),identifier),asyncio.Lock()):
+                rows=await prepare_images(self,identifier,context,self.artifacts.source_catalog(found['artifact']),display_title(found['artifact']['query']))
+                await asyncio.to_thread(self.artifacts.request_state,identifier,context,selected_images=place_images(rows,found['artifact']['report']))
+            return {**self.artifacts.brief(found['artifact']),'image_enrichment':True}
         if arguments.get('action')=='expand':return await self.expand_report(arguments,context,operation_id)
         if arguments.get('action')=='more_media':return await self.more_media(arguments,context,operation_id)
         pending=None
@@ -1044,9 +1079,11 @@ class ResearchSearch:
                     await asyncio.to_thread(checkpoint,phase='failed',failures=failures)
                     return {'status':'failed','reason':first['reason'],'retryable':bool(first.get('retryable')),'retry_after_seconds':first.get('retry_after_seconds',65),'query':query,'results':[],'failures':failures,'completeness':'unavailable'}
                 await asyncio.to_thread(checkpoint,phase='comparing_evidence',sources=sources,failures=failures)
-            if self.synthesize and mode=='detailed':
+            from .research_illustrations import prepare_images,place_images
+            illustrations=await prepare_images(self,identifier,context,sources,display_title(query)) if self.illustrate else []
+            if self.synthesize:
                 await asyncio.to_thread(checkpoint,phase='preparing_report')
-                try:report=await self.synthesize(query,sources)
+                try:report=await self.synthesize(('[QUICK]\n' if mode=='quick' else '')+query,sources)
                 except BudgetPaused as exc:
                     until=max(time.time()+5,exc.until)
                     await asyncio.to_thread(checkpoint,phase='waiting_for_quota',next_attempt=until,waiting_reason=exc.reason)
@@ -1058,6 +1095,7 @@ class ResearchSearch:
                 if not report:return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
             else:
                 report='# '+display_title(query)+'\n\n'+('These are source excerpts, not a completed synthesis.\n\n' if mode=='detailed' else '')+'\n\n'.join('### '+r['title']+'\n\n'+reader_text(r.get('content',''))[:(500000 if mode=='detailed' else 1200)]+' [S'+str(i+1)+']' for i,r in enumerate(sources))+'\n\n## Limitations\nSearch excerpts may be incomplete; consult the supporting sources.'
+            await asyncio.to_thread(self.artifacts.request_state,identifier,context,selected_images=place_images(illustrations,report))
             title=display_title(re.search(r'^# (.+)',report,re.M).group(1)) if re.search(r'^# (.+)',report,re.M) else display_title(query)
             await asyncio.to_thread(checkpoint,display_title=title,phase='complete',next_attempt=None)
             item=await asyncio.to_thread(self.artifacts.save,query,mode,report,sources,failures,context,operation_id or key)
