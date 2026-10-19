@@ -5983,6 +5983,7 @@ async def _start_gemini_voice(websocket: WebSocket, *, reset_retry: bool = True,
         status_provider=status_provider,
     )
     session.guest=guest
+    session.research_focus_provider=lambda:_live_research_focus(session,client_id)
     focused=ui_context(client_id).get('snapshot',{})
     if not guest and focused.get('view')=='research' and focused.get('research_id'):
         thread=await _research_thread(str(focused['research_id']),{'profile_id':session.profile_id,'project_id':session.project_id})
@@ -6134,12 +6135,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 elif msg_type == "ui_context":
                     changed=set_ui(ws_manager.client_id(websocket),message.get("snapshot",{}))
                     live=state.live_sessions.get(websocket)
-                    if changed and live and not live.guest:
-                        snapshot=message.get('snapshot',{})
-                        identifier=str(snapshot.get('research_id','')) if snapshot.get('view')=='research' else ''
-                        thread=await _research_thread(identifier,{'profile_id':live.profile_id,'project_id':live.project_id}) if identifier else {}
-                        live.research_focus={**thread,**{k:snapshot[k] for k in ('reader_cursor','reader_end','research_tab','source_visible_count','media_visible_count') if k in snapshot}} if thread.get('status')=='ok' else {}
-                        await ws_manager.send_to_client(websocket,{'type':'research_focus_ack','research_id':live.research_focus.get('research_id',''),'thread_id':live.research_focus.get('thread_id','')})
+                    if not live or not live.guest:
+                        snapshot=ui_context(ws_manager.client_id(websocket)).get('snapshot',{})
+                        focus=await _live_research_focus(live,ws_manager.client_id(websocket),snapshot,hydrate=False)
+                        if live:live.research_focus=focus
+                        await ws_manager.send_to_client(websocket,{'type':'research_focus_ack','research_id':focus.get('research_id',''),'selection_revision':snapshot.get('selection_revision',0),'thread_id':focus.get('thread_id','')})
                     if changed and live and not live.guest and not live._audio_started and not live._input_parts:
                         if not live.guest:await live.refresh_ui(ui_context(ws_manager.client_id(websocket)))
                 elif msg_type == "live_start":
@@ -6187,7 +6187,9 @@ async def websocket_endpoint(websocket: WebSocket):
                             await ws_manager.send_to_client(websocket,{'type':'live_error','message':'Invalid request identifier.'})
                             continue
                         if source=='search_widget':text='Search in the Search widget for '+str(message.get('display_query') or text)
-                        if str(message.get('research_id') or '') != str((getattr(session,'research_focus',{}) or {}).get('research_id','')):
+                        snapshot=ui_context(ws_manager.client_id(websocket)).get('snapshot',{})
+                        current_id=str(snapshot.get('research_id') or '') if snapshot.get('view')=='research' else ''
+                        if str(message.get('research_id') or '') != current_id or ('selection_revision' in message and message['selection_revision']!=snapshot.get('selection_revision',0)):
                             await ws_manager.send_to_client(websocket,{'type':'live_error','message':'Research focus changed. Your message was not submitted; select the report and retry.'})
                             continue
                         accepted=await session.send_text(text,request_id=rid)
@@ -8445,7 +8447,40 @@ async def _research_thread(identifier,context):
             rows.insert(0,{'id':'origin:'+identifier,'role':'user','content':metadata['origin_text'],'timestamp':metadata.get('created'),'origin_session_id':metadata.get('origin_session_id'),'attribution':'initiating_request'})
         return rows[-100:]
     rows=await asyncio.to_thread(messages)
-    return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'summary':item['summary'][:1600]}
+    document=await asyncio.to_thread(artifacts.reader,identifier,context,item['revision'],0,8000)
+    sources=await asyncio.to_thread(artifacts.source_catalog,item)
+    from astra_ai.core.research_learning import evidence_excerpt
+    return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'kind':item.get('kind','research'),'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'summary':document.get('report','')[:7000] or item['summary'][:1600],'evidence':[{'id':'S'+str(i+1),'title':r['title'],'excerpt':evidence_excerpt(r,500)} for i,r in enumerate(sources[:6])]}
+
+async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
+    snapshot=snapshot if snapshot is not None else ui_context(client_id).get('snapshot',{})
+    if live and live.guest:return {}
+    context={'profile_id':getattr(live,'profile_id',''),'project_id':getattr(live,'project_id','')}
+    identifier=str(snapshot.get('research_id','')) if snapshot.get('view')=='research' else ''
+    if not identifier:
+        recent=str(snapshot.get('recent_research_id',''))
+        if live:
+            artifacts,_=get_research_services();found=await asyncio.to_thread(artifacts.get,recent,context) if recent else {}
+            item=found.get('artifact',{}) if found.get('status')=='ok' else {}
+            live.recent_research_reference={'research_id':recent,'title':item.get('display_title') or item.get('query',''),'summary':item.get('summary','')[:1200]} if item else {}
+        return {}
+    artifacts,_=get_research_services()
+    found=await asyncio.to_thread(artifacts.get,identifier,context)
+    if found.get('status')!='ok':return {}
+    item=found['artifact'];key=(identifier,item['revision'],context['profile_id'],context['project_id'],snapshot.get('selection_revision'),snapshot.get('reader_end'),snapshot.get('research_tab'))
+    cached=getattr(live,'_research_context_cache',None) if live else None
+    if hydrate and cached and cached[0]==key and time.monotonic()-cached[1]<20:return cached[2]
+    focus=await _research_thread(identifier,context) if hydrate else {'research_id':identifier,'research_revision':item['revision'],'thread_id':item.get('thread_id','research-'+identifier)}
+    if hydrate and focus.get('status')!='ok':return {}
+    focus.update({k:snapshot.get(k) for k in ('selection_revision','reader_cursor','reader_end','research_tab','source_visible_count','media_visible_count')})
+    artifacts,_=get_research_services()
+    if not hydrate:return focus
+    cursor=max(0,int(snapshot.get('reader_end') or 0)-6)
+    visible=await asyncio.to_thread(artifacts.reader,identifier,context,focus['research_revision'],cursor,4000)
+    focus['visible_section']=visible.get('report','')[:4000]
+    if live:live._research_context_cache=(key,time.monotonic(),focus)
+    return focus
+
 
 @app.post('/api/research/{identifier}/expand')
 async def research_expand(identifier:str,request:Request):

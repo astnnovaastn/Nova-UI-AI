@@ -372,6 +372,25 @@ def test_shared_ui_context_preserves_research_focus_without_inventing_views():
     snapshot=sanitize_ui({'view':'research','research_id':'report','research_revision':'revision','thread_id':'research-report','revision':5})
     assert snapshot['view']=='research' and snapshot['research_id']=='report' and snapshot['thread_id']=='research-report'
     assert sanitize_ui({'view':'arbitrary'})['view']=='dashboard'
+    assert sanitize_ui({'selection_revision':9,'recent_research_id':'report'})['selection_revision']==9
+    assert sanitize_ui({'selection_revision':True}).get('selection_revision',0)==0
+
+
+def test_turn_resolves_current_server_focus_before_freezing(tmp_path):
+    async def scenario():
+        sent=[];session=make_session(tmp_path,sent)
+        selected={'research_id':'fresh','thread_id':'research-fresh','messages':[]}
+        async def resolve():return dict(selected)
+        session.research_focus_provider=resolve
+        session.research_focus={'research_id':'stale','thread_id':'research-stale'}
+        await session._pin_research()
+        session._input_parts=['Question about the open report'];session._output_parts=['Its answer']
+        frozen=session._detach_turn()
+        selected.update(research_id='next',thread_id='research-next')
+        await session._pin_research();await session._complete_turn(frozen)
+        assert {r['session_id'] for r in session.memory_manager._messages()}=={'research-fresh'}
+        assert session._turn_focus['research_id']=='next'
+    asyncio.run(scenario())
 
 
 def test_leaving_research_restores_main_context_without_restarting_live(tmp_path):

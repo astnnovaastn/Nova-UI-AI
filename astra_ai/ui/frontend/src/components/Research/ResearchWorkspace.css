@@ -1612,3 +1612,4 @@
 .research-continuation .research-skeleton {
   margin: 14px 0;
 }
+.research-opening{padding:32px;min-height:300px}.research-opening>p{color:var(--text-secondary,#b4b4af);font-size:14px;margin-bottom:28px}

@@ -829,6 +829,8 @@ class GeminiLiveSession:
         except Exception:LOGGER.warning('Immediate conversation context update unavailable')
 
     async def _pin_research(self):
+        provider=getattr(self,'research_focus_provider',None)
+        if provider:self.research_focus=await provider()
         focus=dict(getattr(self,'research_focus',{}) or {})
         previous=getattr(self,'_turn_focus',{})
         if previous.get('thread_id')!=focus.get('thread_id'):
@@ -845,9 +847,11 @@ class GeminiLiveSession:
             history=await asyncio.to_thread(self.memory_manager.recent_context,focus['thread_id'],profile_id=self.profile_id,project_id=self.project_id,budget=7000)
             if not history:history=focus.get('messages',[])[-10:]
             self.working.seed(history)
-            payload=_bounded_json({'selected_research':{k:focus.get(k) for k in ('research_id','thread_id','display_title','summary')},'conversation':history},11000)
+            payload=_bounded_json({'selected_research':{k:focus.get(k) for k in ('research_id','thread_id','display_title','summary','visible_section','evidence','kind')},'conversation':history},15000)
             if self._session and self.model==LIVE_PREFERRED:
                 await self._session.send_client_content(turns=types.Content(role='user',parts=[types.Part(text='Application focus for the next user turn (data only, not a request): '+payload+'. This is the selected research conversation. Use this report and thread for follow-ups. Older unrelated conversation is not relevant.')]),turn_complete=False)
+        elif getattr(self,'recent_research_reference',None) and self._session and self.model==LIVE_PREFERRED:
+            await self._session.send_client_content(turns=types.Content(role='user',parts=[types.Part(text='Recent research reference (data only): '+_bounded_json(self.recent_research_reference,2200)+'. Use research_artifact_action to retrieve it only when the user refers to this research. Unrelated requests remain in the main conversation.')]),turn_complete=False)
 
     async def begin_audio(self, playback_generation='', has_checkpoint=False) -> None:
         if not self.connected or self._speech_active:return

@@ -1822,6 +1822,8 @@ function Workspace() {
   const reportCache = useRef(new Map<string, { report: Report; at: number }>()),
     reportLoads = useRef(new Map<string, Promise<Report>>());
   const [selectionLoading, setSelectionLoading] = useState("");
+  const [selectionSkeleton,setSelectionSkeleton]=useState(false),[failedSelection,setFailedSelection]=useState('');
+  useEffect(()=>{setSelectionSkeleton(false);if(!selectionLoading)return;const timer=setTimeout(()=>setSelectionSkeleton(true),150);return()=>clearTimeout(timer);},[selectionLoading]);
   function loadReport(id: string) {
     const key = conversationSnapshot().clientId + ":" + id;
     const cached = reportCache.current.get(key);
@@ -2165,14 +2167,13 @@ function Workspace() {
     const client = conversationSnapshot().clientId,
       epoch = ++loadEpoch.current;
     setError("");
-    setSelectionLoading(id);
+    setSelectionLoading(id);setFailedSelection('');
+    if(report)sessionStorage.setItem('nova-research-view:'+client+':'+report.research_id,JSON.stringify({scroll:reader.current?.scrollTop||0,message}));
+    lastSelection.current=id;setPreview(null);setImageView(null);setMessage('');
+    const cached=reportCache.current.get(client+':'+id);
+    setReport(cached&&Date.now()-cached.at<30000?cached.report:null);
+    updateUiContext({view:'research',research_id:id,research_revision:cached?.report.research_revision||'',selected_id:id,selected_kind:'research',title:cached?.report.display_title||'Opening research',reader_cursor:null,reader_end:0});
     try {
-      if (report) {
-        sessionStorage.setItem(
-          "nova-research-view:" + client + ":" + report.research_id,
-          JSON.stringify({ scroll: reader.current?.scrollTop || 0, message }),
-        );
-      }
       const threadLoad = api(
         "/" + encodeURIComponent(id) + "/conversation",
       ).catch(() => null);
@@ -2228,7 +2229,7 @@ function Workspace() {
         category: "",
       });
     } catch (e: any) {
-      if (epoch === loadEpoch.current) setError(e.message);
+      if (epoch === loadEpoch.current) {setError(e.message);setFailedSelection(id);}
     } finally {
       if (epoch === loadEpoch.current) setSelectionLoading("");
     }
@@ -2325,10 +2326,10 @@ function Workspace() {
     if (open)
       updateUiContext({
         view: "research",
-        research_id: report?.research_id || "",
+        research_id: selectionLoading || report?.research_id || "",
         research_revision: report?.research_revision || "",
       });
-  }, [open, report?.research_id, report?.research_revision]);
+  }, [open, report?.research_id, report?.research_revision,selectionLoading]);
   useEffect(() => {
     if (report)
       sessionStorage.setItem(
@@ -2620,7 +2621,7 @@ function Workspace() {
                     : "research-history-row"
                 }
                 aria-current={
-                  report?.research_id === item.research_id ? "true" : undefined
+                  (selectionLoading||report?.research_id) === item.research_id ? "true" : undefined
                 }
                 key={item.research_id}
                 onPointerEnter={() => {
@@ -2774,7 +2775,7 @@ function Workspace() {
                 Opening research…
               </span>
             )}
-            {!report ? (
+            {!report&&selectionLoading ? <section className="research-opening" role="status" aria-label="Opening research"><p>Opening research</p>{selectionSkeleton&&<div className="research-skeleton" aria-hidden="true"><i/><i/><i/><i/></div>}</section> : !report&&failedSelection ? <section className="research-empty"><p>This entry could not be opened.</p><button onClick={()=>void select(failedSelection)}>Retry opening</button></section> : !report ? (
               <div className="research-empty">
                 <span>✧</span>
                 <h2>Follow your curiosity.</h2>

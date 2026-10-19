@@ -382,6 +382,7 @@ socket.onMessage((msg) => {
   if(type==='status'&&msg.client_id){conversationState({clientId:String(msg.client_id)});socket.send({type:'conversation_attach',session_id:conversationSnapshot().sessionId});void conversationLoad(conversationSnapshot().sessionId).catch(()=>{});}
   if(type==='application_confirmation'){void confirmOwner(String(msg.title),String(msg.target),String(msg.revision)).then(confirmed=>socket.send({type:'widget_action_result',widget:'application_confirmation',request_id:msg.request_id,revision:msg.revision,confirmed,status:confirmed?'completed':'failed'}));return;}
   if(type==='application_control'){void applicationControl(msg).then(result=>socket.send({type:'widget_action_result',widget:'application',command:msg.action,request_id:msg.request_id,...result})).catch(e=>socket.send({type:'widget_action_result',widget:'application',request_id:msg.request_id,status:'failed',detail:e.message}));return;}
+  if(type==='research_focus_ack'){conversationState({focusId:String(msg.research_id||''),focusRevision:Number(msg.selection_revision||0)});window.dispatchEvent(new CustomEvent('nova-research-focus-ack',{detail:msg}));return;}
   if(type==='research_continue'){window.dispatchEvent(new CustomEvent('nova-research-continue',{detail:msg}));return;}
   if(type==='research_refresh'){window.dispatchEvent(new CustomEvent('nova-research-refresh',{detail:msg}));return;}
   if(type==='research_ready'){window.dispatchEvent(new CustomEvent('nova-research-ready',{detail:msg}));return;}
@@ -1062,7 +1063,7 @@ void import('./components/Research/ResearchWorkspace').then(m=>m.default());
 
 // Component-owned, allowlisted UI state; no credential or document scraping.
 let uiTimer:ReturnType<typeof setTimeout>|null=null;
-window.addEventListener('nova-ui-context',()=>{if(uiTimer)clearTimeout(uiTimer);uiTimer=setTimeout(()=>socket.send({type:'ui_context',snapshot:uiSnapshot()}),120);});
+window.addEventListener('nova-ui-context',()=>{if(uiTimer)clearTimeout(uiTimer);socket.send({type:'ui_context',snapshot:uiSnapshot()});});
 window.addEventListener('orbWidgetStateChange',(event:Event)=>{const d=(event as CustomEvent).detail||{};updateUiContext({widgets:Object.entries(d).filter(([,v])=>v===true).map(([k])=>k).slice(0,12)});});
 window.addEventListener('nova-chat-microphone',()=>btnMute.click());
 let memoryChatBusy=false;
@@ -1072,16 +1073,22 @@ window.addEventListener('nova-research-result',(event:Event)=>socket.send({type:
 window.addEventListener('nova-memory-view-result',(event:Event)=>{socket.send({type:'widget_action_result',...(event as CustomEvent).detail,widget:'memory'});});
 window.addEventListener('nova-job-cancel',async(event:Event)=>{const id=String((event as CustomEvent).detail?.job_id||'');if(id){const headers={'X-Nova-Client':conversationSnapshot().clientId};await fetch('/api/jobs/'+encodeURIComponent(id)+'/cancel',{method:'POST',headers});const r=await fetch('/api/jobs',{headers});if(r.ok){const data=await r.json();conversationState({jobs:data.jobs||[]});}}});
 
-window.addEventListener('nova-chat-send',(event:Event)=>{
+window.addEventListener('nova-chat-send',async(event:Event)=>{
  const d=(event as CustomEvent).detail||{},text=String(d.text||'').trim();
  if(!text||memoryChatBusy||conversationSnapshot().sessionSwitching)return;
  if(!socket.isConnected()){conversationState({status:'Aegis is offline. Your draft is preserved.'});return;}
  canceledGeneration=audioGeneration;heldGeneration=pendingInterruptionGeneration='';audioPlayer.stop();isAudioPlaying=false;
  if(voiceSession.needsStart())startPreferredVoiceSession(!isMuted);
- memoryChatBusy=true;conversationState({state:'thinking',status:'',textBusy:true,sources:[]});
+ memoryChatBusy=true;
+ const selected=String(d.research_id||''),revision=Number(d.selection_revision||0);
+ socket.send({type:'ui_context',snapshot:uiSnapshot()});
+ const focused=()=>conversationSnapshot().focusId===selected&&conversationSnapshot().focusRevision===revision;
+ if(!focused())await new Promise<void>(resolve=>{const check=()=>{if(focused())done();};const done=()=>{clearTimeout(timer);window.removeEventListener('nova-research-focus-ack',check);resolve();};const timer=setTimeout(done,7000);window.addEventListener('nova-research-focus-ack',check);check();});
+ if(!focused()||String(uiSnapshot().view==='research'?uiSnapshot().research_id||'':'')!==selected){memoryChatBusy=false;conversationState({status:'The selected conversation is still opening. Your message draft is preserved.'});return;}
+ conversationState({state:'thinking',status:'',textBusy:true,sources:[]});
  conversationMessage('user',text,'sending',d.request_id);
  socket.send({type:'ui_context',snapshot:uiSnapshot()});
- socket.send({type:'live_text',text,request_id:d.request_id,session_id:conversationSnapshot().sessionId,source:'typed_input',research_id:d.research_id||''});
+ socket.send({type:'live_text',text,request_id:d.request_id,session_id:conversationSnapshot().sessionId,source:'typed_input',research_id:d.research_id||'',selection_revision:revision});
 });
 
 window.addEventListener('nova-conversation-switch',((e:CustomEvent)=>{if(conversationSnapshot().textBusy||conversationSnapshot().sessionSwitching||!conversationSnapshot().connected)return;conversationState({sessionSwitching:true,status:'Opening conversation…'});conversationInterrupt();audioPlayer.stop();heldGeneration=pendingInterruptionGeneration='';isAudioPlaying=false;voiceInput?.pause();userTranscript=assistantTranscript=userMessageId=assistantMessageId='';socket.send({type:'conversation_switch',session_id:e.detail.session_id});}) as EventListener);
