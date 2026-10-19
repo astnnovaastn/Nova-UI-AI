@@ -1385,6 +1385,19 @@ function EvidenceImage({
     </figure>
   );
 }
+function imageComposition(images: {width?: number; height?: number; caption?: string; layout?: string}[], passage: string) {
+  if (!images.length) return "none";
+  if (images.length > 1) {
+    return images.length === 2 && passage.length >= 700 && images.every(image => (image.width || 1) / (image.height || 1) >= 1.1) ? "pair" : "gallery";
+  }
+  const image = images[0];
+  const ratio = image.width && image.height ? image.width / image.height : image.layout === "wide" ? 2.3 : 1.4;
+  const diagram = /\b(chart|diagram|infographic|map|schematic|timeline)\b/i.test(image.caption || "");
+  if (ratio >= 2.25 || (diagram && ratio >= 1.25)) return "wide";
+  if (ratio < 0.85 && passage.length >= 280) return "portrait";
+  return passage.length >= 280 ? "aside" : "compact";
+}
+
 function EvidenceGallery({ images, reportId, onOpen, layout = "gallery" }: {
   images: ResearchImage[]; reportId: string; onOpen: (image: ResearchImage) => void; layout?: string;
 }) {
@@ -1603,8 +1616,9 @@ function ReportContent({
         : [];
     relatedImages.forEach((image) => placed.add(image.id));
     const related = relatedImages[0];
+    const composition = imageComposition(relatedImages, passage);
     const illustration = (
-      <EvidenceGallery images={relatedImages} reportId={reportId} onOpen={image => onImage?.(image)} layout={relatedImages.length > 1 ? "gallery" : related?.layout === "wide" ? "wide" : "aside"} />
+      <EvidenceGallery images={relatedImages} reportId={reportId} onOpen={image => onImage?.(image)} layout={composition} />
     );
     const content = React.createElement(
       tag,
@@ -1628,8 +1642,9 @@ function ReportContent({
       );
     return related ? (
       <div className="research-illustrated-block" key={key}>
-        {illustration}
+        {composition !== "wide" && illustration}
         {content}
+        {composition === "wide" && illustration}
       </div>
     ) : (
       content

@@ -26,6 +26,7 @@ const names = [
   "mergeMedia",
   "pausePlayers",
   "researchDestination",
+  "imageComposition",
 ];
 const selected = tree.statements
   .filter((n) => ts.isFunctionDeclaration(n) && names.includes(n.name?.text))
@@ -44,6 +45,20 @@ const sources = [
   { id: "S1", title: "First" },
   { id: "S2", title: "Second" },
 ];
+
+test("reader composition adapts to image proportions, paragraph length and collection size", () => {
+  const long = "A connected explanation with inline evidence. ".repeat(20);
+  assert.equal(context.imageComposition([], long), "none");
+  assert.equal(context.imageComposition([{width:800,height:500}], long), "aside");
+  assert.equal(context.imageComposition([{width:400,height:700}], long), "portrait");
+  assert.equal(context.imageComposition([{width:1200,height:400}], long), "wide");
+  assert.equal(context.imageComposition([{width:800,height:500,caption:"Architecture diagram"}], long), "wide");
+  assert.equal(context.imageComposition([{width:800,height:500}], "A short observation."), "compact");
+  const pair = [{width:800,height:500},{width:900,height:600}];
+  assert.equal(context.imageComposition(pair,long), "pair");
+  assert.equal(context.imageComposition(pair,"A short comparison."), "gallery");
+  assert.equal(context.imageComposition([...pair,pair[0]],long), "gallery");
+});
 
 test("Gemini grouped citations become pills while literal source-like text stays intact", () => {
   assert.deepEqual(
