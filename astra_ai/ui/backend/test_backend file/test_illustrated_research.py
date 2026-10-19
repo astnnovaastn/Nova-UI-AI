@@ -30,6 +30,8 @@ def test_gemini_uses_configured_text_model_without_live_and_validates_citations(
     assert calls[0]['model']=='configured-gemini'
     assert '2,000–4,000' in calls[0]['config'].system_instruction
     assert 'direct answer' in calls[0]['config'].system_instruction
+    assert 'never one section per source' in calls[0]['config'].system_instruction
+    assert 'supported clause' in calls[0]['config'].system_instruction
     assert budget.snapshot()['requests']==1
 
 def test_gemini_quota_does_not_use_groq_pause(tmp_path):
@@ -68,7 +70,8 @@ def test_source_images_are_validated_and_cached_without_image_search(tmp_path,mo
     rows=asyncio.run(prepare_images(service,identifier,CTX,[source],'NVIDIA workstation'))
     assert len(rows)==1 and rows[0]['width']==800
     assert asyncio.run(prepare_images(service,identifier,CTX,[source],'NVIDIA workstation'))==rows
-    assert len(requests)==1 and not store.request_state(identifier,CTX).get('image_search_attempted')
+    assert requests.count('https://example.com/workstation.png')==1
+    assert not store.request_state(identifier,CTX).get('image_search_attempted')
 
 def test_image_fallback_is_once_even_when_empty_and_reopened(tmp_path):
     store,identifier=entry(tmp_path);calls=[]
@@ -208,3 +211,55 @@ def test_image_placement_keeps_paragraph_immediately_below_heading():
     report='# Comparison\n\nGeneral overview of AI PCs and their limitations. [S1, S2]\n\n### Consumer AI PCs\nAI PCs provide everyday assistance. [S2]'
     placed=place_images([{'id':'I1','source_id':'S2','caption':'AI PCs'}],report)
     assert placed[0]['placement_text']=='AI PCs provide everyday assistance.'
+
+
+def test_pending_reports_expose_collected_images_before_synthesis_budget_resumes(tmp_path,monkeypatch):
+    store,identifier=entry(tmp_path)
+    monkeypatch.setattr(store,'_fetch_public_source',lambda url,image=False:(picture(),'image/png',url))
+    rows=asyncio.run(prepare_images(ResearchSearch(store,lambda _:None),identifier,CTX,[{'url':'https://example.com','title':'NVIDIA workstation','images':[{'url':'https://example.com/photo.png','caption':'NVIDIA workstation'}]}],'NVIDIA workstation'))
+    store.request_state(identifier,CTX,phase='waiting_for_quota',sources=[{'url':'https://example.com','title':'NVIDIA workstation','content':'Collected evidence.','retrieved_at':'2026-10-19'}])
+    asyncio.run(ResearchSearch(store,lambda _:None).search({'action':'images','research_id':identifier},CTX,'pending-images'))
+    document=store.document(identifier,CTX,bounded=True)
+    assert document['completeness']=='pending' and document['image_items'][0]['id']==rows[0]['id']
+    assert 'url' not in document['image_items'][0]
+
+
+def test_image_validation_continues_past_failed_first_batch_and_keeps_more_than_four(tmp_path,monkeypatch):
+    store,identifier=entry(tmp_path);calls=[]
+    def fetch(url,image=False):
+        calls.append(url)
+        if not image:return b'<article>No article images.</article>','text/html',url
+        number=int(url.rsplit('/',1)[1].split('.')[0])
+        if number<8:raise ValueError('source_http_error')
+        stream=io.BytesIO();Image.new('RGB',(800+number,500),(number*10,20,30)).save(stream,format='PNG')
+        return stream.getvalue(),'image/png',url
+    monkeypatch.setattr(store,'_fetch_public_source',fetch)
+    source={'url':'https://example.com','title':'NVIDIA workstation','images':[{'url':f'https://example.com/{n}.png','caption':'NVIDIA workstation'} for n in range(14)]}
+    rows=asyncio.run(prepare_images(ResearchSearch(store,lambda _:None),identifier,CTX,[source],'NVIDIA workstation'))
+    assert len(rows)==6 and len(calls)==14
+
+
+def test_page_images_after_first_two_sources_and_lazy_srcset_originals(tmp_path,monkeypatch):
+    store,identifier=entry(tmp_path)
+    sources=[{'url':f'https://example.com/page{n}','title':'NVIDIA workstation','content':'Evidence'} for n in range(3)]
+    def fetch(url,image=False):
+        if image:return picture(),'image/png',url
+        html='<article><p>NVIDIA workstation evidence.</p><picture><source srcset="/small.png 320w, /large.png 1600w"><img src="data:image/png;base64,AA" alt="NVIDIA workstation"></picture></article>' if url.endswith('page2') else '<article><p>No image here.</p></article>'
+        return html.encode(),'text/html',url
+    monkeypatch.setattr(store,'_fetch_public_source',fetch)
+    rows=asyncio.run(prepare_images(ResearchSearch(store,lambda _:None),identifier,CTX,sources,'NVIDIA workstation'))
+    assert len(rows)==1 and rows[0]['url']=='https://example.com/large.png' and rows[0]['source_id']=='S3'
+
+
+def test_internal_source_reader_retains_article_images_using_scoped_ids(tmp_path,monkeypatch):
+    store,identifier=entry(tmp_path)
+    store.request_state(identifier,CTX,sources=[{'url':'https://example.com/article','title':'NVIDIA workstation','content':'Evidence.'}])
+    article=b'<nav><img src="/nav.png"></nav><article><p>NVIDIA workstation evidence.</p><figure><img data-src="/photo.png" alt="NVIDIA workstation"><figcaption>Workstation photo</figcaption></figure><img src="/google.png" alt="Add as a preferred source on Google"></article>'
+    monkeypatch.setattr(store,'_fetch_public_source',lambda url,image=False:(picture(),'image/png',url) if image else (article,'text/html',url))
+    body,mime=store.source_bytes(identifier,CTX,'S1',reader=True);page=json.loads(body)
+    assert mime=='application/json' and len(page['images'])==1
+    image=page['images'][0]
+    assert image['id'] in page['html'] and 'data-research-image' in page['html']
+    assert 'https://example.com/photo.png' not in page['html'] and 'url' not in image
+    assert '/nav.png' not in page['html'] and store.image_bytes(identifier,CTX,image['id'])[1]=='image/png'
+    with pytest.raises(ValueError):store.image_bytes(identifier,{**CTX,'project_id':'other'},image['id'])

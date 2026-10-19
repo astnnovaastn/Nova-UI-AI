@@ -539,9 +539,10 @@ class ResearchArtifacts:
         document['extension_activity']=self.extension_state(identifier,context)
         document['document_revisions']=metadata.get('document_revisions',[])
         document['research_cards']=metadata.get('research_cards',[])
-        document['images_prepared']=metadata.get('images_prepared',False) and metadata.get('image_enrichment_version')==3
+        from .research_illustrations import IMAGE_VERSION
+        document['images_prepared']=metadata.get('images_prepared',False) and metadata.get('image_enrichment_version')==IMAGE_VERSION
         document['image_sources']=[{'id':r['source_id'],'url':r['source_url'],'title':r['caption'],'content':'Image attribution page; not claim evidence.'} for r in self.images(identifier,context) if r.get('source_id','').startswith('P')]
-        document.update(display_title=metadata.get('display_title') or display_title(item['query']),thread_id=metadata.get('thread_id','research-'+identifier),phase=metadata.get('phase','complete'),processing_seconds=metadata.get('processing_seconds'),active_since=metadata.get('active_since'),next_attempt=metadata.get('next_attempt'),waiting_reason=metadata.get('waiting_reason'),image_items=[{k:v for k,v in image.items() if k!='url'} for image in self.images(identifier,context)])
+        document.update(display_title=metadata.get('display_title') or display_title(item['query']),thread_id=metadata.get('thread_id','research-'+identifier),phase=metadata.get('phase','complete'),processing_seconds=metadata.get('processing_seconds'),active_since=metadata.get('active_since'),next_attempt=metadata.get('next_attempt'),waiting_reason=metadata.get('waiting_reason'),image_items=[{k:v for k,v in image.items() if k!='url'} for image in self.images(identifier,context) if not image.get('source_only')])
         from .research_documents import DocumentFiles
         document.update(DocumentFiles(self).presentation(identifier,context))
         if bounded:
@@ -759,7 +760,7 @@ class ResearchArtifacts:
             target=parsed.path or '/'
             if parsed.query:target+='?'+parsed.query
             try:
-                with pool.request('GET',target,timeout=urllib3.Timeout(connect=5,read=15),redirect=False,retries=False,preload_content=False,headers={'Host':parsed.netloc,'User-Agent':'NovaResearchReader/1.0','Accept':'application/pdf,text/html,text/plain,text/markdown'}) as response:
+                with pool.request('GET',target,timeout=urllib3.Timeout(connect=5,read=15),redirect=False,retries=False,preload_content=False,headers={'Host':parsed.netloc,'User-Agent':'NovaResearchReader/1.0','Accept':'image/webp,image/png,image/jpeg;q=0.9' if image else 'application/pdf,text/html,text/plain,text/markdown'}) as response:
                     if response.status in {301,302,303,307,308}:url=urljoin(url,response.headers.get('Location',''));continue
                     if response.status!=200:raise ValueError('source_http_error')
                     mime=response.headers.get('Content-Type','').split(';')[0].lower()
@@ -776,14 +777,17 @@ class ResearchArtifacts:
         fetched=self.get(identifier,context)
         if fetched['status']!='ok':return []
         metadata=self.request_state(identifier,context)
-        if metadata.get('images_prepared'):return metadata.get('selected_images',[])
-        images=[];seen=set()
+        images=list(metadata.get('selected_images',[])) if metadata.get('images_prepared') else []
+        images.extend(metadata.get('source_images',[]));seen={r['url'] for r in images}
+        from .research_illustrations import useful_image
+        images=[r for r in images if useful_image(r)]
+        if metadata.get('images_prepared'):return images
         for index,source in enumerate(self.source_catalog(fetched['artifact'])):
             for row in source.get('images',[]):
                 url=str(row.get('url',''));parsed=urlsplit(url)
                 if parsed.scheme not in {'http','https'} or not parsed.hostname or parsed.username or parsed.password or url in seen:continue
                 seen.add(url);images.append({'id':'I'+stable(identifier,url)[:24],'url':url,'caption':row.get('caption') or source['title'],'source_id':'S'+str(index+1),'publication':parsed.hostname})
-                if len(images)==4:return images
+                if len(images)>=64:return images
         return images
 
     def image_bytes(self, identifier, context, image_id):
@@ -797,7 +801,7 @@ class ResearchArtifacts:
         if len(content)>8_000_000:raise ValueError('image_too_large')
         with self.image_worker:
             with Image.open(io.BytesIO(content)) as decoded:
-                if decoded.width<240 or decoded.height<120 or decoded.width*decoded.height>20_000_000 or getattr(decoded,'n_frames',1)>1:raise ValueError('unsuitable_image')
+                if min(decoded.width,decoded.height)<160 or max(decoded.width,decoded.height)<320 or decoded.width*decoded.height>20_000_000 or getattr(decoded,'n_frames',1)>1:raise ValueError('unsuitable_image')
                 decoded.verify()
         self.reader_cache[key]=(time.time(),(content,mime))
         while len(self.reader_cache)>64 or sum(len(v[1][0]) for v in self.reader_cache.values())>16_000_000:self.reader_cache.pop(next(iter(self.reader_cache)))
@@ -838,6 +842,20 @@ class ResearchArtifacts:
             soup=BeautifulSoup(content,'html.parser')
             root=article_root(soup)
             text=root.get_text('\n',strip=True)
+            from .research_illustrations import page_candidates
+            # Mint scoped IDs from actual article markup; bytes still pass the validated image transport.
+            source_images=[]
+            if reader:
+                candidates=page_candidates(root,final_url,{'url':final_url,'title':root.get_text(' ',strip=True)[:160] or final_url},identifier,source_id)[:24]
+                for row,node in candidates:
+                    if node:
+                        node.attrs={'data-research-image':row['id']}
+                        source_images.append({**row,'source_only':True})
+                if source_images:
+                    with self.lock:
+                        metadata=self.request_state(identifier,context)
+                        old=[r for r in metadata.get('source_images',[]) if r.get('source_id')!=source_id]
+                        self.request_state(identifier,context,source_images=[*source_images,*old][:96])
             links={}
             for heading in root.find_all(id=True):heading['id']='reader-'+source_id+'-'+str(heading['id'])
             for anchor in root.find_all('a'):
@@ -853,11 +871,11 @@ class ResearchArtifacts:
                 links[link_id]=href
                 self.reader_links[(cache_scope,link_id)]=(href,time.time())
                 anchor.attrs={'href':'#'+link_id,'data-source-link':link_id}
-            sanitized=bleach.clean(str(root),tags={'p','h1','h2','h3','h4','h5','ul','ol','li','blockquote','pre','code','br','hr','a','table','thead','tbody','tr','th','td','strong','em','b','i','sup','sub'},attributes={'*':['id'],'a':['href','data-source-link'],'th':['colspan','rowspan'],'td':['colspan','rowspan']},protocols={'http','https'},strip=True)
+            sanitized=bleach.clean(str(root),tags={'p','h1','h2','h3','h4','h5','ul','ol','li','blockquote','pre','code','br','hr','a','table','thead','tbody','tr','th','td','strong','em','b','i','sup','sub','img'},attributes={'*':['id'],'img':['data-research-image'],'a':['href','data-source-link'],'th':['colspan','rowspan'],'td':['colspan','rowspan']},protocols={'http','https'},strip=True)
         else:
             text=content.decode('utf-8',errors='replace');links={}
             sanitized=''.join('<p>'+html.escape(p).replace('\n','<br>')+'</p>' for p in text.split('\n\n'))
-        answer=(json.dumps({'html':sanitized,'links':links,'url':final_url}).encode(),'application/json') if reader else (text.encode(),'text/plain; charset=utf-8')
+        answer=(json.dumps({'html':sanitized,'links':links,'url':final_url,'images':[{k:v for k,v in r.items() if k!='url'} for r in source_images] if mime=='text/html' else []}).encode(),'application/json') if reader else (text.encode(),'text/plain; charset=utf-8')
         self.reader_cache[key]=(time.time(),answer)
         while len(self.reader_cache)>64 or sum(len(v[1][0]) for v in self.reader_cache.values())>16_000_000:self.reader_cache.pop(next(iter(self.reader_cache)))
         while len(self.reader_links)>2000:self.reader_links.pop(next(iter(self.reader_links)))
@@ -1029,7 +1047,7 @@ class ResearchSearch:
             from .research_illustrations import prepare_images,place_images
             async with self.operation_locks.setdefault(stable('illustrate',scope(context),identifier),asyncio.Lock()):
                 rows=await prepare_images(self,identifier,context,self.artifacts.source_catalog(found['artifact']),display_title(found['artifact']['query']))
-                await asyncio.to_thread(self.artifacts.request_state,identifier,context,selected_images=place_images(rows,found['artifact']['report']))
+                await asyncio.to_thread(self.artifacts.request_state,identifier,context,selected_images=place_images(rows,found['artifact']['report']) if found['artifact']['report'] else rows)
             return {**self.artifacts.brief(found['artifact']),'image_enrichment':True}
         if arguments.get('action')=='expand':return await self.expand_report(arguments,context,operation_id)
         if arguments.get('action')=='more_media':return await self.more_media(arguments,context,operation_id)

@@ -8470,8 +8470,9 @@ async def research_images(identifier:str,request:Request):
     context=_learning_context(request);artifacts,_=get_research_services();found=await asyncio.to_thread(artifacts.get,identifier,context)
     if found['status']!='ok':return found
     metadata=await asyncio.to_thread(artifacts.request_state,identifier,context)
-    if metadata.get('images_prepared') and metadata.get('image_enrichment_version')==3:return {'status':'completed','research_id':identifier}
-    result=action_jobs.submit([{'name':'search_web','arguments':{'action':'images','research_id':identifier}}],context,'research-images-v3-'+identifier,goal='Prepare research illustrations')
+    from astra_ai.core.research_illustrations import IMAGE_VERSION
+    if metadata.get('images_prepared') and metadata.get('image_enrichment_version')==IMAGE_VERSION:return {'status':'completed','research_id':identifier}
+    result=action_jobs.submit([{'name':'search_web','arguments':{'action':'images','research_id':identifier}}],context,'research-images-v'+str(IMAGE_VERSION)+'-'+identifier,goal='Prepare research illustrations')
     return {**result,'research_id':identifier}
 
 @app.get('/api/research/{identifier}/reader')

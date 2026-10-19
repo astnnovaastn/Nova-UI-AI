@@ -605,7 +605,7 @@
   overflow-wrap: anywhere;
 }
 .research-prose p {
-  margin: 0 0 1.15em;
+  margin: 0 0 0.9em;
 }
 .research-prose h1 {
   font-size: clamp(25px, 2.2vw, 32px);
@@ -616,11 +616,11 @@
 .research-prose h2 {
   font-size: 21px;
   line-height: 1.4;
-  margin: 32px 0 14px;
+  margin: 24px 0 12px;
 }
 .research-prose h3 {
   font-size: 17px;
-  margin: 24px 0 12px;
+  margin: 20px 0 10px;
 }
 .research-prose li {
   padding-left: 3px;
@@ -1658,8 +1658,13 @@
 }
 .research-prose hr {
   border: 0;
-  height: 0;
-  margin: 26px 0;
+  border-top: 1px solid var(--r-edge);
+  margin: 20px 0;
+}
+.research-source-preview .research-prose .research-evidence-image {
+  float: none;
+  width: min(100%, 360px);
+  margin: 14px 20px 18px 0;
 }
 .research-extension {
   margin-block: 30px;

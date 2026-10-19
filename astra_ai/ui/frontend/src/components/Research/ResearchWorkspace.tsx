@@ -1189,9 +1189,11 @@ function researchProgress(
 function PendingResearch({
   report,
   onOpen,
+  onImage,
 }: {
   report: Report;
   onOpen: (source: Source) => void;
+  onImage: (image: ResearchImage) => void;
 }) {
   const [now, setNow] = useState(Date.now());
   const status = researchProgress(
@@ -1240,6 +1242,9 @@ function PendingResearch({
           </details>
         )}
       </div>
+      {!!report.image_items?.length && (
+        <EvidenceGallery images={report.image_items} reportId={report.research_id} onOpen={onImage} />
+      )}
       {status.skeleton && (
         <div className="research-loading-lines" aria-hidden="true">
           {[0, 1].map((n) => (
@@ -1371,7 +1376,7 @@ function EvidenceImage({
   return (
     <figure className="research-evidence-image">
       <button onClick={onOpen} aria-label={"Enlarge image: " + image.caption}>
-        <img src={url} alt={image.caption} onError={() => setUrl("")} />
+        <img src={url} alt={image.caption} style={{objectFit: "scale-down"}} onError={() => setUrl("")} />
       </button>
       <figcaption>
         {image.caption}
@@ -1380,6 +1385,43 @@ function EvidenceImage({
     </figure>
   );
 }
+function EvidenceGallery({ images, reportId, onOpen, layout = "gallery" }: {
+  images: ResearchImage[]; reportId: string; onOpen: (image: ResearchImage) => void; layout?: string;
+}) {
+  const [limit, setLimit] = useState(5);
+  return <>
+    <div className={"research-image-composition " + layout}>
+      {images.slice(0, limit).map(image => <EvidenceImage key={image.id} image={image} reportId={reportId} onOpen={() => onOpen(image)} />)}
+    </div>
+    {images.length > limit && <button className="research-inline-action" onClick={() => setLimit(value => value + 5)}>Show more images ({images.length - limit})</button>}
+  </>;
+}
+
+function SourceArticle({ html, images, reportId, onImage }: {
+  html: string; images: ResearchImage[]; reportId: string; onImage: (image: ResearchImage) => void;
+}) {
+  const doc = new DOMParser().parseFromString(clean(html), "text/html");
+  function render(node: Node, key: string): React.ReactNode {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+    if (!(node instanceof Element)) return null;
+    const tag = node.tagName.toLowerCase();
+    if (tag === "img") {
+      const image = images.find(item => item.id === node.getAttribute("data-research-image"));
+      return image ? <EvidenceImage key={key} image={image} reportId={reportId} onOpen={() => onImage(image)} /> : null;
+    }
+    const props: Record<string, any> = { key };
+    for (const attribute of Array.from(node.attributes)) {
+      if (["id", "href", "data-source-link", "colspan", "rowspan"].includes(attribute.name))
+        props[attribute.name === "colspan" ? "colSpan" : attribute.name === "rowspan" ? "rowSpan" : attribute.name] = attribute.value;
+    }
+    if (["br", "hr"].includes(tag)) return React.createElement(tag, props);
+    const children = Array.from(node.childNodes).map((child, index) => render(child, key + ":" + index));
+    if (["p", "a"].includes(tag) && node.querySelector("img")) return <div key={key}>{children}</div>;
+    return React.createElement(tag, props, ...children);
+  }
+  return <>{Array.from(doc.body.childNodes).map((node, index) => render(node, String(index)))}</>;
+}
+
 function ImageViewer({
   image,
   reportId,
@@ -1558,30 +1600,11 @@ function ReportContent({
                   ? passage.includes(image.placement_text.slice(0, 60))
                   : node.textContent?.includes("[" + image.source_id + "]")),
             )
-            .slice(0, 4)
         : [];
     relatedImages.forEach((image) => placed.add(image.id));
     const related = relatedImages[0];
     const illustration = (
-      <div
-        className={
-          "research-image-composition " +
-          (relatedImages.length > 1
-            ? "gallery"
-            : related?.layout === "wide"
-              ? "wide"
-              : "aside")
-        }
-      >
-        {relatedImages.map((image) => (
-          <EvidenceImage
-            key={image.id}
-            image={image}
-            reportId={reportId}
-            onOpen={() => onImage?.(image)}
-          />
-        ))}
-      </div>
+      <EvidenceGallery images={relatedImages} reportId={reportId} onOpen={image => onImage?.(image)} layout={relatedImages.length > 1 ? "gallery" : related?.layout === "wide" ? "wide" : "aside"} />
     );
     const content = React.createElement(
       tag,
@@ -1636,6 +1659,7 @@ function DocumentPreview({
     [pages, setPages] = useState(0),
     [current, setCurrent] = useState(source),
     [links, setLinks] = useState<Record<string, string>>({}),
+    [articleImages, setArticleImages] = useState<ResearchImage[]>([]),
     [trail, setTrail] = useState<Source[]>([]),
     [sourceImage, setSourceImage] = useState<ResearchImage | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null),
@@ -1650,6 +1674,7 @@ function DocumentPreview({
     const controller = new AbortController();
     setError("");
     setHtml("");
+    setArticleImages([]);
     setData(null);
     setPages(0);
     setPage(1);
@@ -1668,6 +1693,7 @@ function DocumentPreview({
           const d = await r.json();
           setHtml(d.html);
           setLinks(d.links || {});
+          setArticleImages(d.images || []);
         }
       })
       .catch((e) => {
@@ -1760,7 +1786,7 @@ function DocumentPreview({
           ← Previous source
         </button>
       )}
-      {!!report.image_items?.some((i) => i.source_id === current.id) && (
+      {!html && !!report.image_items?.some((i) => i.source_id === current.id) && (
         <div className="research-image-composition gallery">
           {report.image_items
             .filter((i) => i.source_id === current.id)
@@ -1837,8 +1863,9 @@ function DocumentPreview({
               });
             }
           }}
-          dangerouslySetInnerHTML={{ __html: clean(html) }}
-        />
+        >
+          <SourceArticle html={html} images={articleImages} reportId={report.research_id} onImage={setSourceImage} />
+        </div>
       ) : (
         <p role="status">Loading source…</p>
       )}
@@ -2195,7 +2222,7 @@ function initialDraft(report: Report) {
     for (const image of [
       ...(report.image_items || []),
       ...(report.attachment_images || []),
-    ].slice(0, 4)) {
+    ]) {
       const p = Array.from(doc.querySelectorAll("p,li")).find((p) =>
         image.placement_text
           ? p.textContent?.includes(image.placement_text.slice(0, 50))
@@ -2463,7 +2490,6 @@ function Workspace() {
     if (
       !report ||
       report.kind !== "research" ||
-      report.completeness === "pending" ||
       report.images_prepared
     )
       return;
@@ -3976,6 +4002,7 @@ function Workspace() {
                         sources: report.sources.slice(0, sourceLimit),
                       }}
                       onOpen={openSource}
+                      onImage={setImageView}
                     />
                   ) : (report.evidence_collection ||
                       report.completeness === "pending") &&
@@ -4030,7 +4057,7 @@ function Workspace() {
                         images={[
                           ...(report.image_items || []),
                           ...(report.attachment_images || []),
-                        ].slice(0, 4)}
+                        ]}
                         reportId={report.research_id}
                         onImage={setImageView}
                       />
