@@ -87,12 +87,17 @@ export function conversationState(update: Partial<typeof connection>) {
     for (const key of Object.keys(researchMessages))
       delete researchMessages[key];
     requestResearch.clear();
-    updateUiContext({research_id:"",research_revision:"",thread_id:"",recent_research_id:""});
+    updateUiContext({
+      research_id: "",
+      research_revision: "",
+      thread_id: "",
+      recent_research_id: "",
+    });
   }
   connection = {
     ...connection,
     ...update,
-    ...(scopeChanged ? { jobs: [], focusId:"",focusRevision:-1 } : {}),
+    ...(scopeChanged ? { jobs: [], focusId: "", focusRevision: -1 } : {}),
   };
   changed();
 }
@@ -127,7 +132,12 @@ export function requestConversation(
   requestResearch.set(id, research_id);
   window.dispatchEvent(
     new CustomEvent("nova-chat-send", {
-      detail: { text, request_id: id, research_id, selection_revision:snapshot.selection_revision||0 },
+      detail: {
+        text,
+        request_id: id,
+        research_id,
+        selection_revision: snapshot.selection_revision || 0,
+      },
     }),
   );
 }
@@ -144,10 +154,18 @@ export function uiSnapshot() {
   return snapshot;
 }
 export function updateUiContext(update: Record<string, unknown>) {
-  if ((update.view !== undefined && update.view !== snapshot.view) || (update.research_id !== undefined && update.research_id !== snapshot.research_id)) {
-    update = {...update, selection_revision:Number(snapshot.selection_revision||0)+1};
+  if (
+    (update.view !== undefined && update.view !== snapshot.view) ||
+    (update.research_id !== undefined &&
+      update.research_id !== snapshot.research_id)
+  ) {
+    update = {
+      ...update,
+      selection_revision: Number(snapshot.selection_revision || 0) + 1,
+    };
   }
-  if (update.view === "research" && update.research_id) update={...update,recent_research_id:update.research_id};
+  if ((update.view ?? snapshot.view) === "research" && update.research_id)
+    update = { ...update, recent_research_id: update.research_id };
   snapshot = { ...snapshot, ...update, version: 1, revision: ++uiRevision };
   window.dispatchEvent(
     new CustomEvent("nova-ui-context", { detail: snapshot }),

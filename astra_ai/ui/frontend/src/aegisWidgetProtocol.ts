@@ -516,7 +516,7 @@ export function applicationControls(offset = 0, limit = 60, query = "") {
       next_offset: null,
     };
   for (const e of document.querySelectorAll<HTMLElement>(
-    ".memory-chat-messages,.memory-library-content,.memory-history,.research-reader,.research-outline,.research-sources,.research-chat,.research-edit-pane,.research-source-preview,.research-media,.research-editor,.settings-content",
+    ".memory-chat-messages,.memory-library-content,.memory-history,.research-reader,.research-outline,.research-sources,.research-chat,.research-edit-pane,.research-source-preview,.research-media,.research-editor,.document-assets,.document-attachment-reader,.document-copy-preview,.research-central-chat,.settings-content",
   )) {
     e.setAttribute("data-aegis-scroll", "true");
     if (!e.getAttribute("aria-label"))

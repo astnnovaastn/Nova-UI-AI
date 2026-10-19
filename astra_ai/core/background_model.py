@@ -31,8 +31,12 @@ class BackgroundModel:
     async def report(self,query,sources,kind='research'):
         """One budgeted synthesis; original excerpts remain in the artifact."""
         import asyncio
+        terms={w for w in re.findall(r'[a-z0-9]{3,}',query.casefold()) if w not in {'the','and','what','how','for','with','research','about'}}
+        ranked=sorted(enumerate(sources),key=lambda pair:sum(t in (pair[1].get('title','')+' '+pair[1].get('content','')[:4000]).casefold() for t in terms),reverse=True)
+        # Keep source IDs in the original catalog even when a large upload needs evidence selection.
+        selected=sorted(ranked[:20],key=lambda pair:pair[0])
         def passages(source):
-            text=source.get('content','');limit=max(800,24000//max(1,len(sources)))
+            text=source.get('content','');limit=max(400,18000//max(1,len(selected)))
             terms={w for w in re.findall(r'[a-z0-9]{3,}',query.casefold()) if w not in {'the','and','what','how','for','with','research','about'}}
             candidates=re.split(r'\n\s*\n',text)
             ranked=sorted(enumerate(candidates),key=lambda row:(sum(t in row[1].casefold() for t in terms)*3+min(len(row[1]),500)/500-(row[1].count('](')*40/max(1,len(row[1])))),reverse=True)
@@ -43,11 +47,12 @@ class BackgroundModel:
                 if part:picked.append((index,part));remaining-=len(part)+2
                 if remaining<=0:break
             return '\n\n'.join(p for _,p in sorted(picked)) or text[:limit]
-        evidence=[{'id':'S'+str(i+1),'title':s['title'],'url':s['url'],'retrieved_at':s.get('retrieved_at'),'origin_research_id':s.get('origin_research_id'),'historical':s.get('historical',False),'content':passages(s)} for i,s in enumerate(sources)]
+        evidence=[{'id':'S'+str(i+1),'title':s['title'][:200],'url':s['url'][:800],'retrieved_at':s.get('retrieved_at'),'origin_research_id':s.get('origin_research_id'),'historical':s.get('historical',False),'content':passages(s)} for i,s in selected]
         schema={'type':'object','additionalProperties':False,'properties':{'report':{'type':'string'}},'required':['report']}
         purpose=('Write an illustrated written documentary document, not a film script. Default to approximately 2,000–3,000 words when evidence supports it; honour the requested length. Plan a coherent introduction, substantive chapters, conclusion, limitations and references. Use a clear narrative supported by the supplied evidence. Do not invent illustrations, image descriptions or quotations. ' if kind=='documentary' else 'Write a clear, substantial, source-grounded research report. Target 12,000–18,000 characters when evidence supports it, with a ceiling of 20,000 at a complete section boundary. ')
         result=await asyncio.to_thread(self.structured,purpose+'Use Markdown. Answer the actual question. Begin with a concise subject headline, normally 8–12 words and at most 90 characters; never repeat the request or its instructions as the headline. Shorter is better than weak or repeated evidence. Preserve dates and originating report references of reused evidence; historical evidence is not a current claim. Compare independent sources, check coverage, and identify gaps. Cite factual paragraphs using [S1], [S2], etc from supplied evidence. Never invent citations, URLs, dates or facts. Distinguish source claims from analysis; preserve code and math when relevant. Use plain professional prose without decorative emojis. Do not concatenate raw webpages or pad length. Do not instruct the assistant to save anything in Notes.',{'query':query,'evidence':evidence},schema,6000)
         report=safe(result['report'])
         citations=re.findall(r'\[S(\d+)\]',report) if report else []
-        if not citations or any(int(i)<1 or int(i)>len(sources) for i in citations):raise ModelUnavailable('Unverifiable report citations')
+        allowed={i+1 for i,_ in selected}
+        if not citations or any(int(i) not in allowed for i in citations):raise ModelUnavailable('Unverifiable report citations')
         return report

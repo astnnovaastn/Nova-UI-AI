@@ -418,7 +418,7 @@ class ResearchArtifacts:
         with self.lock:
             data=self.snapshot();rows=data['artifacts'].values()
             for item in sorted(rows, key=lambda r:r['created'], reverse=True):
-                if scope(item) != scope(context) or item['id'] in data.get('removed',{}):continue
+                if scope(item) != scope(context) or item['id'] in data.get('removed',{}) or item.get('kind','research')!='research':continue
                 if operation_id and item.get('operation_id') == operation_id:
                     if (item['query'], item['mode']) != (query, mode):raise ValueError('operation_id_reused')
                     return copy.deepcopy(item)
@@ -564,6 +564,9 @@ class ResearchArtifacts:
         result=self.document(identifier,context,revision)
         if result['status']!='ok':raise ValueError(result['status'])
         if format not in {'md','html','pdf','docx'}:raise ValueError('unsupported_export')
+        # Private page citations reopen through the application, which resolves owner scope.
+        # Never embed a connection credential or an unusable header-only binary URL.
+        result['sources']=[{**s,'url':f'http://127.0.0.1:5173/#research={identifier}&source={s["id"]}'} if s.get('attachment_id') else s for s in result['sources']]
         with self.lock:extensions=read(self.path,{}).get('extensions',{}).get(identifier,[])
         result['report']+=''.join('\n\n'+e['report'] for e in extensions)
         body=result.get('draft',{}).get('html','') if draft and result.get('draft') else ''
@@ -574,17 +577,30 @@ class ResearchArtifacts:
         source_text='\n\nSources\n'+'\n'.join(f"[{s['id']}] {s['title']}: {s['url']}" for s in result['sources'])
         text=soup.get_text('\n')+source_text
         if format=='md':return (text if draft else result['report']+source_text).encode(),'text/markdown; charset=utf-8'
+        from .research_documents import export_illustrations
+        illustrations=export_illustrations(self,identifier,context,soup,result,draft)
+        title=result.get('display_title') or display_title(result['query'])
         if format=='html':
+            import base64
+            for image in soup.find_all('img'):
+                image['src']='data:image/jpeg;base64,'+base64.b64encode(illustrations[image['data-export-image']]).decode();image['style']='max-width:260px;height:auto;object-fit:contain'
+                del image['data-export-image']
+            body=str(soup)
             links=''.join('<li><a href="'+html_module.escape(s['url'],quote=True)+'">['+s['id']+'] '+html_module.escape(s['title'])+'</a></li>' for s in result['sources'])
-            return ('<!doctype html><meta charset="utf-8"><title>'+html_module.escape(result['query'])+'</title><main>'+body+'<h2>Sources</h2><ol>'+links+'</ol></main>').encode(),'text/html; charset=utf-8'
+            return ('<!doctype html><meta charset="utf-8"><title>'+html_module.escape(title)+'</title><main>'+body+'<h2>Sources</h2><ol>'+links+'</ol></main>').encode(),'text/html; charset=utf-8'
         output=io.BytesIO()
         if format=='docx':
             from docx import Document
             from docx.oxml import OxmlElement
             from docx.oxml.ns import qn
             from docx.opc.constants import RELATIONSHIP_TYPE
-            doc=Document();doc.add_heading(result['query'],0)
-            for node in soup.find_all(['h1','h2','h3','p','li','blockquote','pre','table']):
+            from docx.shared import Inches
+            doc=Document();doc.core_properties.title=title
+            for node in soup.find_all(['h1','h2','h3','p','li','blockquote','pre','table','img']):
+                if node.name=='img':
+                    doc.add_picture(io.BytesIO(illustrations[node['data-export-image']]),width=Inches(2.6))
+                    if node.get('alt'):doc.add_paragraph(node['alt'],style='Caption')
+                    continue
                 if node.find_parent(['li','blockquote','pre','table']):continue
                 if node.name=='table':
                     rows=node.find_all('tr');width=max((len(r.find_all(['td','th'])) for r in rows),default=0)
@@ -604,7 +620,7 @@ class ResearchArtifacts:
             for source in result['sources']:
                 paragraph=doc.add_paragraph('['+source['id']+'] ');link=OxmlElement('w:hyperlink');link.set(qn('r:id'),paragraph.part.relate_to(source['url'],RELATIONSHIP_TYPE.HYPERLINK,is_external=True));run=OxmlElement('w:r');value=OxmlElement('w:t');value.text=source['title'];run.append(value);link.append(run);paragraph._p.append(link)
             doc.save(output);return output.getvalue(),'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle
+        from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle,Image as ReportImage
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
@@ -614,7 +630,12 @@ class ResearchArtifacts:
         if font.exists():
             if 'NovaExport' not in pdfmetrics.getRegisteredFontNames():pdfmetrics.registerFont(TTFont('NovaExport',str(font)))
             for style in styles.byName.values():style.fontName='NovaExport'
-        for node in soup.find_all(['h1','h2','h3','p','li','blockquote','pre','table']):
+        for node in soup.find_all(['h1','h2','h3','p','li','blockquote','pre','table','img']):
+            if node.name=='img':
+                image=ReportImage(io.BytesIO(illustrations[node['data-export-image']]))
+                scale=min(190/image.imageWidth,180/image.imageHeight,1);image.drawWidth=image.imageWidth*scale;image.drawHeight=image.imageHeight*scale;image.hAlign='LEFT';story.extend([image,Spacer(1,6)])
+                if node.get('alt'):story.extend([Paragraph(html_module.escape(node['alt']),styles['BodyText']),Spacer(1,9)])
+                continue
             if node.find_parent(['li','blockquote','pre','table']):continue
             if node.name=='table':
                 rows=[[Paragraph(html_module.escape(c.get_text()),styles['BodyText']) for c in row.find_all(['td','th'])] for row in node.find_all('tr')]
@@ -629,7 +650,7 @@ class ResearchArtifacts:
             story.extend([Paragraph(html_module.escape(value).replace('\\n','<br/>'),style),Spacer(1,9)])
         story.extend([Paragraph('Sources',styles['Heading2']),Spacer(1,8)])
         for source in result['sources']:story.append(Paragraph('['+source['id']+'] <link href="'+html_module.escape(source['url'],quote=True)+'">'+html_module.escape(source['title'])+'</link>',styles['BodyText']))
-        SimpleDocTemplate(output,title=result['query']).build(story)
+        SimpleDocTemplate(output,title=title).build(story)
         return output.getvalue(),'application/pdf'
 
     def report_links(self, item, context):
@@ -962,7 +983,7 @@ class ResearchSearch:
                 return {**self.artifacts.brief(item),**result,'no_more':not additional,'added_sources':len(additional)}
             if not self.synthesize:return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
             await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='preparing_report',view=view,operation_id=operation_id)
-            try:report=await self.synthesize('Continue this same research with additional supported detail. Do not repeat the existing overview or already composed findings. Original subject: '+item['query']+'\nRequested detail: '+detail+'\nAlready composed: '+item['report'][:4000]+'\nPrior extensions: '+' '.join(e['report'][:1000] for e in entries[-3:]),sources)
+            try:report=await self.synthesize(('[DOCUMENTARY]\n' if item.get('kind')=='documentary' else '')+'Continue this same research with additional supported detail. Do not repeat the existing overview or already composed findings. Original subject: '+item['query']+'\nRequested detail: '+detail+'\nAlready composed: '+item['report'][:4000]+'\nPrior extensions: '+' '.join(e['report'][:1000] for e in entries[-3:]),sources)
             except BudgetPaused as exc:
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='waiting_for_quota',view=view,operation_id=operation_id,reason=exc.reason)
                 return {'status':'waiting_for_quota','next_attempt':max(time.time()+5,exc.until),'reason':exc.reason,'research_id':identifier}

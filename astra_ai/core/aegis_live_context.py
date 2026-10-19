@@ -135,9 +135,9 @@ def safe_text(value, limit=600):
 def sanitize_ui(payload):
     if not isinstance(payload, dict): return {}
     clean = {"version":1,"revision":max(0,int(payload.get("revision",0))),"view":payload.get("view") if payload.get("view") in {"dashboard","memory","research"} else "dashboard"}
-    for key in ("category","selected_id","selected_kind","title","summary","research_id","research_revision","thread_id","research_tab","recent_research_id"):
+    for key in ("category","selected_id","selected_kind","title","summary","research_id","research_revision","thread_id","research_tab","recent_research_id","attachment_id","attachment_origin_id","attachment_revision"):
         if isinstance(payload.get(key),str): clean[key]=safe_text(payload[key])
-    for key in ("reader_cursor","reader_end","source_visible_count","media_visible_count","selection_revision"):
+    for key in ("reader_cursor","reader_end","source_visible_count","media_visible_count","selection_revision","attachment_page"):
         value=payload.get(key,0 if key=='selection_revision' else None)
         if value is None:clean[key]=None
         elif isinstance(value,int) and not isinstance(value,bool) and 0<=value<=100000:clean[key]=value

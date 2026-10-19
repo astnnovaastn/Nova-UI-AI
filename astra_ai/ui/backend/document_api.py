@@ -5,6 +5,17 @@ from fastapi.responses import Response,JSONResponse
 from astra_ai.core.research_documents import DocumentFiles,MAX_FILE,compose_documentary,create_entry
 from astra_ai.memory.shared_memory import atomic,read
 
+def prepare_composition(artifacts,identifier,context,brief):
+    from astra_ai.core.research_learning import display_title
+    from astra_ai.memory.shared_memory import safe
+    if not isinstance(brief,str) or not 1<=len(brief.strip())<=12000 or safe(brief)!=brief:raise ValueError('Document brief must contain 1–12,000 characters and no credentials.')
+    with artifacts.lock:
+        metadata=artifacts.request_state(identifier,context)
+        item=artifacts.get(identifier,context).get('artifact',{})
+        if metadata.get('kind')!='documentary' or metadata.get('phase') not in {'draft','failed'} or item.get('completeness') not in {'pending','failed'}:raise ValueError('This documentary is already being prepared or has been written.')
+        artifacts.request_state(identifier,context,query=brief,origin_text=context.get('user_text') or brief,display_title=display_title(brief),phase='queued',outbound_started=False)
+    return metadata
+
 def submit(jobs,context,identifier,action,**args):
     operation_id=args.pop('operation_id',None) or uuid.uuid4().hex
     context={**context,'requested_research':True}
@@ -31,7 +42,8 @@ async def run_document_job(artifacts,search,model,cpu,args,context):
                 return {'status':'completed','attachment_id':row['id'],'page_count':row['page_count']}
             if args['action']=='document_pdf':
                 edit_id=str(args.get('edit_id',''));body=await asyncio.to_thread(intent,files,identifier,context,file_id,edit_id)
-                return await asyncio.to_thread(files.edit_pdf,identifier,context,file_id,str(body.get('revision','')),body.get('commands'),edit_id)
+                result=await asyncio.to_thread(files.edit_pdf,identifier,context,file_id,str(body.get('revision','')),body.get('commands'),edit_id)
+                return {**result,'status':'completed','preview_status':result['status']}
         return {'status':'rejected','reason':'unsupported_document_operation'}
     except (ValueError,OSError) as error:return {'status':'failed','reason':str(error)[:180]}
 
@@ -43,7 +55,15 @@ def authored_preview(files,identifier,context,markdown,expected_revision,operati
     if not re.fullmatch(r'[a-zA-Z0-9_-]{1,100}',operation_id):raise ValueError('invalid_edit_id')
     current=files.artifacts.document(identifier,context,bounded=True)
     if expected_revision!=(current.get('draft') or {}).get('revision',''):return {'status':'conflict','reason':'draft_changed'}
-    html=bleach.clean(MarkdownIt().render(markdown),tags={'p','h1','h2','h3','h4','strong','em','s','ul','ol','li','blockquote','pre','code','br','hr','a','table','thead','tbody','tr','th','td'},attributes={'a':['href','title']},protocols={'https','http'},strip=True)
+    html=bleach.clean(MarkdownIt().render(markdown),tags={'p','h1','h2','h3','h4','strong','em','s','ul','ol','li','blockquote','pre','code','br','hr','a','img','table','thead','tbody','tr','th','td'},attributes={'a':['href','title'],'img':['src','alt','title']},protocols={'https','http'},strip=True)
+    from bs4 import BeautifulSoup
+    soup=BeautifulSoup(html,'html.parser')
+    for image in soup.find_all('img'):
+        match=re.fullmatch(r'/api/research/([0-9a-f]{32})/attachments/([0-9a-f]{32})/images/(A[0-9a-f]{24})',image.get('src',''))
+        if not match:image.decompose();continue
+        row=files.get(match[1],context,match[2])
+        if not row or not any(i['id']==match[3] for i in [*row.get('images',[]),*[i for r in row.get('pdf_revisions',[]) for i in r.get('images',[])]]):image.decompose()
+    html=str(soup)
     folder=files.root/identifier/'authored';folder.mkdir(parents=True,exist_ok=True)
     proposal={'id':operation_id,'html':html,'expected_revision':expected_revision,'source_revision':current['research_revision']}
     atomic(folder/(operation_id+'.json'),proposal)
@@ -68,13 +88,26 @@ async def document_tool(artifacts,context,args,operation_id,jobs):
     try:
         action=args['action']
         if action=='create_documentary':
+            selected=await asyncio.to_thread(artifacts.get,identifier,context)
+            current=selected.get('artifact',{})
+            if current.get('kind')=='documentary' and current.get('completeness') in {'pending','failed'}:
+                await asyncio.to_thread(prepare_composition,artifacts,identifier,context,str(args.get('detail') or context.get('user_text') or current['query']))
+                result=submit(jobs,context,identifier,'document_compose',operation_id=operation_id)
+                if result.get('status') in {'queued','duplicate'}:await asyncio.to_thread(artifacts.request_state,identifier,context,job_id=result['job_id'])
+                return result
             created=await asyncio.to_thread(create_entry,artifacts,context,'documentary',str(args.get('detail') or 'An illustrated written documentary based on this research'),operation_id,identifier)
             if created['status']!='completed':return created
             result=submit(jobs,context,created['research_id'],'document_compose',operation_id=operation_id+'-compose')
             if result.get('status') in {'queued','duplicate'}:await asyncio.to_thread(artifacts.request_state,created['research_id'],context,phase='queued',job_id=result['job_id'])
             return result
         await asyncio.to_thread(files.require,identifier,context)
-        if action=='read_attachment':return await asyncio.to_thread(files.page,identifier,context,str(args.get('attachment_id','')),int(args.get('page',1)),'',int(args.get('offset',0)),8000)
+        if action=='read_attachment':
+            file_id=str(args.get('attachment_id',''));row=await asyncio.to_thread(files.get,identifier,context,file_id)
+            if not row:return {'status':'not_found'}
+            revision=str(args.get('pdf_revision') or row.get('pdf_revision') or row['revision'])
+            result=await asyncio.to_thread(files.page,identifier,context,file_id,int(args.get('page',1)),revision,int(args.get('offset',0)),3500,int(args.get('object_offset',0)),20)
+            result.pop('attachment',None)
+            return {**result,'pdf_revision':revision}
         if action=='preview_document':return await asyncio.to_thread(authored_preview,files,identifier,context,str(args.get('markdown','')),str(args.get('draft_revision','')),operation_id)
         if action=='apply_document':return await asyncio.to_thread(authored_apply,files,identifier,context,str(args.get('edit_id','')))
         if action=='preview_pdf':
@@ -93,12 +126,10 @@ def install(app,services,context_for,jobs_for):
     @app.post('/api/research/{identifier}/compose')
     async def compose(identifier:str,request:Request):
         files,context=files_for(request,identifier);body=await request.json();metadata=await asyncio.to_thread(files.artifacts.request_state,identifier,context)
-        if metadata.get('kind')!='documentary' or metadata.get('phase')!='draft':raise HTTPException(409,'This documentary is already being prepared or has been written.')
         brief=body.get('query') or metadata['query']
-        if not isinstance(brief,str) or not 1<=len(brief.strip())<=12000:raise HTTPException(400,'Document brief must contain 1–12,000 characters.')
-        from astra_ai.core.research_learning import display_title
-        await asyncio.to_thread(files.artifacts.request_state,identifier,context,query=brief,origin_text=brief,display_title=display_title(brief),phase='queued')
-        result=submit(jobs_for(),context,identifier,'document_compose',operation_id=metadata['operation_id']+'-compose')
+        try:await asyncio.to_thread(prepare_composition,files.artifacts,identifier,context,brief)
+        except ValueError as error:raise HTTPException(409,str(error))
+        result=submit(jobs_for(),context,identifier,'document_compose',operation_id=uuid.uuid4().hex)
         if result.get('status') in {'queued','duplicate'}:await asyncio.to_thread(files.artifacts.request_state,identifier,context,job_id=result['job_id'])
         else:await asyncio.to_thread(files.artifacts.request_state,identifier,context,phase='draft')
         return result
@@ -122,6 +153,14 @@ def install(app,services,context_for,jobs_for):
         except (ValueError,OSError,UnicodeError) as error:raise HTTPException(422,str(error)[:180])
         result=submit(jobs_for(),context,identifier,'document_extract',attachment_id=row['id'],operation_id='attachment-'+identifier+'-'+row['id'])
         return {**result,'attachment':row}
+
+    @app.post('/api/research/{identifier}/attachments/{file_id}/retry')
+    async def retry_file(identifier:str,file_id:str,request:Request):
+        files,context=files_for(request,identifier);row=await asyncio.to_thread(files.get,identifier,context,file_id)
+        if not row or row['status']!='failed':raise HTTPException(409,'Only failed attachment processing can be retried.')
+        result=submit(jobs_for(),context,identifier,'document_extract',attachment_id=file_id)
+        if result.get('status') in {'queued','duplicate'}:await asyncio.to_thread(files.update,identifier,context,file_id,status='queued',error='')
+        return result
 
     @app.get('/api/research/{identifier}/attachments/{file_id}/original')
     async def original(identifier:str,file_id:str,request:Request,revision:str='',download:bool=False):

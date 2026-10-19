@@ -146,3 +146,66 @@ def test_documentary_pending_releases_budget_and_reuses_upload_after_resume(tmp_
         async def report(self,brief,sources,kind):return '# Documentary\n\nA supported document [S1].'
     resumed=asyncio.run(compose_documentary(store,ResearchSearch(store,lambda k:None),Ready(),CTX,identifier))
     assert resumed['status']=='completed' and len(DocumentFiles(store).listing(identifier,CTX))==1
+
+@pytest.mark.parametrize('format',['pdf','docx','html'])
+def test_illustrated_authored_exports_preserve_uploaded_figures(tmp_path,format):
+    store,files,identifier,row=setup(tmp_path)
+    sources=store.source_catalog(store.get(identifier,CTX)['artifact'])
+    store.request_state(identifier,CTX,phase='complete')
+    item=store.save('Explain this uploaded research','detailed','# Illustrated documentary\n\nA supported explanation [S1].',sources,[],CTX,'document')
+    body,mime=store.export(identifier,CTX,item['revision'],format)
+    if format=='html':assert b'data:image/jpeg;base64,' in body
+    elif format=='docx':
+        import zipfile
+        with zipfile.ZipFile(io.BytesIO(body)) as doc:assert any(name.startswith('word/media/') for name in doc.namelist())
+    else:
+        import pypdfium2 as pdfium
+        with pdfium.PdfDocument(body) as doc:assert any(o.type==pdfium.raw.FPDF_PAGEOBJ_IMAGE for page in doc for o in page.get_objects())
+
+def test_image_insert_native_edit_ordering_and_overlapping_text(tmp_path):
+    _,files,identifier,row=setup(tmp_path);page=files.page(identifier,CTX,row['id']);text=next(o for o in page['objects'] if o['type']=='text')
+    with pytest.raises(ValueError,match='overlaps'):
+        files.edit_pdf(identifier,CTX,row['id'],row['revision'],[{'action':'insert_text','page':1,'text':'Overlaps the heading','rect':[40,720,450,50]}],'overlap')
+    with pytest.raises(ValueError,match='Select_native_objects_again'):
+        files.edit_pdf(identifier,CTX,row['id'],row['revision'],[{'action':'remove_object','page':1,'object_id':text['id']},{'action':'move_object','page':1,'object_id':text['id'],'rect':[10,20,40,50]}],'shifted-id')
+    commands=[{'action':'insert_image','page':1,'image_attachment_id':row['id'],'image_id':row['images'][0]['id'],'rect':[320,500,200,100]}]
+    result=files.edit_pdf(identifier,CTX,row['id'],row['revision'],commands,'image-insert')
+    edited=files.page(identifier,CTX,row['id'],1,result['revision'])
+    assert len([o for o in edited['objects'] if o['type']=='image'])==2
+    assert files.edit_pdf(identifier,CTX,row['id'],row['revision'],commands,'image-insert')['revision']==result['revision']
+    with pytest.raises(ValueError,match='operation_id_reused'):files.edit_pdf(identifier,CTX,row['id'],row['revision'],[{'action':'add_page','page':1}],'image-insert')
+
+def test_converted_documentary_keeps_page_evidence_and_inherits_figures(tmp_path):
+    store,files,identifier,row=setup(tmp_path)
+    original=store.get(identifier,CTX)['artifact']
+    linked=create_entry(store,CTX,'documentary','A documentary based on the supplied document','linked',identifier)['research_id']
+    class Model:
+        async def report(self,brief,sources,kind):
+            assert sources[0]['attachment_origin_id']==identifier and 'Research document heading' in sources[0]['content']
+            return '# Linked documentary\n\nSupported interpretation [S1].'
+    result=asyncio.run(compose_documentary(store,ResearchSearch(store,lambda k:None),Model(),CTX,linked))
+    assert result['status']=='completed'
+    assert store.get(identifier,CTX)['artifact']==original
+    presentation=files.presentation(linked,CTX)
+    assert presentation['attachment_images'][0]['url'].startswith('/api/research/'+identifier+'/attachments/')
+    assert presentation['attachment_images'][0]['source_id']=='S1'
+
+def test_latest_documentary_does_not_repeat_search_after_quota_wait(tmp_path):
+    from astra_ai.core.background_budget import BudgetPaused
+    store=ResearchArtifacts(tmp_path/'reports.json');identifier=create_entry(store,CTX,'documentary','Latest public research','latest')['research_id'];calls=[]
+    search=ResearchSearch(store,lambda k:None)
+    def request(*args):calls.append(args);return [{'title':'Evidence','url':'https://example.org/evidence','content':'Public evidence.'}],None
+    search._request=request
+    class Model:
+        async def report(self,*args,**kwargs):raise BudgetPaused(9999999999,'daily_budget')
+    asyncio.run(compose_documentary(store,search,Model(),CTX,identifier))
+    asyncio.run(compose_documentary(store,search,Model(),CTX,identifier))
+    assert len(calls)==1 and store.request_state(identifier,CTX)['freshness_checked']
+
+def test_pdf_preview_job_is_a_successful_preparation_not_a_failed_search(tmp_path):
+    from astra_ai.ui.backend.document_api import intent,run_document_job
+    store,files,identifier,row=setup(tmp_path);edit_id='a'*32
+    intent(files,identifier,CTX,row['id'],edit_id,{'revision':row['revision'],'commands':[{'action':'add_page','page':1}]})
+    result=asyncio.run(run_document_job(store,ResearchSearch(store,lambda k:None),None,asyncio.Semaphore(1),{'action':'document_pdf','research_id':identifier,'attachment_id':row['id'],'edit_id':edit_id},CTX))
+    assert result['status']=='completed' and result['preview_status']=='preview'
+    assert not files.get(identifier,CTX,row['id']).get('pdf_revision')

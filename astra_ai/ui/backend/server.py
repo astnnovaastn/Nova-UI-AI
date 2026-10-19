@@ -2293,7 +2293,7 @@ _research_services = {}
 background_model=None
 async def _synthesize_research(query,sources):
     if background_model is None:return ''
-    return await background_model.report(query,sources)
+    return await background_model.report(query.removeprefix('[DOCUMENTARY]\n'),sources,kind='documentary' if query.startswith('[DOCUMENTARY]\n') else 'research')
 
 
 def get_research_services():
@@ -8486,7 +8486,7 @@ async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     artifacts,_=get_research_services()
     found=await asyncio.to_thread(artifacts.get,identifier,context)
     if found.get('status')!='ok':return {}
-    item=found['artifact'];key=(identifier,item['revision'],artifacts._snapshot_key,context['profile_id'],context['project_id'],snapshot.get('selection_revision'),snapshot.get('reader_end'),snapshot.get('research_tab'))
+    item=found['artifact'];key=(identifier,item['revision'],artifacts._snapshot_key,context['profile_id'],context['project_id'],snapshot.get('selection_revision'),snapshot.get('reader_end'),snapshot.get('research_tab'),snapshot.get('attachment_id'),snapshot.get('attachment_page'),snapshot.get('attachment_revision'))
     cached=getattr(live,'_research_context_cache',None) if live else None
     if hydrate and cached and cached[0]==key and time.monotonic()-cached[1]<20:return cached[2]
     focus=await _research_thread(identifier,context) if hydrate else {'research_id':identifier,'research_revision':item['revision'],'thread_id':item.get('thread_id','research-'+identifier)}
@@ -8497,6 +8497,16 @@ async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     cursor=max(0,int(snapshot.get('reader_end') or 0)-6)
     visible=await asyncio.to_thread(artifacts.reader,identifier,context,focus['research_revision'],cursor,4000)
     focus['visible_section']=visible.get('report','')[:2400]
+    if snapshot.get('attachment_id'):
+        from astra_ai.core.research_documents import DocumentFiles
+        files=DocumentFiles(artifacts);file_id=snapshot['attachment_id'];origin=snapshot.get('attachment_origin_id') or identifier
+        linked=origin==identifier or any(s.get('attachment_id')==file_id and (s.get('attachment_origin_id') or s.get('origin_research_id'))==origin for s in artifacts.source_catalog(item))
+        if linked:
+            try:
+                page=await asyncio.to_thread(files.page,origin,context,file_id,int(snapshot.get('attachment_page') or 1),str(snapshot.get('attachment_revision','')),0,1800,0,8)
+                focus['visible_document']={k:page.get(k) for k in ('page','text','objects','width','height','scanned')}
+                focus['visible_document'].update(attachment_id=file_id,attachment_origin_id=origin,revision=snapshot.get('attachment_revision'))
+            except (ValueError,OSError):focus['visible_document']={'status':'unavailable','attachment_id':file_id}
     if live:live._research_context_cache=(key,time.monotonic(),focus)
     return focus
 
@@ -8538,7 +8548,8 @@ async def research_draft(identifier:str,request:Request):
 @app.get('/api/research/{identifier}/export')
 async def research_export(identifier:str,request:Request,revision:str,format:str='md',draft:bool=False):
     context=_learning_context(request);artifacts,_=get_research_services()
-    try:body,mime=await asyncio.to_thread(artifacts.export,identifier,context,revision,format,draft)
+    try:
+        async with learning_service.cpu:body,mime=await asyncio.to_thread(artifacts.export,identifier,context,revision,format,draft)
     except ValueError as exc:raise HTTPException(400,str(exc))
     from fastapi.responses import Response
     return Response(body,media_type=mime,headers={'Content-Disposition':f'attachment; filename="research.{format}"','X-Content-Type-Options':'nosniff','Cache-Control':'no-store'})
@@ -8575,6 +8586,22 @@ async def research_media_request(identifier:str,request:Request):
 @app.get('/api/research/{identifier}/sources/{source_id}')
 async def research_source(identifier:str,source_id:str,request:Request,view:str='',revision:str=''):
     context=_learning_context(request);artifacts,_=get_research_services()
+    found=await asyncio.to_thread(artifacts.get,identifier,context,revision)
+    if found.get('status')!='ok':raise HTTPException(404,'Source unavailable')
+    catalog=await asyncio.to_thread(artifacts.source_catalog,found['artifact'])
+    match=re.fullmatch(r'S([1-9][0-9]*)',source_id)
+    source=catalog[int(match[1])-1] if match and int(match[1])<=len(catalog) else {}
+    if source.get('attachment_id'):
+        from astra_ai.core.research_documents import DocumentFiles
+        files=DocumentFiles(artifacts);origin=source.get('attachment_origin_id') or source.get('origin_research_id') or identifier
+        try:body,mime=await asyncio.to_thread(files.original,origin,context,source['attachment_id'],source.get('attachment_revision',''))
+        except (ValueError,OSError):raise HTTPException(422,'Original attachment unavailable')
+        if view=='reader' and mime!='application/pdf':
+            import html
+            page=await asyncio.to_thread(files.page,origin,context,source['attachment_id'],source.get('page',1))
+            return {'html':'<p>'+html.escape(page.get('text','')).replace('\n\n','</p><p>')+'</p>','links':{}}
+        from fastapi.responses import Response
+        return Response(body,media_type=mime,headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
     try:body,mime=await asyncio.to_thread(artifacts.source_bytes,identifier,context,source_id,view=='reader',revision)
     except Exception:raise HTTPException(422,'This source is unavailable for internal reading. Collected evidence remains available.')
     if _learning_context(request)!=context:raise HTTPException(403,'Research session changed')
