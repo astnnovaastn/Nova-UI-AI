@@ -4315,7 +4315,7 @@ function Workspace() {
                   )}
                   {(report.next_cursor != null || report.extensions?.next_cursor != null) && report.completeness !== "pending" && (
                     <button className="research-inline-action" disabled={revealingSaved} onClick={() => void expand()}>
-                      {revealingSaved ? "Revealing saved findings…" : "Expand this report"}
+                      {revealingSaved ? "Revealing saved findings…" : "Show more saved findings"}
                     </button>
                   )}
                   {revealingSaved && <div className="research-saved-reveal" role="status" aria-label="Revealing saved findings"><span /><span /><span /></div>}

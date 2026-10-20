@@ -8493,7 +8493,7 @@ async def continue_research(identifier,context,operation_id,view='',detail=''):
         from astra_ai.core.research_topics import conversational_mode
         args={'action':'more_media' if view=='media' else 'expand','research_id':identifier,'research_revision':item['revision'],'view':view,'detail':detail[:2000],
               'mode':conversational_mode({'mode':'detailed'},context)}
-        if initial_pending:args={'action':'topic_followup','research_id':identifier,'query':detail[:2000],'mode':args['mode']}
+        if initial_pending:args={'action':'topic_followup','research_id':identifier,'query':detail[:2000],'mode':args['mode'],'report_mode':item.get('mode','detailed')}
         await asyncio.to_thread(artifacts.extension_state,identifier,context,phase='waiting_for_report' if initial_pending else 'queued',view=view,operation_id=operation_id,detail=detail[:2000],outbound_started=False,search_checkpoint=None,collected_sources=0,reason='initial_report_pending' if initial_pending else '')
         result=action_jobs.submit([{'name':'search_web','arguments':args}],{**context,'research_id':identifier,'requested_research':True},operation_id,goal='Continue '+(item.get('display_title') or item['query'][:90]))
         if result.get('status') in {'accepted','queued','duplicate','completed'}:

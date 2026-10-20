@@ -46,6 +46,7 @@ def requested_research_budget(path,slot,settings):
 
 
 class GeminiResearchModel(BackgroundModel):
+    detailed_evidence_limit=60000
     def __init__(self, key_provider, budget, model_provider, client_factory=None):
         super().__init__(key_provider, budget)
         self.model_provider = model_provider
@@ -110,8 +111,9 @@ class GeminiResearchModel(BackgroundModel):
         from google import genai
         from google.genai import types
         factory = self.client_factory or genai.Client
-        if max_tokens==6000 and not str(payload.get('query','')).startswith('[QUICK]\n'):max_tokens=12000
-        estimate=min(20000,max_tokens+len(json.dumps(payload))//3+500)
+        quick=payload.get('mode')=='quick' or str(payload.get('query','')).startswith('[QUICK]\n')
+        if max_tokens==6000 and not quick:max_tokens=12000
+        estimate=min(40000,max_tokens+len(json.dumps(payload))//3+500)
         from .aegis_ai import CURRENT_OPERATION
         context=CURRENT_OPERATION.get() or {}
         with self.budget.lease(tokens=estimate,scope_id=context.get('model_research_id') or context.get('research_id','')) as reservation:

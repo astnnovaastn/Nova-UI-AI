@@ -34,6 +34,29 @@ def test_gemini_uses_configured_text_model_without_live_and_validates_citations(
     assert 'supported clause' in calls[0]['config'].system_instruction
     assert budget.snapshot()['requests']==1
 
+
+@pytest.mark.parametrize('mode,ceiling,tokens',[('quick',18000,6000),('detailed',60000,12000)])
+def test_research_depth_packs_later_evidence_and_keeps_quick_and_detailed_distinct(tmp_path,mode,ceiling,tokens):
+    calls=[]
+    class Client:
+        def __init__(self,**kwargs):self.models=self
+        def generate_content(self,**kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps({'report':'# Findings\n\nA supported conclusion [S1].'}))
+        def close(self):pass
+    budget=BackgroundBudget(tmp_path/'gemini.json',daily_tokens=400000,min_interval=0)
+    model=GeminiResearchModel(lambda:'test',budget,lambda:'configured-gemini',Client)
+    sources=[{'url':'https://example.com/'+str(i),'title':'Study '+str(i),'content':'Methods and results. '*350+'LATER_RESULT_'+str(i)+'.'} for i in range(8)]
+    asyncio.run(model.report(('[QUICK]\n' if mode=='quick' else '')+'Compare study findings',sources))
+    payload=json.loads(calls[0]['contents']);evidence=payload['evidence']
+    assert payload['mode']==mode and sum(len(row['content']) for row in evidence)<=ceiling
+    assert calls[0]['config'].max_output_tokens==tokens and budget.snapshot()['requests']==1
+    if mode=='detailed':
+        assert sum(len(row['content']) for row in evidence)>50000
+        assert all('LATER_RESULT_'+str(i) in row['content'] for i,row in enumerate(evidence))
+        assert '12,000–18,000' in calls[0]['config'].system_instruction
+    else:assert all('LATER_RESULT_' not in row['content'] for row in evidence)
+
 def test_gemini_quota_does_not_use_groq_pause(tmp_path):
     groq=BackgroundBudget(tmp_path/'groq.json',min_interval=0)
     gemini=BackgroundBudget(tmp_path/'gemini.json',min_interval=0);gemini.slot=groq.slot
@@ -58,6 +81,26 @@ def test_quick_search_synthesizes_and_checkpoint_resume_does_not_search_again(tm
     second=asyncio.run(service.search({'query':'NVIDIA workstation comparison','mode':'quick'},CTX,'quick'))
     assert second['status']=='completed' and len(calls)==1
     assert attempts[0].startswith('[QUICK]\n')
+
+
+def test_normal_quick_search_reads_articles_before_writing_and_resumes_without_retrieval(tmp_path,monkeypatch):
+    store,_=entry(tmp_path);calls=[];reads=[];attempts=[]
+    source={'url':'https://example.com/workstation','title':'Workstation evidence','content':'A short search snippet.','retrieved_at':'2026-10-20'}
+    article='Substantive source explanations, specifications and comparisons. '*150
+    def read(*args):reads.append(args);return article.encode(),'text/plain; charset=utf-8'
+    monkeypatch.setattr(store,'source_bytes',read)
+    async def synth(query,sources):
+        attempts.append(sources)
+        assert sources[0]['content']==article and sources[0]['search_excerpt']==source['content']
+        if len(attempts)==1:raise BudgetPaused(9999999999,'gemini_daily_quota')
+        return '# Workstation evidence\n\nA connected explanation of the collected evidence [S1].'
+    service=ResearchSearch(store,lambda _:None,synthesize=synth,read_evidence=True)
+    service._request=lambda *args:(calls.append(args) or ([source],None))
+    args={'query':'Compare workstations','mode':'quick'}
+    first=asyncio.run(service.search(args,CTX,'normal'))
+    second=asyncio.run(service.search(args,CTX,'normal'))
+    assert first['status']=='waiting_for_quota' and second['status']=='completed'
+    assert len(calls)==1 and calls[0][1]=='quick' and len(reads)==1
 
 def picture():
     stream=io.BytesIO();Image.new('RGB',(800,500),'teal').save(stream,format='PNG');return stream.getvalue()

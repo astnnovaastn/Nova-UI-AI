@@ -507,11 +507,7 @@ class ResearchArtifacts:
             if not line.strip() and not fence:blocks.append(''.join(current));current=[]
         if current:blocks.append(''.join(current))
         cursor=max(0,int(cursor));limit=max(1000,min(20000,int(limit)));page=[];size=0;end=cursor
-        major=0
         for block in blocks[cursor:]:
-            if re.match(r'^## ',block.lstrip()):
-                major+=1
-                if major>10 and page:break
             if size+len(block)>limit and page:break
             # A pathological oversized block is explicitly omitted, never sliced into invalid markup.
             if len(block)>20000:page.append('\n[Oversized block is available in the full export.]\n')
@@ -706,7 +702,7 @@ class ResearchArtifacts:
         from .research_documents import DocumentFiles
         document.update(DocumentFiles(self).presentation(identifier,context))
         if bounded:
-            document.update(self.reader(identifier,context,revision,limit=12000,stream='base'))
+            document.update(self.reader(identifier,context,revision,limit=20000,stream='base'))
             document['extensions']=self.reader(identifier,context,revision,stream='extensions')
             document['sources']=[{**r,'content':evidence_excerpt(r)} for r in sources]
             document['summary']=document['summary'][:1000]
@@ -1053,6 +1049,25 @@ class ResearchSearch:
         self.synthesize=synthesize;self.illustrate=illustrate;self.complete=complete;self.read_evidence=read_evidence
         self.network=asyncio.Semaphore(4);self.operation_locks={};self.provider_states={}
 
+    async def read_collected_evidence(self,identifier,context,sources):
+        found=await asyncio.to_thread(self.artifacts.get,identifier,context)
+        if found.get('status')!='ok':return sources
+        catalog=await asyncio.to_thread(self.artifacts.source_catalog,found['artifact'])
+        ids={row['url']:'S'+str(i+1) for i,row in enumerate(catalog)}
+        async def read_page(row):
+            try:
+                async with self.network:
+                    body,mime=await asyncio.to_thread(self.artifacts.source_bytes,identifier,context,ids[row['url']],False)
+                if mime.startswith('text/plain'):
+                    text=reader_text(safe(body.decode('utf-8',errors='replace')))[:12000]
+                    if len(text)>len(row.get('content',''))+100:return {**row,'search_excerpt':row.get('content',''),'content':text}
+            except Exception:pass
+            return row
+        candidates=[row for row in sources if not self.artifacts.video_id(row['url']) and len(row.get('content',''))<12000][:3]
+        enriched=await asyncio.gather(*(read_page(row) for row in candidates))
+        by_url={row['url']:row for row in enriched}
+        return [by_url.get(row['url'],row) for row in sources]
+
     def _request(self, query, mode, count):
         from .research_topics import search_key
         provider='tavily' if mode=='detailed' else 'serpapi'
@@ -1246,20 +1261,7 @@ class ResearchSearch:
             # entries keep citation IDs stable without publishing unfinished prose.
             await asyncio.to_thread(self.artifacts.append_extension,identifier,context,item['revision'],operation_id+':sources','',sources)
             if self.read_evidence and not operations[operation_id].get('pages_checked'):
-                catalog=await asyncio.to_thread(self.artifacts.source_catalog,self.artifacts.get(identifier,context)['artifact'])
-                ids={row['url']:'S'+str(i+1) for i,row in enumerate(catalog)}
-                async def read_page(row):
-                    try:
-                        async with self.network:
-                            body,mime=await asyncio.to_thread(self.artifacts.source_bytes,identifier,context,ids[row['url']],False)
-                        if mime.startswith('text/plain'):
-                            text=reader_text(safe(body.decode('utf-8',errors='replace')))[:12000]
-                            if len(text)>len(row.get('content',''))+100:return {**row,'search_excerpt':row.get('content',''),'content':text}
-                    except Exception:pass
-                    return row
-                candidates=[row for row in sources if not self.artifacts.video_id(row['url'])][:3]
-                enriched=await asyncio.gather(*(read_page(row) for row in candidates))
-                by_url={row['url']:row for row in enriched};sources=[by_url.get(row['url'],row) for row in sources]
+                sources=await self.read_collected_evidence(identifier,context,sources)
                 operations[operation_id].update(sources=sources,pages_checked=True)
                 await asyncio.to_thread(self.artifacts.request_state,identifier,context,quick_followups=operations)
             if item.get('completeness')=='pending':
@@ -1289,7 +1291,8 @@ class ResearchSearch:
             if saved:return {**await answer_result(saved['report']),'duplicate':True}
             if not self.synthesize:return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
             await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='preparing_report',view='reader',operation_id=operation_id)
-            try:report=await self.synthesize('[QUICK]\nOriginal report subject: '+item['query']+'\nFollow-up question: '+query,catalog)
+            composition_mode=arguments.get('report_mode') or item.get('mode','quick')
+            try:report=await self.synthesize(('[QUICK]\n' if composition_mode=='quick' else '')+'Original report subject: '+item['query']+'\nFollow-up question: '+query,catalog)
             except BudgetPaused as exc:
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='waiting_for_quota',view='reader',reason=exc.reason,next_attempt=exc.until)
                 return {'status':'waiting_for_quota','reason':exc.reason,'next_attempt':exc.until,'research_id':identifier,'results':await asyncio.to_thread(self.artifacts.followup_evidence,identifier,context,operation_id),
@@ -1322,7 +1325,7 @@ class ResearchSearch:
                     await asyncio.to_thread(self.artifacts.link_turn,parent_id,{**context,'referenced_research_id':parent_id})
                     mode=conversational_mode(arguments,context)
                     if mode=='detailed' and parent['artifact'].get('completeness')!='pending':return await self.expand_report({'research_id':parent_id,'research_revision':parent['artifact']['revision'],'detail':query,'mode':mode,'view':'reader'},context,operation_id)
-                    return await self.quick_followup({'research_id':parent_id,'query':query},context,operation_id)
+                    return await self.quick_followup({'research_id':parent_id,'query':query,'report_mode':parent['artifact'].get('mode','quick')},context,operation_id)
         if arguments.get('action')=='topic_followup':return await self.quick_followup(arguments,context,operation_id)
         if arguments.get('action')=='repair':
             identifier=str(arguments.get('research_id',''));found=await asyncio.to_thread(self.artifacts.get,identifier,context)
@@ -1408,6 +1411,9 @@ class ResearchSearch:
                     await asyncio.to_thread(checkpoint,phase='failed',failures=failures)
                     return {'status':'failed','reason':first['reason'],'retryable':bool(first.get('retryable')),'retry_after_seconds':first.get('retry_after_seconds',65),'query':query,'results':[],'failures':failures,'completeness':'unavailable'}
                 await asyncio.to_thread(checkpoint,phase='comparing_evidence',sources=sources,failures=failures)
+            if mode=='quick' and self.read_evidence and not pending.get('source_pages_checked'):
+                sources=await self.read_collected_evidence(identifier,context,sources)
+                await asyncio.to_thread(checkpoint,sources=sources,source_pages_checked=True)
             from .research_illustrations import prepare_images,place_images
             illustrations=await prepare_images(self,identifier,context,sources,display_title(query)) if self.illustrate else []
             if self.synthesize:

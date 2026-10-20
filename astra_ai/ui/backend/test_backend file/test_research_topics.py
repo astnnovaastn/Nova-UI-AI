@@ -62,8 +62,8 @@ def test_queued_search_keeps_frozen_report_instead_of_allocating_another_topic(t
     store=ResearchArtifacts(tmp_path/'r.json')
     parent=store.save('Pixel versus iPhone',mode,'# Comparison\n\nSupported comparison [S1].',[SOURCE],[],CTX,'parent')
     context={**CTX,'research_id':parent['id'],'thread_id':'research-'+parent['id'],'job_id':'batch','user_text':'Which of these phones has the better camera?'}
-    calls=[]
-    async def synth(query,sources):return '## Camera comparison\n\nThe camera conclusion follows the saved and retrieved evidence [S2].'
+    calls=[];composed=[]
+    async def synth(query,sources):composed.append(query);return '## Camera comparison\n\nThe camera conclusion follows the saved and retrieved evidence [S2].'
     service=ResearchSearch(store,lambda _:None,synthesize=synth)
     service._request=lambda *a:(calls.append(a) or ([{**SOURCE,'url':'https://example.com/cameras'}],None))
     args={'query':'Pixel versus iPhone camera comparison','mode':'quick','topic':'phone cameras'}
@@ -72,6 +72,7 @@ def test_queued_search_keeps_frozen_report_instead_of_allocating_another_topic(t
     assert result['status']=='completed' and result['research_id']==parent['id']
     assert store.listing(CTX)['total']==1 and store.listing(CTX)['items'][0]['followup_count']==1
     assert calls[0][1]=='quick' and sum(bool(row['report']) for row in store.snapshot()['extensions'][parent['id']])==1
+    assert composed[0].startswith('[QUICK]\n')==(mode=='quick')
     assert store.get(parent['id'],CTX)['artifact']['report']==parent['report']
     assert asyncio.run(service.search(args,context,'camera-turn'))['duplicate']
     assert len(calls)==1

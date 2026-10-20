@@ -101,17 +101,26 @@ def test_extension_is_deduplicated_and_preserves_archive_and_draft(tmp_path):
 
 def test_initial_detailed_page_reserves_saved_findings_without_provider_requests(tmp_path,monkeypatch):
     store=ResearchArtifacts(tmp_path/'reports.json')
-    text='# Topic\n\n'+''.join('## Finding '+str(i)+'\n\n'+('Supported facts [S1]. '*90)+'\n\n' for i in range(9))
+    text='# Topic\n\n'+''.join('## Finding '+str(i)+'\n\n'+('Supported facts [S1]. '*90)+'\n\n' for i in range(14))
     item=store.save('Topic','detailed',text,[source()],[],CTX,'saved-only')
     draft=store.save_draft(item['id'],CTX,item['revision'],'','<p>My changes</p>')['draft']
     monkeypatch.setattr(ResearchSearch,'_request',lambda *a:pytest.fail('Expansion must not search'))
     first=store.document(item['id'],CTX,bounded=True)
-    assert len(first['report'])<=12000 and first['next_cursor'] is not None
+    assert 18000<len(first['report'])<=20000 and first['next_cursor'] is not None
     next_page=store.reader(item['id'],CTX,item['revision'],first['next_cursor'],stream='base')
     assert next_page['blocks']==store.reader(item['id'],CTX,item['revision'],first['next_cursor'],stream='base')['blocks']
-    assert 'Finding 8' in next_page['report']
+    assert 'Finding 13' in next_page['report']
     assert store.document(item['id'],CTX)['draft']==draft
     assert store.get(item['id'],CTX)['artifact']['report']==text
+
+
+def test_initial_reader_displays_supported_detailed_report_without_a_ten_section_cutoff(tmp_path):
+    store=ResearchArtifacts(tmp_path/'reports.json')
+    text='# Detailed findings\n\n'+''.join('## Finding '+str(i)+'\n\n'+('Supported explanation [S1]. '*48)+'\n\n' for i in range(12))
+    item=store.save('Detailed findings','detailed',text,[source()],[],CTX,'complete')
+    document=store.document(item['id'],CTX,bounded=True)
+    assert len(text)>12000 and len(text)<18000
+    assert document['report']==text and document['next_cursor'] is None
 
 
 def test_article_extraction_strips_notifications_and_preserves_prose_and_bibliography():
