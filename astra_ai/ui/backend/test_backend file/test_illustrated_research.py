@@ -263,3 +263,208 @@ def test_internal_source_reader_retains_article_images_using_scoped_ids(tmp_path
     assert 'https://example.com/photo.png' not in page['html'] and 'url' not in image
     assert '/nav.png' not in page['html'] and store.image_bytes(identifier,CTX,image['id'])[1]=='image/png'
     with pytest.raises(ValueError):store.image_bytes(identifier,{**CTX,'project_id':'other'},image['id'])
+
+
+def test_gemini_budget_settles_actual_usage_and_explicit_rejections(tmp_path):
+    budget=BackgroundBudget(tmp_path/'gemini.json',min_interval=0)
+    class Client:
+        def __init__(self,**kwargs):self.models=self
+        def generate_content(self,**kwargs):return SimpleNamespace(text='{"report":"A supported answer."}',usage_metadata=SimpleNamespace(total_token_count=321))
+        def close(self):pass
+    model=GeminiResearchModel(lambda:'test',budget,lambda:'configured-gemini',Client)
+    model.structured('Compose the answer',{}, {'type':'object'})
+    assert budget.snapshot()['tokens']==321 and budget.snapshot()['settled_tokens']==321
+    class QuotaError(Exception):code=429
+    def rejected(**kwargs):raise QuotaError()
+    class Rejected(Client):
+        def generate_content(self,**kwargs):return rejected(**kwargs)
+    model.client_factory=Rejected
+    with pytest.raises(BudgetPaused):model.structured('Compose the answer',{}, {'type':'object'})
+    assert budget.snapshot()['tokens']==321 and budget.snapshot()['requests']==2
+
+
+def test_token_reservation_cannot_double_refund_or_refund_uncertain_usage(tmp_path):
+    budget=BackgroundBudget(tmp_path/'usage.json',min_interval=0)
+    with budget.lease(1000) as reservation:
+        reservation.settle(200);reservation.settle(0)
+    assert budget.snapshot()['tokens']==200
+    with pytest.raises(TimeoutError):
+        with budget.lease(1000):raise TimeoutError()
+    assert budget.snapshot()['tokens']==1200
+
+
+def test_research_policy_preserves_learning_limits_and_resume_is_checkpoint_scoped(tmp_path):
+    import time,copy
+    from datetime import datetime,timezone
+    from astra_ai.core.research_model import requested_research_budget,resume_research_budget_waits
+    from astra_ai.memory.shared_memory import StorageLock,read,atomic
+    store,identifier=entry(tmp_path)
+    store.request_state(identifier,CTX,phase='waiting_for_quota',waiting_reason='background_daily_budget',sources=[{'url':'https://example.com','title':'NVIDIA','content':'Saved evidence','retrieved_at':'2026-10-19'}])
+    learning=BackgroundBudget(tmp_path/'learning.json')
+    budget=requested_research_budget(tmp_path/'research.json',learning.slot,lambda _:None)
+    assert learning.daily_tokens==80000 and budget.daily_tokens==400000 and budget.slot is learning.slot
+    atomic(budget.path,{'day':datetime.now(timezone.utc).date().isoformat(),'requests':8,'tokens':75402,'next_attempt':0})
+    action={'name':'search_web','state':'waiting_for_retry','arguments':{'research_id':identifier},'result':{'reason':'background_daily_budget'},'next_attempt':time.time()+86400,'attempts':2}
+    path=tmp_path/'jobs.json'
+    jobs=SimpleNamespace(path=path,lock=StorageLock(tmp_path/'jobs.lock'),load=lambda:read(path,{}),write=lambda value:atomic(path,value))
+    ready={'state':'waiting_for_retry','context':{**CTX,'requested_research':True},'actions':[copy.deepcopy(action)]}
+    foreign=copy.deepcopy(ready);foreign['context']['project_id']='another-project'
+    provider=copy.deepcopy(ready);provider['actions'][0]['result']['reason']='gemini_rate_limit'
+    atomic(path,{'jobs':{'ready':ready,'foreign':foreign,'provider':provider}})
+    assert resume_research_budget_waits(jobs,store,budget)==1
+    result=read(path,{})
+    assert result['jobs']['ready']['actions'][0]['state']=='queued'
+    assert result['jobs']['ready']['actions'][0]['attempts']==2
+    assert result['jobs']['foreign']['state']=='waiting_for_retry' and result['jobs']['provider']['state']=='waiting_for_retry'
+    assert resume_research_budget_waits(jobs,store,budget)==0
+    assert store.request_state(identifier,CTX)['sources'][0]['content']=='Saved evidence'
+
+
+def test_gemini_refuses_output_limit_and_reserves_room_for_complete_detailed_report(tmp_path):
+    from astra_ai.core.background_model import ModelUnavailable
+    calls=[]
+    class Client:
+        def __init__(self,**kwargs):self.models=self
+        def generate_content(self,**kwargs):
+            calls.append(kwargs);return SimpleNamespace(text='{"report":"unfinished"}',usage_metadata=SimpleNamespace(total_token_count=100),candidates=[SimpleNamespace(finish_reason='MAX_TOKENS')])
+        def close(self):pass
+    model=GeminiResearchModel(lambda:'test',BackgroundBudget(tmp_path/'budget.json',min_interval=0),lambda:'configured-gemini',Client)
+    with pytest.raises(ModelUnavailable,match='output limit'):model.structured('Report',{'query':'A detailed topic'},{'type':'object'},6000)
+    assert calls[0]['config'].max_output_tokens==12000
+
+
+def test_report_completion_revision_keeps_original_and_draft_without_researching_again(tmp_path):
+    store,identifier=entry(tmp_path)
+    old=store.save('NVIDIA workstation comparison','detailed','# Answer\n\nAn unfinished',[{'url':'https://example.com','title':'NVIDIA evidence','content':'Supported comparison.','retrieved_at':'2026-10-19'}],[],CTX,'sample')
+    draft=store.save_draft(identifier,CTX,old['revision'],'','<p>User edited this.</p>')['draft']
+    calls=[]
+    async def synth(query,sources):calls.append(query);return '# Complete comparison\n\nA complete supported answer. [S1]'
+    service=ResearchSearch(store,lambda _:None,synthesize=synth)
+    service._request=lambda *a:pytest.fail('Completion must reuse the saved evidence')
+    args={'action':'repair','research_id':identifier,'research_revision':old['revision']}
+    result=asyncio.run(service.search(args,CTX,'repair'))
+    assert result['status']=='completed'
+    assert store.get(identifier,CTX,old['revision'])['artifact']['report']==old['report']
+    assert store.document(identifier,CTX)['draft']==draft
+    assert store.get(identifier,CTX)['artifact']['report'].endswith('answer. [S1]')
+    asyncio.run(service.search(args,CTX,'repair'))
+    assert len(calls)==1 and len(store.snapshot()['report_history'][identifier])==1
+
+
+def test_gemini_completes_valid_json_that_contains_unfinished_prose(tmp_path):
+    calls=[]
+    class Model(GeminiResearchModel):
+        def structured(self,instruction,payload,schema,max_tokens=1600):
+            calls.append(payload)
+            return {'report':'# Answer\n\nSupported first section. [S1]\n\nThe remaining answer is'} if len(calls)==1 else {'report':'The remaining answer is supported by this evidence [S1].\n\n## Limitations\nNo unsupported details are invented [S1].'}
+    model=Model(lambda:'test',BackgroundBudget(tmp_path/'budget.json'),lambda:'configured-gemini')
+    report=asyncio.run(model.report('A detailed comparison',[{'url':'https://example.com','title':'Evidence','content':'Supported facts.'}]))
+    assert len(calls)==2 and calls[1]['unfinished_paragraph']=='The remaining answer is'
+    assert report.count('Supported first section.')==1 and report.endswith('[S1].')
+
+
+def test_plain_generated_headline_is_presented_as_heading_without_rewriting_archive(tmp_path):
+    store,identifier=entry(tmp_path)
+    report='A Clear Hardware Comparison\n\nThe source supports this answer [S1].'
+    store.save('NVIDIA workstation comparison','detailed',report,[],[],CTX,'sample')
+    assert store.reader(identifier,CTX)['report'].startswith('# A Clear Hardware Comparison\n\n')
+    assert store.get(identifier,CTX)['artifact']['report']==report
+
+
+def test_completion_keeps_main_answer_across_short_local_pacing_and_rejects_zero_citation(tmp_path):
+    import time
+    from astra_ai.core.background_model import ModelUnavailable
+    class Model(GeminiResearchModel):
+        calls=0
+        def structured(self,instruction,payload,schema,max_tokens=1600):
+            self.calls+=1
+            if self.calls==1:raise BudgetPaused(time.time()+.01,'background_quota_paused')
+            return {'report':'Remaining findings are supported [S1].'}
+    model=Model(lambda:'test',BackgroundBudget(tmp_path/'pacing.json'),lambda:'configured-gemini')
+    evidence=[{'title':'Evidence','content':'Supported facts.'}]
+    report=asyncio.run(model.complete_report('# Heading\n\nExisting findings [S1].\n\nUnfinished','Question',evidence))
+    assert model.calls==2 and report.count('Existing findings')==1 and report.endswith('[S1].')
+    model.structured=lambda *args:{'report':'Unsupported reference [S0].'}
+    with pytest.raises(ModelUnavailable,match='unverifiable'):asyncio.run(model.complete_report('Unfinished','Question',evidence))
+
+
+def test_repair_completes_saved_prose_without_recomposing_the_report(tmp_path):
+    store,identifier=entry(tmp_path)
+    old=store.save('NVIDIA workstation comparison','detailed','# Answer\n\nExisting findings [S1].\n\nUnfinished',[{'url':'https://example.com','title':'Evidence','content':'Supported facts.','retrieved_at':'2026-10-19'}],[],CTX,'sample')
+    calls=[]
+    async def complete(report,query,sources):
+        calls.append(report);return report.removesuffix('Unfinished')+'A complete ending [S1].'
+    async def synth(*args):pytest.fail('Do not regenerate already composed sections')
+    service=ResearchSearch(store,lambda _:None,synthesize=synth,complete=complete)
+    result=asyncio.run(service.search({'action':'repair','research_id':identifier,'research_revision':old['revision']},CTX,'complete-saved'))
+    assert result['status']=='completed' and calls==[old['report']]
+    assert store.get(identifier,CTX)['artifact']['report'].endswith('ending [S1].')
+
+
+def test_unfinished_completion_is_checkpointed_and_resumed_without_repeating_prefix(tmp_path):
+    from astra_ai.core.research_model import IncompleteResearchAnswer
+    store,identifier=entry(tmp_path)
+    old=store.save('NVIDIA workstation comparison','detailed','# Answer\n\nUnfinished',[{'url':'https://example.com','title':'Evidence','content':'Supported facts.','retrieved_at':'2026-10-19'}],[],CTX,'sample')
+    calls=[]
+    async def complete(report,query,sources):
+        calls.append(report)
+        if len(calls)==1:raise IncompleteResearchAnswer('# Answer\n\nCompleted findings [S1].\n\nRemaining')
+        return report.removesuffix('Remaining')+'Conclusion [S1].'
+    service=ResearchSearch(store,lambda _:None,synthesize=complete,complete=complete)
+    args={'action':'repair','research_id':identifier,'research_revision':old['revision']}
+    assert asyncio.run(service.search(args,CTX,'resume-completion'))['status']=='waiting_for_retry'
+    assert store.get(identifier,CTX)['artifact']['report']==old['report']
+    assert asyncio.run(service.search(args,CTX,'resume-completion'))['status']=='completed'
+    assert calls[1].endswith('Remaining') and store.get(identifier,CTX)['artifact']['report'].count('Completed findings')==1
+
+
+def test_substantial_partial_report_finishes_with_bounded_findings_and_verdict(tmp_path):
+    class Model(GeminiResearchModel):
+        def structured(self,instruction,payload,schema,max_tokens=1600):
+            assert max_tokens==3000 and set(schema['required'])=={'findings','recommendations','limitations'}
+            return {'findings':'Remaining findings are supported [S1].','recommendations':'Choose based on the verified trade-offs [S1].','limitations':'Unavailable prices cannot be verified [S1].'}
+    model=Model(lambda:'test',BackgroundBudget(tmp_path/'summary.json'),lambda:'configured-gemini')
+    prefix='# Comparison\n\n'+'Supported findings [S1]. '*520
+    report=asyncio.run(model.complete_report(prefix+'\n\nUnfinished','Compare products',[{'title':'Evidence','content':'Supported findings.'}]))
+    assert report.startswith(prefix) and report.endswith('[S1].') and len(report)<20000
+
+
+def test_recompressed_resized_picture_is_deduplicated_but_distinct_images_remain():
+    from PIL import ImageDraw
+    from astra_ai.core.research_illustrations import image_fingerprint,same_picture
+    image=Image.new('RGB',(800,500),'#326397');draw=ImageDraw.Draw(image)
+    draw.rectangle((100,80,650,400),fill='#e7c778');draw.ellipse((250,160,420,330),fill='#702060')
+    def row(image,quality):
+        stream=io.BytesIO();image.save(stream,format='JPEG',quality=quality)
+        return {'width':image.width,'height':image.height,**image_fingerprint(stream.getvalue())}
+    original=row(image,95);resized=row(image.resize((640,400)),70)
+    assert same_picture(original,resized)
+    draw.rectangle((0,0,600,500),fill='#109020')
+    assert not same_picture(original,row(image,95))
+
+
+def test_image_placement_limits_groups_and_keeps_product_identity_in_its_passage():
+    images=[{'id':'I'+str(n),'source_id':'S1','caption':'Samsung Galaxy S26 Ultra product image'} for n in range(7)]
+    images += [{'id':'wrong','source_id':'S1','caption':'Honor Magic V5 product image'}]
+    report='# Phones\n\nApple iPhone 17 Pro offers the first comparison [S1].\n\nSamsung Galaxy S26 Ultra has supported display findings [S1].\n\nSamsung Galaxy S26 Ultra has supported camera findings [S1].'
+    placed=place_images(images,report)
+    assert len(placed)==7 and all('Samsung' in image['placement_text'] for image in placed)
+    assert max(sum(other['placement_text']==image['placement_text'] for other in placed) for image in placed)<=5
+
+
+def test_image_upgrade_keeps_old_duplicate_ids_available_to_existing_drafts(tmp_path,monkeypatch):
+    store,identifier=entry(tmp_path)
+    rows=[{'id':'I'+str(n)*24,'url':f'https://example.com/photo{n}.png','source_id':'S1','caption':'NVIDIA workstation','publication':'example.com','source_url':'https://example.com'} for n in (1,2)]
+    store.request_state(identifier,CTX,images_prepared=True,image_enrichment_version=4,validated_images=rows,selected_images=rows,image_search_attempted=True,image_pages_version=5)
+    monkeypatch.setattr(store,'_fetch_public_source',lambda url,image=False:(picture(),'image/png',url))
+    selected=asyncio.run(prepare_images(ResearchSearch(store,lambda _:None),identifier,CTX,[],'NVIDIA workstation'))
+    assert len(selected)==1
+    archived=store.request_state(identifier,CTX)['image_archive']
+    assert archived[0]['id']==rows[1]['id'] and archived[0]['source_only']
+    assert store.image_bytes(identifier,CTX,rows[1]['id'])[1]=='image/png'
+
+
+def test_phone_comparison_does_not_illustrate_incidental_other_models():
+    rows=[{'id':'main','source_id':'S1','caption':'Samsung Galaxy S26 Ultra'}, {'id':'incidental','source_id':'S1','caption':'OnePlus 15'}]
+    report='# Apple iPhone 17 and Samsung Galaxy S26 Ultra\n\n## Samsung Galaxy S26 Ultra\n\nThe camera comparison also briefly mentions the OnePlus 15 [S1].'
+    assert [row['id'] for row in place_images(rows,report)]==['main']

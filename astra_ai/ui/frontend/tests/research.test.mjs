@@ -27,6 +27,9 @@ const names = [
   "pausePlayers",
   "researchDestination",
   "imageComposition",
+  "sourceLinkKey",
+  "freshSourceLinks",
+  "citedSourceKeys",
 ];
 const selected = tree.statements
   .filter((n) => ts.isFunctionDeclaration(n) && names.includes(n.name?.text))
@@ -46,10 +49,24 @@ const sources = [
   { id: "S2", title: "Second" },
 ];
 
+test("each source and YouTube link appears once; later citations produce no replacement", () => {
+  const seen = new Set();
+  const first = {id:"S1",url:"https://www.example.com/article?utm_source=search",title:"Evidence"};
+  const same = {id:"S2",url:"https://example.com/article#details",title:"Same evidence"};
+  assert.deepEqual(plain(context.freshSourceLinks([first,same],seen)), [first]);
+  assert.deepEqual(plain(context.freshSourceLinks([same,first],seen)), []);
+  const youtube={id:"S3",url:"https://youtube.com/watch?v=dQw4w9WgXcQ",title:"Video"};
+  assert.equal(context.freshSourceLinks([youtube],seen).length,1);
+  assert.equal(context.freshSourceLinks([{...youtube,url:"https://youtu.be/dQw4w9WgXcQ?t=12"}],seen).length,0);
+  const prior=context.citedSourceKeys("A supported sentence [S1].",[first,same]);
+  assert.equal(context.freshSourceLinks([same],new Set(prior)).length,0);
+});
+
 test("reader composition adapts to image proportions, paragraph length and collection size", () => {
   const long = "A connected explanation with inline evidence. ".repeat(20);
   assert.equal(context.imageComposition([], long), "none");
   assert.equal(context.imageComposition([{width:800,height:500}], long), "aside");
+  assert.equal(context.imageComposition([{width:800,height:500}], "A compact supporting explanation. ".repeat(12)), "aside-end");
   assert.equal(context.imageComposition([{width:400,height:700}], long), "portrait");
   assert.equal(context.imageComposition([{width:1200,height:400}], long), "wide");
   assert.equal(context.imageComposition([{width:800,height:500,caption:"Architecture diagram"}], long), "wide");
@@ -69,7 +86,7 @@ test("Gemini grouped citations become pills while literal source-like text stays
   );
   assert.deepEqual(
     plain(context.citationParts("Unknown [S1, S999].", sources)),
-    ["Unknown ", "[S1, S999]", "."],
+    ["Unknown ", "", "."],
   );
 });
 
@@ -83,7 +100,7 @@ test("adjacent citations group in evidence order and repeated references dedupli
     ".",
   ]);
 });
-test("malformed or unknown citations remain visible instead of claiming support", () => {
+test("unavailable source references leave plain text without fabricated links or numbers", () => {
   const parts = plain(
     context.citationParts(
       "Unknown [S999]; mixed [S1][S999]; malformed [Sx].",
@@ -92,7 +109,7 @@ test("malformed or unknown citations remain visible instead of claiming support"
   );
   assert.equal(
     parts.filter((p) => typeof p === "string").join(""),
-    "Unknown [S999]; mixed [S1][S999]; malformed [Sx].",
+    "Unknown ; mixed ; malformed [Sx].",
   );
 });
 test("literal code, mathematical notation and quotation content remain exact", () => {

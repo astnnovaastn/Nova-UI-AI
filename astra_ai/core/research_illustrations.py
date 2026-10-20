@@ -2,13 +2,28 @@
 import asyncio, io, re, hashlib, time
 from .research_learning import scope
 from urllib.parse import urlsplit, urljoin
-from PIL import Image
+from PIL import Image,ImageStat,ImageOps
 from urllib3.exceptions import HTTPError
 from astra_ai.memory.shared_memory import stable, safe
 
-IMAGE_VERSION=4
+IMAGE_VERSION=5
 MAX_IMAGES=24
 TARGET_IMAGES=5
+
+def image_fingerprint(body):
+    with Image.open(io.BytesIO(body)) as original:
+        image=ImageOps.exif_transpose(original).convert('RGB')
+        small=image.resize((9,8),Image.Resampling.LANCZOS).convert('L')
+        pixels=list(small.tobytes());bits=0
+        for row in range(8):
+            for column in range(8):bits=(bits<<1)|int(pixels[row*9+column]>pixels[row*9+column+1])
+        return {'visual_hash':format(bits,'016x'),'visual_color':[round(n) for n in ImageStat.Stat(image.resize((16,16))).mean]}
+
+def same_picture(first,second):
+    if first.get('content_hash') and first.get('content_hash')==second.get('content_hash'):return True
+    if not all(row.get('visual_hash') and row.get('visual_color') for row in (first,second)):return False
+    if abs(first['width']/first['height']-second['width']/second['height'])>.08:return False
+    return (int(first['visual_hash'],16)^int(second['visual_hash'],16)).bit_count()<=4 and max(abs(a-b) for a,b in zip(first['visual_color'],second['visual_color']))<=5
 
 
 def useful_image(row):
@@ -78,10 +93,8 @@ async def prepare_images(search, identifier, context, sources, query):
             if not score:continue
             candidates.append({'id':'I'+stable(identifier,url)[:24],'url':url,'caption':caption,'source_id':'S'+str(index+1),'publication':urlsplit(source['url']).hostname,'source_url':source['url'],'score':score})
 
+    candidates.extend(row for row in metadata.get('validated_images',[]) if row.get('url') not in seen and useful_image(row))
     attempted=set();selected=[];hashes=set()
-    for image in metadata.get('validated_images',[]):
-        if not useful_image(image):continue
-        selected.append(image);attempted.add(image['url'])
     async def validate(rows):
         async def one(row):
             if row['url'] in attempted:return None
@@ -111,8 +124,11 @@ async def prepare_images(search, identifier, context, sources, query):
             for result in results:
                 if not result:continue
                 row,body,mime,width,height=result;digest=hashlib.sha256(body).hexdigest()
-                if digest in hashes or any(r['url']==row['url'] for r in selected):continue
-                hashes.add(digest);selected.append({**row,'width':width,'height':height,'layout':'wide' if width/height>1.8 else 'aside'})
+                def signature():
+                    with artifacts.image_worker:return image_fingerprint(body)
+                candidate={**row,'width':width,'height':height,'content_hash':digest,**await asyncio.to_thread(signature),'layout':'wide' if width/height>1.8 else 'aside'}
+                if digest in hashes or any(r['url']==row['url'] or same_picture(candidate,r) for r in selected):continue
+                hashes.add(digest);selected.append(candidate)
                 artifacts.reader_cache[(stable(scope(context),identifier),'image',row['id'])]=(time.time(),(body,mime))
                 while len(artifacts.reader_cache)>64 or sum(len(v[1][0]) for v in artifacts.reader_cache.values())>16_000_000:artifacts.reader_cache.pop(next(iter(artifacts.reader_cache)))
                 if len(selected)>=MAX_IMAGES:break
@@ -154,23 +170,48 @@ async def prepare_images(search, identifier, context, sources, query):
                 candidates.append({'id':'I'+stable(identifier,url)[:24],'url':url,'caption':caption,'source_id':'P'+stable(page)[:24],'publication':urlsplit(page).hostname,'source_url':page,'score':score})
             await asyncio.to_thread(artifacts.request_state,identifier,context,image_candidates=candidates)
             selected=await validate(candidates)
-    await asyncio.to_thread(artifacts.request_state,identifier,context,selected_images=selected,validated_images=selected,images_prepared=True,image_enrichment_version=IMAGE_VERSION,image_candidates=[])
+    retained={row['id']:row for row in metadata.get('image_archive',[])}
+    current_ids={row['id'] for row in selected}
+    for row in metadata.get('validated_images',[]) or metadata.get('selected_images',[]):
+        if row['id'] not in current_ids:retained[row['id']]={**row,'source_only':True}
+    await asyncio.to_thread(artifacts.request_state,identifier,context,selected_images=selected,validated_images=selected,image_archive=list(retained.values()),images_prepared=True,image_enrichment_version=IMAGE_VERSION,image_candidates=[])
     return selected
 
 
 def place_images(images, report):
     """Choose an evidence-adjacent passage; never scatter images arbitrarily."""
-    # Markdown allows a paragraph immediately after a heading without a blank line.
-    passages=re.sub(r'(?m)^(#{1,6}[^\n]*\n)',r'\1\n',report)
-    blocks=[b for b in re.split(r'\n\s*\n',passages) if not b.startswith(('#','```','~~~','|'))]
-    result=[]
+    from markdown_it import MarkdownIt
+    from bs4 import BeautifulSoup
+    document=BeautifulSoup(MarkdownIt().enable('table').render(report),'html.parser')
+    nodes=[node for node in document.find_all(['p','li']) if not node.find_parent(['table','blockquote','pre']) and (node.name=='li' and not node.find('li') or node.name=='p' and not node.find_parent('li'))]
+    blocks=[node.get_text(' ',strip=True) for node in nodes]
+    contexts={}
+    for node,block in zip(nodes,blocks):
+        heading=node.find_previous(['h1','h2','h3','h4','h5','h6'])
+        contexts[block]=(heading.get_text(' ',strip=True)+' ' if heading else '')+block
+    result=[];counts={}
+    def products(text):
+        found=set()
+        for brand,pattern in [('apple',r'\b(?:apple|iphone)\b'),('samsung',r'\b(?:samsung|galaxy)\b'),('google',r'\b(?:google|pixel)\b'),('honor',r'\bhonor\b'),('xiaomi',r'\bxiaomi\b'),('oneplus',r'\boneplus\b'),('zte',r'\b(?:zte|redmagic)\b')]:
+            if re.search(pattern,text,re.I):found.add(brand)
+        for family,number in re.findall(r'\b(iphone|pixel|galaxy\s*s)\s*(\d+)\b',text,re.I):found.add(re.sub(r'\s','',family.lower())+number)
+        for shape in ('fold','flip'):
+            if re.search(r'\b'+shape+r'\b',text,re.I):found.add(shape)
+        return found
+    headline=document.find('h1')
+    subjects=products(headline.get_text(' ',strip=True)) if headline else set()
     for image in images:
-        candidates=[b for b in blocks if re.search(r'\[(?:S\d+\s*[,;]\s*)*'+re.escape(image['source_id'])+r'(?:\s*[,;]\s*S\d+)*\]',b)]
-        if not candidates:candidates=[b for b in blocks if len(terms(image['caption']) & terms(b))>=2]
+        if not useful_image(image):continue
+        if re.search(r'\b(?:book cover|inside preview)\b',image['caption'],re.I) and not re.search(r'\b(?:books?|publishing)\b',report,re.I):continue
+        if any(same_picture(image,old) or image['id']==old['id'] for old in result):continue
+        identities=products(image['caption'])
+        if subjects and identities and not identities<=subjects:continue
+        if not identities and re.search(r'\b(?:iphone|galaxy|pixel)\b',report,re.I) and re.search(r'\bphone\b',image['caption'],re.I):continue
+        eligible=[b for b in blocks if counts.get(b,0)<5 and (not identities or identities<=products(contexts[b]))]
+        def associated(block):return bool(re.search(r'\[(?:S\d+\s*[,;]\s*)*'+re.escape(image['source_id'])+r'(?:\s*[,;]\s*S\d+)*\]',block))
+        candidates=[b for b in eligible if associated(b) or len(terms(image['caption']) & terms(contexts[b]))>=2]
         if not candidates:continue
-        block=max(candidates,key=lambda b:(len(terms(image['caption']) & terms(b)), -len(b)))
-        from markdown_it import MarkdownIt
-        from bs4 import BeautifulSoup
-        plain=BeautifulSoup(MarkdownIt().render(block),'html.parser').get_text(' ',strip=True)
-        result.append({**image,'placement_text':re.sub(r'\[S\d+(?:\s*[,;]\s*S\d+)*\]', '',plain).strip()[:90]})
+        block=max(candidates,key=lambda b:(len(terms(image['caption']) & terms(contexts[b]))*3+2*associated(b)-counts.get(b,0), -len(b)))
+        counts[block]=counts.get(block,0)+1
+        result.append({**image,'placement_text':re.sub(r'\[S\d+(?:\s*[,;]\s*S\d+)*\]', '',block).strip()[:90]})
     return result

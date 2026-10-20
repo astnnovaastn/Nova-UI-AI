@@ -1297,6 +1297,31 @@ function PendingResearch({
     </section>
   );
 }
+function sourceLinkKey(url: string) {
+  const video = videoId(url);
+  if (video) return "youtube:" + video;
+  try {
+    const parsed = new URL(url);
+    parsed.hash = "";
+    parsed.hostname = parsed.hostname.replace(/^www\./, "");
+    for (const key of [...parsed.searchParams.keys()])
+      if (/^(utm_|fbclid$|gclid$)/i.test(key)) parsed.searchParams.delete(key);
+    parsed.searchParams.sort();
+    return parsed.toString();
+  } catch { return url; }
+}
+function freshSourceLinks(refs: Source[], seen: Set<string>) {
+  return refs.filter(source => {
+    const key = sourceLinkKey(source.url || source.id);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+function citedSourceKeys(text: string, sources: Source[]) {
+  const ids = new Set([...text.matchAll(/\[(S\d+(?:\s*[,;]\s*S\d+)*)\]/g)].flatMap(match => match[1].match(/S\d+/g) || []));
+  return sources.filter(source => ids.has(source.id) || !!source.url && text.includes(source.url)).map(source => sourceLinkKey(source.url || source.id));
+}
 function citationParts(
   value: string,
   sources: Source[],
@@ -1315,11 +1340,13 @@ function citationParts(
       ];
       const refs = ids.map((id) => sources.find((s) => s.id === id));
       if (ids.length && refs.every(Boolean)) return refs as Source[];
+      if (ids.length) return "";
       return part.replace(/^(?:\p{Extended_Pictographic}\uFE0F?\s+)+/u, "");
     });
 }
 // Transform parsed text nodes only: citations cannot modify code, HTML attributes or URLs.
 type ResearchImage = {
+  content_hash?: string;
   width?: number;
   height?: number;
   placement_text?: string;
@@ -1334,10 +1361,12 @@ function EvidenceImage({
   image,
   reportId,
   onOpen,
+  attribution = false,
 }: {
   image: ResearchImage;
   reportId: string;
   onOpen: () => void;
+  attribution?: boolean;
 }) {
   const [url, setUrl] = useState("");
   useEffect(() => {
@@ -1378,10 +1407,10 @@ function EvidenceImage({
       <button onClick={onOpen} aria-label={"Enlarge image: " + image.caption}>
         <img src={url} alt={image.caption} style={{objectFit: "scale-down"}} onError={() => setUrl("")} />
       </button>
-      <figcaption>
+      {attribution && <figcaption>
         {image.caption}
         <small>{image.publication}</small>
-      </figcaption>
+      </figcaption>}
     </figure>
   );
 }
@@ -1395,18 +1424,16 @@ function imageComposition(images: {width?: number; height?: number; caption?: st
   const diagram = /\b(chart|diagram|infographic|map|schematic|timeline)\b/i.test(image.caption || "");
   if (ratio >= 2.25 || (diagram && ratio >= 1.25)) return "wide";
   if (ratio < 0.85 && passage.length >= 280) return "portrait";
-  return passage.length >= 280 ? "aside" : "compact";
+  return passage.length >= 700 ? "aside" : passage.length >= 280 ? "aside-end" : "compact";
 }
 
 function EvidenceGallery({ images, reportId, onOpen, layout = "gallery" }: {
   images: ResearchImage[]; reportId: string; onOpen: (image: ResearchImage) => void; layout?: string;
 }) {
-  const [limit, setLimit] = useState(5);
   return <>
     <div className={"research-image-composition " + layout}>
-      {images.slice(0, limit).map(image => <EvidenceImage key={image.id} image={image} reportId={reportId} onOpen={() => onOpen(image)} />)}
+      {images.slice(0, 5).map(image => <EvidenceImage key={image.id} image={image} reportId={reportId} onOpen={() => onOpen(image)} />)}
     </div>
-    {images.length > limit && <button className="research-inline-action" onClick={() => setLimit(value => value + 5)}>Show more images ({images.length - limit})</button>}
   </>;
 }
 
@@ -1498,7 +1525,7 @@ function ImageViewer({
         >
           <Icon name="close" />
         </button>
-        <EvidenceImage image={image} reportId={reportId} onOpen={() => {}} />
+        <EvidenceImage image={image} reportId={reportId} onOpen={() => {}} attribution />
         <button className="research-inline-action" onClick={onSource}>
           Read image source
         </button>
@@ -1515,6 +1542,7 @@ function ReportContent({
   images = [],
   reportId = "",
   onImage,
+  precedingLinks = [],
 }: {
   text: string;
   sources: Source[];
@@ -1523,12 +1551,20 @@ function ReportContent({
   images?: ResearchImage[];
   reportId?: string;
   onImage?: (image: ResearchImage) => void;
+  precedingLinks?: string[];
 }) {
   const doc = useMemo(
     () => new DOMParser().parseFromString(markdown(text), "text/html"),
     [text],
   );
   const placed = new Set<string>();
+  const seenSources = new Set(precedingLinks);
+  const uniqueImages = images.filter((image, index) => images.findIndex(other => other.id === image.id || (image.content_hash && other.content_hash === image.content_hash)) === index);
+  const anchorText = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  function chip(refs: Source[], key: string) {
+    const fresh = freshSourceLinks(refs, seenSources);
+    return fresh.length ? <SourceChip key={key} source={fresh[0]} sources={fresh} onClick={source => onOpen(source || fresh[0])} /> : null;
+  }
   function render(node: Node, key: string, literal = false): React.ReactNode {
     if (node.nodeType === Node.TEXT_NODE) {
       const value = node.textContent || "";
@@ -1543,14 +1579,16 @@ function ReportContent({
         typeof part === "string" ? (
           part
         ) : (
-          <SourceChip
-            key={key + ":" + i}
-            source={part[0]}
-            sources={part}
-            onClick={(s) => onOpen(s || part[0])}
-          />
+          chip(part, key + ":" + i)
         ),
-      );
+      ).reduce<React.ReactNode[]>((parts, part) => {
+        if (part == null) return parts;
+        const previous = parts[parts.length - 1];
+        if (typeof part === "string" && typeof previous === "string") {
+          parts[parts.length - 1] = (/^[\s.,;:!?)]/.test(part) ? previous.replace(/[ \t]+$/, "") : previous) + part;
+        } else parts.push(part);
+        return parts;
+      }, []);
     }
     if (!(node instanceof Element)) return null;
     const tag = node.tagName.toLowerCase();
@@ -1559,13 +1597,11 @@ function ReportContent({
         id = node.getAttribute("data-citation");
       const source = sources.find((s) => (id && s.id === id) || s.url === href);
       if (source)
-        return (
-          <SourceChip
-            key={key}
-            source={source}
-            onClick={() => onOpen(source)}
-          />
-        );
+        return chip([source], key) || node.textContent;
+      const linkKey = sourceLinkKey(href);
+      if (!href.startsWith("#") && seenSources.has(linkKey)) return node.textContent;
+      if (!href.startsWith("#")) seenSources.add(linkKey);
+      if (!href.startsWith("#")) return node.textContent;
       return (
         <a
           key={key}
@@ -1605,14 +1641,14 @@ function ReportContent({
       .trim();
     const relatedImages =
       !literal && ["p", "li"].includes(tag)
-        ? images
+        ? uniqueImages
             .filter(
               (image) =>
                 !placed.has(image.id) &&
                 (image.placement_text
-                  ? passage.includes(image.placement_text.slice(0, 60))
+                  ? anchorText(passage).includes(anchorText(image.placement_text).slice(0, 55))
                   : node.textContent?.includes("[" + image.source_id + "]")),
-            )
+            ).slice(0, 5)
         : [];
     relatedImages.forEach((image) => placed.add(image.id));
     const related = relatedImages[0];
@@ -1620,30 +1656,24 @@ function ReportContent({
     const illustration = (
       <EvidenceGallery images={relatedImages} reportId={reportId} onOpen={image => onImage?.(image)} layout={composition} />
     );
+    const children = Array.from(node.childNodes).map((n, i) =>
+      render(n, key + ":" + i, literal || ["pre", "code", "blockquote"].includes(tag)));
     const content = React.createElement(
       tag,
       props,
-      ...Array.from(node.childNodes).map((n, i) =>
-        render(
-          n,
-          key + ":" + i,
-          literal || ["pre", "code", "blockquote"].includes(tag),
-        ),
-      ),
+      ...children,
     );
     if (related && tag === "li")
       return React.createElement(
         "li",
-        { ...props, className: "research-illustrated-block" },
+        { ...props, className: "research-illustrated-block", "data-composition": composition },
         illustration,
-        ...Array.from(node.childNodes).map((n, i) =>
-          render(n, key + ":" + i, literal),
-        ),
+        <div className="research-illustrated-copy">{children}</div>,
       );
     return related ? (
-      <div className="research-illustrated-block" key={key}>
+      <div className="research-illustrated-block" data-composition={composition} key={key}>
         {composition !== "wide" && illustration}
-        {content}
+        <div className="research-illustrated-copy">{content}</div>
         {composition === "wide" && illustration}
       </div>
     ) : (
@@ -3589,6 +3619,16 @@ function Workspace() {
       setError(e.message);
     }
   }
+  const readerSources = report ? [...report.sources, ...(report.linked_sources || []), ...(report.image_sources || [])] : [];
+  const readerBaseKeys = citedSourceKeys(report?.report || "", readerSources);
+  const readerVideos = freshSourceLinks(media, new Set(readerBaseKeys)).slice(0, 5);
+  const readerExtensionBlocks = report?.extensions?.blocks || (report?.extensions?.report ? [{id: report.extension_revision || "extension", text: report.extensions.report}] : []);
+  const readerVideoKeys = readerVideos.map(video => sourceLinkKey(video.url));
+  const readerFooterSources = freshSourceLinks(report?.sources || [], new Set([
+    ...readerBaseKeys, ...readerVideoKeys,
+    ...citedSourceKeys(readerExtensionBlocks.map(block => block.text).join("\n"), readerSources),
+    ...(report?.evidence_collection ? (report.sources || []).map(source => sourceLinkKey(source.url)) : []),
+  ]));
   return (
     <section
       className="research-workspace"
@@ -4092,13 +4132,13 @@ function Workspace() {
                         Expand this report
                       </button>
                     )}
-                  {!!media.length && (
+                  {!!readerVideos.length && (
                     <section
                       className="research-related-media"
                       aria-label="Related videos"
                     >
                       <h2>Related videos</h2>
-                      {media.slice(0, 5).map((video) => (
+                      {readerVideos.map((video) => (
                         <button
                           key={videoId(video.url)}
                           onClick={() => openSource(video)}
@@ -4124,20 +4164,14 @@ function Workspace() {
                       className="research-extension"
                       aria-label="Additional research"
                     >
-                      {(
-                        report.extensions.blocks || [
-                          {
-                            id: report.extension_revision || "extension",
-                            text: report.extensions.report,
-                          },
-                        ]
-                      ).map((block) => (
+                      {readerExtensionBlocks.map((block, blockIndex) => (
                         <div
                           className="research-extension-block"
                           key={block.id}
                         >
                           <ReportContent
                             text={block.text}
+                            precedingLinks={[...readerBaseKeys, ...readerVideoKeys, ...citedSourceKeys(readerExtensionBlocks.slice(0, blockIndex).map(previous => previous.text).join("\n"), readerSources)]}
                             sources={[
                               ...report.sources,
                               ...(report.linked_sources || []),
@@ -4160,13 +4194,14 @@ function Workspace() {
                   )}
                   <h2 className="research-sources-heading">Sources</h2>
                   <div className="research-source-chips">
-                    {report.sources.map((source) => (
+                    {readerFooterSources.map((source) => (
                       <SourceChip
                         key={source.id}
                         source={source}
                         onClick={() => openSource(source)}
                       />
                     ))}
+                    {!readerFooterSources.length && <p>Sources are linked where they first appear in the report.</p>}
                   </div>
                 </div>
                 {editOpened && (

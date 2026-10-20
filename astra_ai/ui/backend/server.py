@@ -2296,6 +2296,12 @@ async def _synthesize_research(query,sources):
     if research_model is None:return ''
     return await research_model.report(query.removeprefix('[DOCUMENTARY]\n'),sources,kind='documentary' if query.startswith('[DOCUMENTARY]\n') else 'research')
 
+async def _complete_research(report,query,sources):
+    if research_model is None:
+        from astra_ai.core.background_model import ModelUnavailable
+        raise ModelUnavailable('Gemini research is not configured')
+    return await research_model.complete_report(report,query,sources)
+
 
 def get_research_services():
     from astra_ai.core.research_learning import ResearchArtifacts, ResearchSearch
@@ -2303,7 +2309,7 @@ def get_research_services():
     key=str(path.resolve())
     if key not in _research_services:
         artifacts=ResearchArtifacts(path)
-        _research_services[key]=(artifacts,ResearchSearch(artifacts,_get_env_value,synthesize=_synthesize_research,illustrate=True))
+        _research_services[key]=(artifacts,ResearchSearch(artifacts,_get_env_value,synthesize=_synthesize_research,illustrate=True,complete=_complete_research))
     return _research_services[key]
 
 async def _aegis_search_web(arguments):
@@ -2323,6 +2329,9 @@ async def _aegis_search_web(arguments):
     if arguments.get('action')=='media':
         return await service.enrich_media(str(arguments.get('research_id','')),context,str(arguments.get('research_revision','')))
     result=await service.search(arguments,context,context.get('operation_id',''))
+    if result.get('revision_repair'):
+        await ws_manager.send_to_client_id(context.get('client_id',''),{'type':'research_refresh','research_id':result['research_id']})
+        return result
     if result.get('image_enrichment'):
         await ws_manager.send_to_client_id(context.get('client_id',''),{'type':'research_refresh','research_id':result['research_id']})
     if result.get('status')=='completed' and result.get('research_id'):
@@ -5256,11 +5265,12 @@ async def lifespan(app: FastAPI):
     learned_root=Path(__file__).resolve().parents[2]/'core'/'learned'
     background_budget=BackgroundBudget(state.live_memory.memory_path.parent/'background_budget.json')
     background_model=BackgroundModel(_get_groq_api_key,background_budget)
-    from astra_ai.core.research_model import GeminiResearchModel,resume_legacy_research_waits
-    research_budget=BackgroundBudget(state.live_memory.memory_path.parent/'research_gemini_budget.json')
-    research_budget.slot=background_budget.slot
+    from astra_ai.core.research_model import GeminiResearchModel,resume_legacy_research_waits,requested_research_budget,resume_research_budget_waits
+    research_budget=requested_research_budget(state.live_memory.memory_path.parent/'research_gemini_budget.json',background_budget.slot,_get_env_value)
     research_model=GeminiResearchModel(lambda:state.gemini_api_key,research_budget,lambda:_get_env_value('GEMINI_TEXT_MODEL') or MODEL_STATUS['text'].get('effective') or TEXT_FALLBACK)
     await asyncio.to_thread(resume_legacy_research_waits,action_jobs)
+    research_artifacts,_=get_research_services()
+    await asyncio.to_thread(resume_research_budget_waits,action_jobs,research_artifacts,research_budget)
     state.memory_organizer.background_budget=background_budget
     from astra_ai.memory.organizer_runtime import OrganizationReview, GeminiMergeReviewer
     state.memory_organizer.organization_review=OrganizationReview(state.live_memory,GeminiMergeReviewer(lambda:state.gemini_api_key,background_budget))

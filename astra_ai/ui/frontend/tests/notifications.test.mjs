@@ -7,6 +7,7 @@ function fixture(){
  let now=0,next=0;const timers=new Map(),listeners=new Map(),storage=new Map();
  class Element{children=[];parent=null;id='';className='';hover=false;textContent='';handlers={};classList={add:(c)=>{this.className+=' '+c;}};append(...children){for(const c of children){c.parent=this;this.children.push(c);}}remove(){if(this.parent)this.parent.children=this.parent.children.filter(c=>c!==this);this.parent=null;}setAttribute(k,v){this[k]=v;}addEventListener(k,f){this.handlers[k]=f;}matches(){return this.hover;}contains(e){return e===this||this.children.some(c=>c.contains(e));}showModal(){this.open=true;}close(){this.open=false;this.handlers.close?.();}focus(){document.activeElement=this;}}
  const body=new Element(),find=(root,id)=>root.id===id?root:root.children.map(c=>find(c,id)).find(Boolean);
+ body.classList.contains=(name)=>body.className.split(' ').includes(name);
  const document={body,activeElement:null,createElement:()=>new Element(),getElementById:id=>find(body,id),addEventListener:(k,f)=>listeners.set(k,f)};
  const sessionStorage={getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)};
  const timeout=(f,ms=0)=>{timers.set(++next,{f,at:now+ms});return next;};
@@ -21,6 +22,18 @@ test('hover pauses remaining time, queued notices follow, duplicates do not repl
 test('dismissed notices remain in scoped inbox and cannot cross a guest boundary',()=>{const f=fixture();f.api.noticeScope('owner');f.api.notify({id:'approval',title:'Review action'});f.advance(3200);f.api.showNotificationHistory();let inbox=f.document.getElementById('nova-notification-inbox');assert.ok(inbox.children.some(c=>c.textContent==='Review action'));f.api.noticeScope('guest');assert.equal(f.document.getElementById('nova-notification-inbox'),undefined);f.api.noticeScope('owner');f.api.showNotificationHistory();inbox=f.document.getElementById('nova-notification-inbox');assert.ok(inbox.children.some(c=>c.textContent==='Review action'));});
 
 test('initial snapshots populate inbox without popping up a backlog',()=>{const f=fixture();f.api.noticeScope('owner');f.api.notify({id:'old',title:'Old result',inboxOnly:true});assert.equal(f.document.getElementById('aegis-work-notice'),undefined);f.api.showNotificationHistory();assert.ok(f.document.getElementById('nova-notification-inbox').children.some(c=>c.textContent==='Old result'));});
+
+test('research completion is quiet in Research and deduplicates readiness and task notices by report',()=>{
+ const f=fixture();f.body.classList.add('research-workspace-open');
+ f.api.notify({id:'ready-event',title:'Research ready',kind:'research',target:{research_id:'report-one'}});
+ assert.equal(f.document.getElementById('aegis-work-notice'),undefined);
+ f.body.className='';
+ f.api.notify({id:'task-event',title:'Research ready',kind:'research',target:{research_id:'report-one'}});
+ assert.equal(f.document.getElementById('aegis-work-notice'),undefined);
+ f.api.notify({id:'another-report',title:'Second report ready',kind:'research',target:{research_id:'report-two'}});
+ const box=f.document.getElementById('aegis-work-notice');assert.ok(box);
+ box.children[0].onclick();assert.equal(f.document.getElementById('aegis-work-notice').className.includes('leaving'),true);
+});
 
 test('owner confirmation is nonblocking and synthetic model clicks cannot approve',async()=>{const f=fixture();let done=false;const result=f.api.confirmOwner('Delete fixture','fixture','revision').then(value=>{done=true;return value;});const dialog=f.body.children.find(c=>c.className==='nova-owner-confirmation');assert.equal(dialog.open,true);dialog.children.at(-1).children[1].onclick({isTrusted:false});await Promise.resolve();assert.equal(done,false);f.api.notify({id:'progress',title:'Other work continues'});f.advance(3200);assert.equal(done,false);dialog.children.at(-1).children[1].onclick({isTrusted:true});assert.equal(await result,true);});
 test('a scope change cancels pending owner confirmation',async()=>{const f=fixture();f.api.noticeScope('owner');const result=f.api.confirmOwner('Delete fixture','fixture','revision');f.api.noticeScope('guest');assert.equal(await result,false);assert.ok(!f.body.children.some(c=>c.className==='nova-owner-confirmation'));});

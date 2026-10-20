@@ -381,6 +381,9 @@ class ResearchArtifacts:
         else:
             body=reader_text(item['report'])
             body=re.sub(r'\A# [^\n]+', '# '+title, body, count=1)
+            first,separator,rest=body.partition('\n\n')
+            if not headline and separator and 2<=len(first)<=150 and '\n' not in first and not re.match(r'^[#>|`*+\-]',first) and not first.endswith(('.', '!', '?')):
+                title=display_title(first);body='# '+title+'\n\n'+rest
         with self.lock:
             extensions=self.snapshot().get('extensions',{}).get(identifier,[])
         if stream=='extensions':body=''
@@ -422,8 +425,33 @@ class ResearchArtifacts:
             pending=data.get('requests',{}).get(identifier)
             if not item and pending:item={**pending,'revision':stable(identifier,'pending'),'report':'','summary':'','sources':pending.get('sources',[]),'failures':pending.get('failures',[]),'completeness':'failed' if pending.get('phase')=='failed' else 'pending'}
             if not item or scope(item) != scope(context) or identifier in data.get('removed',{}):return {'status': 'not_found'}
-            if revision and revision != item['revision']:return {'status': 'conflict', 'reason': 'research_revision_changed'}
+            if revision and revision != item['revision']:
+                archived=next((r['artifact'] for r in data.get('report_history',{}).get(identifier,[]) if r['artifact']['revision']==revision),None)
+                if not archived:return {'status': 'conflict', 'reason': 'research_revision_changed'}
+                item=archived
             return {'status': 'ok', 'artifact': copy.deepcopy(item)}
+
+    def revise_report(self,identifier,context,expected_revision,report,operation_id):
+        """Complete a generated report without destroying its original revision or edited draft."""
+        if context.get('guest'):return {'status':'rejected','reason':'owner_required'}
+        if not isinstance(report,str) or not report.strip() or len(report)>500000:return {'status':'rejected','reason':'invalid_report'}
+        with self.lock:
+            found=self.get(identifier,context)
+            if found['status']!='ok':return found
+            old=found['artifact'];data=read(self.path,{})
+            history=data.setdefault('report_history',{}).setdefault(identifier,[])
+            if any(r['operation_id']==operation_id for r in history):return self.brief(old)
+            if old['revision']!=expected_revision:return {'status':'conflict','reason':'research_revision_changed'}
+            self.backup_metadata();report=reader_text(safe(report))
+            history.append({'artifact':copy.deepcopy(old),'operation_id':operation_id,'created':now()})
+            title=display_title(re.search(r'^# (.+)',report,re.M).group(1)) if re.search(r'^# (.+)',report,re.M) else old.get('display_title',display_title(old['query']))
+            updated={**old,'report':report,'summary':report[:1600],'revision':hashlib.sha256(report.encode()).hexdigest(),'display_title':title,'phase':'complete'}
+            data['artifacts'][identifier]=updated
+            data['requests'][identifier].update(display_title=title,phase='complete',next_attempt=None,waiting_reason='')
+            from .research_illustrations import place_images
+            data['requests'][identifier]['selected_images']=place_images(data['requests'][identifier].get('validated_images') or data['requests'][identifier].get('selected_images',[]),report)
+            atomic(self.path,data)
+            return self.brief(updated)
 
     def find(self, query, mode, context, operation_id='', freshness=3600):
         with self.lock:
@@ -779,6 +807,8 @@ class ResearchArtifacts:
         metadata=self.request_state(identifier,context)
         images=list(metadata.get('selected_images',[])) if metadata.get('images_prepared') else []
         images.extend(metadata.get('source_images',[]));seen={r['url'] for r in images}
+        ids={row['id'] for row in images}
+        images.extend({**row,'source_only':True} for row in metadata.get('image_archive',[]) if row['id'] not in ids)
         from .research_illustrations import useful_image
         images=[r for r in images if useful_image(r)]
         if metadata.get('images_prepared'):return images
@@ -883,9 +913,9 @@ class ResearchArtifacts:
 
 
 class ResearchSearch:
-    def __init__(self, artifacts, key_provider, transport=requests, synthesize=None, illustrate=False):
+    def __init__(self, artifacts, key_provider, transport=requests, synthesize=None, illustrate=False, complete=None):
         self.artifacts=artifacts;self.key_provider=key_provider;self.transport=transport
-        self.synthesize=synthesize;self.illustrate=illustrate
+        self.synthesize=synthesize;self.illustrate=illustrate;self.complete=complete
         self.network=asyncio.Semaphore(4);self.operation_locks={};self.provider_states={}
 
     def _request(self, query, mode, count):
@@ -1041,6 +1071,29 @@ class ResearchSearch:
             return {**self.artifacts.brief(item),**result}
 
     async def search(self, arguments, context, operation_id=''):
+        if arguments.get('action')=='repair':
+            identifier=str(arguments.get('research_id',''));found=await asyncio.to_thread(self.artifacts.get,identifier,context)
+            if found['status']!='ok':return found
+            item=found['artifact']
+            with self.artifacts.lock:
+                if any(r['operation_id']==operation_id for r in self.artifacts.snapshot().get('report_history',{}).get(identifier,[])):return {**self.artifacts.brief(item),'revision_repair':True}
+            if item['revision']!=str(arguments.get('research_revision','')):return {'status':'conflict','reason':'research_revision_changed'}
+            if not self.synthesize:return {'status':'failed','reason':'synthesis_unavailable'}
+            checkpoint=self.artifacts.request_state(identifier,context).get('completion_checkpoint',{})
+            if checkpoint.get('revision')!=item['revision']:checkpoint={}
+            try:
+                sources=self.artifacts.source_catalog(item)
+                report=await self.complete(checkpoint.get('report') or item['report'],item['query'],sources) if self.complete else await self.synthesize(item['query']+'\nFinish every requested topic, including recommendations and limitations, within a concise complete report. End with a complete conclusion; do not leave any section or sentence unfinished.',sources)
+            except BudgetPaused as exc:return {'status':'waiting_for_quota','next_attempt':max(time.time()+5,exc.until),'reason':exc.reason,'research_id':identifier}
+            except Exception as exc:
+                from .research_model import IncompleteResearchAnswer
+                if not isinstance(exc,IncompleteResearchAnswer):raise
+                count=checkpoint.get('attempts',0)+1
+                if count>=3 or len(exc.report)>22000:raise
+                await asyncio.to_thread(self.artifacts.request_state,identifier,context,completion_checkpoint={'revision':item['revision'],'operation_id':operation_id,'report':exc.report,'attempts':count})
+                return {'status':'waiting_for_retry','reason':'research_completion_pending','next_attempt':time.time()+15,'research_id':identifier}
+            result=await asyncio.to_thread(self.artifacts.revise_report,identifier,context,item['revision'],report,operation_id)
+            return {**result,'revision_repair':True}
         if arguments.get('action')=='images':
             identifier=str(arguments.get('research_id',''));found=await asyncio.to_thread(self.artifacts.get,identifier,context)
             if found['status']!='ok':return found
@@ -1115,6 +1168,6 @@ class ResearchSearch:
                 report='# '+display_title(query)+'\n\n'+('These are source excerpts, not a completed synthesis.\n\n' if mode=='detailed' else '')+'\n\n'.join('### '+r['title']+'\n\n'+reader_text(r.get('content',''))[:(500000 if mode=='detailed' else 1200)]+' [S'+str(i+1)+']' for i,r in enumerate(sources))+'\n\n## Limitations\nSearch excerpts may be incomplete; consult the supporting sources.'
             await asyncio.to_thread(self.artifacts.request_state,identifier,context,selected_images=place_images(illustrations,report))
             title=display_title(re.search(r'^# (.+)',report,re.M).group(1)) if re.search(r'^# (.+)',report,re.M) else display_title(query)
-            await asyncio.to_thread(checkpoint,display_title=title,phase='complete',next_attempt=None)
+            await asyncio.to_thread(checkpoint,display_title=title,phase='complete',next_attempt=None,waiting_reason='')
             item=await asyncio.to_thread(self.artifacts.save,query,mode,report,sources,failures,context,operation_id or key)
             return self.artifacts.brief(item)

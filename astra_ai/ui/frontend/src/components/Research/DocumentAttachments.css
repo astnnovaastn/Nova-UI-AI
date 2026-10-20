@@ -282,11 +282,11 @@
   object-fit: contain;
 }
 .research-image-viewer .research-evidence-image {
-  width: min(85vw, 1000px);
-  max-width: none;
+  width: 100%;
+  max-width: 100%;
 }
 .research-image-viewer .research-evidence-image img {
-  max-height: 75vh;
+  max-height: 65vh;
 }
 @media (max-width: 1400px) {
   .research-central-chat {

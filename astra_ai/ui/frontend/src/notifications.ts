@@ -244,7 +244,12 @@ function showNext() {
   arm();
 }
 export function notify(n: Notice) {
-  const existing = inbox.find((x) => x.id === n.id);
+  const researchId = n.kind === "research" ? String(n.target?.research_id || "") : "";
+  if (researchId) {
+    n = { ...n, id: "research-ready:" + researchId,
+      inboxOnly: n.inboxOnly || document.body.classList.contains("research-workspace-open") };
+  }
+  const existing = inbox.find((x) => x.id === n.id || (researchId && x.kind === "research" && x.target?.research_id === researchId));
   if (existing) {
     Object.assign(existing, n);
     try {

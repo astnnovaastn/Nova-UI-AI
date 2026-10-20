@@ -7,6 +7,20 @@ from astra_ai.memory.shared_memory import read,atomic,StorageLock
 class BudgetPaused(Exception):
     def __init__(self,until,reason):self.until=until;self.reason=reason;super().__init__(reason)
 
+class TokenReservation:
+    """Settle one estimate against provider usage; never refund uncertain requests."""
+    def __init__(self,budget,day,tokens):self.budget=budget;self.day=day;self.tokens=tokens;self.settled=False
+    def settle(self,actual_tokens):
+        if type(actual_tokens) is not int or actual_tokens<0:return
+        with self.budget.lock:
+            if self.settled:return
+            self.settled=True;data=read(self.budget.path,{})
+            if data.get('day')!=self.day:return
+            data['tokens']=max(0,data.get('tokens',0)-self.tokens+actual_tokens)
+            data['settled_requests']=data.get('settled_requests',0)+1
+            data['settled_tokens']=data.get('settled_tokens',0)+actual_tokens
+            atomic(self.budget.path,data)
+
 class BackgroundBudget:
     def __init__(self,path,daily_requests=40,daily_tokens=80000,min_interval=65):
         self.path=Path(path);self.lock=StorageLock(self.path.with_suffix('.lock'));self.slot=threading.Lock();self.daily_requests=daily_requests;self.daily_tokens=daily_tokens;self.min_interval=min_interval
@@ -24,7 +38,7 @@ class BackgroundBudget:
                 if data.get('requests',0)>=self.daily_requests or data.get('tokens',0)+tokens>self.daily_tokens:
                     midnight=(int(current)//86400+1)*86400;raise BudgetPaused(midnight,'background_daily_budget')
                 data.update(requests=data.get('requests',0)+1,tokens=data.get('tokens',0)+tokens,next_attempt=current+self.min_interval);atomic(self.path,data)
-            yield
+            yield TokenReservation(self,day,tokens)
         finally:self.slot.release()
     def response(self,response):
         with self.lock:

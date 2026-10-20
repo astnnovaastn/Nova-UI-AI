@@ -1,6 +1,23 @@
 import asyncio
 from astra_ai.ui.backend.action_jobs import ActionJobs
 
+def test_requested_research_deadline_allows_bounded_synthesis_without_extending_other_actions(tmp_path,monkeypatch):
+    async def run():
+        deadlines=[];original=asyncio.wait_for
+        async def measured(awaitable,timeout):
+            deadlines.append(timeout)
+            return await original(awaitable,timeout)
+        monkeypatch.setattr(asyncio,'wait_for',measured)
+        async def execute(*args):return {'status':'completed'}
+        async def notify(*args):pass
+        jobs=ActionJobs(tmp_path/'deadlines.json',execute,notify,lambda _:True,{'search_web','recall_memory'})
+        for name,context in [('search_web',{'requested_research':True}),('search_web',{}),('recall_memory',{'requested_research':True})]:
+            jid=jobs.submit([{'name':name}],context)['job_id'];job=jobs.list(jid)['job']
+            await jobs.execute(job,0,job['actions'][0])
+            assert jobs.list(jid)['job']['state']=='completed'
+        assert deadlines==[300,60,60]
+    asyncio.run(run())
+
 def test_transient_retry_completed_dedup_and_mute_independence(tmp_path):
     async def run():
         calls=[]
