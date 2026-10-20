@@ -30,6 +30,7 @@ import {
 } from "../../aegisWidgetProtocol";
 import "./ResearchWorkspace.css";
 import {ResearchHistoryItem} from "./ResearchHistoryItem";
+import {RecentlyRemovedResearch} from "./RecentlyRemovedResearch";
 import {
   AttachmentAssets,
   AttachmentReader,
@@ -1236,13 +1237,13 @@ function researchProgress(
     skeleton: active && elapsed >= 1.5,
   };
 }
-function PendingResearch({
+export function PendingResearch({
   report,
-  onOpen,
+  onBrowse,
   onImage,
 }: {
   report: Report;
-  onOpen: (source: Source) => void;
+  onBrowse: () => void;
   onImage: (image: ResearchImage) => void;
 }) {
   const [now, setNow] = useState(Date.now());
@@ -1271,7 +1272,7 @@ function PendingResearch({
           }
           aria-hidden="true"
         />
-        <span role="status">{status.label}</span>
+        <span role="status">{report.legacy_evidence || report.evidence_collection ? "Evidence collected" : status.label}</span>
         {(status.active || typeof report.processing_seconds === "number") && (
           <span
             className="research-working-time"
@@ -1286,8 +1287,8 @@ function PendingResearch({
             <summary>Why the wait?</summary>
             <p>
               The report-writing service has reached its usage limit. Your
-              collected findings are available below, and the summary will
-              resume automatically when the service is available.
+              collected sources remain available in Sources. Report writing
+              will resume when its queued job can run.
             </p>
           </details>
         )}
@@ -1308,34 +1309,12 @@ function PendingResearch({
         </div>
       )}
       {!!report.sources.length && (
-        <section
-          className="research-collected-findings"
-          aria-label="Collected findings"
-        >
-          <h2>Collected findings</h2>
-          <p className="research-evidence-label">
-            Supporting passages from the sources found so far.
-          </p>
-          {report.sources.map((source) => (
-            <article
-              className="research-evidence-card"
-              id={"source-" + source.id}
-              key={source.id}
-            >
-              <h2>{source.title}</h2>
-              <p>
-                {sourceExcerpt(source)}{" "}
-                <SourceChip source={source} onClick={() => onOpen(source)} />
-              </p>
-              <button
-                className="research-inline-action"
-                onClick={() => onOpen(source)}
-              >
-                Read source
-              </button>
-            </article>
-          ))}
-        </section>
+        <div className="research-evidence-summary">
+          <p>The composed answer hasn’t been published. {report.sources.length} collected sources are available to inspect while report writing is pending.</p>
+          <button className="research-inline-action" onClick={onBrowse}>
+            <Icon name="citation" /> Browse collected sources
+          </button>
+        </div>
       )}
       {!status.active && !report.sources.length && (
         <p>
@@ -1430,7 +1409,18 @@ function EvidenceImage({
   attribution?: boolean;
 }) {
   const [url, setUrl] = useState("");
+  const [client, setClient] = useState(() => {
+    const state=conversationSnapshot();return state.guest ? "" : state.clientId;
+  });
   useEffect(() => {
+    const update=() => {const state=conversationSnapshot();setClient(state.guest ? "" : state.clientId);};
+    update();
+    window.addEventListener("nova-conversation",update);
+    return () => window.removeEventListener("nova-conversation",update);
+  },[]);
+  useEffect(() => {
+    setUrl("");
+    if(!client) return;
     let active = true,
       blob = "";
     const controller = new AbortController();
@@ -1442,7 +1432,7 @@ function EvidenceImage({
         ? image.url
         : "/api/research/" + reportId + "/images/" + image.id,
       {
-        headers: headers(),
+        headers: {...headers(),"X-Nova-Client":client},
         signal: controller.signal,
       },
     )
@@ -1452,7 +1442,7 @@ function EvidenceImage({
       })
       .then((b) => {
         blob = URL.createObjectURL(b);
-        if (active) setUrl(blob);
+        if (active && conversationSnapshot().clientId===client && !conversationSnapshot().guest) setUrl(blob);
         else URL.revokeObjectURL(blob);
       })
       .catch(() => {});
@@ -1461,8 +1451,8 @@ function EvidenceImage({
       controller.abort();
       if (blob) URL.revokeObjectURL(blob);
     };
-  }, [reportId, image.id]);
-  if (!url) return null;
+  }, [reportId, image.id, image.url, client]);
+  if (!url || !client) return null;
   return (
     <figure className="research-evidence-image">
       <button onClick={onOpen} aria-label={"Enlarge image: " + image.caption}>
@@ -3870,7 +3860,7 @@ function Workspace() {
   const readerSources = report ? [...report.sources, ...(report.linked_sources || []), ...(report.image_sources || [])] : [];
   const readerSections = useMemo(() => Array.from(new DOMParser().parseFromString(markdown(report?.report || ""), "text/html").querySelectorAll("h1,h2,h3"))
     .slice(0, 50).map((heading, index) => ({id:"visible-section-" + index,title:heading.textContent?.trim() || "Section"})), [report?.report]);
-  const readerBaseKeys = citedSourceKeys(report?.report || "", readerSources);
+  const readerBaseKeys = report?.completeness === "pending" || report?.evidence_collection || report?.legacy_evidence ? [] : citedSourceKeys(report?.report || "", readerSources);
   const readerVideos = freshSourceLinks(media, new Set([...readerBaseKeys, ...citedSourceKeys(report?.extensions?.report || "", readerSources)])).slice(0, 5);
   const readerExtensionBlocks = report?.extensions?.blocks || (report?.extensions?.report ? [{id: report.extension_revision || "extension", text: report.extensions.report}] : []);
   const readerFollowups = followupGroups(readerExtensionBlocks);
@@ -3878,7 +3868,6 @@ function Workspace() {
   const readerFooterSources = freshSourceLinks(report?.sources || [], new Set([
     ...readerBaseKeys, ...readerVideoKeys,
     ...citedSourceKeys(readerExtensionBlocks.map(block => block.text).join("\n"), readerSources),
-    ...(report?.evidence_collection ? (report.sources || []).map(source => sourceLinkKey(source.url)) : []),
   ]));
   return (
     <section
@@ -3951,25 +3940,11 @@ function Workspace() {
               <Icon name="next" />
             </button>
           </nav>
-          {!!removed.length && (
-            <details className="research-removed">
-              <summary>Recently removed ({removed.length})</summary>
-              {removed.map((item) => (
-                <button
-                  key={item.research_id}
-                  onClick={() =>
-                    window.dispatchEvent(
-                      new CustomEvent("nova-research-restore", {
-                        detail: item,
-                      }),
-                    )
-                  }
-                >
-                  Restore {item.display_title || item.query}
-                </button>
-              ))}
-            </details>
-          )}
+          {!!removed.length && <RecentlyRemovedResearch items={removed} onRestore={async(item:any)=>{
+            const result=await api("/"+item.research_id+"/restore",{method:"POST",body:JSON.stringify({undo_token:item.undo_token})});
+            if(result.status!=="completed" && result.status!=="ok")throw Error(result.reason||"Research could not be restored.");
+            await refresh();
+          }}/>}
           {report && (
             <>
               <h2>On this page</h2>
@@ -4278,54 +4253,12 @@ function Workspace() {
                       </button>
                     </section>
                   ) : report.phase === "failed" ||
-                    report.completeness === "pending" ? (
+                    report.completeness === "pending" || report.evidence_collection || report.legacy_evidence ? (
                     <PendingResearch
-                      report={{
-                        ...report,
-                        sources: report.sources.slice(0, sourceLimit),
-                      }}
-                      onOpen={openSource}
+                      report={report}
+                      onBrowse={() => selectTab("sources")}
                       onImage={setImageView}
                     />
-                  ) : (report.evidence_collection ||
-                      report.completeness === "pending") &&
-                    !original ? (
-                    <>
-                      <h1>{report.display_title || report.query}</h1>
-                      <p className="research-evidence-label">
-                        Source collection · Read the supporting passages below,
-                        or inspect the full original report. Synthesis is not
-                        available for this collection.
-                      </p>
-                      {report.sources.map((source) => (
-                        <article
-                          className="research-evidence-card"
-                          id={"source-" + source.id}
-                          key={source.id}
-                        >
-                          <h2>{source.title}</h2>
-                          <p>
-                            {sourceExcerpt(source)}{" "}
-                            <SourceChip
-                              source={source}
-                              onClick={() => openSource(source)}
-                            />
-                          </p>
-                          <button
-                            className="research-inline-action"
-                            onClick={() => openSource(source)}
-                          >
-                            Read source
-                          </button>
-                        </article>
-                      ))}
-                      <button
-                        className="research-inline-action"
-                        onClick={() => setOriginal(true)}
-                      >
-                        View saved report
-                      </button>
-                    </>
                   ) : (
                     <>
                       <ReportContent
@@ -4412,11 +4345,11 @@ function Workspace() {
                   <h2 className="research-sources-heading">Sources</h2>
                   <div className="research-source-chips">
                     {readerFooterSources.map((source) => (
-                      <SourceChip
+                      <span id={"source-" + source.id} key={source.id}><SourceChip
                         key={source.id}
                         source={source}
                         onClick={() => openSource(source)}
-                      />
+                      /></span>
                     ))}
                     {!readerFooterSources.length && <p>Sources are linked where they first appear in the report.</p>}
                   </div>

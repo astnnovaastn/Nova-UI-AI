@@ -147,11 +147,28 @@ def test_image_ids_are_scoped_validated_and_decode_limited(tmp_path,monkeypatch)
     with pytest.raises(ValueError):store.image_bytes(item['id'],{**CTX,'profile_id':'other'},image['id'])
     with pytest.raises(ValueError):store.image_bytes(item['id'],CTX,'https://127.0.0.1/secret')
 
+
+def test_prepared_image_source_action_resolves_the_current_catalog(tmp_path):
+    store=ResearchArtifacts(tmp_path/'reports.json');row=source();item=store.save('Topic','quick','# Topic',[row],[],CTX,'image')
+    image={'id':'I'+'a'*24,'url':'https://example.org/image.png','caption':'Related illustration','source_url':row['url'],'source_id':'S99','width':640,'height':400}
+    store.request_state(item['id'],CTX,images_prepared=True,selected_images=[image])
+    assert store.images(item['id'],CTX)[0]['source_id']=='S1'
+
 def test_related_evidence_preserves_origin_and_cannot_cross_scope(tmp_path):
     store=ResearchArtifacts(tmp_path/'reports.json');item=store.save('Honeybee communication dance','detailed','# Bees',[source()],[],CTX,'old')
     reused=store.related_evidence('Honeybee communication',CTX)
     assert reused[0]['origin_research_id']==item['id'] and reused[0]['retrieved_at']==source()['retrieved_at']
     assert not store.related_evidence('Honeybee communication',{**CTX,'project_id':'other'})
+
+
+def test_reuse_does_not_match_generic_request_words_or_relabel_unrelated_origins(tmp_path):
+    store=ResearchArtifacts(tmp_path/'reports.json')
+    pc=store.save('can you research the new pc that can run the biger ai model in the world or pc','detailed','# PC',[source()],[],CTX,'pc')
+    query='Can you research about Tesla new cas model'
+    assert not store.related_evidence(query,CTX)
+    row={**source(),'origin_query':pc['query'],'origin_research_id':pc['id']}
+    store.save(query,'detailed','# Tesla',[row],[],CTX,'tesla')
+    assert not store.related_evidence(query,CTX)
 
 
 def test_explicit_report_links_reference_turns_without_copying_transcripts(tmp_path):

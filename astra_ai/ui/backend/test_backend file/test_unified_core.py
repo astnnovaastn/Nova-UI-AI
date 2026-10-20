@@ -65,6 +65,39 @@ def test_typed_request_id_is_deduplicated(tmp_path):
     asyncio.run(scenario())
 
 
+def test_notice_review_cannot_interrupt_preparing_a_typed_research_turn(tmp_path):
+    async def scenario():
+        sent=[];session=make_session(tmp_path,sent);provider=[]
+        async def realtime(**kwargs):provider.append(kwargs)
+        async def client_content(**kwargs):provider.append(kwargs)
+        session._session=SimpleNamespace(send_realtime_input=realtime,send_client_content=client_content)
+        async def pin():
+            await session.review_notice({'id':'unrelated-event'})
+            assert not session._internal_notice and not session._notice_gate
+        session._pin_research=pin
+        result=await session.send_text('Research the Roadster.','research-turn')
+        assert result['status']=='accepted' and session._foreground_preparing==0
+        assert not any('Application operation event' in str(message) for message in provider)
+        assert session._input_parts==['Research the Roadster.']
+    asyncio.run(scenario())
+
+
+def test_research_evidence_prompts_current_answer_without_interrupting_a_new_question(tmp_path):
+    async def scenario():
+        async def operation(name,args):return {'status':'waiting_for_retry','results':[{'id':'S1','content':'Collected evidence.'}]}
+        session=make_session(tmp_path,[],operation_executor=operation)
+        session._turn_focus={'research_id':'tesla','thread_id':'tesla-thread'}
+        session._turn_id='roadster';session._input_parts=['Research Roadster']
+        context=session._operation_context()
+        call=SimpleNamespace(id='search',name='search_web',args={'query':'Roadster'})
+        response=await session._execute_memory_tool(call,context)
+        assert response.scheduling=='INTERRUPT'
+        session._turn_id='different-question';session._input_parts=['Research charging']
+        response=await session._execute_memory_tool(call,context)
+        assert response.scheduling=='SILENT'
+    asyncio.run(scenario())
+
+
 def test_typed_interruption_preserves_new_message_and_spoken_reply(tmp_path):
     async def scenario():
         events=[];session=make_session(tmp_path,events);audio=[]

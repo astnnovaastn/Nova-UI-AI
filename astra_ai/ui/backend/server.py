@@ -2309,7 +2309,7 @@ def get_research_services():
     key=str(path.resolve())
     if key not in _research_services:
         artifacts=ResearchArtifacts(path)
-        _research_services[key]=(artifacts,ResearchSearch(artifacts,_get_env_value,synthesize=_synthesize_research,illustrate=True,complete=_complete_research))
+        _research_services[key]=(artifacts,ResearchSearch(artifacts,_get_env_value,synthesize=_synthesize_research,illustrate=True,complete=_complete_research,read_evidence=True))
     return _research_services[key]
 
 async def _aegis_search_web(arguments):
@@ -5679,7 +5679,10 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
         selected_document=selected_artifacts.get(context['research_id'],context).get('artifact',{}).get('kind')=='documentary'
     research_detail=str(context.get('user_text') or context.get('research_user_text') or arguments.get('query') or '').strip()
     if not selected_document and (name=='search_web' and not arguments.get('action') or name=='search_widget_action' and arguments.get('action')=='run' or name=='research_action' and arguments.get('action')=='request') and not context.get('job_id') and context.get('research_id') and research_followup(research_detail):
-        return await continue_research(context['research_id'],context,operation_id,detail=research_detail)
+        receipt=await continue_research(context['research_id'],context,operation_id,detail=research_detail)
+        if receipt.get('job_id') and not receipt.get('results'):
+            return await _research_collection_receipt(receipt,context)
+        return receipt
     if (name in {'search_web','notes_action'} or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and action_jobs.task:
         actions=[{'name':name,'arguments':{k:v for k,v in arguments.items() if k!='save_to_notes'}}]
         reserved=None;queue_operation_id=operation_id
@@ -5751,7 +5754,8 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
             return await document_tool(artifacts,context,arguments,operation_id,action_jobs)
         if arguments.get('action') in {'expand','continue','more_media','more_sources'}:
             action=arguments.get('action');view='media' if action=='more_media' else 'sources' if action=='more_sources' else ''
-            return await continue_research(identifier,context,operation_id,view=view,detail=str(arguments.get('detail') or context.get('user_text',''))[:2000])
+            receipt=await continue_research(identifier,context,operation_id,view=view,detail=str(arguments.get('detail') or context.get('user_text') or context.get('research_user_text',''))[:2000])
+            return await _research_collection_receipt(receipt,context) if receipt.get('job_id') and not receipt.get('results') else receipt
         if arguments.get('action')=='reader':return await asyncio.to_thread(artifacts.reader,identifier,context,str(arguments.get('research_revision','')),arguments.get('offset',0),arguments.get('limit',12000))
         return await asyncio.to_thread(artifacts.page,identifier,context,str(arguments.get('research_revision','')),arguments.get('offset',0),arguments.get('limit',12000))
     if name=="library_action":
@@ -8423,6 +8427,22 @@ def get_library_service():
     return _library_service
 install_library(app,get_library_service,_learning_context)
 
+async def _research_collection_receipt(receipt,context):
+    # Chat tools wait for their durable collection result, rather than return a
+    # promise before evidence is ready. The HTTP continuation stays nonblocking.
+    deadline=time.monotonic()+45
+    while time.monotonic()<deadline:
+        snapshot=await asyncio.to_thread(action_jobs.list,receipt['job_id'],context)
+        if snapshot.get('status')!='ok':return receipt
+        job=snapshot.get('job',{});steps=job.get('actions',[])
+        outcome=(steps[0].get('result') or {}) if steps else {}
+        if outcome:
+            allowed=('status','reason','summary','next_attempt','results','collected_sources','evidence_available','research_revision','completeness')
+            return {**receipt,**{key:outcome[key] for key in allowed if key in outcome}}
+        if job.get('paused') or job.get('state') in {'failed','canceled','completed'}:return receipt
+        await asyncio.sleep(.1)
+    return {**receipt,'summary':'The follow-up is saved in this report and source collection is still running. Do not claim an answer has been published.'}
+
 def research_followup(text):
     text=str(text).casefold()
     # Called only with the turn's frozen research context. A scoped question
@@ -8449,19 +8469,26 @@ async def continue_research(identifier,context,operation_id,view='',detail=''):
     if initial_pending and reveal_saved:return {'status':'waiting_for_retry','research_id':identifier,'reason':'The original report is still being prepared. Collected findings remain visible.'}
     key=(context.get('profile_id',''),context.get('project_id',''),identifier)
     async with _research_continuation_locks.setdefault(key,asyncio.Lock()):
-        # If a continuation is already pending, attach to it rather than spend again.
+        # Only the same question can reuse a pending continuation. A new question
+        # still belongs to this report and needs its own durable collection step.
+        from astra_ai.memory.shared_memory import normal
         current=await asyncio.to_thread(artifacts.extension_state,identifier,context)
+        metadata=await asyncio.to_thread(artifacts.request_state,identifier,context)
+        checkpoint=metadata.get('quick_followups',{}).get(current.get('operation_id'),{})
+        current_detail=checkpoint.get('query') or current.get('detail','')
         if current.get('operation_id')==operation_id and current.get('phase')=='complete':return {**artifacts.brief(item),'duplicate':True}
-        if current.get('phase') in {'queued','collecting_sources','preparing_report','waiting_for_quota','waiting_for_report'}:
+        if current.get('phase') in {'queued','collecting_sources','preparing_report','waiting_for_quota','waiting_for_report'} and current.get('view')==view and normal(current_detail)==normal(detail[:2000]):
             waiting=current.get('phase') in {'waiting_for_quota','waiting_for_report'}
+            evidence=await asyncio.to_thread(artifacts.followup_evidence,identifier,context,current.get('operation_id',''))
             return {'status':'queued','research_id':identifier,'job_id':current.get('job_id'),'execution_stage':current.get('phase'),'collected_sources':current.get('collected_sources',0),
+                    'results':evidence,
                     'reason':current.get('reason') or 'The existing continuation is still pending.',
-                    'summary':'The follow-up is saved in this same report. Answer generation is paused; do not describe it as active research.' if waiting else 'The follow-up has an existing job. Its execution stage is '+current.get('phase','queued')+'.'}
+                    'summary':'Use the supplied excerpts to answer the question now, with citations and limitations. The composed report is paused; do not merely promise future research or claim report publication.' if evidence else 'The follow-up is saved in this same report. Answer generation is paused; do not describe it as active research.' if waiting else 'The follow-up has an existing job. Its execution stage is '+current.get('phase','queued')+'.'}
         from astra_ai.core.research_topics import conversational_mode
         args={'action':'more_media' if view=='media' else 'expand','research_id':identifier,'research_revision':item['revision'],'view':view,'detail':detail[:2000],
               'mode':conversational_mode({'mode':'detailed'},context)}
         if initial_pending:args={'action':'topic_followup','research_id':identifier,'query':detail[:2000],'mode':args['mode']}
-        await asyncio.to_thread(artifacts.extension_state,identifier,context,phase='waiting_for_report' if initial_pending else 'queued',view=view,operation_id=operation_id,outbound_started=False,search_checkpoint=None,reason='initial_report_pending' if initial_pending else '')
+        await asyncio.to_thread(artifacts.extension_state,identifier,context,phase='waiting_for_report' if initial_pending else 'queued',view=view,operation_id=operation_id,detail=detail[:2000],outbound_started=False,search_checkpoint=None,collected_sources=0,reason='initial_report_pending' if initial_pending else '')
         result=action_jobs.submit([{'name':'search_web','arguments':args}],{**context,'research_id':identifier,'requested_research':True},operation_id,goal='Continue '+(item.get('display_title') or item['query'][:90]))
         if result.get('status') in {'accepted','queued','duplicate','completed'}:
             await asyncio.to_thread(artifacts.extension_state,identifier,context,job_id=result.get('job_id',''))
@@ -8585,9 +8612,11 @@ async def _research_thread(identifier,context):
     files=await asyncio.to_thread(DocumentFiles(artifacts).listing,identifier,context)
     draft=artifacts.snapshot().get('drafts',{}).get(identifier,{})
     activity=await asyncio.to_thread(artifacts.extension_state,identifier,context)
+    followup=metadata.get('quick_followups',{}).get(activity.get('operation_id'),{})
+    followup_evidence=await asyncio.to_thread(artifacts.followup_evidence,identifier,context,activity.get('operation_id',''))
     progress={'completeness':item.get('completeness'),'phase':metadata.get('phase'),'waiting_reason':metadata.get('waiting_reason'),'next_attempt':metadata.get('next_attempt'),
               'followup':{key:activity.get(key) for key in ('phase','reason','job_id','collected_sources')}}
-    return {'status':'ok','progress':progress,'research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'kind':item.get('kind','research'),'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'draft_revision':draft.get('revision',''),'draft_excerpt':re.sub('<[^>]+>',' ',draft.get('html',''))[:5000],'research_cards':metadata.get('research_cards',[]),'attachments':[{k:f.get(k) for k in ('id','name','mime','page_count','status','revision','pdf_revision','needs_ocr')} for f in files],'summary':document.get('report','')[:4000] or item['summary'][:1600],'evidence':[{'id':'S'+str(i+1),'title':r['title'][:180],'excerpt':evidence_excerpt(r,400),'attachment_id':r.get('attachment_id'),'page':r.get('page')} for i,r in enumerate(sources[:6])]}
+    return {'status':'ok','progress':progress,'research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'kind':item.get('kind','research'),'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'draft_revision':draft.get('revision',''),'draft_excerpt':re.sub('<[^>]+>',' ',draft.get('html',''))[:5000],'research_cards':metadata.get('research_cards',[]),'attachments':[{k:f.get(k) for k in ('id','name','mime','page_count','status','revision','pdf_revision','needs_ocr')} for f in files],'summary':document.get('report','')[:4000] or item['summary'][:1600],'followup_question':followup.get('query',''),'followup_evidence':followup_evidence,'evidence':[{'id':'S'+str(i+1),'title':r['title'][:180],'url':r['url'],'excerpt':evidence_excerpt(r,400),'attachment_id':r.get('attachment_id'),'page':r.get('page')} for i,r in enumerate(sources[:6])]}
 
 async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     snapshot=snapshot if snapshot is not None else ui_context(client_id).get('snapshot',{})

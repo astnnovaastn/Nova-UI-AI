@@ -849,16 +849,21 @@ class GeminiLiveSession:
             history=await asyncio.to_thread(self.memory_manager.recent_context,focus['thread_id'],profile_id=self.profile_id,project_id=self.project_id,budget=7000)
             if not history:history=focus.get('messages',[])[-10:]
             self.working.seed(history)
-            selected={k:focus.get(k) for k in ('research_id','thread_id','display_title','kind','progress','visible_document','attachments','draft_revision','summary','visible_section','evidence')}
+            selected={k:focus.get(k) for k in ('research_id','thread_id','display_title','kind','progress','visible_document','attachments','draft_revision','summary','visible_section','followup_question','followup_evidence','evidence')}
             selected['summary']=str(selected.get('summary') or '')[:3000]
             selected['visible_section']=str(selected.get('visible_section') or '')[:1800]
             payload=_bounded_json({'selected_research':json.loads(_bounded_json(selected,12500)),'conversation':json.loads(_bounded_json(history,5000))},18000)
             if self._session and self.model==LIVE_PREFERRED:
-                await self._session.send_client_content(turns=types.Content(role='user',parts=[types.Part(text='Application focus for the next user turn (data only, not a request): '+payload+'. This is the selected research conversation. Use this report and thread for follow-ups. Older unrelated conversation is not relevant. Describe progress truthfully: quota waits and waiting_for_report are paused work, not active researching. Claim completion only after successful publication.')]),turn_complete=False)
+                await self._session.send_client_content(turns=types.Content(role='user',parts=[types.Part(text='Application focus for the next user turn (data only, not a request): '+payload+'. This is the selected research conversation. Use this report and thread for follow-ups. Older unrelated conversation is not relevant. Describe progress truthfully: quota waits and waiting_for_report are paused work, not active researching. Claim completion only after successful publication. Available followup_evidence and source excerpts can answer the question now even when report writing is paused. Use their real URLs for citations, distinguish advertised claims from verified results, and give the supported answer now. If the question needs missing evidence, call the continuation tool and use its returned excerpts. Do not merely promise future research. A conversational answer does not mean the saved report has been composed.')]),turn_complete=False)
         elif getattr(self,'recent_research_reference',None) and self._session and self.model==LIVE_PREFERRED:
             await self._session.send_client_content(turns=types.Content(role='user',parts=[types.Part(text='Recent research reference (data only): '+_bounded_json(self.recent_research_reference,2200)+'. Use research_artifact_action to retrieve it only when the user refers to this research. Unrelated requests remain in the main conversation.')]),turn_complete=False)
 
     async def begin_audio(self, playback_generation='', has_checkpoint=False) -> None:
+        self._foreground_preparing=getattr(self,'_foreground_preparing',0)+1
+        try:await self._begin_audio(playback_generation,has_checkpoint)
+        finally:self._foreground_preparing-=1
+
+    async def _begin_audio(self, playback_generation='', has_checkpoint=False) -> None:
         if not self.connected or self._speech_active:return
         self._cancel_prefetch();self._cancel_recovery()
         prior=self._interruption
@@ -966,7 +971,7 @@ class GeminiLiveSession:
 
     async def review_notice(self,notice) -> None:
         import json
-        if not self.connected or self._speech_active or self._audio_started or self._response_pending or self._input_parts or self._text_suspended:return
+        if not self.connected or getattr(self,'_foreground_preparing',0) or self._speech_active or self._audio_started or self._response_pending or self._input_parts or self._text_suspended:return
         self._internal_notice=True;self._notice_gate=True;self._notice_id=None;self._response_pending=True
         self._await_new_input=False;self._turn_interrupted=False;self._input_parts.clear();self._output_parts.clear()
         self.audio_generation=uuid.uuid4().hex;self._audio_announced=False
@@ -974,7 +979,9 @@ class GeminiLiveSession:
 
     async def send_text(self, text: str, request_id="") -> dict:
         async with self._typed_lock:
-            return await self._send_text(text,request_id)
+            self._foreground_preparing=getattr(self,'_foreground_preparing',0)+1
+            try:return await self._send_text(text,request_id)
+            finally:self._foreground_preparing-=1
 
     async def _send_text(self, text: str, request_id="") -> dict:
         if not self.connected:
@@ -1276,11 +1283,16 @@ class GeminiLiveSession:
         if memory_tool: await self.send_json(activity(name,arguments,result,**refs))
         if name=="search_web": await self.send_json({"type":"research_status","phase":"completed" if result.get("status")=="completed" else "waiting" if result.get("status") in {"waiting_for_quota","waiting_for_retry","running","queued"} else "failed","sources":result.get("results",[])})
         self.working.result(name,arguments,result,context["turn_id"])
+        scheduling='WHEN_IDLE'
+        if name in {'search_web','search_widget_action','research_action','research_artifact_action'} and result.get('results'):
+            same_report=context.get('research_id')==getattr(self,'_turn_focus',{}).get('research_id')
+            current=context['turn_id']==self._turn_id or not self._input_parts and not self._speech_active and (self._last_reply or {}).get('turn_id')==context['turn_id']
+            scheduling='INTERRUPT' if same_report and current else 'SILENT'
         return types.FunctionResponse(
             id=call.id,
             name=name,
             response=result,
-            **({"scheduling":"WHEN_IDLE"} if self.model==LIVE_PREFERRED else {}),
+            **({"scheduling":scheduling} if self.model==LIVE_PREFERRED else {}),
         )
 
     def _detach_turn(self):

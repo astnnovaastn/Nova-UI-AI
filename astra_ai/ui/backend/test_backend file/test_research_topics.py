@@ -51,7 +51,7 @@ def test_topic_followups_append_once_remap_citations_and_preserve_draft(tmp_path
     assert first['status']=='completed' and repeat['duplicate'] and len(calls)==len(model)==1
     assert first['results'][0]['id']=='S2' and first['results'][0]['url']=='https://example.com/fixtures'
     assert calls[0][1]=='quick' and len(model[0])==2
-    assert len(store.snapshot()['extensions'][item['id']])==1
+    assert sum(bool(row['report']) for row in store.snapshot()['extensions'][item['id']])==1
     assert len(store.source_catalog(store.get(item['id'],CTX)['artifact']))==2
     assert store.document(item['id'],CTX)['draft']==draft
     assert store.get(item['id'],CTX)['artifact']['report']==item['report']
@@ -71,7 +71,7 @@ def test_queued_search_keeps_frozen_report_instead_of_allocating_another_topic(t
     result=asyncio.run(service.search(args,context,'camera-turn'))
     assert result['status']=='completed' and result['research_id']==parent['id']
     assert store.listing(CTX)['total']==1 and store.listing(CTX)['items'][0]['followup_count']==1
-    assert calls[0][1]=='quick' and len(store.snapshot()['extensions'][parent['id']])==1
+    assert calls[0][1]=='quick' and sum(bool(row['report']) for row in store.snapshot()['extensions'][parent['id']])==1
     assert store.get(parent['id'],CTX)['artifact']['report']==parent['report']
     assert asyncio.run(service.search(args,context,'camera-turn'))['duplicate']
     assert len(calls)==1
@@ -285,6 +285,66 @@ def test_pending_report_followup_is_durably_queued_on_same_identity(tmp_path,det
     assert store.extension_state(pending['id'],CTX)['phase']=='waiting_for_report'
     again=asyncio.run(env[handler.name](pending['id'],{**CTX,'client_id':'connected'},'camera-turn',detail=detail))
     assert again['job_id']==result['job_id'] and len(jobs.load()['jobs'])==1
+    other=asyncio.run(env[handler.name](pending['id'],{**CTX,'client_id':'connected'},'second-turn',detail='What about battery life?'))
+    assert other['job_id']!=result['job_id'] and len(jobs.load()['jobs'])==2
+    assert store.listing(CTX)['total']==1
+
+
+@pytest.mark.parametrize('pending',[True,False])
+def test_quota_wait_exposes_bounded_followup_evidence_with_stable_citations(tmp_path,pending):
+    store=ResearchArtifacts(tmp_path/'r.json');parent=store.reserve('Tesla models','detailed',CTX,'parent')
+    if not pending:store.save(parent['query'],'detailed','# Tesla models\n\nOriginal answer [S1].',[SOURCE],[],CTX,parent['operation_id'])
+    question='Research the Roadster.';calls=[]
+    async def paused(*args):raise BudgetPaused(9999999999,'gemini_daily_quota')
+    service=ResearchSearch(store,lambda _:None,synthesize=paused)
+    row={'title':'Roadster official specifications','url':'https://www.tesla.com/roadster','content':'Supported vehicle evidence. '*1000,'retrieved_at':'2026-10-20'}
+    service._request=lambda *args:(calls.append(args) or ([row],None))
+    context={**CTX,'research_id':parent['id']}
+    result=asyncio.run(service.quick_followup({'research_id':parent['id'],'query':question},context,'roadster-turn'))
+    assert result['status'] in {'waiting_for_retry','waiting_for_quota'} and result['results']
+    assert calls[0][0]=='Tesla models: '+question and calls[0][1]=='quick'
+    evidence=result['results'][0];document=store.document(parent['id'],CTX,bounded=True)
+    assert document['sources'][int(evidence['id'][1:])-1]['url']==row['url']
+    assert len(evidence['content'])<=1200 and ('promise' in result['summary'] or 'conversationally' in result['summary'])
+    assert not document['extensions']['sections'] and not document['extensions']['report'].strip()
+    assert store.followup_evidence(parent['id'],{**context,'project_id':'foreign'},'roadster-turn')==[]
+    asyncio.run(service.quick_followup({'research_id':parent['id'],'query':question},context,'roadster-turn'))
+    assert len(calls)==1 and store.listing(CTX)['total']==1
+
+
+def test_followup_reads_collected_articles_once_without_new_search_or_model_work(tmp_path,monkeypatch):
+    store=ResearchArtifacts(tmp_path/'r.json');parent=store.reserve('Tesla cars','detailed',CTX,'parent');calls=[];reads=[]
+    row={**SOURCE,'url':'https://www.tesla.com/roadster','content':'Short search snippet.'}
+    service=ResearchSearch(store,lambda _:None,read_evidence=True)
+    service._request=lambda *args:(calls.append(args) or ([row],None))
+    text='Official source statements with supported range and acceleration. '*100
+    def read(*args):reads.append(args);return text.encode(),'text/plain; charset=utf-8'
+    monkeypatch.setattr(store,'source_bytes',read)
+    context={**CTX,'research_id':parent['id']}
+    first=asyncio.run(service.quick_followup({'research_id':parent['id'],'query':'Research the Roadster'},context,'roadster'))
+    second=asyncio.run(service.quick_followup({'research_id':parent['id'],'query':'Research the Roadster'},context,'roadster'))
+    assert len(calls)==1 and len(reads)==1 and first['results']==second['results']
+    assert first['results'][0]['content'].startswith('Official source statements')
+    assert len(first['results'][0]['content'])<=1200
+    saved=store.request_state(parent['id'],context)['quick_followups']['roadster']['sources'][0]
+    assert saved['search_excerpt']==row['content'] and saved['content']==text
+
+
+def test_chat_continuation_waits_for_collected_evidence_without_reexecuting_search():
+    import ast,time
+    from pathlib import Path
+    path=Path(__file__).parents[1]/'server.py';tree=ast.parse(path.read_text(encoding='utf-8'))
+    handler=next(n for n in tree.body if isinstance(n,ast.AsyncFunctionDef) and n.name=='_research_collection_receipt')
+    calls=[];evidence=[{'id':'S4','url':'https://www.tesla.com/roadster','content':'Supported specifications.'}]
+    def listing(job,context):
+        calls.append((job,context))
+        result={} if len(calls)==1 else {'status':'waiting_for_retry','research_id':'tesla','results':evidence,'summary':'Answer from the collected evidence.','report':'private large archive'}
+        return {'status':'ok','job':{'state':'running','actions':[{'result':result}]}}
+    env={'asyncio':asyncio,'time':time,'action_jobs':SimpleNamespace(list=listing)}
+    exec(compile(ast.Module(body=[handler],type_ignores=[]),str(path),'exec'),env)
+    result=asyncio.run(env[handler.name]({'status':'queued','research_id':'tesla','job_id':'roadster'},CTX))
+    assert len(calls)==2 and result['research_id']=='tesla' and result['results']==evidence
+    assert result['status']=='waiting_for_retry' and 'report' not in result
 
 
 def test_legacy_preallocated_child_recovers_query_without_restarting_collection(tmp_path):
@@ -297,7 +357,7 @@ def test_legacy_preallocated_child_recovers_query_without_restarting_collection(
     service._request=lambda *args:(calls.append(args) or ([SOURCE],None))
     result=asyncio.run(service.search({'research_id':child['id'],'mode':'quick'},context,'legacy-turn'))
     assert result['research_id']==parent['id'] and result['reason']=='topic_initial_report_pending'
-    assert len(calls)==1 and calls[0][0]==child['query']
+    assert len(calls)==1 and calls[0][0]==parent['query']+': '+child['query']
     assert store.extension_state(parent['id'],CTX)['operation_id']=='legacy-turn'
     assert store.get(child['id'],CTX)['artifact']['completeness']=='pending'
 
@@ -342,3 +402,11 @@ def test_research_context_includes_real_quota_and_followup_status(tmp_path):
     exec(compile(ast.Module(body=[handler],type_ignores=[]),str(path),'exec'),env)
     result=asyncio.run(env[handler.name](parent['id'],CTX))
     assert result['research_id']==parent['id'] and result['progress']=={'completeness':'pending','phase':'waiting_for_quota','waiting_reason':'gemini_daily_quota','next_attempt':1234,'followup':{'phase':'waiting_for_report','reason':'initial_report_pending','job_id':'camera-job','collected_sources':None}}
+    assert result['followup_evidence']==[]
+    row={**SOURCE,'url':'https://www.tesla.com/roadster','content':'Supported Roadster specifications.'}
+    store.request_state(parent['id'],CTX,quick_followups={'roadster':{'query':'Roadster specifications?','sources':[row]}})
+    store.append_extension(parent['id'],CTX,store.get(parent['id'],CTX)['artifact']['revision'],'roadster:sources','',[row])
+    store.extension_state(parent['id'],CTX,operation_id='roadster')
+    result=asyncio.run(env[handler.name](parent['id'],CTX))
+    assert result['followup_question']=='Roadster specifications?'
+    assert result['followup_evidence'][0]['url']==row['url'] and result['followup_evidence'][0]['content']==row['content']

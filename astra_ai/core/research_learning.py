@@ -376,6 +376,15 @@ class ResearchArtifacts:
                 if row.get('url') and row['url'] not in seen:seen.add(row['url']);rows.append(copy.deepcopy(row))
         return rows
 
+    def followup_evidence(self, identifier, context, operation_id):
+        found=self.get(identifier,context)
+        if found.get('status')!='ok':return []
+        checkpoint=self.request_state(identifier,context).get('quick_followups',{}).get(operation_id,{})
+        wanted={row['url']:row for row in checkpoint.get('sources',[])}
+        return [{'id':'S'+str(i+1),'title':row['title'][:200],'url':row['url'],'content':evidence_excerpt(wanted[row['url']],1200),'retrieved_at':row.get('retrieved_at'),
+                 'text_kind':'video_description' if self.video_id(row['url']) else 'source_excerpt'}
+                for i,row in enumerate(self.source_catalog(found['artifact'])) if row['url'] in wanted][:5]
+
     def deletion_preview(self, identifier, context):
         result=self.get(identifier,context)
         if result['status']!='ok':return result
@@ -439,19 +448,24 @@ class ResearchArtifacts:
             entry={k:context[k] for k in ('session_id','turn_id')}
             if entry not in links:self.backup_metadata();links.append(entry);atomic(self.path,data)
 
-    def related_evidence(self, query, context):
-        terms=lambda text:{w for w in re.findall(r'[a-z0-9]{3,}',text.casefold()) if w not in {'the','and','research','about','information','search','please','could','would','with'}}
+    @staticmethod
+    def related_subject(query, previous):
+        generic={'the','and','research','about','information','search','please','could','would','with','can','you','your','for','that','this','there','what','which','how','does','give','find','show','want','new','latest','current','more','into','from','have','has','are','will','all','need'}
+        terms=lambda text:{w for w in re.findall(r'[a-z0-9]{3,}',text.casefold()) if w not in generic}
         wanted=terms(query)
-        if len(wanted)<2:return []
+        shared=wanted & terms(previous)
+        return len(wanted)>=2 and len(shared)>=2 and len(shared)/len(wanted)>=.6
+
+    def related_evidence(self, query, context):
         with self.lock:items=list(self.snapshot()['artifacts'].values())
         candidates=[]
         for item in items:
             if scope(item)!=scope(context) or item['id'] in self.snapshot().get('removed',{}):continue
-            overlap=len(wanted & terms(item['query']))/max(1,len(wanted))
-            if overlap<.6:continue
+            if not self.related_subject(query,item['query']):continue
             for row in item['sources'][:8]:
+                if row.get('origin_query') and not self.related_subject(query,row['origin_query']):continue
                 # Historical evidence retains its dates and origin; it is never promoted to a fresh claim.
-                candidates.append({**row,'origin_research_id':item['id'],'origin_query':item['query'],'historical':time.time()-item['created_epoch']>86400})
+                candidates.append({**row,'origin_research_id':row.get('origin_research_id') or item['id'],'origin_query':row.get('origin_query') or item['query'],'historical':bool(row.get('historical')) or time.time()-item['created_epoch']>86400})
         return candidates[:16]
 
     def reader(self, identifier, context, revision='', cursor=0, limit=20000, stream='all'):
@@ -478,6 +492,7 @@ class ResearchArtifacts:
         boundaries=[];followups=[]
         if stream!='base':
             for i,entry in enumerate(extensions):
+                if not entry['report'].strip():continue
                 heading=re.search(r'^#{1,3}\s+(.+)',entry['report'],re.M)
                 section={'id':stable('followup',identifier,entry.get('operation_id') or entry['revision']),
                          'title':display_title(entry.get('title') or (heading.group(1) if heading else 'Follow-up research '+str(i+1))),
@@ -674,9 +689,9 @@ class ResearchArtifacts:
         sections=[{'id':'section-'+str(i),'title':line.lstrip('# ').strip()} for i,line in enumerate(item['report'].splitlines()) if re.match(r'^#{1,3} ',line)]
         with self.lock:
             draft=self.snapshot().get('drafts',{}).get(identifier)
-        document={**self.brief(item),'status':'ok','report':item['report'],'sources':sources,'linked_sources':self.report_links(item,context),'sections':sections,'draft':copy.deepcopy(draft),**self.media(identifier,context),'legacy_evidence':'Sourced research excerpts.' in item['report'],'evidence_collection':'Sourced research excerpts.' in item['report'] or 'not a completed synthesis.' in item['report']}
+        document={**self.brief(item),'status':'ok','report':item['report'],'sources':sources,'linked_sources':self.report_links(item,context),'sections':sections,'draft':copy.deepcopy(draft),**self.media(identifier,context),'legacy_evidence':'Sourced research excerpts.' in item['report'] or 'not a completed synthesis.' in item['report'],'evidence_collection':'Sourced research excerpts.' in item['report'] or 'not a completed synthesis.' in item['report']}
         extensions=self.snapshot().get('extensions',{}).get(identifier,[])
-        if extensions:document['evidence_collection']=False
+        if any(entry['report'].strip() for entry in extensions):document['evidence_collection']=False
         metadata=self.request_state(identifier,context)
         document['extension_activity']=self.extension_state(identifier,context)
         document['document_revisions']=metadata.get('document_revisions',[])
@@ -928,6 +943,8 @@ class ResearchArtifacts:
         images.extend({**row,'source_only':True} for row in metadata.get('image_archive',[]) if row['id'] not in ids)
         from .research_illustrations import useful_image
         images=[r for r in images if useful_image(r)]
+        source_ids={row['url']:'S'+str(i+1) for i,row in enumerate(self.source_catalog(fetched['artifact']))}
+        images=[{**row,'source_id':source_ids.get(row.get('source_url'),row.get('source_id',''))} for row in images]
         if metadata.get('images_prepared'):return images
         for index,source in enumerate(self.source_catalog(fetched['artifact'])):
             for row in source.get('images',[]):
@@ -1031,9 +1048,9 @@ class ResearchArtifacts:
 
 
 class ResearchSearch:
-    def __init__(self, artifacts, key_provider, transport=requests, synthesize=None, illustrate=False, complete=None):
+    def __init__(self, artifacts, key_provider, transport=requests, synthesize=None, illustrate=False, complete=None, read_evidence=False):
         self.artifacts=artifacts;self.key_provider=key_provider;self.transport=transport
-        self.synthesize=synthesize;self.illustrate=illustrate;self.complete=complete
+        self.synthesize=synthesize;self.illustrate=illustrate;self.complete=complete;self.read_evidence=read_evidence
         self.network=asyncio.Semaphore(4);self.operation_locks={};self.provider_states={}
 
     def _request(self, query, mode, count):
@@ -1218,11 +1235,32 @@ class ResearchSearch:
             sources=checkpoint.get('sources')
             if sources is None:
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='collecting_sources',view='reader',operation_id=operation_id)
-                async with self.network:rows,error=await asyncio.to_thread(self._request,query,'quick',5)
+                provider_query=(display_title(item['query'])+': '+query)[:600]
+                async with self.network:rows,error=await asyncio.to_thread(self._request,provider_query,'quick',5)
                 if error:
                     await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed',view='reader',reason=error['reason'])
                     return {'status':'failed',**error,'research_id':identifier}
-                sources=rows;operations[operation_id]={'query':query,'sources':rows,'state':'preparing_report'}
+                sources=rows;operations[operation_id]={'query':query,'provider_query':provider_query,'sources':rows,'state':'preparing_report'}
+                await asyncio.to_thread(self.artifacts.request_state,identifier,context,quick_followups=operations)
+            # Evidence has its own durable receipt before model work. Source-only
+            # entries keep citation IDs stable without publishing unfinished prose.
+            await asyncio.to_thread(self.artifacts.append_extension,identifier,context,item['revision'],operation_id+':sources','',sources)
+            if self.read_evidence and not operations[operation_id].get('pages_checked'):
+                catalog=await asyncio.to_thread(self.artifacts.source_catalog,self.artifacts.get(identifier,context)['artifact'])
+                ids={row['url']:'S'+str(i+1) for i,row in enumerate(catalog)}
+                async def read_page(row):
+                    try:
+                        async with self.network:
+                            body,mime=await asyncio.to_thread(self.artifacts.source_bytes,identifier,context,ids[row['url']],False)
+                        if mime.startswith('text/plain'):
+                            text=reader_text(safe(body.decode('utf-8',errors='replace')))[:12000]
+                            if len(text)>len(row.get('content',''))+100:return {**row,'search_excerpt':row.get('content',''),'content':text}
+                    except Exception:pass
+                    return row
+                candidates=[row for row in sources if not self.artifacts.video_id(row['url'])][:3]
+                enriched=await asyncio.gather(*(read_page(row) for row in candidates))
+                by_url={row['url']:row for row in enriched};sources=[by_url.get(row['url'],row) for row in sources]
+                operations[operation_id].update(sources=sources,pages_checked=True)
                 await asyncio.to_thread(self.artifacts.request_state,identifier,context,quick_followups=operations)
             if item.get('completeness')=='pending':
                 # Collection is useful even while the original synthesis is paused.
@@ -1234,10 +1272,16 @@ class ResearchSearch:
                         for row in sources:
                             if row['url'] not in seen:merged.append(row);seen.add(row['url'])
                         self.artifacts.request_state(identifier,context,sources=merged)
-                        self.artifacts.extension_state(identifier,context,phase='waiting_for_report',view='reader',operation_id=operation_id,reason='initial_report_pending',collected_sources=len(sources))
+                        activity=self.artifacts.extension_state(identifier,context)
+                        if activity.get('operation_id') in {None,operation_id}:
+                            self.artifacts.extension_state(identifier,context,phase='waiting_for_report',view='reader',operation_id=operation_id,reason='initial_report_pending',collected_sources=len(sources))
                 await asyncio.to_thread(checkpoint_pending)
-                return {'status':'waiting_for_retry','reason':'topic_initial_report_pending','next_attempt':time.time()+15,'research_id':identifier,'collected_sources':len(sources),'evidence_available':True,'summary':'Follow-up sources collected and saved. Answer generation is waiting for the original report; it is not actively researching.'}
+                evidence=await asyncio.to_thread(self.artifacts.followup_evidence,identifier,context,operation_id)
+                return {'status':'waiting_for_retry','reason':'topic_initial_report_pending','next_attempt':time.time()+15,'research_id':identifier,'collected_sources':len(sources),'evidence_available':True,'results':evidence,
+                        'summary':'Sources are saved in this report. Give a concise supported conversational answer from these excerpts now, with citations and limitations. Do not merely promise future research. The composed report is still waiting; do not claim it is published.'}
             catalog=await asyncio.to_thread(self.artifacts.source_catalog,item);urls={row['url'] for row in catalog}
+            richer={row['url']:row for row in sources}
+            catalog=[richer.get(row['url'],row) for row in catalog]
             for row in sources:
                 if row['url'] not in urls:catalog.append(row);urls.add(row['url'])
             with self.artifacts.lock:
@@ -1245,10 +1289,11 @@ class ResearchSearch:
             if saved:return {**await answer_result(saved['report']),'duplicate':True}
             if not self.synthesize:return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
             await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='preparing_report',view='reader',operation_id=operation_id)
-            try:report=await self.synthesize('[QUICK]\n'+query,catalog)
+            try:report=await self.synthesize('[QUICK]\nOriginal report subject: '+item['query']+'\nFollow-up question: '+query,catalog)
             except BudgetPaused as exc:
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='waiting_for_quota',view='reader',reason=exc.reason,next_attempt=exc.until)
-                return {'status':'waiting_for_quota','reason':exc.reason,'next_attempt':exc.until,'research_id':identifier}
+                return {'status':'waiting_for_quota','reason':exc.reason,'next_attempt':exc.until,'research_id':identifier,'results':await asyncio.to_thread(self.artifacts.followup_evidence,identifier,context,operation_id),
+                        'summary':'Follow-up evidence is saved. Answer the question conversationally from the supplied excerpts and cite them. Report writing is paused for quota, not active research.'}
             except asyncio.CancelledError:raise
             except Exception:
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed',view='reader',reason='synthesis_unavailable')
