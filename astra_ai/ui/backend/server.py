@@ -5675,7 +5675,7 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
     if context.get('research_id'):
         selected_artifacts,_=get_research_services()
         selected_document=selected_artifacts.get(context['research_id'],context).get('artifact',{}).get('kind')=='documentary'
-    if not selected_document and (name=='search_web' or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and context.get('research_id') and research_followup(context.get('user_text','')):
+    if not selected_document and (name=='search_web' and not arguments.get('action') or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and context.get('research_id') and research_followup(context.get('user_text','')):
         return await continue_research(context['research_id'],context,operation_id,detail=context.get('user_text',''))
     if (name in {'search_web','notes_action'} or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and action_jobs.task:
         actions=[{'name':name,'arguments':{k:v for k,v in arguments.items() if k!='save_to_notes'}}]
@@ -8422,7 +8422,9 @@ install_library(app,get_library_service,_learning_context)
 
 def research_followup(text):
     text=str(text).casefold()
-    return bool(re.search(r'\b(more|expand|continue|additional|further|deeper|add)\b',text)) and not re.search(r'\b(new research|new topic|different topic|start over|instead research)\b',text)
+    # Called only with the turn's frozen research context. A scoped question
+    # belongs here even when it does not contain the word "more".
+    return bool(text.strip()) and not re.search(r'\b(new research|new topic|different topic|start over|instead research)\b',text)
 
 _research_continuation_locks={}
 
@@ -8433,11 +8435,12 @@ async def continue_research(identifier,context,operation_id,view='',detail=''):
     view=view or ('media' if re.search(r'\b(videos?|youtube|media)\b',detail,re.I) else 'sources' if re.search(r'\b(more sources|additional sources)\b',detail,re.I) else 'reader')
     request_id='research-more-'+operation_id
     state.register_widget_action(context.get('client_id',''),request_id)
-    await ws_manager.send_to_client_id(context.get('client_id',''),{'type':'research_continue','request_id':request_id,'research_id':identifier,'research_revision':item['revision'],'view':view})
+    reveal_saved=not detail.strip() or bool(re.fullmatch(r'(?:please )?(?:(?:show|give|tell) (?:me )?)?(?:more(?: information| details)?|expand(?: this)?(?: report| research| results)?|continue(?: this)?(?: report| research)?)[.!? ]*',detail.strip(),re.I))
+    await ws_manager.send_to_client_id(context.get('client_id',''),{'type':'research_continue','request_id':request_id,'research_id':identifier,'research_revision':item['revision'],'view':view,'reveal_saved':reveal_saved or view!='reader'})
     observed=await state.await_widget_action(context.get('client_id',''),request_id,timeout=5)
     if not observed:return {'status':'unconfirmed','reason':'research_view_not_acknowledged','research_id':identifier}
     if observed.get('status')!='completed':return observed
-    if observed.get('revealed'):return {**observed,'research_id':identifier,'research_revision':item['revision'],'provider_calls':0}
+    if observed.get('revealed') and (reveal_saved or view!='reader'):return {**observed,'research_id':identifier,'research_revision':item['revision'],'provider_calls':0}
     if item['completeness']=='pending' and view=='reader':return {'status':'waiting_for_retry','research_id':identifier,'reason':'The original report is still being prepared. Collected findings remain visible.'}
     key=(context.get('profile_id',''),context.get('project_id',''),identifier)
     async with _research_continuation_locks.setdefault(key,asyncio.Lock()):
@@ -8446,7 +8449,9 @@ async def continue_research(identifier,context,operation_id,view='',detail=''):
         if current.get('operation_id')==operation_id and current.get('phase')=='complete':return {**artifacts.brief(item),'duplicate':True}
         if current.get('phase') in {'queued','collecting_sources','preparing_report','waiting_for_quota'}:
             return {'status':'queued','research_id':identifier,'job_id':current.get('job_id'),'reason':'The existing continuation is still pending.'}
-        args={'action':'more_media' if view=='media' else 'expand','research_id':identifier,'research_revision':item['revision'],'view':view,'detail':detail[:2000]}
+        from astra_ai.core.research_topics import conversational_mode
+        args={'action':'more_media' if view=='media' else 'expand','research_id':identifier,'research_revision':item['revision'],'view':view,'detail':detail[:2000],
+              'mode':conversational_mode({'mode':'detailed'},context)}
         await asyncio.to_thread(artifacts.extension_state,identifier,context,phase='queued',view=view,operation_id=operation_id,outbound_started=False,search_checkpoint=None,reason='')
         result=action_jobs.submit([{'name':'search_web','arguments':args}],{**context,'requested_research':True},operation_id,goal='Continue '+(item.get('display_title') or item['query'][:90]))
         if result.get('status') in {'accepted','queued','duplicate','completed'}:

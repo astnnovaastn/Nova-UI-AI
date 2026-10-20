@@ -43,6 +43,12 @@ const clean = (html: string) =>
     ADD_ATTR: ["data-citation", "data-source-link"],
     FORBID_TAGS: ["iframe", "style", "script"],
   });
+function sectionLabel(value: string) {
+  const label = value.trim().replace(/:$/, "");
+  const words = label.split(/\s+/);
+  return words.length >= 2 && words.length <= 10 && label.length <= 80 &&
+    !/[.!?;]$/.test(label) && words.every(word => /^(?:(?:[\p{Lu}\d"“]|[a-z](?=[A-Z]))[\p{L}\p{N}'’"“”/().+–—-]*|and|or|of|for|the|to|in|vs\.?|with|a|an)$/u.test(word));
+}
 const markdown = (text: string) => {
   const doc = new DOMParser().parseFromString(
     clean(marked.parse(text, { async: false }) as string),
@@ -59,6 +65,20 @@ const markdown = (text: string) => {
   }
   for (const image of doc.querySelectorAll("img"))
     if (!/^https?:\/\//i.test(image.getAttribute("src") || "")) image.remove();
+  // Legacy synthesis used bold paragraph prefixes for section labels. Promote
+  // only standalone title-like prefixes; evidence, code and inline emphasis stay intact.
+  for (const paragraph of Array.from(doc.body.children)) {
+    if (paragraph.tagName !== "P") continue;
+    const first = paragraph.firstChild;
+    if (!(first instanceof Element) || first.tagName !== "STRONG" ||
+        !sectionLabel(first.textContent || "") || (paragraph.textContent || "").length - (first.textContent || "").length < 80) continue;
+    const heading = doc.createElement("h3");
+    paragraph.setAttribute("data-research-passage", paragraph.textContent || "");
+    heading.textContent = (first.textContent || "").trim().replace(/:$/, "");
+    first.remove(); paragraph.before(heading);
+    if (paragraph.firstChild?.nodeType === Node.TEXT_NODE)
+      paragraph.firstChild.textContent = paragraph.firstChild.textContent?.replace(/^\s*[:–—-]?\s*/, "") || "";
+  }
   return doc.body.innerHTML;
 };
 const Citation = Mark.create({
@@ -260,7 +280,7 @@ type Report = {
     report: string;
     next_cursor: number | null;
     reader_end: number;
-    blocks: { id: string; text: string }[];
+    blocks: { id: string; text: string; section_id?: string; section_title?: string; section_created?: string }[];
   };
   research_id: string;
   research_revision: string;
@@ -1347,6 +1367,17 @@ function citedSourceKeys(text: string, sources: Source[]) {
   const ids = new Set([...text.matchAll(/\[(S\d+(?:\s*[,;]\s*S\d+)*)\]/g)].flatMap(match => match[1].match(/S\d+/g) || []));
   return sources.filter(source => ids.has(source.id) || !!source.url && text.includes(source.url)).map(source => sourceLinkKey(source.url || source.id));
 }
+function followupGroups(blocks: {id: string; text: string; section_id?: string; section_title?: string; section_created?: string}[]) {
+  const groups: {id: string; title: string; text: string; created?: string}[] = [];
+  for (const block of blocks) {
+    if (!block.text.trim()) continue;
+    const id = block.section_id || "saved-followup";
+    const previous = groups[groups.length - 1];
+    if (previous?.id === id) previous.text += block.text;
+    else groups.push({id, title:block.section_title || "Follow-up research", text:block.text, created:block.section_created});
+  }
+  return groups;
+}
 function citationParts(
   value: string,
   sources: Source[],
@@ -1448,7 +1479,7 @@ function imageComposition(images: {width?: number; height?: number; caption?: st
   const ratio = image.width && image.height ? image.width / image.height : image.layout === "wide" ? 2.3 : 1.4;
   const diagram = /\b(chart|diagram|infographic|map|schematic|timeline)\b/i.test(image.caption || "");
   if (ratio >= 2.25 || (diagram && ratio >= 1.25)) return "wide";
-  if (ratio < 0.85 && passage.length >= 280) return "portrait";
+  if (ratio < 0.85) return passage.length >= 700 ? "portrait" : "compact";
   return passage.length >= 700 ? "aside" : passage.length >= 280 ? "aside-end" : "compact";
 }
 function companionParagraphs(node: Element, images: ResearchImage[]) {
@@ -1456,7 +1487,7 @@ function companionParagraphs(node: Element, images: ResearchImage[]) {
   const paragraphs: Element[] = [];
   let length = node.textContent?.length || 0, next = node.nextElementSibling;
   const normalized = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
-  while (next?.tagName === "P" && length < 700 && paragraphs.length < 2) {
+  while (next?.tagName === "P" && length < 1600 && paragraphs.length < 4) {
     const text = next.textContent || "";
     if (images.some(image => image.placement_text && normalized(text).includes(normalized(image.placement_text).slice(0, 55)))) break;
     paragraphs.push(next); length += text.length; next = next.nextElementSibling;
@@ -1474,7 +1505,7 @@ function EvidenceGallery({ images, reportId, onOpen, layout = "gallery" }: {
   </>;
 }
 
-function JumpToBottom({ target, active, identity, clearance = 76 }: {
+function JumpToBottom({ target, active, identity, clearance = 22 }: {
   target: React.RefObject<HTMLElement | null>; active: boolean; identity: string; clearance?: number;
 }) {
   const [position, setPosition] = useState<{left: number; top: number} | null>(null);
@@ -1498,7 +1529,7 @@ function JumpToBottom({ target, active, identity, clearance = 76 }: {
     onClick={() => target.current?.scrollTo({top: target.current.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"})}><Icon name="down" /></button>, document.body) : null;
 }
 
-function SourceArticle({ html, images, reportId, onImage }: {
+export function SourceArticle({ html, images, reportId, onImage }: {
   html: string; images: ResearchImage[]; reportId: string; onImage: (image: ResearchImage) => void;
 }) {
   const doc = new DOMParser().parseFromString(clean(html), "text/html");
@@ -1627,7 +1658,7 @@ function ImageViewer({
     document.body,
   );
 }
-function ReportContent({
+export function ReportContent({
   text,
   sources,
   onOpen,
@@ -1731,7 +1762,7 @@ function ReportContent({
     }
     if (tag === "img") return null; // Report images use scoped, validated artifact IDs.
     if (["br", "hr"].includes(tag)) return React.createElement(tag, props);
-    const passage = (node.textContent || "")
+    const passage = (node.getAttribute("data-research-passage") || node.textContent || "")
       .replace(/\[S\d+(?:\s*[,;]\s*S\d+)*\]/g, "")
       .trim();
     const relatedImages =
@@ -2362,7 +2393,7 @@ function sourceExcerpt(source: Source) {
     "Read the source to inspect the evidence."
   );
 }
-function initialDraft(report: Report) {
+export function initialDraft(report: Report) {
   if (report.kind === "documentary" && report.phase === "draft")
     return "<p></p>";
   if (!report.evidence_collection) {
@@ -2378,7 +2409,7 @@ function initialDraft(report: Report) {
     ].slice(0, 6)) {
       const p = Array.from(doc.querySelectorAll("p,li")).find((p) =>
         image.placement_text
-          ? normalized(p.textContent || "").includes(normalized(image.placement_text).slice(0, 55))
+          ? normalized(p.getAttribute("data-research-passage") || p.textContent || "").includes(normalized(image.placement_text).slice(0, 55))
           : p.textContent?.includes("[" + image.source_id + "]"),
       );
       if (p) groups.set(p, [...(groups.get(p) || []), image].slice(0, 3));
@@ -2483,6 +2514,7 @@ function Workspace() {
     [total, setTotal] = useState(0),
     [report, setReport] = useState<Report | null>(null),
     [tab, setTab] = useState("reader"),
+    [narrowPanel, setNarrowPanel] = useState(""),
     [query, setQuery] = useState(
       () =>
         sessionStorage.getItem(
@@ -2689,6 +2721,16 @@ function Workspace() {
   const [selectingHistory, setSelectingHistory] = useState(false);
   const [selectedHistory, setSelectedHistory] = useState<Set<string>>(new Set());
   useEffect(() => {setSelectedHistory(new Set()); setSelectingHistory(false);}, [chat.clientId]);
+  useEffect(() => { setNarrowPanel(""); }, [report?.research_id]);
+  useEffect(() => {
+    if (!narrowPanel) return;
+    const origin = document.activeElement as HTMLElement;
+    const panel = document.querySelector<HTMLElement>(narrowPanel === "history" ? ".research-outline" : ".research-assistant");
+    panel?.querySelector<HTMLButtonElement>(".research-panel-close")?.focus({preventScroll:true});
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); setNarrowPanel(""); } };
+    window.addEventListener("keydown", escape);
+    return () => { window.removeEventListener("keydown", escape); origin?.focus({preventScroll:true}); };
+  }, [narrowPanel]);
   const revealPending = useRef(false);
   const [videoDestination, setVideoDestination] = useState<{ reportId: string; id: string } | null>(null);
   const [sourceLimit, setSourceLimit] = useState(10),
@@ -2897,7 +2939,7 @@ function Workspace() {
       continuePending.current.add(d.request_id);
       try {
         let revealed = false;
-        if (d.view === "reader" && current.next_cursor != null) {
+        if (d.reveal_saved !== false && d.view === "reader" && current.next_cursor != null) {
           await more();
           if (reportRef.current?.research_id !== d.research_id) {
             send({ status: "unconfirmed", reason: "research_focus_changed" });
@@ -2906,13 +2948,13 @@ function Workspace() {
           setTab("reader");
           revealed = true;
         } else if (
-          d.view === "reader" &&
+          d.reveal_saved !== false && d.view === "reader" &&
           current.extensions?.next_cursor != null
         ) {
           await moreExtensions();
           revealed = true;
         } else if (
-          d.view === "reader" &&
+          d.reveal_saved !== false && d.view === "reader" &&
           current.completeness === "pending" &&
           sourceLimit < current.sources.length
         ) {
@@ -3729,7 +3771,7 @@ function Workspace() {
       reportId: report.research_id,
       text: message,
     };
-    requestConversation(message, id);
+    requestConversation(message, id, report.research_id);
   }
   async function applyDocumentEdit() {
     if (!report || !documentEdit) return;
@@ -3814,9 +3856,12 @@ function Workspace() {
     }
   }
   const readerSources = report ? [...report.sources, ...(report.linked_sources || []), ...(report.image_sources || [])] : [];
+  const readerSections = useMemo(() => Array.from(new DOMParser().parseFromString(markdown(report?.report || ""), "text/html").querySelectorAll("h1,h2,h3"))
+    .slice(0, 50).map((heading, index) => ({id:"visible-section-" + index,title:heading.textContent?.trim() || "Section"})), [report?.report]);
   const readerBaseKeys = citedSourceKeys(report?.report || "", readerSources);
   const readerVideos = freshSourceLinks(media, new Set([...readerBaseKeys, ...citedSourceKeys(report?.extensions?.report || "", readerSources)])).slice(0, 5);
   const readerExtensionBlocks = report?.extensions?.blocks || (report?.extensions?.report ? [{id: report.extension_revision || "extension", text: report.extensions.report}] : []);
+  const readerFollowups = followupGroups(readerExtensionBlocks);
   const readerVideoKeys = readerVideos.map(video => sourceLinkKey(video.url));
   const readerFooterSources = freshSourceLinks(report?.sources || [], new Set([
     ...readerBaseKeys, ...readerVideoKeys,
@@ -3829,6 +3874,7 @@ function Workspace() {
       hidden={!open}
       data-aegis-widget="research"
       aria-label="Research workspace"
+      data-panel={narrowPanel}
     >
       <JumpToBottom target={reader} active={open && tab === "reader" && !preview && !attachment && !documentEdit} identity={(report?.research_id || "") + (report?.reader_end || "") + (report?.extensions?.reader_end || "")} />
       {exportPreview && (
@@ -3866,7 +3912,8 @@ function Workspace() {
         />
       )}
       <div className="research-layout">
-        <aside className="research-outline">
+        <aside className="research-outline" id="research-history-panel" aria-label="Research history">
+          <button className="research-panel-close" aria-label="Close research history" onClick={() => setNarrowPanel("")}><Icon name="close" /></button>
           <div className="research-history-heading"><h2>Your research</h2><button className="research-history-select" disabled={!!deleting} onClick={() => {setSelectingHistory(!selectingHistory); setSelectedHistory(new Set());}}>{selectingHistory ? "Cancel" : "Select"}</button></div>
           {selectingHistory && <div className="research-history-selection"><button onClick={() => setSelectedHistory(new Set(items.map(item => item.research_id)))}>Select page</button><button disabled={!selectedHistory.size || !!deleting} onClick={() => void removeSelectedHistory()}><Icon name="trash" /> Remove ({selectedHistory.size})</button></div>}
           {items.map((item) => (
@@ -3962,11 +4009,14 @@ function Workspace() {
                 report.completeness === "pending") &&
               !original
                 ? report.sources.map((s) => ({ id: s.id, title: s.title }))
-                : report.sections.slice(0, 50)
+                : readerSections
               ).map((s) => (
                 <button
                   key={s.id}
                   onClick={() => {
+                    selectTab("reader");
+                    setNarrowPanel("");
+                    requestAnimationFrame(() => {
                     const target =
                       (report.evidence_collection ||
                         report.completeness === "pending") &&
@@ -3977,16 +4027,29 @@ function Workspace() {
                       behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
                       block: "start",
                     });
+                    });
                   }}
                 >
                   {s.title}
                 </button>
               ))}
+              {!!readerFollowups.length && <>
+                <h2>Follow-up topics</h2>
+                {readerFollowups.map(section => <button key={section.id} onClick={() => {
+                  selectTab("reader");
+                  requestAnimationFrame(() => document.getElementById("research-followup-" + section.id)?.scrollIntoView({block:"start",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"}));
+                  setNarrowPanel("");
+                }}>{section.title}</button>)}
+              </>}
             </>
           )}
         </aside>
         <main className="research-document">
           <header className="research-document-tools">
+            <div className="research-panel-toggles">
+              <button className="research-history-toggle" aria-controls="research-history-panel" aria-expanded={narrowPanel === "history"} onClick={() => setNarrowPanel(narrowPanel === "history" ? "" : "history")}>History</button>
+              <button className="research-chat-toggle" aria-controls="research-conversation-panel" aria-expanded={narrowPanel === "conversation"} onClick={() => setNarrowPanel(narrowPanel === "conversation" ? "" : "conversation")}>Conversation</button>
+            </div>
             <nav aria-label="Report views">
               {(report?.kind === "chat"
                 ? []
@@ -4324,14 +4387,17 @@ function Workspace() {
                       className="research-extension"
                       aria-label="Additional research"
                     >
-                      {readerExtensionBlocks.map((block, blockIndex) => (
-                        <div
-                          className="research-extension-block"
-                          key={block.id}
+                      {readerFollowups.map((section, sectionIndex) => (
+                        <section
+                          className="research-extension-block research-followup-section"
+                          id={"research-followup-" + section.id}
+                          key={section.id}
+                          aria-label={section.title}
                         >
+                          <header className="research-followup-heading"><h2>{section.title}</h2><small>Follow-up research</small></header>
                           <ReportContent
-                            text={block.text}
-                            precedingLinks={[...readerBaseKeys, ...citedSourceKeys(readerExtensionBlocks.slice(0, blockIndex).map(previous => previous.text).join("\n"), readerSources)]}
+                            text={section.text.replace(/^\s*#{1,3}\s+([^\n]+)\n/, (heading, title) => title.trim() === section.title ? "" : heading)}
+                            precedingLinks={[...readerBaseKeys, ...citedSourceKeys(readerFollowups.slice(0, sectionIndex).map(previous => previous.text).join("\n"), readerSources)]}
                             sources={[
                               ...report.sources,
                               ...(report.linked_sources || []),
@@ -4339,8 +4405,10 @@ function Workspace() {
                             onOpen={openSource}
                             onUnknown={openUnknown}
                             reportId={report.research_id}
+                            images={(report.image_items || []).filter(image => !!image.placement_text && section.text.includes(image.placement_text))}
+                            onImage={setImageView}
                           />
-                        </div>
+                        </section>
                       ))}
                     </section>
                   )}
@@ -4717,7 +4785,8 @@ function Workspace() {
             </div>
           </form>
         </main>
-        <aside className="research-assistant" hidden={report?.kind === "chat"}>
+        <aside className="research-assistant" id="research-conversation-panel" aria-label="Research conversation" hidden={report?.kind === "chat"}>
+          <button className="research-panel-close" aria-label="Close research conversation" onClick={() => setNarrowPanel("")}><Icon name="close" /></button>
           <header>
             <span className="research-eyebrow">AEGIS</span>
             <span className="research-chat-label">Research conversation</span>

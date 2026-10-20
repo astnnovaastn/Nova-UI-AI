@@ -6,6 +6,34 @@ from astra_ai.core.research_learning import ResearchArtifacts,ResearchSearch,dis
 from astra_ai.core.background_budget import BudgetPaused
 
 CTX={'profile_id':'owner','project_id':'project','session_id':'main','turn_id':'origin','user_text':'Please research honeybee communication'}
+
+def test_followup_sections_keep_identity_across_bounded_pages_and_preserve_original(tmp_path):
+    store=ResearchArtifacts(tmp_path/'sections.json')
+    item=store.save('Honeybees','detailed','# Honeybees\n\nOriginal findings.',[source()],[],CTX,'original')
+    store.append_extension(item['id'],CTX,item['revision'],'camera','# Evidence follow-up\n\n'+('Supported additional evidence. '*35)+'\n\n'+('Second paragraph. '*40),[source('New evidence')],'How does the waggle signal vary?')
+    store.append_extension(item['id'],CTX,item['revision'],'second','## Next subject\n\nA further related conclusion.',[], 'A related subject')
+    first=store.reader(item['id'],CTX,limit=1000,stream='extensions')
+    assert len(first['sections'])==2 and first['sections'][0]['title']=='How does the waggle signal vary?'
+    cursor=first['next_cursor'];blocks=first['blocks'][:]
+    while cursor is not None:
+        page=store.reader(item['id'],CTX,limit=1000,stream='extensions',cursor=cursor)
+        assert page['sections']==first['sections']
+        blocks+=page['blocks'];cursor=page['next_cursor']
+    assert len({block['id'] for block in blocks})==len(blocks)
+    assert {block['section_id'] for block in blocks}=={s['id'] for s in first['sections']}
+    assert store.get(item['id'],CTX)['artifact']['report']==item['report']
+    assert store.reader(item['id'],{**CTX,'project_id':'other'},stream='extensions')['status']=='not_found'
+
+def test_scoped_questions_continue_research_unless_new_topic_is_explicit():
+    import ast,re
+    from pathlib import Path
+    path=Path(__file__).parents[1]/'server.py';tree=ast.parse(path.read_text(encoding='utf-8'))
+    node=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='research_followup')
+    env={'re':re};exec(compile(ast.Module(body=[node],type_ignores=[]),str(path),'exec'),env)
+    assert env['research_followup']('Which has the better camera?')
+    assert env['research_followup']('What about battery life?')
+    assert not env['research_followup']('Start a new topic about architecture')
+    assert not env['research_followup']('New research about football')
 def source(content='Real supported evidence.'):
     return {'title':'Source','url':'https://example.org/article','retrieved_at':'2026-10-16T10:00:00Z','content':content}
 
@@ -238,7 +266,8 @@ def test_more_videos_deduplicates_and_persists_one_request_per_operation(tmp_pat
 
 
 @pytest.mark.parametrize('revealed',[True,False])
-def test_continuation_reveals_saved_content_before_queueing_same_report(tmp_path,revealed):
+@pytest.mark.parametrize('detail,reveal_saved',[('more information',True),('Which device has the better camera?',False)])
+def test_continuation_reveals_saved_content_before_queueing_same_report(tmp_path,revealed,detail,reveal_saved):
     import ast,re
     from pathlib import Path
     store=ResearchArtifacts(tmp_path/'r.json');item=store.save('Subject','detailed','# Subject',[source()],[],CTX,'op');submitted=[];sent=[]
@@ -253,10 +282,12 @@ def test_continuation_reveals_saved_content_before_queueing_same_report(tmp_path
     node=next(n for n in tree.body if isinstance(n,ast.AsyncFunctionDef) and n.name=='continue_research')
     env={'_research_continuation_locks':{},'asyncio':asyncio,'re':re,'get_research_services':lambda:(store,None),'state':SimpleNamespace(register_widget_action=lambda *a:None,await_widget_action=wait),'ws_manager':SimpleNamespace(send_to_client_id=send),'action_jobs':SimpleNamespace(submit=submit)}
     exec(compile(ast.Module(body=[node],type_ignores=[]),str(source_path),'exec'),env)
-    result=asyncio.run(env['continue_research'](item['id'],CTX,'continuation',detail='more information'))
+    result=asyncio.run(env['continue_research'](item['id'],CTX,'continuation',detail=detail))
     assert result['research_id']==item['id'] and store.listing(CTX)['total']==1
-    if revealed:assert not submitted and result['provider_calls']==0
+    assert sent[0]['reveal_saved']==reveal_saved
+    if revealed and reveal_saved:assert not submitted and result['provider_calls']==0
     else:
         assert submitted[0][0]['arguments']['research_id']==item['id']
+        assert submitted[0][0]['arguments']['mode']=='quick'
         activity=store.extension_state(item['id'],CTX)
         assert activity['phase']=='collecting_sources' and activity['search_checkpoint']==[source()]

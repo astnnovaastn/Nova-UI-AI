@@ -74,6 +74,16 @@ test("late replies keep the report association frozen at request time", () => {
   assert.equal(api.conversationResearch("first")[0].text, "Late answer");
   assert.equal(api.conversationResearch("second").length, 0);
 });
+test("the visible research identity wins over a stale published UI snapshot", () => {
+  const {api,events}=setup();
+  api.updateUiContext({view:"research",research_id:"old"});
+  api.requestConversation("Question for the newly opened report","frozen","selected");
+  assert.equal(events.find(e=>e.type==="nova-chat-send").detail.research_id,"selected");
+  api.updateUiContext({research_id:"other"});
+  api.conversationMessage("assistant","Correct destination","completed","reply:frozen");
+  assert.equal(api.conversationResearch("selected")[0].text,"Correct destination");
+  assert.equal(api.conversationResearch("old").length,0);
+});
 test("changing owner connection clears selected and recent research context", () => {
   const { api } = setup();
   api.conversationState({ clientId: "owner" });

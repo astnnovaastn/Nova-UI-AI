@@ -475,7 +475,15 @@ class ResearchArtifacts:
         with self.lock:
             extensions=self.snapshot().get('extensions',{}).get(identifier,[])
         if stream=='extensions':body=''
-        if stream!='base':body+=''.join('\n\n'+e['report'] for e in extensions)
+        boundaries=[];followups=[]
+        if stream!='base':
+            for i,entry in enumerate(extensions):
+                heading=re.search(r'^#{1,3}\s+(.+)',entry['report'],re.M)
+                section={'id':stable('followup',identifier,entry.get('operation_id') or entry['revision']),
+                         'title':display_title(entry.get('title') or (heading.group(1) if heading else 'Follow-up research '+str(i+1))),
+                         'created':entry.get('created','')}
+                boundaries.append((len(body),section));followups.append(section)
+                body+='\n\n'+entry['report']
         # Complete Markdown blocks only; fenced code remains one block.
         blocks=[];current=[];fence=False
         for line in body.splitlines(keepends=True):
@@ -494,16 +502,23 @@ class ResearchArtifacts:
             if len(block)>20000:page.append('\n[Oversized block is available in the full export.]\n')
             else:page.append(block)
             size+=len(page[-1]);end+=1
-        return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'extension_revision':stable(*[e['revision'] for e in extensions]),'report':''.join(page),'next_cursor':end if end<len(blocks) else None,'display_title':title,'cursor':cursor,'reader_end':end,'stream':stream,'blocks':[{'id':stable(item['revision'],stream,cursor+i,b),'text':b} for i,b in enumerate(page)]}
+        presented=[];position=sum(len(block) for block in blocks[:cursor])
+        for i,block in enumerate(page):
+            section=next((section for start,section in reversed(boundaries) if start<=position),None)
+            presented.append({'id':stable(item['revision'],stream,cursor+i,block),'text':block,**({'section_id':section['id'],'section_title':section['title'],'section_created':section['created']} if section else {})})
+            position+=len(blocks[cursor+i])
+        return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'extension_revision':stable(*[e['revision'] for e in extensions]),'report':''.join(page),'next_cursor':end if end<len(blocks) else None,'display_title':title,'cursor':cursor,'reader_end':end,'stream':stream,'blocks':presented,'sections':followups}
 
-    def append_extension(self, identifier, context, revision, operation_id, report, sources=None):
+    def append_extension(self, identifier, context, revision, operation_id, report, sources=None, title=''):
         with self.lock:
             fetched=self.get(identifier,context,revision)
             if fetched['status']!='ok':return fetched
             data=read(self.path,{});rows=data.setdefault('extensions',{}).setdefault(identifier,[])
             existing=next((e for e in rows if e['operation_id']==operation_id),None)
             if existing:return {'status':'completed','extension_revision':existing['revision'],'research_id':identifier,'research_revision':revision}
-            self.backup_metadata();entry={'revision':stable(report),'report':reader_text(report),'sources':sources or [],'operation_id':operation_id,'created':now()};rows.append(entry);atomic(self.path,data)
+            self.backup_metadata();entry={'revision':stable(report),'report':reader_text(report),'sources':sources or [],'operation_id':operation_id,'created':now()}
+            if title:entry['title']=display_title(title)
+            rows.append(entry);atomic(self.path,data)
             return {'status':'completed','extension_revision':entry['revision'],'research_id':identifier,'research_revision':revision}
 
     def get(self, identifier, context, revision=''):
@@ -671,7 +686,8 @@ class ResearchArtifacts:
         document['image_sources']=[{'id':r['source_id'],'url':r['source_url'],'title':r['caption'],'content':'Image attribution page; not claim evidence.'} for r in self.images(identifier,context) if r.get('source_id','').startswith('P')]
         document.update(display_title=metadata.get('display_title') or display_title(item['query']),thread_id=metadata.get('thread_id','research-'+identifier),phase=metadata.get('phase','complete'),processing_seconds=metadata.get('processing_seconds'),active_since=metadata.get('active_since'),next_attempt=metadata.get('next_attempt'),waiting_reason=metadata.get('waiting_reason'),image_items=[{k:v for k,v in image.items() if k!='url'} for image in self.images(identifier,context) if not image.get('source_only')])
         # Presentation only: old image IDs remain available to existing drafts.
-        document['image_items']=(place_images(document['image_items'],item['report']) if item['report'].strip() else document['image_items'][:report_image_limit(item['report'])])
+        composed=item['report']+'\n\n'+'\n\n'.join(entry['report'] for entry in extensions)
+        document['image_items']=(place_images(document['image_items'],composed) if composed.strip() else document['image_items'][:report_image_limit(composed)])
         from .research_documents import DocumentFiles
         document.update(DocumentFiles(self).presentation(identifier,context))
         if bounded:
@@ -1149,7 +1165,8 @@ class ResearchSearch:
                 if activity.get('operation_id')==operation_id and activity.get('outbound_started'):return {'status':'unconfirmed','reason':'reconcile_extension_search_before_retry','research_id':identifier}
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='collecting_sources',view=view,operation_id=operation_id,outbound_started=True,search_checkpoint=None)
                 query=(display_title(item['query'])+' '+detail)[:600]
-                async with self.network:rows,error=await asyncio.to_thread(self._request,query,'detailed',8)
+                search_mode=arguments.get('mode') if arguments.get('mode') in {'quick','detailed'} else item.get('mode','detailed')
+                async with self.network:rows,error=await asyncio.to_thread(self._request,query,search_mode,8)
                 if error:
                     await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed',reason=error['reason'])
                     return {'status':'failed','reason':error['reason'],'research_id':identifier}
@@ -1170,7 +1187,7 @@ class ResearchSearch:
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed',reason='extension_unavailable')
                 return {'status':'failed','reason':'extension_unavailable','research_id':identifier}
             if not report:return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
-            result=await asyncio.to_thread(self.artifacts.append_extension,identifier,context,revision,operation_id,report,additional)
+            result=await asyncio.to_thread(self.artifacts.append_extension,identifier,context,revision,operation_id,report,additional,detail)
             await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='complete',view=view,operation_id=operation_id)
             return {**self.artifacts.brief(item),**result}
 
@@ -1223,7 +1240,7 @@ class ResearchSearch:
             except Exception:
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed',view='reader',reason='synthesis_unavailable')
                 return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
-            result=await asyncio.to_thread(self.artifacts.append_extension,identifier,context,item['revision'],operation_id,report,sources)
+            result=await asyncio.to_thread(self.artifacts.append_extension,identifier,context,item['revision'],operation_id,report,sources,query)
             if result['status']!='completed':return result
             operations[operation_id]={'query':query,'state':'complete','summary':report[:4000],'created':now()}
             await asyncio.to_thread(self.artifacts.request_state,identifier,context,quick_followups=operations)

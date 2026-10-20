@@ -126,9 +126,10 @@ export function conversationMessage(
 export function requestConversation(
   text: string,
   id: string = crypto.randomUUID(),
+  researchId?: string,
 ) {
   const research_id =
-    snapshot.view === "research" ? String(snapshot.research_id || "") : "";
+    researchId ?? (snapshot.view === "research" ? String(snapshot.research_id || "") : "");
   requestResearch.set(id, research_id);
   window.dispatchEvent(
     new CustomEvent("nova-chat-send", {

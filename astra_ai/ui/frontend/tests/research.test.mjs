@@ -31,6 +31,8 @@ const names = [
   "freshSourceLinks",
   "citedSourceKeys",
   "companionParagraphs",
+  "sectionLabel",
+  "followupGroups",
 ];
 const selected = tree.statements
   .filter((n) => ts.isFunctionDeclaration(n) && names.includes(n.name?.text))
@@ -85,6 +87,18 @@ test("illustrations absorb adjacent prose without crossing headings or another p
   assert.equal(context.companionParagraphs(first,[])[0],second);
   assert.equal(context.companionParagraphs(second,[]).length,0);
   assert.equal(context.companionParagraphs(first,[{placement_text:second.textContent.slice(0,90)}]).length,0);
+});
+test("section labels remain distinct from sentence emphasis and entity names", () => {
+  for (const label of ["Display and Design", "Camera Capabilities", "Workload Dictates Hardware:", "Apple iPhone vs Google Pixel"])
+    assert.equal(context.sectionLabel(label), true, label);
+  for (const label of ["OpenAI", "Both devices", "This is the conclusion.", "This is not a heading", "A".repeat(90)])
+    assert.equal(context.sectionLabel(label), false, label);
+});
+test("saved follow-up blocks keep stable topic boundaries across page retrieval", () => {
+  const blocks=[{id:"1",text:"First ",section_id:"a",section_title:"Camera follow-up"},{id:"2",text:"paragraph",section_id:"a"},{id:"3",text:"Second topic",section_id:"b",section_title:"Battery follow-up"}];
+  const grouped=plain(context.followupGroups(blocks));
+  assert.deepEqual(grouped.map(g=>[g.id,g.title,g.text]),[["a","Camera follow-up","First paragraph"],["b","Battery follow-up","Second topic"]]);
+  assert.equal(context.followupGroups([...blocks,{id:"4",text:" continued",section_id:"b"}])[1].text,"Second topic continued");
 });
 
 test("Expand only reads saved pages, ignores repeat clicks and preserves a switched report", async () => {
