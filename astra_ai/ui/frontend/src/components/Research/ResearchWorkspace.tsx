@@ -124,6 +124,23 @@ const ScopedImage = Image.extend({
     };
   },
 });
+const IllustrationGroup = TiptapNode.create({
+  name: "illustrationGroup", group: "block", content: "image+", draggable: true,
+  addAttributes: () => ({ layout: { default: "gallery", parseHTML: el => el.getAttribute("data-image-group") } }),
+  parseHTML: () => [{ tag: "div[data-image-group]" }],
+  renderHTML: ({ node }) => ["div", { "data-image-group": node.attrs.layout, class: "research-image-composition " + node.attrs.layout }, 0],
+});
+const IllustratedBlock = TiptapNode.create({
+  name: "illustratedBlock", group: "block", content: "block+", draggable: true,
+  addAttributes: () => ({ composition: { default: "gallery", parseHTML: el => el.getAttribute("data-composition") } }),
+  parseHTML: () => [{ tag: "div[data-illustrated]" }],
+  renderHTML: ({ node }) => ["div", { "data-illustrated": "", "data-composition": node.attrs.composition, class: "research-illustrated-block" }, 0],
+});
+const IllustratedCopy = TiptapNode.create({
+  name: "illustratedCopy", group: "block", content: "block+",
+  parseHTML: () => [{ tag: "div[data-illustrated-copy]" }],
+  renderHTML: () => ["div", { "data-illustrated-copy": "", class: "research-illustrated-copy" }, 0],
+});
 function IllustratedPreview({ html }: { html: string }) {
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -184,7 +201,7 @@ async function api(path: string, options: RequestInit = {}) {
   if (!r.ok || ["conflict", "not_found", "rejected"].includes(d.status))
     throw Object.assign(
       new Error(d.reason || d.detail || "Research unavailable"),
-      { data: d },
+      { data: d, status: r.status },
     );
   return d;
 }
@@ -207,6 +224,7 @@ type Source = {
   published_at?: string;
 };
 type Report = {
+  status?: string;
   kind?: "research" | "documentary" | "chat";
   attachments?: Attachment[];
   attachment_images?: ResearchImage[];
@@ -310,6 +328,7 @@ function Icon({ name }: { name: string }) {
     more: "M5 12h.01M12 12h.01M19 12h.01",
     trash: "M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7",
     arrow: "M12 19V5m-6 6 6-6 6 6",
+    down: "M12 5v14m-6-6 6 6 6-6",
     close: "m6 6 12 12M6 18 18 6",
     depth: "M4 6h16M7 12h10M10 18h4",
     plus: "M12 5v14M5 12h14",
@@ -559,6 +578,9 @@ function DocumentPaperPreview({
       StarterKit,
       TableKit,
       ScopedImage,
+      IllustrationGroup,
+      IllustratedBlock,
+      IllustratedCopy,
       Citation,
       PageBreak,
       DocumentVideo,
@@ -608,6 +630,9 @@ function DraftEditor({
       StarterKit,
       TableKit,
       ScopedImage,
+      IllustrationGroup,
+      IllustratedBlock,
+      IllustratedCopy,
       Citation,
       PageBreak,
       DocumentVideo,
@@ -1183,7 +1208,7 @@ function researchProgress(
       String(Math.floor(whole / 60)).padStart(2, "0") +
       ":" +
       String(whole % 60).padStart(2, "0"),
-    skeleton: active && sourceCount === 0 && elapsed >= 1.5,
+    skeleton: active && elapsed >= 1.5,
   };
 }
 function PendingResearch({
@@ -1247,7 +1272,7 @@ function PendingResearch({
       )}
       {status.skeleton && (
         <div className="research-loading-lines" aria-hidden="true">
-          {[0, 1].map((n) => (
+          {[0, 1, 2].map((n) => (
             <div className="research-skeleton" key={n}>
               <i />
               <i />
@@ -1405,7 +1430,7 @@ function EvidenceImage({
   return (
     <figure className="research-evidence-image">
       <button onClick={onOpen} aria-label={"Enlarge image: " + image.caption}>
-        <img src={url} alt={image.caption} style={{objectFit: "scale-down"}} onError={() => setUrl("")} />
+        <img src={url} alt={image.caption} width={image.width} height={image.height} onError={() => setUrl("")} />
       </button>
       {attribution && <figcaption>
         {image.caption}
@@ -1426,21 +1451,89 @@ function imageComposition(images: {width?: number; height?: number; caption?: st
   if (ratio < 0.85 && passage.length >= 280) return "portrait";
   return passage.length >= 700 ? "aside" : passage.length >= 280 ? "aside-end" : "compact";
 }
+function companionParagraphs(node: Element, images: ResearchImage[]) {
+  if (node.tagName !== "P") return [];
+  const paragraphs: Element[] = [];
+  let length = node.textContent?.length || 0, next = node.nextElementSibling;
+  const normalized = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  while (next?.tagName === "P" && length < 700 && paragraphs.length < 2) {
+    const text = next.textContent || "";
+    if (images.some(image => image.placement_text && normalized(text).includes(normalized(image.placement_text).slice(0, 55)))) break;
+    paragraphs.push(next); length += text.length; next = next.nextElementSibling;
+  }
+  return paragraphs;
+}
 
 function EvidenceGallery({ images, reportId, onOpen, layout = "gallery" }: {
   images: ResearchImage[]; reportId: string; onOpen: (image: ResearchImage) => void; layout?: string;
 }) {
   return <>
     <div className={"research-image-composition " + layout}>
-      {images.slice(0, 5).map(image => <EvidenceImage key={image.id} image={image} reportId={reportId} onOpen={() => onOpen(image)} />)}
+      {images.slice(0, 3).map(image => <EvidenceImage key={image.id} image={image} reportId={reportId} onOpen={() => onOpen(image)} />)}
     </div>
   </>;
+}
+
+function JumpToBottom({ target, active, identity, clearance = 76 }: {
+  target: React.RefObject<HTMLElement | null>; active: boolean; identity: string; clearance?: number;
+}) {
+  const [position, setPosition] = useState<{left: number; top: number} | null>(null);
+  useEffect(() => {
+    const root = target.current;
+    if (!active || !root) { setPosition(null); return; }
+    const update = () => {
+      const rect = root.getBoundingClientRect();
+      setPosition(rect.width && root.scrollHeight - root.scrollTop - root.clientHeight > 320
+        ? {left: rect.left + rect.width / 2, top: Math.min(rect.bottom, innerHeight) - clearance} : null);
+    };
+    update();
+    root.addEventListener("scroll", update, {passive: true});
+    window.addEventListener("resize", update);
+    const observer = new ResizeObserver(update);
+    observer.observe(root);
+    for (const child of Array.from(root.children)) observer.observe(child);
+    return () => { root.removeEventListener("scroll", update); window.removeEventListener("resize", update); observer.disconnect(); };
+  }, [target, active, identity, clearance]);
+  return position && active ? createPortal(<button className="research-jump-bottom" style={position} aria-label="Go to end" title="Go to end"
+    onClick={() => target.current?.scrollTo({top: target.current.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"})}><Icon name="down" /></button>, document.body) : null;
 }
 
 function SourceArticle({ html, images, reportId, onImage }: {
   html: string; images: ResearchImage[]; reportId: string; onImage: (image: ResearchImage) => void;
 }) {
   const doc = new DOMParser().parseFromString(clean(html), "text/html");
+  const seenImages = new Set<string>();
+  // Group neighbouring article pictures, preserving their relationship to prose.
+  for (const img of Array.from(doc.querySelectorAll("img[data-research-image]"))) {
+    const id = img.getAttribute("data-research-image") || "";
+    const image = images.find(item => item.id === id);
+    const signature = image?.content_hash || id;
+    if (!image || seenImages.has(signature) || seenImages.size >= (doc.body.textContent!.length > 18000 ? 6 : 4)) { img.remove(); continue; }
+    seenImages.add(signature);
+    const parent = img.parentElement;
+    if (parent?.tagName === "P" && !parent.textContent?.trim()) parent.replaceWith(img);
+    const previous = img.previousElementSibling;
+    if (previous?.classList.contains("research-image-composition")) {
+      previous.append(img);
+      previous.className = "research-image-composition gallery";
+    } else {
+      const group = doc.createElement("div");
+      group.className = "research-image-composition wide";
+      img.replaceWith(group); group.append(img);
+    }
+  }
+  for (const group of Array.from(doc.querySelectorAll(".research-image-composition"))) {
+    const passage = group.nextElementSibling;
+    if (passage?.tagName !== "P") { group.className = "research-image-composition gallery"; continue; }
+    const pictures = Array.from(group.querySelectorAll("img")).map(img => images.find(image => image.id === img.getAttribute("data-research-image"))).filter(Boolean) as ResearchImage[];
+    const companions = companionParagraphs(passage, images);
+    const composition = imageComposition(pictures, (passage.textContent || "") + companions.map(p => p.textContent).join(" "));
+    const block = doc.createElement("div"), copy = doc.createElement("div");
+    block.className = "research-illustrated-block"; block.dataset.composition = composition;
+    copy.className = "research-illustrated-copy";
+    group.className = "research-image-composition " + composition;
+    group.replaceWith(block); copy.append(passage, ...companions); block.append(group, copy);
+  }
   function render(node: Node, key: string): React.ReactNode {
     if (node.nodeType === Node.TEXT_NODE) return node.textContent;
     if (!(node instanceof Element)) return null;
@@ -1451,8 +1544,8 @@ function SourceArticle({ html, images, reportId, onImage }: {
     }
     const props: Record<string, any> = { key };
     for (const attribute of Array.from(node.attributes)) {
-      if (["id", "href", "data-source-link", "colspan", "rowspan"].includes(attribute.name))
-        props[attribute.name === "colspan" ? "colSpan" : attribute.name === "rowspan" ? "rowSpan" : attribute.name] = attribute.value;
+      if (["id", "class", "data-composition", "href", "data-source-link", "colspan", "rowspan"].includes(attribute.name))
+        props[attribute.name === "class" ? "className" : attribute.name === "colspan" ? "colSpan" : attribute.name === "rowspan" ? "rowSpan" : attribute.name] = attribute.value;
     }
     if (["br", "hr"].includes(tag)) return React.createElement(tag, props);
     const children = Array.from(node.childNodes).map((child, index) => render(child, key + ":" + index));
@@ -1558,14 +1651,16 @@ function ReportContent({
     [text],
   );
   const placed = new Set<string>();
+  const consumedParagraphs = new Set<Node>();
   const seenSources = new Set(precedingLinks);
-  const uniqueImages = images.filter((image, index) => images.findIndex(other => other.id === image.id || (image.content_hash && other.content_hash === image.content_hash)) === index);
+  const uniqueImages = images.filter((image, index) => images.findIndex(other => other.id === image.id || (image.content_hash && other.content_hash === image.content_hash)) === index).slice(0, 6);
   const anchorText = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
   function chip(refs: Source[], key: string) {
     const fresh = freshSourceLinks(refs, seenSources);
     return fresh.length ? <SourceChip key={key} source={fresh[0]} sources={fresh} onClick={source => onOpen(source || fresh[0])} /> : null;
   }
   function render(node: Node, key: string, literal = false): React.ReactNode {
+    if (consumedParagraphs.has(node)) return null;
     if (node.nodeType === Node.TEXT_NODE) {
       const value = node.textContent || "";
       if (
@@ -1648,11 +1743,13 @@ function ReportContent({
                 (image.placement_text
                   ? anchorText(passage).includes(anchorText(image.placement_text).slice(0, 55))
                   : node.textContent?.includes("[" + image.source_id + "]")),
-            ).slice(0, 5)
+            ).slice(0, 3)
         : [];
     relatedImages.forEach((image) => placed.add(image.id));
     const related = relatedImages[0];
-    const composition = imageComposition(relatedImages, passage);
+    const companions = related ? companionParagraphs(node, uniqueImages) : [];
+    companions.forEach(paragraph => consumedParagraphs.add(paragraph));
+    const composition = tag === "li" ? "gallery" : imageComposition(relatedImages, passage + companions.map(paragraph => paragraph.textContent).join(" "));
     const illustration = (
       <EvidenceGallery images={relatedImages} reportId={reportId} onOpen={image => onImage?.(image)} layout={composition} />
     );
@@ -1663,17 +1760,23 @@ function ReportContent({
       props,
       ...children,
     );
+    const companionContent = companions.map((paragraph, index) => {
+      consumedParagraphs.delete(paragraph);
+      const rendered = render(paragraph, key + ":companion:" + index);
+      consumedParagraphs.add(paragraph);
+      return rendered;
+    });
     if (related && tag === "li")
       return React.createElement(
         "li",
         { ...props, className: "research-illustrated-block", "data-composition": composition },
-        illustration,
         <div className="research-illustrated-copy">{children}</div>,
+        illustration,
       );
     return related ? (
       <div className="research-illustrated-block" data-composition={composition} key={key}>
         {composition !== "wide" && illustration}
-        <div className="research-illustrated-copy">{content}</div>
+        <div className="research-illustrated-copy">{content}{companionContent}</div>
         {composition === "wide" && illustration}
       </div>
     ) : (
@@ -1710,6 +1813,7 @@ function DocumentPreview({
   const canvas = useRef<HTMLCanvasElement>(null),
     pdf = useRef<any>(null),
     heading = useRef<HTMLHeadingElement>(null);
+  const sourceReader = useRef<HTMLElement>(null);
   useEffect(() => {
     const section = heading.current?.closest("section");
     if (section) section.scrollTop = 0;
@@ -1788,7 +1892,8 @@ function DocumentPreview({
     };
   }, [page, pages]);
   return (
-    <section className="research-source-preview" aria-label={current.title}>
+    <section ref={sourceReader} className="research-source-preview" aria-label={current.title}>
+      <JumpToBottom target={sourceReader} active identity={current.id + html} clearance={34} />
       <header>
         <div>
           <span className="research-publication">
@@ -1823,12 +1928,13 @@ function DocumentPreview({
       </div>
       {trail.length > 0 && (
         <button
+          className="research-inline-action"
           onClick={() => {
             setCurrent(trail[trail.length - 1]);
             setTrail((t) => t.slice(0, -1));
           }}
         >
-          ← Previous source
+          <Icon name="undo" /> Previous source
         </button>
       )}
       {!html && !!report.image_items?.some((i) => i.source_id === current.id) && (
@@ -2264,22 +2370,48 @@ function initialDraft(report: Report) {
       markdown(report.report + (report.extensions?.report || "")),
       "text/html",
     );
+    const groups = new Map<Element, ResearchImage[]>();
+    const normalized = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
     for (const image of [
       ...(report.image_items || []),
       ...(report.attachment_images || []),
-    ]) {
+    ].slice(0, 6)) {
       const p = Array.from(doc.querySelectorAll("p,li")).find((p) =>
         image.placement_text
-          ? p.textContent?.includes(image.placement_text.slice(0, 50))
+          ? normalized(p.textContent || "").includes(normalized(image.placement_text).slice(0, 55))
           : p.textContent?.includes("[" + image.source_id + "]"),
       );
-      if (p) {
+      if (p) groups.set(p, [...(groups.get(p) || []), image].slice(0, 3));
+    }
+    for (const [passage, images] of groups) {
+      const companions = companionParagraphs(passage, report.image_items || []);
+      const composition = passage.tagName === "LI" ? "gallery" : imageComposition(images, (passage.textContent || "") + companions.map(paragraph => paragraph.textContent).join(" "));
+      const group = doc.createElement("div");
+      group.dataset.imageGroup = composition;
+      group.className = "research-image-composition " + composition;
+      for (const image of images) {
         const img = doc.createElement("img");
         img.src =
           image.url ||
           "/api/research/" + report.research_id + "/images/" + image.id;
         img.alt = image.caption;
-        p.before(img);
+        group.append(img);
+      }
+      if (passage.tagName === "LI") {
+        // Keep the list item's leading paragraph valid for the paper editor.
+        const paragraph = doc.createElement("p");
+        while (passage.firstChild) paragraph.append(passage.firstChild);
+        passage.append(paragraph, group);
+      } else {
+        const block = doc.createElement("div");
+        block.dataset.illustrated = "";
+        block.dataset.composition = composition;
+        block.className = "research-illustrated-block";
+        passage.replaceWith(block);
+        const copy = doc.createElement("div"); copy.dataset.illustratedCopy = "";
+        copy.className = "research-illustrated-copy"; copy.append(passage, ...companions);
+        if (composition === "wide") block.append(copy, group);
+        else block.append(group, copy);
       }
     }
     return doc.body.innerHTML;
@@ -2553,6 +2685,12 @@ function Workspace() {
   ]);
   const reportRef = useRef(report);
   reportRef.current = report;
+  const [revealingSaved, setRevealingSaved] = useState(false);
+  const [selectingHistory, setSelectingHistory] = useState(false);
+  const [selectedHistory, setSelectedHistory] = useState<Set<string>>(new Set());
+  useEffect(() => {setSelectedHistory(new Set()); setSelectingHistory(false);}, [chat.clientId]);
+  const revealPending = useRef(false);
+  const [videoDestination, setVideoDestination] = useState<{ reportId: string; id: string } | null>(null);
   const [sourceLimit, setSourceLimit] = useState(10),
     [mediaLimit, setMediaLimit] = useState(3),
     [removed, setRemoved] = useState<any[]>([]),
@@ -2676,6 +2814,28 @@ function Workspace() {
       setDeleting("");
     }
   }
+  async function removeSelectedHistory() {
+    if (deleting || !selectedHistory.size) return;
+    const ids = Array.from(selectedHistory), client = chat.clientId;
+    setDeleting("selection");
+    try {
+      const preview = await api("/history/delete-preview", {method:"POST", body:JSON.stringify({research_ids:ids})});
+      if (preview.status !== "ok") throw Error(preview.reason || "Selected research is unavailable.");
+      const operation_id = crypto.randomUUID();
+      let result;
+      do {
+        result = await api("/history/delete", {method:"POST", body:JSON.stringify({research_ids:ids, revision:preview.revision, operation_id})});
+        if (result.status === "waiting_for_ui") await new Promise(resolve => setTimeout(resolve,750));
+      } while (result.status === "waiting_for_ui" && conversationSnapshot().clientId === client);
+      if (conversationSnapshot().clientId !== client) return;
+      if (result.status !== "completed") throw Error(result.reason || "Removal was not confirmed.");
+      for (const id of ids) reportCache.current.delete(client + ":" + id);
+      if (ids.includes(lastSelection.current)) { ++loadEpoch.current; lastSelection.current=""; setReport(null); setPreview(null); }
+      setSelectedHistory(new Set()); setSelectingHistory(false);
+      await refresh();
+    } catch (e:any) { if (e.data?.reason !== "user_rejected" && e.message !== "user_rejected") setError(e.message); }
+    finally { setDeleting(""); }
+  }
   useEffect(() => {
     const restore = (e: Event) => {
       const d = (e as CustomEvent).detail;
@@ -2691,7 +2851,17 @@ function Workspace() {
   }, [chat.clientId]);
   useEffect(() => {
     const refreshEvent = (e: Event) => {
-      void reloadReport((e as CustomEvent).detail.research_id).catch(() => {});
+      const detail = (e as CustomEvent).detail || {};
+      const removedIds: string[] = detail.removed_research_ids || [];
+      for (const id of removedIds) reportCache.current.delete(chat.clientId + ":" + id);
+      if (removedIds.includes(lastSelection.current)) {
+        ++loadEpoch.current; lastSelection.current = ""; setReport(null); setPreview(null); setAttachment(null); setDocumentEdit(null); setSelectionLoading(""); setFailedSelection(""); setError("");
+        sessionStorage.removeItem("nova-selected-research");
+        updateUiContext({research_id:"",research_revision:"",selected_id:"",title:""});
+      }
+      const id = detail.research_id;
+      if (id) void reloadReport(id).catch(() => {});
+      void refresh();
     };
     window.addEventListener("nova-research-refresh", refreshEvent);
     return () =>
@@ -2917,6 +3087,7 @@ function Workspace() {
         conversationSnapshot().guest
       )
         return;
+      if (d.status === "redirect" && d.research_id !== id) { await select(d.research_id); return; }
       setImageView(null);
       setReport(d);
       setEntryKind(d.kind || "research");
@@ -2964,6 +3135,12 @@ function Workspace() {
       });
     } catch (e: any) {
       if (epoch === loadEpoch.current) {
+        if (e.status === 410) {
+          lastSelection.current=""; setReport(null); setPreview(null); setError(""); setFailedSelection("");
+          sessionStorage.removeItem("nova-selected-research");
+          updateUiContext({research_id:"",research_revision:"",selected_id:"",title:""});
+          void refresh(); return;
+        }
         setError(e.message);
         setFailedSelection(id);
       }
@@ -3099,7 +3276,7 @@ function Workspace() {
     return () => clearInterval(interval);
   }, [open, report?.research_id, report?.phase]);
   async function more() {
-    if (!report) return;
+    if (!report || report.next_cursor == null) return;
     const id = report.research_id,
       requestedCursor = report.next_cursor;
     try {
@@ -3113,7 +3290,7 @@ function Workspace() {
           "&stream=base",
       );
       setReport((old) =>
-        old?.research_id === id && old.next_cursor === requestedCursor
+        old?.research_id === id && old.research_revision === d.research_revision && old.next_cursor === requestedCursor
           ? {
               ...old,
               report: old.report + d.report,
@@ -3143,7 +3320,7 @@ function Workspace() {
           report.extensions.next_cursor,
       );
     setReport((old) =>
-      old?.research_id === id && old.extensions?.next_cursor === requestedCursor
+      old?.research_id === id && old.research_revision === next.research_revision && old.extensions?.next_cursor === requestedCursor
         ? {
             ...old,
             extensions: {
@@ -3156,9 +3333,16 @@ function Workspace() {
     );
   }
   async function expand() {
-    await requestMore("reader");
+    if (revealPending.current || !report) return;
+    revealPending.current = true;
+    setRevealingSaved(true);
+    try {
+      if (report.next_cursor != null) await more();
+      else if (report.extensions?.next_cursor != null) await moreExtensions();
+    } catch (e: any) { setError(e.message); }
+    finally { revealPending.current = false; setRevealingSaved(false); }
   }
-  function closePreview() {
+  function closePreview(restoreFocus = true) {
     const destination = researchDestination(location.hash);
     if (destination?.source)
       history.replaceState(
@@ -3169,9 +3353,14 @@ function Workspace() {
     setPreview(null);
     setAttachment(null);
     setDocumentEdit(null);
-    requestAnimationFrame(() =>
+    if (restoreFocus) requestAnimationFrame(() =>
       originFocus.current?.focus({ preventScroll: true }),
     );
+  }
+  function selectTab(value: string) {
+    closePreview(false);
+    setImageView(null);
+    setTab(value);
   }
   useEffect(() => {
     const done = (e: KeyboardEvent) => {
@@ -3250,6 +3439,23 @@ function Workspace() {
     ...(report?.linked_sources || []),
     ...extraMedia,
   ]);
+  useLayoutEffect(() => {
+    if (!videoDestination) return;
+    if (videoDestination.reportId !== report?.research_id) { setVideoDestination(null); return; }
+    if (!["media", "assets"].includes(tab)) return;
+    const index = media.findIndex(source => videoId(source.url) === videoDestination.id);
+    if (index < 0) return;
+    if (index >= mediaLimit) { setMediaLimit(index + 1); return; }
+    const target = document.querySelector<HTMLElement>(`.research-workspace [data-video-id="${videoDestination.id}"]`);
+    if (!target) return;
+    const frame = requestAnimationFrame(() => {
+      if (reportRef.current?.research_id !== videoDestination.reportId) return;
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      setVideoDestination(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [videoDestination, report?.research_id, tab, mediaLimit, media]);
   function openSource(source: Source) {
     if (source.attachment_id && report) {
       const reportId = report.research_id,
@@ -3283,20 +3489,8 @@ function Workspace() {
         videoPositions.set(videoId(source.url)!, timestamp);
       if (!media.some((s) => videoId(s.url) === videoId(source.url)))
         setExtraMedia((old) => [...old, source]);
-      setPreview(null);
-      setTab(reportRef.current?.kind === "documentary" ? "assets" : "media");
-      requestAnimationFrame(() => {
-        const target = document.querySelector<HTMLElement>(
-          `[data-video-id="${videoId(source.url)}"]`,
-        );
-        target?.focus({ preventScroll: true });
-        target?.scrollIntoView({
-          block: "center",
-          behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
-            ? "auto"
-            : "smooth",
-        });
-      });
+      selectTab(reportRef.current?.kind === "documentary" ? "assets" : "media");
+      setVideoDestination({reportId: reportRef.current!.research_id, id: videoId(source.url)!});
       return;
     }
     originFocus.current = document.activeElement as HTMLElement;
@@ -3621,7 +3815,7 @@ function Workspace() {
   }
   const readerSources = report ? [...report.sources, ...(report.linked_sources || []), ...(report.image_sources || [])] : [];
   const readerBaseKeys = citedSourceKeys(report?.report || "", readerSources);
-  const readerVideos = freshSourceLinks(media, new Set(readerBaseKeys)).slice(0, 5);
+  const readerVideos = freshSourceLinks(media, new Set([...readerBaseKeys, ...citedSourceKeys(report?.extensions?.report || "", readerSources)])).slice(0, 5);
   const readerExtensionBlocks = report?.extensions?.blocks || (report?.extensions?.report ? [{id: report.extension_revision || "extension", text: report.extensions.report}] : []);
   const readerVideoKeys = readerVideos.map(video => sourceLinkKey(video.url));
   const readerFooterSources = freshSourceLinks(report?.sources || [], new Set([
@@ -3636,6 +3830,7 @@ function Workspace() {
       data-aegis-widget="research"
       aria-label="Research workspace"
     >
+      <JumpToBottom target={reader} active={open && tab === "reader" && !preview && !attachment && !documentEdit} identity={(report?.research_id || "") + (report?.reader_end || "") + (report?.extensions?.reader_end || "")} />
       {exportPreview && (
         <PDFExportPreview
           preview={exportPreview}
@@ -3672,9 +3867,11 @@ function Workspace() {
       )}
       <div className="research-layout">
         <aside className="research-outline">
-          <h2>Your research</h2>
+          <div className="research-history-heading"><h2>Your research</h2><button className="research-history-select" disabled={!!deleting} onClick={() => {setSelectingHistory(!selectingHistory); setSelectedHistory(new Set());}}>{selectingHistory ? "Cancel" : "Select"}</button></div>
+          {selectingHistory && <div className="research-history-selection"><button onClick={() => setSelectedHistory(new Set(items.map(item => item.research_id)))}>Select page</button><button disabled={!selectedHistory.size || !!deleting} onClick={() => void removeSelectedHistory()}><Icon name="trash" /> Remove ({selectedHistory.size})</button></div>}
           {items.map((item) => (
-            <div className="research-history-item" key={item.research_id}>
+            <div className="research-history-item" data-selecting={selectingHistory || undefined} key={item.research_id}>
+              {selectingHistory && <input className="research-history-checkbox" type="checkbox" aria-label={"Select " + (item.display_title || item.query)} checked={selectedHistory.has(item.research_id)} onChange={e => setSelectedHistory(previous => {const next=new Set(previous); if(e.target.checked) next.add(item.research_id); else next.delete(item.research_id); return next;})} />}
               <button
                 className={
                   (selectionLoading || report?.research_id) === item.research_id
@@ -3695,7 +3892,7 @@ function Workspace() {
                 }}
                 onClick={() => void select(item.research_id)}
               >
-                <strong>{item.query}</strong>
+                <strong>{item.display_title || item.query}</strong>
                 <small>
                   {new Date(item.retrieved_at).toLocaleDateString()} ·{" "}
                   {item.phase === "draft"
@@ -3766,7 +3963,7 @@ function Workspace() {
               !original
                 ? report.sources.map((s) => ({ id: s.id, title: s.title }))
                 : report.sections.slice(0, 50)
-              ).map((s, i) => (
+              ).map((s) => (
                 <button
                   key={s.id}
                   onClick={() => {
@@ -3775,9 +3972,9 @@ function Workspace() {
                         report.completeness === "pending") &&
                       !original
                         ? reader.current?.querySelector("#source-" + s.id)
-                        : reader.current?.querySelectorAll("h1,h2,h3")[i];
+                        : Array.from(reader.current?.querySelectorAll("h1,h2,h3") || []).find(heading => heading.textContent?.trim() === s.title.trim());
                     target?.scrollIntoView({
-                      behavior: "smooth",
+                      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
                       block: "start",
                     });
                   }}
@@ -3815,7 +4012,7 @@ function Workspace() {
                         report.phase !== "draft") ||
                       report.phase === "failed")
                   }
-                  onClick={() => setTab(v)}
+                  onClick={() => selectTab(v)}
                 >
                   {v === "reader" && report?.kind === "documentary"
                     ? "Document"
@@ -3889,7 +4086,7 @@ function Workspace() {
               </section>
             ) : !report ? (
               <div className="research-empty">
-                <span>✧</span>
+
                 <h2>Follow your curiosity.</h2>
                 <p>
                   Research a topic, read the evidence, and shape an editable
@@ -4116,22 +4313,43 @@ function Workspace() {
                         reportId={report.research_id}
                         onImage={setImageView}
                       />
-                      {report.next_cursor != null && (
-                        <button onClick={() => void more().catch(() => {})}>
-                          Show more
-                        </button>
-                      )}
                     </>
                   )}
-                  {report.next_cursor == null &&
-                    report.completeness !== "pending" && (
-                      <button
-                        className="research-inline-action"
-                        onClick={() => void expand()}
-                      >
-                        Expand this report
-                      </button>
-                    )}
+                  <ContinuationStatus
+                    activity={report.extension_activity}
+                    view="reader"
+                  />
+                  {!!report.extensions?.report && (
+                    <section
+                      className="research-extension"
+                      aria-label="Additional research"
+                    >
+                      {readerExtensionBlocks.map((block, blockIndex) => (
+                        <div
+                          className="research-extension-block"
+                          key={block.id}
+                        >
+                          <ReportContent
+                            text={block.text}
+                            precedingLinks={[...readerBaseKeys, ...citedSourceKeys(readerExtensionBlocks.slice(0, blockIndex).map(previous => previous.text).join("\n"), readerSources)]}
+                            sources={[
+                              ...report.sources,
+                              ...(report.linked_sources || []),
+                            ]}
+                            onOpen={openSource}
+                            onUnknown={openUnknown}
+                            reportId={report.research_id}
+                          />
+                        </div>
+                      ))}
+                    </section>
+                  )}
+                  {(report.next_cursor != null || report.extensions?.next_cursor != null) && report.completeness !== "pending" && (
+                    <button className="research-inline-action" disabled={revealingSaved} onClick={() => void expand()}>
+                      {revealingSaved ? "Revealing saved findings…" : "Expand this report"}
+                    </button>
+                  )}
+                  {revealingSaved && <div className="research-saved-reveal" role="status" aria-label="Revealing saved findings"><span /><span /><span /></div>}
                   {!!readerVideos.length && (
                     <section
                       className="research-related-media"
@@ -4153,43 +4371,6 @@ function Workspace() {
                           <Icon name="play" />
                         </button>
                       ))}
-                    </section>
-                  )}
-                  <ContinuationStatus
-                    activity={report.extension_activity}
-                    view="reader"
-                  />
-                  {!!report.extensions?.report && (
-                    <section
-                      className="research-extension"
-                      aria-label="Additional research"
-                    >
-                      {readerExtensionBlocks.map((block, blockIndex) => (
-                        <div
-                          className="research-extension-block"
-                          key={block.id}
-                        >
-                          <ReportContent
-                            text={block.text}
-                            precedingLinks={[...readerBaseKeys, ...readerVideoKeys, ...citedSourceKeys(readerExtensionBlocks.slice(0, blockIndex).map(previous => previous.text).join("\n"), readerSources)]}
-                            sources={[
-                              ...report.sources,
-                              ...(report.linked_sources || []),
-                            ]}
-                            onOpen={openSource}
-                            onUnknown={openUnknown}
-                            reportId={report.research_id}
-                          />
-                        </div>
-                      ))}
-                      {report.extensions.next_cursor != null && (
-                        <button
-                          className="research-inline-action"
-                          onClick={() => void moreExtensions()}
-                        >
-                          Show more findings
-                        </button>
-                      )}
                     </section>
                   )}
                   <h2 className="research-sources-heading">Sources</h2>
@@ -4291,11 +4472,11 @@ function Workspace() {
                           >
                             {expandedVideo === source.id
                               ? "Close video ↑"
-                              : "Watch video ↓"}
+                              : <><Icon name="play" /> Watch video</>}
                           </button>
                         ) : (
-                          <button onClick={() => openSource(source)}>
-                            Read source →
+                          <button className="research-inline-action" onClick={() => openSource(source)}>
+                            <Icon name="citation" /> Read source
                           </button>
                         )}
                       </footer>
@@ -4310,7 +4491,7 @@ function Workspace() {
                   ))}
                   <button
                     className="research-inline-action"
-                    onClick={() => void requestMore("sources")}
+                    onClick={() => sourceLimit < report.sources.length ? setSourceLimit(v => v + 10) : void requestMore("sources")}
                   >
                     {sourceLimit < report.sources.length
                       ? "Show more sources"
@@ -4378,7 +4559,7 @@ function Workspace() {
                   )}
                   <button
                     className="research-inline-action"
-                    onClick={() => void requestMore("media")}
+                    onClick={() => mediaLimit < media.length ? setMediaLimit(v => v + 3) : void requestMore("media")}
                   >
                     {mediaLimit < media.length
                       ? "Show more videos"
@@ -4433,7 +4614,7 @@ function Workspace() {
                   <button onClick={() => void applyDocumentEdit()}>
                     Apply to draft
                   </button>
-                  <button aria-label="Close preview" onClick={closePreview}>
+                  <button aria-label="Close preview" onClick={() => closePreview()}>
                     <Icon name="close" />
                   </button>
                 </header>

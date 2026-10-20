@@ -448,8 +448,39 @@ def test_image_placement_limits_groups_and_keeps_product_identity_in_its_passage
     images += [{'id':'wrong','source_id':'S1','caption':'Honor Magic V5 product image'}]
     report='# Phones\n\nApple iPhone 17 Pro offers the first comparison [S1].\n\nSamsung Galaxy S26 Ultra has supported display findings [S1].\n\nSamsung Galaxy S26 Ultra has supported camera findings [S1].'
     placed=place_images(images,report)
-    assert len(placed)==7 and all('Samsung' in image['placement_text'] for image in placed)
-    assert max(sum(other['placement_text']==image['placement_text'] for other in placed) for image in placed)<=5
+    assert len(placed)==4 and all('Samsung' in image['placement_text'] for image in placed)
+    assert max(sum(other['placement_text']==image['placement_text'] for other in placed) for image in placed)<=3
+
+
+def test_illustration_budget_is_four_normally_and_never_exceeds_six():
+    images=[{'id':'I'+str(n),'source_id':'S1','caption':'NVIDIA workstation architecture'} for n in range(30)]
+    short='# NVIDIA Workstations\n\n'+''.join(f'NVIDIA workstation architecture comparison {i} [S1].\n\n' for i in range(12))
+    assert len(place_images(images,short))==4
+    long=short+'\n\n'+('Supported NVIDIA workstation architecture findings. '*400)
+    assert len(place_images(images,long))==6
+
+
+def test_saved_report_presentation_caps_legacy_images_without_fetch_or_draft_changes(tmp_path,monkeypatch):
+    store,identifier=entry(tmp_path)
+    report='# NVIDIA Workstations\n\n'+''.join(f'NVIDIA workstation architecture finding {i} [S1].\n\n' for i in range(10))
+    item=store.save('NVIDIA workstation comparison','detailed',report,[],[],CTX,'sample')
+    rows=[{'id':'I'+str(n),'url':f'https://example.com/{n}.png','source_id':'S1','caption':'NVIDIA workstation architecture'} for n in range(20)]
+    store.request_state(identifier,CTX,selected_images=rows,validated_images=rows,images_prepared=True,image_enrichment_version=5)
+    draft=store.save_draft(identifier,CTX,item['revision'],'','<p>Preserve my draft.</p>')['draft']
+    monkeypatch.setattr(store,'_fetch_public_source',lambda *a:pytest.fail('Saved presentation must not fetch'))
+    doc=store.document(identifier,CTX,bounded=True)
+    assert len(doc['image_items'])==4 and doc['draft']==draft
+    assert len(store.images(identifier,CTX))==20
+    assert store.get(identifier,CTX)['artifact']['report']==report
+
+
+def test_illustrated_draft_groups_survive_sanitization_and_revision_history(tmp_path):
+    store,identifier=entry(tmp_path);revision=store.get(identifier,CTX)['artifact']['revision']
+    html='<div data-illustrated="" data-composition="pair"><div data-image-group="pair"><img src="https://example.com/a.png" alt="A"><img src="https://example.com/b.png" alt="B"></div><div data-illustrated-copy=""><p>Connected prose.</p></div></div>'
+    result=store.save_draft(identifier,CTX,revision,'',html)
+    assert result['status']=='completed'
+    assert 'data-image-group="pair"' in result['draft']['html']
+    assert 'data-illustrated-copy' in result['draft']['html']
 
 
 def test_image_upgrade_keeps_old_duplicate_ids_available_to_existing_drafts(tmp_path,monkeypatch):

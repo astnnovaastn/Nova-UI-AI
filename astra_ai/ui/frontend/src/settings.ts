@@ -27,6 +27,8 @@ interface StatusResponse {
     groq: boolean;
     elevenlabs: boolean;
     elevenlabs_voice_id: boolean;
+    quick_search?: boolean;
+    deep_research?: boolean;
   };
   timestamp: string;
 }
@@ -127,6 +129,16 @@ function buildPanelHTML(): string {
             </div>
           </div>
 
+          <div class="settings-field">
+            <label for="input-quick-search-key">Quick Search · SerpAPI</label>
+            <div class="settings-input-row"><input type="password" id="input-quick-search-key" autocomplete="off" placeholder="Conversation search key" /><span class="status-dot" id="status-quick-search"></span></div>
+            <p>Fills missing or current information in conversations.</p>
+          </div>
+          <div class="settings-field">
+            <label for="input-deep-research-key">Deep Research · Tavily</label>
+            <div class="settings-input-row"><input type="password" id="input-deep-research-key" autocomplete="off" placeholder="Detailed research key" /><span class="status-dot" id="status-deep-research"></span></div>
+            <p>Used for extensive investigations. Conversation searches never use this key.</p>
+          </div>
           <div class="settings-actions">
             <button class="settings-btn primary" id="btn-save-keys">Save Keys</button>
           </div>
@@ -299,6 +311,8 @@ async function loadStatus() {
     const geminiStatus = document.getElementById("gemini-key-status");
     if (geminiStatus) geminiStatus.textContent = geminiConfigured ? "Gemini key configured. Start a conversation to check access." : "Save your key to enable Gemini conversations.";
     const groqConnected = status.env_keys_set?.groq === true;
+    setDotStatus("status-quick-search", status.env_keys_set?.quick_search ? "green" : "red");
+    setDotStatus("status-deep-research", status.env_keys_set?.deep_research ? "green" : "red");
     setDotStatus("status-groq", groqConnected ? "green" : "red");
     const elevenlabsConnected = status.env_keys_set?.elevenlabs === true;
     setDotStatus("status-fish", elevenlabsConnected ? "green" : "red");
@@ -352,6 +366,10 @@ function wireEvents() {
 
   // Save keys
   document.getElementById("btn-save-keys")?.addEventListener("click", async () => {
+    for (const [id, key] of [["input-quick-search-key", "QUICK_SEARCH_API_KEY"], ["input-deep-research-key", "DEEP_RESEARCH_API_KEY"]]) {
+      const input = document.getElementById(id) as HTMLInputElement;
+      if (input.value.trim()) { await apiPost("/api/settings/keys", {key_name: key, key_value: input.value.trim()}); input.value = ""; }
+    }
     const geminiInput = document.getElementById("input-gemini-key") as HTMLInputElement;
     const geminiKey = geminiInput.value.trim();
     if (geminiKey) {

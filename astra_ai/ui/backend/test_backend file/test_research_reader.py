@@ -70,6 +70,30 @@ def test_extension_is_deduplicated_and_preserves_archive_and_draft(tmp_path):
     assert store.document(item['id'],CTX)['draft']==draft
     assert store.reader(item['id'],{**CTX,'profile_id':'other'})['status']=='not_found'
 
+
+def test_initial_detailed_page_reserves_saved_findings_without_provider_requests(tmp_path,monkeypatch):
+    store=ResearchArtifacts(tmp_path/'reports.json')
+    text='# Topic\n\n'+''.join('## Finding '+str(i)+'\n\n'+('Supported facts [S1]. '*90)+'\n\n' for i in range(9))
+    item=store.save('Topic','detailed',text,[source()],[],CTX,'saved-only')
+    draft=store.save_draft(item['id'],CTX,item['revision'],'','<p>My changes</p>')['draft']
+    monkeypatch.setattr(ResearchSearch,'_request',lambda *a:pytest.fail('Expansion must not search'))
+    first=store.document(item['id'],CTX,bounded=True)
+    assert len(first['report'])<=12000 and first['next_cursor'] is not None
+    next_page=store.reader(item['id'],CTX,item['revision'],first['next_cursor'],stream='base')
+    assert next_page['blocks']==store.reader(item['id'],CTX,item['revision'],first['next_cursor'],stream='base')['blocks']
+    assert 'Finding 8' in next_page['report']
+    assert store.document(item['id'],CTX)['draft']==draft
+    assert store.get(item['id'],CTX)['artifact']['report']==text
+
+
+def test_article_extraction_strips_notifications_and_preserves_prose_and_bibliography():
+    from bs4 import BeautifulSoup
+    from astra_ai.core.research_learning import article_root
+    html='<main><div class="notificationBar">Enable notifications</div><div id="oneTrust">Cookies</div><nav>Home</nav><article><h1>Actual article</h1><p>Substantive article facts and explanation.</p><div class="tableOfContents"><a href="#one">One</a></div><h2>References</h2><ul><li><a href="/a">A</a></li><li><a href="/b">B</a></li><li><a href="/c">C</a></li></ul></article></main>'
+    text=article_root(BeautifulSoup(html,'html.parser')).get_text(' ',strip=True)
+    assert 'Substantive article facts' in text and 'References A B C' in text
+    assert all(word not in text for word in ('Cookies','Enable notifications','Home','One'))
+
 def test_legacy_reader_does_not_dump_request_or_entire_source(tmp_path):
     store=ResearchArtifacts(tmp_path/'reports.json');brief='Create a report titled "Clean Topic"\nREQUIREMENTS: '+('long instruction '*500)
     raw='# '+brief+'\n\nSourced research excerpts.\n'+('full webpage '*5000)

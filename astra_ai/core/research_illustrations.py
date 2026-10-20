@@ -7,8 +7,12 @@ from urllib3.exceptions import HTTPError
 from astra_ai.memory.shared_memory import stable, safe
 
 IMAGE_VERSION=5
-MAX_IMAGES=24
-TARGET_IMAGES=5
+MAX_IMAGES=6
+TARGET_IMAGES=4
+
+def report_image_limit(report):
+    """A few illustrations, with a small allowance for substantial long reports."""
+    return 6 if len(report)>18000 else 4
 
 def image_fingerprint(body):
     with Image.open(io.BytesIO(body)) as original:
@@ -153,7 +157,8 @@ async def prepare_images(search, identifier, context, sources, query):
         await asyncio.to_thread(artifacts.request_state,identifier,context,image_candidates=candidates,image_pages_checked=True,image_pages_version=IMAGE_VERSION)
         selected=await validate(candidates)
     if len(selected)<3 and not metadata.get('image_search_attempted'):
-        key=search.key_provider('SERPAPI_KEY')
+        from .research_topics import search_key
+        key=search_key(search.key_provider,'quick')
         if key:
             await asyncio.to_thread(artifacts.request_state,identifier,context,image_search_attempted=True)
             def discover():
@@ -201,13 +206,14 @@ def place_images(images, report):
     headline=document.find('h1')
     subjects=products(headline.get_text(' ',strip=True)) if headline else set()
     for image in images:
+        if len(result)>=report_image_limit(report):break
         if not useful_image(image):continue
         if re.search(r'\b(?:book cover|inside preview)\b',image['caption'],re.I) and not re.search(r'\b(?:books?|publishing)\b',report,re.I):continue
         if any(same_picture(image,old) or image['id']==old['id'] for old in result):continue
         identities=products(image['caption'])
         if subjects and identities and not identities<=subjects:continue
         if not identities and re.search(r'\b(?:iphone|galaxy|pixel)\b',report,re.I) and re.search(r'\bphone\b',image['caption'],re.I):continue
-        eligible=[b for b in blocks if counts.get(b,0)<5 and (not identities or identities<=products(contexts[b]))]
+        eligible=[b for b in blocks if counts.get(b,0)<3 and (not identities or identities<=products(contexts[b]))]
         def associated(block):return bool(re.search(r'\[(?:S\d+\s*[,;]\s*)*'+re.escape(image['source_id'])+r'(?:\s*[,;]\s*S\d+)*\]',block))
         candidates=[b for b in eligible if associated(b) or len(terms(image['caption']) & terms(contexts[b]))>=2]
         if not candidates:continue

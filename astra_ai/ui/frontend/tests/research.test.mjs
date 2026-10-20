@@ -30,6 +30,7 @@ const names = [
   "sourceLinkKey",
   "freshSourceLinks",
   "citedSourceKeys",
+  "companionParagraphs",
 ];
 const selected = tree.statements
   .filter((n) => ts.isFunctionDeclaration(n) && names.includes(n.name?.text))
@@ -75,6 +76,46 @@ test("reader composition adapts to image proportions, paragraph length and colle
   assert.equal(context.imageComposition(pair,long), "pair");
   assert.equal(context.imageComposition(pair,"A short comparison."), "gallery");
   assert.equal(context.imageComposition([...pair,pair[0]],long), "gallery");
+});
+
+test("illustrations absorb adjacent prose without crossing headings or another picture", () => {
+  const last={tagName:"H2",textContent:"Next topic",nextElementSibling:null};
+  const second={tagName:"P",textContent:"A substantial connected explanation. ".repeat(25),nextElementSibling:last};
+  const first={tagName:"P",textContent:"A short introduction.",nextElementSibling:second};
+  assert.equal(context.companionParagraphs(first,[])[0],second);
+  assert.equal(context.companionParagraphs(second,[]).length,0);
+  assert.equal(context.companionParagraphs(first,[{placement_text:second.textContent.slice(0,90)}]).length,0);
+});
+
+test("Expand only reads saved pages, ignores repeat clicks and preserves a switched report", async () => {
+  const declarations=[];
+  function visit(node) { if(ts.isFunctionDeclaration(node) && ["expand","more","moreExtensions"].includes(node.name?.text)) declarations.push(node.getText(tree)); ts.forEachChild(node,visit); }
+  visit(tree);
+  const calls=[];
+  const saved={research_id:"a",research_revision:"revision",report:"First\n\n",next_cursor:4};
+  const run={report:saved,revealPending:{current:false},setRevealingSaved:()=>{},setReaderChars:()=>{},setError:message=>{throw Error(message);},setReport:update=>{run.report=update(run.report);},api:async(path,options)=>{calls.push({path,options});return {research_revision:"revision",report:"Saved continuation",next_cursor:null,reader_end:8};}};
+  vm.createContext(run);vm.runInContext(ts.transpileModule(declarations.join("\n"),{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText,run);
+  await Promise.all([run.expand(),run.expand()]);
+  assert.equal(calls.length,1);assert.equal(calls[0].options,undefined);
+  assert.match(calls[0].path,/reader\?revision=revision&cursor=4&stream=base/);
+  assert.equal(run.report.report,"First\n\nSaved continuation");
+  await run.expand();assert.equal(calls.length,1);
+  run.report={...saved};
+  run.api=async()=>{run.report={research_id:"b",research_revision:"other",report:"Other report"};return {research_revision:"revision",report:"Late answer",next_cursor:null};};
+  await run.expand();assert.equal(run.report.report,"Other report");
+});
+
+test("a removed saved selection clears cleanly while an unknown entry remains retryable", async () => {
+  let declaration;
+  function visit(node) { if(ts.isFunctionDeclaration(node) && node.name?.text==="select") declaration=node.getText(tree); ts.forEachChild(node,visit); }
+  visit(tree);
+  const noop=()=>{};
+  const run={setEditorGeneration:noop,setMessage:noop,reportCache:{current:new Map()},report:null,loadEpoch:{current:0},lastSelection:{current:"removed"},reader:{current:null},location:{hash:""},researchDestination:()=>null,conversationSnapshot:()=>({clientId:"owner",guest:false}),setTab:noop,setError:message=>{run.error=message;},setSelectionLoading:noop,setFailedSelection:value=>{run.failed=value;},setPreview:noop,setImageView:noop,setAttachment:noop,setDocumentEdit:noop,setReport:value=>{run.report=value;},updateUiContext:noop,api:async()=>null,loadReport:async()=>{throw {status:410,message:"Removed"};},sessionStorage:{removeItem:()=>{run.cleared=true;}},refresh:async()=>{}};
+  vm.createContext(run);vm.runInContext(ts.transpileModule(declaration,{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText,run);
+  await run.select("removed");
+  assert.equal(run.error,"");assert.equal(run.failed,"");assert.equal(run.lastSelection.current,"");assert.equal(run.cleared,true);
+  run.loadReport=async()=>{throw {status:404,message:"Unavailable"};};
+  await run.select("unknown");assert.equal(run.failed,"unknown");assert.equal(run.error,"Unavailable");
 });
 
 test("Gemini grouped citations become pills while literal source-like text stays intact", () => {
@@ -231,7 +272,7 @@ test("working timer and skeleton reflect real processing, never a quota pause", 
   );
   assert.equal(
     context.researchProgress("preparing_report", 2, 100, 105000, 8).skeleton,
-    false,
+    true,
   );
   const waiting = context.researchProgress(
     "waiting_for_quota",

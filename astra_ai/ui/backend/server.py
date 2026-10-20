@@ -5265,11 +5265,12 @@ async def lifespan(app: FastAPI):
     learned_root=Path(__file__).resolve().parents[2]/'core'/'learned'
     background_budget=BackgroundBudget(state.live_memory.memory_path.parent/'background_budget.json')
     background_model=BackgroundModel(_get_groq_api_key,background_budget)
-    from astra_ai.core.research_model import GeminiResearchModel,resume_legacy_research_waits,requested_research_budget,resume_research_budget_waits
+    from astra_ai.core.research_model import GeminiResearchModel,resume_legacy_research_waits,requested_research_budget,resume_research_budget_waits,resume_published_research
     research_budget=requested_research_budget(state.live_memory.memory_path.parent/'research_gemini_budget.json',background_budget.slot,_get_env_value)
     research_model=GeminiResearchModel(lambda:state.gemini_api_key,research_budget,lambda:_get_env_value('GEMINI_TEXT_MODEL') or MODEL_STATUS['text'].get('effective') or TEXT_FALLBACK)
     await asyncio.to_thread(resume_legacy_research_waits,action_jobs)
     research_artifacts,_=get_research_services()
+    await asyncio.to_thread(resume_published_research,action_jobs,research_artifacts)
     await asyncio.to_thread(resume_research_budget_waits,action_jobs,research_artifacts,research_budget)
     state.memory_organizer.background_budget=background_budget
     from astra_ai.memory.organizer_runtime import OrganizationReview, GeminiMergeReviewer
@@ -5627,7 +5628,7 @@ def _destructive_revision(name,arguments,context):
     from astra_ai.memory.shared_memory import stable,canonical
     target=str(arguments.get('note_id') or arguments.get('record_id') or arguments.get('event_id') or arguments.get('id') or arguments.get('path') or '')
     if name=='research_artifact_action':
-        artifacts,_=get_research_services();snapshot=artifacts.deletion_preview(str(arguments.get('research_id','')),context)
+        artifacts,_=get_research_services();snapshot=artifacts.deletion_preview_many(arguments['research_ids'],context) if arguments.get('research_ids') else artifacts.deletion_preview(str(arguments.get('research_id','')),context)
     elif name=='notes_action':snapshot=state.get_note_by_id(target) if target else state.get_notes_state()
     elif name in {'memory_action','transcript_action','delete_memory','delete_search_memory'}:snapshot=state.live_memory.load().get('_meta',{})
     else:snapshot={'ui':state.widget_connections.context_payload_for(context.get('client_id','')).get('connected_widgets',{}),'target':target}
@@ -5665,6 +5666,9 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
     client_id=context.get("client_id","");sid=context.get("session_id","")
     names={d["name"] for d in ALL_AEGIS_TOOLS}
     if name not in names:return {"status":"rejected","reason":"unregistered_tool"}
+    if name=='search_web' and not arguments.get('action') or name=='search_widget_action' and arguments.get('action')=='run':
+        from astra_ai.core.research_topics import conversational_mode
+        arguments={**arguments,'mode':conversational_mode(arguments,context)}
     if context.get("guest") and name not in {d["name"] for d in MEMORY_TOOL_DECLARATIONS+MEMORY_EVENT_TOOL_DECLARATIONS} | {"search_web","get_system_status"}:
         return {"status":"rejected","reason":"Guest context cannot access owner widgets or private UI."}
     selected_document=False
@@ -5675,18 +5679,25 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
         return await continue_research(context['research_id'],context,operation_id,detail=context.get('user_text',''))
     if (name in {'search_web','notes_action'} or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and action_jobs.task:
         actions=[{'name':name,'arguments':{k:v for k,v in arguments.items() if k!='save_to_notes'}}]
-        reserved=None
+        reserved=None;queue_operation_id=operation_id
         if name=='search_web' and not arguments.get('action') and not arguments.get('research_id'):
             artifacts,_=get_research_services()
-            reserved=await asyncio.to_thread(artifacts.reserve,str(arguments.get('query','')),arguments.get('mode','quick'),context,operation_id)
+            conversational=arguments.get('mode','quick')=='quick' and not context.get('requested_research') and not selected_document
+            reserved=await asyncio.to_thread(artifacts.conversation_search,str(arguments.get('query','')),context,str(arguments.get('topic',''))) if conversational else await asyncio.to_thread(artifacts.reserve,str(arguments.get('query','')),arguments.get('mode','quick'),context,operation_id)
             if reserved.get('status')!='ok':return reserved
-            actions[0]['arguments']={k:v for k,v in actions[0]['arguments'].items() if k!='query'}|{'research_id':reserved['id']}
+            await asyncio.to_thread(artifacts.link_turn,reserved['id'],{**context,'referenced_research_id':reserved['id']})
+            if conversational:
+                from astra_ai.memory.shared_memory import stable,normal
+                queue_operation_id=stable('quick-turn',reserved['id'],normal(arguments.get('query','')),int(time.time()//300))
+            if reserved.get('followup'):
+                actions[0]['arguments']={'action':'topic_followup','research_id':reserved['id'],'query':arguments['query'],'mode':'quick'}
+            else:actions[0]['arguments']={k:v for k,v in actions[0]['arguments'].items() if k!='query'}|{'research_id':reserved['id']}
             if selected_document:await asyncio.to_thread(artifacts.request_state,reserved['id'],context,document_parent_id=context['research_id'])
             context={**context,'requested_research':True}
         if name=='search_web' and arguments.get('save_to_notes') is True:
             actions.append({'name':'notes_action','arguments':{'action':'import_research'},'depends_on':[0],
                             'result_refs':{'research_id':{'action_index':0,'result_path':'/research_id'},'research_revision':{'action_index':0,'result_path':'/research_revision'}}})
-        submitted=await asyncio.to_thread(action_jobs.submit,actions,context,operation_id,str(arguments.get('query') or arguments.get('action') or name)[:180])
+        submitted=await asyncio.to_thread(action_jobs.submit,actions,context,queue_operation_id,str(arguments.get('query') or arguments.get('action') or name)[:180])
         if submitted.get('status') not in {'queued','duplicate'}:return submitted
         jid=submitted['job_id']
         if reserved:await asyncio.to_thread(artifacts.request_state,reserved['id'],context,job_id=jid)
@@ -5701,6 +5712,13 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
             if job.get('paused') or job.get('state') in {'waiting_for_retry','waiting_for_ui'}:return {'status':job.get('state'),'job_id':jid,**({'research_id':reserved['id'],'thread_id':reserved['thread_id']} if reserved else {}),'reason':'Work continues in the durable task queue.'}
             await asyncio.sleep(.1)
         return {'status':'running','job_id':jid,**({'research_id':reserved['id'],'thread_id':reserved['thread_id']} if reserved else {}),'reason':'Inspect the existing task; do not submit it again.'}
+    if name=='research_artifact_action' and arguments.get('action')=='delete':
+        artifacts,_=get_research_services()
+        ids=arguments.get('research_ids') or ([arguments['research_id']] if arguments.get('research_id') else [])
+        preview=await asyncio.to_thread(artifacts.deletion_preview_many,ids,context)
+        if preview['status']!='ok':return preview
+        if arguments.get('revision') and arguments['revision']!=preview['revision']:return {'status':'conflict','reason':'research_changed_review_removal'}
+        arguments={**arguments,'research_ids':ids,'revision':preview['revision'],'target_title':preview['title']}
     confirmation=await _confirm_destructive(name,arguments,{**context,'operation_id':operation_id})
     if confirmation:return confirmation
     if name=="run_action_batch":return await asyncio.to_thread(action_jobs.submit,arguments.get("actions"),context,operation_id,arguments.get("goal", ""))
@@ -5717,6 +5735,11 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
         return await get_library_service().decision('memory:'+str(arguments.get('approval_id','')),{'decision':'approved' if arguments.get('approved') is True or arguments.get('action')=='approve' else 'rejected','version':arguments.get('version'),'confirmation_quote':arguments.get('confirmation_quote')},context,voice=True)
     if name=='research_artifact_action':
         artifacts,service=get_research_services()
+        if arguments.get('action')=='find_history':return await asyncio.to_thread(artifacts.find_history,str(arguments.get('query','')),context)
+        if arguments.get('action')=='delete':
+            result=await asyncio.to_thread(artifacts.remove_many,arguments['research_ids'],context,arguments['revision'],operation_id)
+            if result.get('status')=='completed':await ws_manager.send_to_client_id(client_id,{'type':'research_refresh','removed_research_ids':arguments['research_ids']})
+            return result
         identifier=str(arguments.get('research_id') or context.get('research_id',''))
         await asyncio.to_thread(artifacts.link_turn,identifier,{**context,'referenced_research_id':identifier})
         action=arguments.get('action')
@@ -7645,6 +7668,8 @@ async def get_settings_status():
         
         # Check which API keys are configured in environment
         env_keys_set = {
+            "quick_search": bool(_get_env_value("QUICK_SEARCH_API_KEY") or _get_env_value("SERPAPI_KEY")),
+            "deep_research": bool(_get_env_value("DEEP_RESEARCH_API_KEY") or _get_env_value("TAVILY_API_KEY")),
             "gemini": bool(state.gemini_api_key),
             "groq": bool(os.getenv("GROQ_API_KEY")),
             "elevenlabs": bool(os.getenv("ELEVENLABS_API_KEY") or os.getenv("elevenlabs_api_key")),
@@ -8454,6 +8479,25 @@ async def research_request(request:Request):
     else:await asyncio.to_thread(artifacts.request_state,reserved['id'],context,job_id=result.get('job_id',''))
     return {**result,'research_id':reserved['id'],'thread_id':reserved['thread_id']}
 
+@app.post('/api/research/history/delete-preview')
+async def research_delete_many_preview(request:Request):
+    context=_learning_context(request);body=await request.json();artifacts,_=get_research_services()
+    return await asyncio.to_thread(artifacts.deletion_preview_many,body.get('research_ids'),context)
+
+@app.post('/api/research/history/delete')
+async def research_delete_many(request:Request):
+    context=_learning_context(request);body=await request.json();artifacts,_=get_research_services()
+    preview=await asyncio.to_thread(artifacts.deletion_preview_many,body.get('research_ids'),context)
+    if preview['status']!='ok':return preview
+    if body.get('revision')!=preview['revision']:return JSONResponse({'status':'conflict','reason':'research_changed_review_removal'},status_code=409)
+    operation_id=str(body.get('operation_id') or uuid.uuid4().hex)
+    args={'action':'delete','research_ids':body['research_ids'],'revision':preview['revision'],'target_title':preview['title']}
+    confirmation=await _confirm_destructive('research_artifact_action',args,{**context,'operation_id':operation_id})
+    if confirmation:return confirmation
+    result=await asyncio.to_thread(artifacts.remove_many,body['research_ids'],context,preview['revision'],operation_id)
+    if result.get('status')=='completed':await ws_manager.send_to_client_id(context.get('client_id',''),{'type':'research_refresh','removed_research_ids':body['research_ids']})
+    return result
+
 @app.post('/api/research/{identifier}/delete')
 async def research_delete(identifier:str,request:Request):
     context=_learning_context(request);body=await request.json();artifacts,_=get_research_services()
@@ -8584,7 +8628,9 @@ async def research_document(identifier:str,request:Request,revision:str=''):
         job=action_jobs.list(metadata['job_id'],context).get('job',{})
         if job.get('state') in {'failed','canceled','cancelled'}:await asyncio.to_thread(artifacts.request_state,identifier,context,phase='failed',waiting_reason='research_'+job['state'])
     result=await asyncio.to_thread(artifacts.document,identifier,context,revision,True)
-    if result['status']=='not_found':raise HTTPException(404,'Research unavailable')
+    if result['status']=='not_found':
+        if metadata.get('status')=='ok' and identifier in artifacts.snapshot().get('removed',{}):raise HTTPException(410,'Research removed from history')
+        raise HTTPException(404,'Research unavailable')
     return result
 
 @app.put('/api/research/{identifier}/draft')

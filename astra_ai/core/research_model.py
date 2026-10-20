@@ -129,6 +129,30 @@ class GeminiResearchModel(BackgroundModel):
                     except Exception:pass
 
 
+def resume_published_research(jobs,artifacts):
+    """Finish cached job bookkeeping after a crash without another provider request."""
+    import shutil
+    changed=0
+    with jobs.lock:
+        data=jobs.load()
+        for job in data.get('jobs',{}).values():
+            if job.get('state')!='waiting_for_retry':continue
+            context=job.get('context',{})
+            artifacts.reconcile_publication(context)
+            for action in job.get('actions',[]):
+                arguments=action.get('arguments',{});identifier=arguments.get('research_id')
+                if action.get('name')!='search_web' or arguments.get('action') or not identifier or action.get('state')!='waiting_for_retry':continue
+                found=artifacts.get(identifier,context);item=found.get('artifact',{})
+                if found.get('status')!='ok' or item.get('completeness')!='complete' or not item.get('report','').strip():continue
+                if any(marker in item['report'] for marker in ('Sourced research excerpts.','not a completed synthesis.')):continue
+                action.update(state='queued',next_attempt=0);job['state']='queued';changed+=1
+        if changed:
+            backup=jobs.path.with_suffix('.before-publication-recovery.bak')
+            if jobs.path.exists() and not backup.exists():shutil.copy2(jobs.path,backup)
+            jobs.write(data)
+    return changed
+
+
 def resume_research_budget_waits(jobs,artifacts,budget):
     """Release checkpointed local-budget waits when the corrected research policy permits it."""
     import time
