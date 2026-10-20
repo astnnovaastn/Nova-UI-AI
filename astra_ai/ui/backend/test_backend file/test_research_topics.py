@@ -344,7 +344,10 @@ def test_chat_continuation_waits_for_collected_evidence_without_reexecuting_sear
     exec(compile(ast.Module(body=[handler],type_ignores=[]),str(path),'exec'),env)
     result=asyncio.run(env[handler.name]({'status':'queued','research_id':'tesla','job_id':'roadster'},CTX))
     assert len(calls)==2 and result['research_id']=='tesla' and result['results']==evidence
-    assert result['status']=='waiting_for_retry' and 'report' not in result
+    assert result['status']=='completed' and result['operation']=='collect_followup_evidence' and 'report' not in result
+    assert result['publication_pending'] and result['report_status']=='waiting_for_retry'
+    cached=asyncio.run(env[handler.name]({'status':'queued','research_id':'tesla','job_id':'roadster','results':evidence},CTX))
+    assert cached['status']=='completed' and cached['publication_pending'] and len(calls)==2
 
 
 def test_legacy_preallocated_child_recovers_query_without_restarting_collection(tmp_path):

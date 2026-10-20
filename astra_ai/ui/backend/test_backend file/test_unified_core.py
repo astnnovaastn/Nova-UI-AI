@@ -84,14 +84,15 @@ def test_notice_review_cannot_interrupt_preparing_a_typed_research_turn(tmp_path
 
 def test_research_evidence_prompts_current_answer_without_interrupting_a_new_question(tmp_path):
     async def scenario():
-        async def operation(name,args):return {'status':'waiting_for_retry','results':[{'id':'S1','content':'Collected evidence.'}]}
-        session=make_session(tmp_path,[],operation_executor=operation)
+        async def operation(name,args):return {'status':'completed','publication_pending':True,'results':[{'id':'S1','content':'Collected evidence.'}]}
+        events=[];session=make_session(tmp_path,events,operation_executor=operation)
         session._turn_focus={'research_id':'tesla','thread_id':'tesla-thread'}
         session._turn_id='roadster';session._input_parts=['Research Roadster']
         context=session._operation_context()
         call=SimpleNamespace(id='search',name='search_web',args={'query':'Roadster'})
         response=await session._execute_memory_tool(call,context)
         assert response.scheduling=='INTERRUPT'
+        assert [event for event in events if event['type']=='research_status'][-1]['phase']=='waiting'
         session._turn_id='different-question';session._input_parts=['Research charging']
         response=await session._execute_memory_tool(call,context)
         assert response.scheduling=='SILENT'

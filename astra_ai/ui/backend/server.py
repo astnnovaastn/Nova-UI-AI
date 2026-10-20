@@ -5680,7 +5680,7 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
     research_detail=str(context.get('user_text') or context.get('research_user_text') or arguments.get('query') or '').strip()
     if not selected_document and (name=='search_web' and not arguments.get('action') or name=='search_widget_action' and arguments.get('action')=='run' or name=='research_action' and arguments.get('action')=='request') and not context.get('job_id') and context.get('research_id') and research_followup(research_detail):
         receipt=await continue_research(context['research_id'],context,operation_id,detail=research_detail)
-        if receipt.get('job_id') and not receipt.get('results'):
+        if receipt.get('job_id'):
             return await _research_collection_receipt(receipt,context)
         return receipt
     if (name in {'search_web','notes_action'} or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and action_jobs.task:
@@ -5755,7 +5755,7 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
         if arguments.get('action') in {'expand','continue','more_media','more_sources'}:
             action=arguments.get('action');view='media' if action=='more_media' else 'sources' if action=='more_sources' else ''
             receipt=await continue_research(identifier,context,operation_id,view=view,detail=str(arguments.get('detail') or context.get('user_text') or context.get('research_user_text',''))[:2000])
-            return await _research_collection_receipt(receipt,context) if receipt.get('job_id') and not receipt.get('results') else receipt
+            return await _research_collection_receipt(receipt,context) if receipt.get('job_id') else receipt
         if arguments.get('action')=='reader':return await asyncio.to_thread(artifacts.reader,identifier,context,str(arguments.get('research_revision','')),arguments.get('offset',0),arguments.get('limit',12000))
         return await asyncio.to_thread(artifacts.page,identifier,context,str(arguments.get('research_revision','')),arguments.get('offset',0),arguments.get('limit',12000))
     if name=="library_action":
@@ -8430,6 +8430,12 @@ install_library(app,get_library_service,_learning_context)
 async def _research_collection_receipt(receipt,context):
     # Chat tools wait for their durable collection result, rather than return a
     # promise before evidence is ready. The HTTP continuation stays nonblocking.
+    def collected(result):
+        if result.get('results') and result.get('status') in {'queued','waiting_for_retry','waiting_for_quota'}:
+            return {**result,'status':'completed','operation':'collect_followup_evidence','publication_pending':True,'report_status':result['status'],
+                    'summary':'Evidence collection is complete for this question. Answer from these excerpts now, with real citations and limitations. The composed report is still pending; do not claim it has been published and do not repeat this collection.'}
+        return result
+    if receipt.get('results'):return collected(receipt)
     deadline=time.monotonic()+45
     while time.monotonic()<deadline:
         snapshot=await asyncio.to_thread(action_jobs.list,receipt['job_id'],context)
@@ -8438,7 +8444,7 @@ async def _research_collection_receipt(receipt,context):
         outcome=(steps[0].get('result') or {}) if steps else {}
         if outcome:
             allowed=('status','reason','summary','next_attempt','results','collected_sources','evidence_available','research_revision','completeness')
-            return {**receipt,**{key:outcome[key] for key in allowed if key in outcome}}
+            return collected({**receipt,**{key:outcome[key] for key in allowed if key in outcome}})
         if job.get('paused') or job.get('state') in {'failed','canceled','completed'}:return receipt
         await asyncio.sleep(.1)
     return {**receipt,'summary':'The follow-up is saved in this report and source collection is still running. Do not claim an answer has been published.'}

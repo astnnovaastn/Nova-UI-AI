@@ -1281,7 +1281,7 @@ class GeminiLiveSession:
             LOGGER.error("Memory tool failed: %s (%s)",name,type(exc).__name__)
             result = {"status": "error", "reason": type(exc).__name__}
         if memory_tool: await self.send_json(activity(name,arguments,result,**refs))
-        if name=="search_web": await self.send_json({"type":"research_status","phase":"completed" if result.get("status")=="completed" else "waiting" if result.get("status") in {"waiting_for_quota","waiting_for_retry","running","queued"} else "failed","sources":result.get("results",[])})
+        if name=="search_web": await self.send_json({"type":"research_status","phase":"waiting" if result.get('publication_pending') else "completed" if result.get("status")=="completed" else "waiting" if result.get("status") in {"waiting_for_quota","waiting_for_retry","running","queued"} else "failed","sources":result.get("results",[])})
         self.working.result(name,arguments,result,context["turn_id"])
         scheduling='WHEN_IDLE'
         if name in {'search_web','search_widget_action','research_action','research_artifact_action'} and result.get('results'):
