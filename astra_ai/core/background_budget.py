@@ -7,6 +7,15 @@ from astra_ai.memory.shared_memory import read,atomic,StorageLock
 class BudgetPaused(Exception):
     def __init__(self,until,reason):self.until=until;self.reason=reason;super().__init__(reason)
 
+def scoped_requests_remaining(data,scope_id,day):
+    """A trusted, day-bound allowance never grants requests to another report."""
+    allowances=data.get('research_allowances',{})
+    grant=allowances.get(scope_id,{}) if scope_id and isinstance(allowances,dict) else {}
+    if not isinstance(grant,dict) or data.get('day')!=day or grant.get('day')!=day:return 0
+    extra,used=grant.get('extra_requests'),grant.get('used')
+    if type(extra) is not int or type(used) is not int or not 0<=used<=extra<=3:return 0
+    return extra-used
+
 class TokenReservation:
     """Settle one estimate against provider usage; never refund uncertain requests."""
     def __init__(self,budget,day,tokens):self.budget=budget;self.day=day;self.tokens=tokens;self.settled=False
@@ -26,8 +35,13 @@ class BackgroundBudget:
         self.path=Path(path);self.lock=StorageLock(self.path.with_suffix('.lock'));self.slot=threading.Lock();self.daily_requests=daily_requests;self.daily_tokens=daily_tokens;self.min_interval=min_interval
     def snapshot(self):
         with self.lock:return read(self.path,{'day':'','requests':0,'tokens':0,'next_attempt':0})
+    def provider_pause(self,until,reason):
+        with self.lock:
+            data=read(self.path,{})
+            data.update(next_attempt=max(data.get('next_attempt',0),until),pause_reason=reason)
+            atomic(self.path,data)
     @contextlib.contextmanager
-    def lease(self,tokens=4000):
+    def lease(self,tokens=4000,scope_id=''):
         if not self.slot.acquire(False):raise BudgetPaused(time.time()+5,'background_model_busy')
         try:
             with self.lock:
@@ -35,8 +49,10 @@ class BackgroundBudget:
                 if data.get('day')!=day:data={'day':day,'requests':0,'tokens':0,'next_attempt':data.get('next_attempt',0)}
                 current=time.time()
                 if current<data.get('next_attempt',0):raise BudgetPaused(data['next_attempt'],'background_quota_paused')
-                if data.get('requests',0)>=self.daily_requests or data.get('tokens',0)+tokens>self.daily_tokens:
+                needs_extra=data.get('requests',0)>=self.daily_requests
+                if (needs_extra and not scoped_requests_remaining(data,scope_id,day)) or data.get('tokens',0)+tokens>self.daily_tokens:
                     midnight=(int(current)//86400+1)*86400;raise BudgetPaused(midnight,'background_daily_budget')
+                if needs_extra:data['research_allowances'][scope_id]['used']+=1
                 data.update(requests=data.get('requests',0)+1,tokens=data.get('tokens',0)+tokens,next_attempt=current+self.min_interval);atomic(self.path,data)
             yield TokenReservation(self,day,tokens)
         finally:self.slot.release()

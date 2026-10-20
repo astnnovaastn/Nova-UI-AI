@@ -126,6 +126,26 @@ def test_tool_latency_does_not_block_the_next_provider_transcript(tmp_path):
         assert captured[0]['operation_id']=='slow-notes'
     asyncio.run(scenario())
 
+
+def test_late_research_tool_retains_question_without_reusing_general_authorisation(tmp_path):
+    async def scenario():
+        session=make_session(tmp_path,[])
+        session.research_focus={'research_id':'pixel','thread_id':'research-pixel'}
+        await session._pin_research()
+        question='Compare low-light photos and portrait cameras.'
+        session.working.begin(question,'camera-turn');session._input_parts=[question]
+        session._detach_turn()
+        frozen=session._operation_context()
+        assert frozen['user_text']=='' and frozen['research_user_text']==question
+        assert frozen['research_id']=='pixel'
+        session.research_focus={'research_id':'another','thread_id':'research-another'}
+        await session._pin_research()
+        assert session._operation_context()['research_user_text']==''
+        assert frozen['research_user_text']==question and frozen['research_id']=='pixel'
+        session.research_focus={};await session._pin_research()
+        assert session._operation_context()['research_user_text']==''
+    asyncio.run(scenario())
+
 @pytest.mark.parametrize('utterance',[
     'Can you search the web about OpenAI new models and what they can do?',
     'Can you open my notes widget and put in all the search information about OpenAI?',

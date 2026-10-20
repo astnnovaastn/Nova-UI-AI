@@ -29,6 +29,7 @@ import {
   registerMediaControls,
 } from "../../aegisWidgetProtocol";
 import "./ResearchWorkspace.css";
+import {ResearchHistoryItem} from "./ResearchHistoryItem";
 import {
   AttachmentAssets,
   AttachmentReader,
@@ -264,6 +265,7 @@ type Report = {
     view?: string;
     reason?: string;
     job_id?: string;
+    collected_sources?: number;
   };
   next_cursor?: number | null;
   thread_id?: string;
@@ -369,6 +371,9 @@ function Icon({ name }: { name: string }) {
     undo: "M9 4 3 10l6 6M3 10h11a6 6 0 0 1 6 6",
     redo: "m15 4 6 6-6 6m6-6H10a6 6 0 0 0-6 6",
     save: "M4 3h13l4 4v14H3V3Zm3 0v6h10V3M7 21v-8h10v8",
+    check: "M4 12l5 5L20 6",
+    previous: "m14 5-7 7 7 7",
+    next: "m10 5 7 7-7 7",
   };
   return (
     <svg
@@ -2484,6 +2489,10 @@ function ContinuationStatus({
       <p role="status">
         {active
           ? "Adding more " + (view === "reader" ? "details" : view) + "…"
+          : activity.phase === "waiting_for_report"
+            ? activity.collected_sources
+              ? `${activity.collected_sources} follow-up sources collected. Answer generation is waiting for the original report.`
+              : "Follow-up saved. Waiting for the original report."
           : activity.phase === "waiting_for_quota"
             ? "More details are pending. Your current findings remain available."
             : activity.reason === "no_more_videos"
@@ -2718,6 +2727,7 @@ function Workspace() {
   const reportRef = useRef(report);
   reportRef.current = report;
   const [revealingSaved, setRevealingSaved] = useState(false);
+  const [archivedHistory, setArchivedHistory] = useState(false);
   const [selectingHistory, setSelectingHistory] = useState(false);
   const [selectedHistory, setSelectedHistory] = useState<Set<string>>(new Set());
   useEffect(() => {setSelectedHistory(new Set()); setSelectingHistory(false);}, [chat.clientId]);
@@ -3057,6 +3067,7 @@ function Workspace() {
         "collecting_sources",
         "preparing_report",
         "waiting_for_quota",
+        "waiting_for_report",
       ].includes(report.extension_activity?.phase || "")
     )
       return;
@@ -3071,12 +3082,13 @@ function Workspace() {
     const client = conversationSnapshot().clientId;
     if (!client || conversationSnapshot().guest) return;
     try {
-      const d = await api("?offset=" + offset);
+      const d = await api("?offset=" + offset + "&archived=" + archivedHistory);
       if (
         conversationSnapshot().clientId !== client ||
         conversationSnapshot().guest
       )
         return;
+      if(offset && offset>=d.total){setOffset(Math.max(0,Math.floor((d.total-1)/30)*30));return;}
       setItems(d.items);
       setRemoved(d.removed || []);
       setTotal(d.total);
@@ -3224,7 +3236,7 @@ function Workspace() {
         if (id) void select(id);
       }
     }
-  }, [open, offset]);
+  }, [open, offset, archivedHistory]);
   useEffect(() => {
     const show = (e: Event) => {
       setOpen(true);
@@ -3914,73 +3926,29 @@ function Workspace() {
       <div className="research-layout">
         <aside className="research-outline" id="research-history-panel" aria-label="Research history">
           <button className="research-panel-close" aria-label="Close research history" onClick={() => setNarrowPanel("")}><Icon name="close" /></button>
-          <div className="research-history-heading"><h2>Your research</h2><button className="research-history-select" disabled={!!deleting} onClick={() => {setSelectingHistory(!selectingHistory); setSelectedHistory(new Set());}}>{selectingHistory ? "Cancel" : "Select"}</button></div>
-          {selectingHistory && <div className="research-history-selection"><button onClick={() => setSelectedHistory(new Set(items.map(item => item.research_id)))}>Select page</button><button disabled={!selectedHistory.size || !!deleting} onClick={() => void removeSelectedHistory()}><Icon name="trash" /> Remove ({selectedHistory.size})</button></div>}
-          {items.map((item) => (
-            <div className="research-history-item" data-selecting={selectingHistory || undefined} key={item.research_id}>
-              {selectingHistory && <input className="research-history-checkbox" type="checkbox" aria-label={"Select " + (item.display_title || item.query)} checked={selectedHistory.has(item.research_id)} onChange={e => setSelectedHistory(previous => {const next=new Set(previous); if(e.target.checked) next.add(item.research_id); else next.delete(item.research_id); return next;})} />}
-              <button
-                className={
-                  (selectionLoading || report?.research_id) === item.research_id
-                    ? "research-history-row selected"
-                    : "research-history-row"
-                }
-                aria-current={
-                  (selectionLoading || report?.research_id) === item.research_id
-                    ? "true"
-                    : undefined
-                }
-                key={item.research_id}
-                onPointerEnter={() => {
-                  void loadReport(item.research_id).catch(() => {});
-                }}
-                onFocus={() => {
-                  void loadReport(item.research_id).catch(() => {});
-                }}
-                onClick={() => void select(item.research_id)}
-              >
-                <strong>{item.display_title || item.query}</strong>
-                <small>
-                  {new Date(item.retrieved_at).toLocaleDateString()} ·{" "}
-                  {item.phase === "draft"
-                    ? "draft"
-                    : item.kind === "chat"
-                      ? "chat"
-                      : item.kind === "documentary"
-                        ? "documentary · " + item.completeness
-                        : item.completeness}
-                </small>
-              </button>
-              <details className="research-history-menu">
-                <summary
-                  aria-label={
-                    "Options for " + (item.display_title || item.query)
-                  }
-                >
-                  <Icon name="more" />
-                </summary>
-                <button
-                  disabled={!!deleting}
-                  onClick={(e) => {
-                    e.currentTarget.closest("details")?.removeAttribute("open");
-                    void removeReport(item);
-                  }}
-                >
-                  <Icon name="trash" />
-                  Remove research
-                </button>
-              </details>
-            </div>
-          ))}
-          <nav>
-            <button disabled={!offset} onClick={() => setOffset((v) => v - 30)}>
-              Previous
+          <div className="research-history-heading"><h2>Your research</h2><button className="research-history-select" aria-pressed={selectingHistory} disabled={!!deleting} onClick={() => {setSelectingHistory(!selectingHistory); setSelectedHistory(new Set());}}><Icon name={selectingHistory ? "check" : "list"} />{selectingHistory ? "Done" : "Select"}</button></div>
+          {selectingHistory && <div className="research-history-selection" aria-label="History selection controls">
+            <span role="status">{selectedHistory.size} selected</span>
+            <div><button disabled={!!deleting} onClick={() => setSelectedHistory(items.every(item => selectedHistory.has(item.research_id)) ? new Set() : new Set(items.map(item => item.research_id)))}>{items.length && items.every(item => selectedHistory.has(item.research_id)) ? "Clear selection" : "Select page"}</button><button className="research-history-remove" disabled={!selectedHistory.size || !!deleting} onClick={() => void removeSelectedHistory()}><Icon name="trash" />{deleting ? "Removing…" : "Remove"}</button></div>
+          </div>}
+          <button className="rh-archive-view" aria-pressed={archivedHistory} onClick={()=>{setArchivedHistory(!archivedHistory);setOffset(0);setSelectedHistory(new Set());setSelectingHistory(false);}}>{archivedHistory ? "← Back to recent research" : "View archived research"}</button>
+          {!items.length && <p>{archivedHistory ? "No archived research." : "No saved research yet."}</p>}
+          {items.map(item => <ResearchHistoryItem key={item.research_id} item={item} active={(selectionLoading || report?.research_id)===item.research_id} selecting={selectingHistory} checked={selectedHistory.has(item.research_id)} disabled={!!deleting}
+            onPick={()=>void select(item.research_id)} onWarm={()=>void loadReport(item.research_id).catch(()=>{})}
+            onToggle={()=>setSelectedHistory(previous=>{const next=new Set(previous);if(next.has(item.research_id))next.delete(item.research_id);else next.add(item.research_id);return next;})}
+            onUpdate={async(value:any)=>{const result=await api("/"+item.research_id+"/history",{method:"PATCH",body:JSON.stringify(value)});if(result.status!=="completed")throw Error(result.reason||"Could not update research.");await refresh();}}
+            onDelete={()=>void removeReport(item)} />)}
+          <nav className="research-history-pagination" aria-label="Research history pages">
+            <button aria-label="Previous history page" title="Previous page" disabled={!offset} onClick={() => setOffset((v) => v - 30)}>
+              <Icon name="previous" />
             </button>
+            <span>{Math.floor(offset / 30) + 1} / {Math.max(1,Math.ceil(total / 30))}</span>
             <button
               disabled={offset + 30 >= total}
+              aria-label="Next history page" title="Next page"
               onClick={() => setOffset((v) => v + 30)}
             >
-              Next
+              <Icon name="next" />
             </button>
           </nav>
           {!!removed.length && (

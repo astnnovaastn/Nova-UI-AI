@@ -56,6 +56,34 @@ def test_topic_followups_append_once_remap_citations_and_preserve_draft(tmp_path
     assert store.document(item['id'],CTX)['draft']==draft
     assert store.get(item['id'],CTX)['artifact']['report']==item['report']
 
+@pytest.mark.parametrize('mode',['quick','detailed'])
+@pytest.mark.parametrize('action',['','topic_followup'])
+def test_queued_search_keeps_frozen_report_instead_of_allocating_another_topic(tmp_path,mode,action):
+    store=ResearchArtifacts(tmp_path/'r.json')
+    parent=store.save('Pixel versus iPhone',mode,'# Comparison\n\nSupported comparison [S1].',[SOURCE],[],CTX,'parent')
+    context={**CTX,'research_id':parent['id'],'thread_id':'research-'+parent['id'],'job_id':'batch','user_text':'Which of these phones has the better camera?'}
+    calls=[]
+    async def synth(query,sources):return '## Camera comparison\n\nThe camera conclusion follows the saved and retrieved evidence [S2].'
+    service=ResearchSearch(store,lambda _:None,synthesize=synth)
+    service._request=lambda *a:(calls.append(a) or ([{**SOURCE,'url':'https://example.com/cameras'}],None))
+    args={'query':'Pixel versus iPhone camera comparison','mode':'quick','topic':'phone cameras'}
+    if action:args.update(action=action,research_id='mistaken-child')
+    result=asyncio.run(service.search(args,context,'camera-turn'))
+    assert result['status']=='completed' and result['research_id']==parent['id']
+    assert store.listing(CTX)['total']==1 and store.listing(CTX)['items'][0]['followup_count']==1
+    assert calls[0][1]=='quick' and len(store.snapshot()['extensions'][parent['id']])==1
+    assert store.get(parent['id'],CTX)['artifact']['report']==parent['report']
+    assert asyncio.run(service.search(args,context,'camera-turn'))['duplicate']
+    assert len(calls)==1
+
+def test_explicit_new_research_in_selected_context_can_start_a_separate_session(tmp_path):
+    store=ResearchArtifacts(tmp_path/'r.json');parent=store.save('Phones','quick','# Phones',[SOURCE],[],CTX,'parent')
+    async def synth(*a):return '# Architecture\n\nA different researched subject [S1].'
+    service=ResearchSearch(store,lambda _:None,synthesize=synth)
+    service._request=lambda *a:([SOURCE],None)
+    result=asyncio.run(service.search({'query':'Architecture today','mode':'quick'},{**CTX,'research_id':parent['id'],'job_id':'batch','user_text':'Start a new research about architecture'},'new'))
+    assert result['research_id']!=parent['id'] and store.listing(CTX)['total']==2
+
 def test_quick_quota_resume_reuses_checkpoint_without_search(tmp_path):
     store=ResearchArtifacts(tmp_path/'reports.json');row=store.conversation_search('Football scores',CTX,'football')
     item=store.save(row['query'],'quick','# Football\n\nResults [S1].',[SOURCE],[],CTX,row['operation_id'])
@@ -164,3 +192,153 @@ def test_removed_document_route_distinguishes_recoverable_deletion_from_wrong_sc
     assert removed.value.status_code==410
     with pytest.raises(HTTPException) as outside:asyncio.run(namespace['research_document'](row['id'],{**CTX,'profile_id':'other'}))
     assert outside.value.status_code==404
+
+
+@pytest.mark.parametrize('user_text',['Which camera is better?',''])
+@pytest.mark.parametrize('tool,arguments',[('search_web',{'query':'Camera question'}),
+    ('search_widget_action',{'action':'run','query':'Camera question'}),
+    ('research_action',{'action':'request','query':'Camera question'})])
+def test_direct_tool_variants_continue_selected_report(tool,arguments,user_text):
+    import ast
+    from pathlib import Path
+    path=Path(__file__).parents[1]/'server.py'
+    tree=ast.parse(path.read_text(encoding='utf-8'))
+    handler=next(node for node in tree.body if isinstance(node,ast.AsyncFunctionDef) and node.name=='_dispatch_scoped_aegis_tool')
+    calls=[]
+    async def continuation(identifier,context,operation_id,**kwargs):
+        calls.append((identifier,operation_id,kwargs));return {'status':'accepted','research_id':identifier}
+    artifacts=SimpleNamespace(get=lambda *args:{'artifact':{'kind':'research'}})
+    namespace={'ALL_AEGIS_TOOLS':[{'name':tool}], 'get_research_services':lambda:(artifacts,None),
+        'research_followup':lambda text:True,'continue_research':continuation}
+    exec(compile(ast.Module(body=[handler],type_ignores=[]),str(path),'exec'),namespace)
+    result=asyncio.run(namespace[handler.name](tool,arguments,{**CTX,'client_id':'connected','research_id':'pixel','user_text':user_text},'turn-camera'))
+    assert result['research_id']=='pixel' and calls==[('pixel','turn-camera',{'detail':user_text or 'Camera question'})]
+
+
+@pytest.mark.parametrize('fail',[False,True])
+def test_search_model_scope_uses_frozen_parent_and_restores_context(fail):
+    import ast
+    from pathlib import Path
+    from astra_ai.core.aegis_ai import CURRENT_OPERATION
+    path=Path(__file__).parents[1]/'server.py';tree=ast.parse(path.read_text(encoding='utf-8'))
+    handler=next(node for node in tree.body if isinstance(node,ast.AsyncFunctionDef) and node.name=='_aegis_search_web')
+    captured=[]
+    async def search(arguments,context,operation):
+        captured.append(dict(CURRENT_OPERATION.get()))
+        if fail:raise RuntimeError('worker interrupted')
+        return {'status':'rejected'}
+    namespace={'get_research_services':lambda:(None,SimpleNamespace(search=search))}
+    exec(compile(ast.Module(body=[handler],type_ignores=[]),str(path),'exec'),namespace)
+    async def run():
+        original={**CTX,'client_id':'connected','operation_id':'turn','research_id':'pixel'}
+        token=CURRENT_OPERATION.set(original)
+        try:
+            try:return await namespace[handler.name]({'research_id':'wrong-child'})
+            finally:assert CURRENT_OPERATION.get()==original
+        finally:CURRENT_OPERATION.reset(token)
+    if fail:
+        with pytest.raises(RuntimeError):asyncio.run(run())
+    else:assert asyncio.run(run())=={'status':'rejected'}
+    assert captured[0]['model_research_id']=='pixel' and captured[0]['research_id']=='pixel'
+
+
+@pytest.mark.parametrize('mode',['quick','detailed'])
+def test_followup_waits_for_initial_report_then_appends_without_new_history(tmp_path,mode):
+    store=ResearchArtifacts(tmp_path/'r.json');pending=store.reserve('Pixel versus iPhone','detailed',CTX,'original')
+    context={**CTX,'research_id':pending['id'],'user_text':'Which camera is better?','job_id':'camera'}
+    calls=[]
+    async def synth(query,sources):return '## Cameras\n\nA supported camera conclusion [S2].'
+    service=ResearchSearch(store,lambda _:None,synthesize=synth)
+    service._request=lambda *args:(calls.append(args) or ([{**SOURCE,'url':'https://example.com/cameras'}],None))
+    args={'action':'topic_followup','research_id':pending['id'],'query':context['user_text'],'mode':mode}
+    waiting=asyncio.run(service.search(args,context,'camera-turn'))
+    assert waiting['reason']=='topic_initial_report_pending' and len(calls)==1 and waiting['collected_sources']==1
+    assert store.extension_state(pending['id'],CTX)['phase']=='waiting_for_report'
+    assert len(store.request_state(pending['id'],CTX)['sources'])==1
+    assert asyncio.run(service.search(args,context,'camera-turn'))['collected_sources']==1 and len(calls)==1
+    store.save(pending['query'],'detailed','# Phone comparison\n\nThe initial answer [S1].',[SOURCE],[],CTX,pending['operation_id'])
+    finished=asyncio.run(service.search(args,context,'camera-turn'))
+    assert finished['status']=='completed' and finished['research_id']==pending['id']
+    assert store.listing(CTX)['total']==1 and store.listing(CTX)['items'][0]['followup_count']==1
+    assert len(calls)==1
+
+
+@pytest.mark.parametrize('detail',['Which camera is better?','Compare low-light photos, portraits and video for these same phones.'])
+def test_pending_report_followup_is_durably_queued_on_same_identity(tmp_path,detail):
+    import ast,re
+    from pathlib import Path
+    from astra_ai.core.action_jobs import ActionJobs
+    store=ResearchArtifacts(tmp_path/'r.json');pending=store.reserve('Pixel versus iPhone','detailed',CTX,'original')
+    jobs=ActionJobs(tmp_path/'jobs.json',None,None,None,{'search_web'})
+    async def wait(*args,**kwargs):return {'status':'completed','revealed':False}
+    async def send(*args):pass
+    path=Path(__file__).parents[1]/'server.py';tree=ast.parse(path.read_text(encoding='utf-8'))
+    handler=next(n for n in tree.body if isinstance(n,ast.AsyncFunctionDef) and n.name=='continue_research')
+    env={'asyncio':asyncio,'re':re,'_research_continuation_locks':{},'get_research_services':lambda:(store,None),
+        'state':SimpleNamespace(register_widget_action=lambda *args:None,await_widget_action=wait),
+        'ws_manager':SimpleNamespace(send_to_client_id=send),'action_jobs':jobs}
+    exec(compile(ast.Module(body=[handler],type_ignores=[]),str(path),'exec'),env)
+    result=asyncio.run(env[handler.name](pending['id'],{**CTX,'client_id':'connected'},'camera-turn',detail=detail))
+    assert result['status']=='queued' and result['research_id']==pending['id']
+    saved=jobs.load()['jobs'][result['job_id']]
+    assert saved['context']['research_id']==pending['id'] and saved['actions'][0]['arguments']['action']=='topic_followup'
+    assert store.extension_state(pending['id'],CTX)['phase']=='waiting_for_report'
+    again=asyncio.run(env[handler.name](pending['id'],{**CTX,'client_id':'connected'},'camera-turn',detail=detail))
+    assert again['job_id']==result['job_id'] and len(jobs.load()['jobs'])==1
+
+
+def test_legacy_preallocated_child_recovers_query_without_restarting_collection(tmp_path):
+    store=ResearchArtifacts(tmp_path/'r.json')
+    parent=store.reserve('Pixel comparison','detailed',CTX,'parent')
+    child=store.reserve('Pixel camera question','quick',CTX,'legacy-child')
+    context={**CTX,'research_id':parent['id'],'job_id':'legacy','user_text':''}
+    service=ResearchSearch(store,lambda _:None)
+    calls=[]
+    service._request=lambda *args:(calls.append(args) or ([SOURCE],None))
+    result=asyncio.run(service.search({'research_id':child['id'],'mode':'quick'},context,'legacy-turn'))
+    assert result['research_id']==parent['id'] and result['reason']=='topic_initial_report_pending'
+    assert len(calls)==1 and calls[0][0]==child['query']
+    assert store.extension_state(parent['id'],CTX)['operation_id']=='legacy-turn'
+    assert store.get(child['id'],CTX)['artifact']['completeness']=='pending'
+
+
+@pytest.mark.parametrize('text,view',[
+    ('Which camera is better for portraits and video?','reader'),
+    ('Compare video quality and low-light photos.','reader'),
+    ('Find more independent sources for the video quality comparison.','reader'),
+    ('Show me related YouTube videos about these phones.','media'),
+    ('Find a video review of these phones.','media'),
+    ('More videos please.','media'),
+    ('Play this video.','media'),
+    ('Give me additional sources.','sources')])
+def test_camera_video_quality_is_reader_content_not_a_media_navigation(text,view):
+    from astra_ai.core.research_topics import followup_view
+    assert followup_view(text)==view
+
+
+def test_late_search_uses_frozen_question_instead_of_unrelated_model_query(tmp_path):
+    store=ResearchArtifacts(tmp_path/'r.json');parent=store.reserve('Pixel comparison','detailed',CTX,'parent')
+    question='Which camera has better low-light photos?'
+    context={**CTX,'research_id':parent['id'],'job_id':'late','user_text':'','research_user_text':question}
+    service=ResearchSearch(store,lambda _:None)
+    captured=[]
+    async def followup(args,*unused):captured.append(args);return {'status':'waiting_for_retry','research_id':args['research_id']}
+    service.quick_followup=followup
+    result=asyncio.run(service.search({'query':'Unrelated football rankings','mode':'quick'},context,'camera'))
+    assert result['research_id']==parent['id'] and captured[0]['query']==question
+    assert store.listing(CTX)['total']==1
+
+
+def test_research_context_includes_real_quota_and_followup_status(tmp_path):
+    import ast,re,threading
+    from pathlib import Path
+    store=ResearchArtifacts(tmp_path/'r.json');parent=store.reserve('Pixel comparison','detailed',CTX,'parent')
+    store.request_state(parent['id'],CTX,phase='waiting_for_quota',waiting_reason='gemini_daily_quota',next_attempt=1234)
+    store.extension_state(parent['id'],CTX,phase='waiting_for_report',reason='initial_report_pending',job_id='camera-job')
+    path=Path(__file__).parents[1]/'server.py';tree=ast.parse(path.read_text(encoding='utf-8'))
+    handler=next(n for n in tree.body if isinstance(n,ast.AsyncFunctionDef) and n.name=='_research_thread')
+    memory=SimpleNamespace(_lock=threading.RLock(),_messages=lambda:[])
+    env={'asyncio':asyncio,'re':re,'get_research_services':lambda:(store,None),'state':SimpleNamespace(live_memory=memory)}
+    exec(compile(ast.Module(body=[handler],type_ignores=[]),str(path),'exec'),env)
+    result=asyncio.run(env[handler.name](parent['id'],CTX))
+    assert result['research_id']==parent['id'] and result['progress']=={'completeness':'pending','phase':'waiting_for_quota','waiting_reason':'gemini_daily_quota','next_attempt':1234,'followup':{'phase':'waiting_for_report','reason':'initial_report_pending','job_id':'camera-job','collected_sources':None}}

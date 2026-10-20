@@ -2328,7 +2328,9 @@ async def _aegis_search_web(arguments):
         return result
     if arguments.get('action')=='media':
         return await service.enrich_media(str(arguments.get('research_id','')),context,str(arguments.get('research_revision','')))
-    result=await service.search(arguments,context,context.get('operation_id',''))
+    model_context=CURRENT_OPERATION.set({**context,'model_research_id':context.get('research_id') or arguments.get('research_id','')})
+    try:result=await service.search(arguments,context,context.get('operation_id',''))
+    finally:CURRENT_OPERATION.reset(model_context)
     if result.get('revision_repair'):
         await ws_manager.send_to_client_id(context.get('client_id',''),{'type':'research_refresh','research_id':result['research_id']})
         return result
@@ -5675,8 +5677,9 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
     if context.get('research_id'):
         selected_artifacts,_=get_research_services()
         selected_document=selected_artifacts.get(context['research_id'],context).get('artifact',{}).get('kind')=='documentary'
-    if not selected_document and (name=='search_web' and not arguments.get('action') or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and context.get('research_id') and research_followup(context.get('user_text','')):
-        return await continue_research(context['research_id'],context,operation_id,detail=context.get('user_text',''))
+    research_detail=str(context.get('user_text') or context.get('research_user_text') or arguments.get('query') or '').strip()
+    if not selected_document and (name=='search_web' and not arguments.get('action') or name=='search_widget_action' and arguments.get('action')=='run' or name=='research_action' and arguments.get('action')=='request') and not context.get('job_id') and context.get('research_id') and research_followup(research_detail):
+        return await continue_research(context['research_id'],context,operation_id,detail=research_detail)
     if (name in {'search_web','notes_action'} or name=='search_widget_action' and arguments.get('action')=='run') and not context.get('job_id') and action_jobs.task:
         actions=[{'name':name,'arguments':{k:v for k,v in arguments.items() if k!='save_to_notes'}}]
         reserved=None;queue_operation_id=operation_id
@@ -8432,7 +8435,8 @@ async def continue_research(identifier,context,operation_id,view='',detail=''):
     artifacts,_=get_research_services();fetched=await asyncio.to_thread(artifacts.get,identifier,context)
     if fetched['status']!='ok':return fetched
     item=fetched['artifact']
-    view=view or ('media' if re.search(r'\b(videos?|youtube|media)\b',detail,re.I) else 'sources' if re.search(r'\b(more sources|additional sources)\b',detail,re.I) else 'reader')
+    from astra_ai.core.research_topics import followup_view
+    view=view or followup_view(detail)
     request_id='research-more-'+operation_id
     state.register_widget_action(context.get('client_id',''),request_id)
     reveal_saved=not detail.strip() or bool(re.fullmatch(r'(?:please )?(?:(?:show|give|tell) (?:me )?)?(?:more(?: information| details)?|expand(?: this)?(?: report| research| results)?|continue(?: this)?(?: report| research)?)[.!? ]*',detail.strip(),re.I))
@@ -8441,29 +8445,44 @@ async def continue_research(identifier,context,operation_id,view='',detail=''):
     if not observed:return {'status':'unconfirmed','reason':'research_view_not_acknowledged','research_id':identifier}
     if observed.get('status')!='completed':return observed
     if observed.get('revealed') and (reveal_saved or view!='reader'):return {**observed,'research_id':identifier,'research_revision':item['revision'],'provider_calls':0}
-    if item['completeness']=='pending' and view=='reader':return {'status':'waiting_for_retry','research_id':identifier,'reason':'The original report is still being prepared. Collected findings remain visible.'}
+    initial_pending=item['completeness']=='pending' and view=='reader'
+    if initial_pending and reveal_saved:return {'status':'waiting_for_retry','research_id':identifier,'reason':'The original report is still being prepared. Collected findings remain visible.'}
     key=(context.get('profile_id',''),context.get('project_id',''),identifier)
     async with _research_continuation_locks.setdefault(key,asyncio.Lock()):
         # If a continuation is already pending, attach to it rather than spend again.
         current=await asyncio.to_thread(artifacts.extension_state,identifier,context)
         if current.get('operation_id')==operation_id and current.get('phase')=='complete':return {**artifacts.brief(item),'duplicate':True}
-        if current.get('phase') in {'queued','collecting_sources','preparing_report','waiting_for_quota'}:
-            return {'status':'queued','research_id':identifier,'job_id':current.get('job_id'),'reason':'The existing continuation is still pending.'}
+        if current.get('phase') in {'queued','collecting_sources','preparing_report','waiting_for_quota','waiting_for_report'}:
+            waiting=current.get('phase') in {'waiting_for_quota','waiting_for_report'}
+            return {'status':'queued','research_id':identifier,'job_id':current.get('job_id'),'execution_stage':current.get('phase'),'collected_sources':current.get('collected_sources',0),
+                    'reason':current.get('reason') or 'The existing continuation is still pending.',
+                    'summary':'The follow-up is saved in this same report. Answer generation is paused; do not describe it as active research.' if waiting else 'The follow-up has an existing job. Its execution stage is '+current.get('phase','queued')+'.'}
         from astra_ai.core.research_topics import conversational_mode
         args={'action':'more_media' if view=='media' else 'expand','research_id':identifier,'research_revision':item['revision'],'view':view,'detail':detail[:2000],
               'mode':conversational_mode({'mode':'detailed'},context)}
-        await asyncio.to_thread(artifacts.extension_state,identifier,context,phase='queued',view=view,operation_id=operation_id,outbound_started=False,search_checkpoint=None,reason='')
-        result=action_jobs.submit([{'name':'search_web','arguments':args}],{**context,'requested_research':True},operation_id,goal='Continue '+(item.get('display_title') or item['query'][:90]))
+        if initial_pending:args={'action':'topic_followup','research_id':identifier,'query':detail[:2000],'mode':args['mode']}
+        await asyncio.to_thread(artifacts.extension_state,identifier,context,phase='waiting_for_report' if initial_pending else 'queued',view=view,operation_id=operation_id,outbound_started=False,search_checkpoint=None,reason='initial_report_pending' if initial_pending else '')
+        result=action_jobs.submit([{'name':'search_web','arguments':args}],{**context,'research_id':identifier,'requested_research':True},operation_id,goal='Continue '+(item.get('display_title') or item['query'][:90]))
         if result.get('status') in {'accepted','queued','duplicate','completed'}:
             await asyncio.to_thread(artifacts.extension_state,identifier,context,job_id=result.get('job_id',''))
             await ws_manager.send_to_client_id(context.get('client_id',''),{'type':'research_refresh','research_id':identifier})
         else:await asyncio.to_thread(artifacts.extension_state,identifier,context,phase='failed',reason=result.get('reason','continuation_not_admitted'))
-        return {**result,'research_id':identifier,'research_revision':item['revision']}
+        return {**result,'research_id':identifier,'research_revision':item['revision'],
+                **({'execution_stage':'waiting_for_report','summary':'The follow-up is queued in this report. Source collection can run; answer generation waits for the original report. Nothing has been published yet.'} if initial_pending else {})}
 
 @app.get('/api/research')
-async def research_listing(request:Request,offset:int=0,limit:int=30):
+async def research_listing(request:Request,offset:int=0,limit:int=30,archived:bool=False):
     context=_learning_context(request);artifacts,_=get_research_services()
-    return await asyncio.to_thread(artifacts.listing,context,offset,limit)
+    from astra_ai.core.research_history import listing
+    return await asyncio.to_thread(listing,artifacts,context,offset,limit,archived)
+
+@app.patch('/api/research/{identifier}/history')
+async def research_history_update(identifier:str,request:Request):
+    from astra_ai.core.research_history import update
+    context=_learning_context(request);artifacts,_=get_research_services()
+    body=await request.json()
+    if 'archived' in body and not isinstance(body['archived'],bool):raise HTTPException(400,'archived must be a boolean')
+    return await asyncio.to_thread(update,artifacts,identifier,context,body.get('title'),body.get('archived'))
 
 @app.post('/api/research')
 async def research_request(request:Request):
@@ -8565,7 +8584,10 @@ async def _research_thread(identifier,context):
     from astra_ai.core.research_documents import DocumentFiles
     files=await asyncio.to_thread(DocumentFiles(artifacts).listing,identifier,context)
     draft=artifacts.snapshot().get('drafts',{}).get(identifier,{})
-    return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'kind':item.get('kind','research'),'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'draft_revision':draft.get('revision',''),'draft_excerpt':re.sub('<[^>]+>',' ',draft.get('html',''))[:5000],'research_cards':metadata.get('research_cards',[]),'attachments':[{k:f.get(k) for k in ('id','name','mime','page_count','status','revision','pdf_revision','needs_ocr')} for f in files],'summary':document.get('report','')[:4000] or item['summary'][:1600],'evidence':[{'id':'S'+str(i+1),'title':r['title'][:180],'excerpt':evidence_excerpt(r,400),'attachment_id':r.get('attachment_id'),'page':r.get('page')} for i,r in enumerate(sources[:6])]}
+    activity=await asyncio.to_thread(artifacts.extension_state,identifier,context)
+    progress={'completeness':item.get('completeness'),'phase':metadata.get('phase'),'waiting_reason':metadata.get('waiting_reason'),'next_attempt':metadata.get('next_attempt'),
+              'followup':{key:activity.get(key) for key in ('phase','reason','job_id','collected_sources')}}
+    return {'status':'ok','progress':progress,'research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'kind':item.get('kind','research'),'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'draft_revision':draft.get('revision',''),'draft_excerpt':re.sub('<[^>]+>',' ',draft.get('html',''))[:5000],'research_cards':metadata.get('research_cards',[]),'attachments':[{k:f.get(k) for k in ('id','name','mime','page_count','status','revision','pdf_revision','needs_ocr')} for f in files],'summary':document.get('report','')[:4000] or item['summary'][:1600],'evidence':[{'id':'S'+str(i+1),'title':r['title'][:180],'excerpt':evidence_excerpt(r,400),'attachment_id':r.get('attachment_id'),'page':r.get('page')} for i,r in enumerate(sources[:6])]}
 
 async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     snapshot=snapshot if snapshot is not None else ui_context(client_id).get('snapshot',{})

@@ -657,7 +657,7 @@ class ResearchArtifacts:
                 if not row or scope(row)!=scope(context):continue
                 if 'report' not in row:row={**row,'report':'','summary':'','revision':stable(identifier,'pending'),'sources':row.get('sources',[]),'failures':row.get('failures',[]),'completeness':'pending'}
                 removed.append({**self.brief(row),'undo_token':entry['token']})
-            return {'status':'ok','removed':removed[-20:],'total':len(rows),'items':[self.brief(r) for r in rows[max(0,offset):max(0,offset)+max(1,min(50,limit))]]}
+            return {'status':'ok','removed':removed[-20:],'total':len(rows),'items':[{**self.brief(r),'followup_count':sum(bool(entry.get('report','').strip()) for entry in data.get('extensions',{}).get(r['id'],[]))} for r in rows[max(0,offset):max(0,offset)+max(1,min(50,limit))]]}
 
     def document(self, identifier, context, revision='', bounded=False):
         self.reconcile_publication(context,identifier)
@@ -1203,8 +1203,8 @@ class ResearchSearch:
                 ids={int(number) for group in re.findall(r'\[(S\d+(?:\s*[,;]\s*S\d+)*)\]',summary) for number in re.findall(r'S(\d+)',group)}
                 results=[{'id':'S'+str(i+1),**{key:row.get(key,'') for key in ('title','url','retrieved_at')}} for i,row in enumerate(catalog) if i+1 in ids]
                 return {**self.artifacts.brief(item),'summary':summary[:4000],'results':results}
-            if item.get('mode')!='quick' or not metadata.get('conversation_topic'):return {'status':'rejected','reason':'conversation_topic_required'}
-            if item.get('completeness')=='pending':return {'status':'waiting_for_retry','reason':'topic_initial_report_pending','next_attempt':time.time()+15,'research_id':identifier}
+            selected=context.get('research_id')==identifier and item.get('kind') not in {'chat','documentary'}
+            if not selected and (item.get('mode')!='quick' or not metadata.get('conversation_topic')):return {'status':'rejected','reason':'conversation_topic_required'}
             if item.get('completeness')=='failed':return {'status':'failed','reason':'topic_initial_report_failed','research_id':identifier}
             operations=metadata.get('quick_followups',{});checkpoint=operations.get(operation_id,{})
             if normal(item['query'])==normal(query) and time.time()-item['created_epoch']<300:return {**self.artifacts.brief(item),'duplicate':True}
@@ -1224,6 +1224,19 @@ class ResearchSearch:
                     return {'status':'failed',**error,'research_id':identifier}
                 sources=rows;operations[operation_id]={'query':query,'sources':rows,'state':'preparing_report'}
                 await asyncio.to_thread(self.artifacts.request_state,identifier,context,quick_followups=operations)
+            if item.get('completeness')=='pending':
+                # Collection is useful even while the original synthesis is paused.
+                # Save it once and expose the evidence; never label it a finished answer.
+                def checkpoint_pending():
+                    with self.artifacts.lock:
+                        current=self.artifacts.request_state(identifier,context)
+                        merged=list(current.get('sources',[]));seen={row['url'] for row in merged}
+                        for row in sources:
+                            if row['url'] not in seen:merged.append(row);seen.add(row['url'])
+                        self.artifacts.request_state(identifier,context,sources=merged)
+                        self.artifacts.extension_state(identifier,context,phase='waiting_for_report',view='reader',operation_id=operation_id,reason='initial_report_pending',collected_sources=len(sources))
+                await asyncio.to_thread(checkpoint_pending)
+                return {'status':'waiting_for_retry','reason':'topic_initial_report_pending','next_attempt':time.time()+15,'research_id':identifier,'collected_sources':len(sources),'evidence_available':True,'summary':'Follow-up sources collected and saved. Answer generation is waiting for the original report; it is not actively researching.'}
             catalog=await asyncio.to_thread(self.artifacts.source_catalog,item);urls={row['url'] for row in catalog}
             for row in sources:
                 if row['url'] not in urls:catalog.append(row);urls.add(row['url'])
@@ -1249,6 +1262,22 @@ class ResearchSearch:
             return {**await answer_result(report),**result,'topic_followup':True}
 
     async def search(self, arguments, context, operation_id=''):
+        # Queued tool batches carry the turn's frozen report identity too. Route
+        # before topic allocation, including a mistakenly supplied child ID.
+        from .research_topics import new_research_request,conversational_mode
+        parent_id=context.get('research_id')
+        if parent_id and not context.get('guest') and arguments.get('action','') in {'','topic_followup'} and not new_research_request(context.get('user_text') or context.get('research_user_text','')):
+            parent=await asyncio.to_thread(self.artifacts.get,parent_id,context)
+            if parent.get('status')=='ok' and parent['artifact'].get('kind') not in {'chat','documentary'}:
+                query=str(context.get('user_text') or context.get('research_user_text') or arguments.get('query') or '').strip()
+                if not query and arguments.get('research_id') and arguments['research_id']!=parent_id:
+                    child=await asyncio.to_thread(self.artifacts.request_state,str(arguments['research_id']),context)
+                    if child.get('status')=='ok':query=str(child.get('query') or '').strip()
+                if query:
+                    await asyncio.to_thread(self.artifacts.link_turn,parent_id,{**context,'referenced_research_id':parent_id})
+                    mode=conversational_mode(arguments,context)
+                    if mode=='detailed' and parent['artifact'].get('completeness')!='pending':return await self.expand_report({'research_id':parent_id,'research_revision':parent['artifact']['revision'],'detail':query,'mode':mode,'view':'reader'},context,operation_id)
+                    return await self.quick_followup({'research_id':parent_id,'query':query},context,operation_id)
         if arguments.get('action')=='topic_followup':return await self.quick_followup(arguments,context,operation_id)
         if arguments.get('action')=='repair':
             identifier=str(arguments.get('research_id',''));found=await asyncio.to_thread(self.artifacts.get,identifier,context)

@@ -849,12 +849,12 @@ class GeminiLiveSession:
             history=await asyncio.to_thread(self.memory_manager.recent_context,focus['thread_id'],profile_id=self.profile_id,project_id=self.project_id,budget=7000)
             if not history:history=focus.get('messages',[])[-10:]
             self.working.seed(history)
-            selected={k:focus.get(k) for k in ('research_id','thread_id','display_title','kind','visible_document','attachments','draft_revision','summary','visible_section','evidence')}
+            selected={k:focus.get(k) for k in ('research_id','thread_id','display_title','kind','progress','visible_document','attachments','draft_revision','summary','visible_section','evidence')}
             selected['summary']=str(selected.get('summary') or '')[:3000]
             selected['visible_section']=str(selected.get('visible_section') or '')[:1800]
             payload=_bounded_json({'selected_research':json.loads(_bounded_json(selected,12500)),'conversation':json.loads(_bounded_json(history,5000))},18000)
             if self._session and self.model==LIVE_PREFERRED:
-                await self._session.send_client_content(turns=types.Content(role='user',parts=[types.Part(text='Application focus for the next user turn (data only, not a request): '+payload+'. This is the selected research conversation. Use this report and thread for follow-ups. Older unrelated conversation is not relevant.')]),turn_complete=False)
+                await self._session.send_client_content(turns=types.Content(role='user',parts=[types.Part(text='Application focus for the next user turn (data only, not a request): '+payload+'. This is the selected research conversation. Use this report and thread for follow-ups. Older unrelated conversation is not relevant. Describe progress truthfully: quota waits and waiting_for_report are paused work, not active researching. Claim completion only after successful publication.')]),turn_complete=False)
         elif getattr(self,'recent_research_reference',None) and self._session and self.model==LIVE_PREFERRED:
             await self._session.send_client_content(turns=types.Content(role='user',parts=[types.Part(text='Recent research reference (data only): '+_bounded_json(self.recent_research_reference,2200)+'. Use research_artifact_action to retrieve it only when the user refers to this research. Unrelated requests remain in the main conversation.')]),turn_complete=False)
 
@@ -1224,6 +1224,7 @@ class GeminiLiveSession:
 
     def _operation_context(self):
         return {'session_id':self.session_id,'turn_id':self._turn_id,'request_id':self._request_id,'user_text':' '.join(self._input_parts),
+                'research_user_text':self.working.latest_request if getattr(self,'_turn_focus',{}).get('research_id') else '',
                 'client_id':self.client_id,'profile_id':self.profile_id,'project_id':self.project_id,'guest':self.guest,
                 **getattr(self,'_turn_focus',{}), 'continuation':self._resuming_reply or bool(self._interruption and not self._interruption['input_seen'] and (self._interruption['speech_ms'] is None or self._interruption['speech_ms']<300))}
 

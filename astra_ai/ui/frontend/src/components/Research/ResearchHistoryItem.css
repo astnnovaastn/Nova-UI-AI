@@ -1,0 +1,26 @@
+.rh-item{position:relative;margin:1px 0;min-width:0}
+.research-workspace .rh-row{display:flex;align-items:center;width:100%;height:36px;padding:7px 10px;border:0;border-radius:8px;background:transparent;text-align:left;font-size:13px;font-weight:400;transition:background .18s}
+.rh-title{display:block;min-width:0;width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;line-height:22px}
+.rh-title>span{display:inline-block;min-width:100%;white-space:nowrap}
+.rh-item:is(:hover,:focus-within,[data-open]) .rh-row{padding-right:39px;background:color-mix(in srgb,var(--r-fg) 7%,var(--r-bg))}
+.rh-row[aria-current=true]{background:color-mix(in srgb,var(--r-fg) 9%,var(--r-bg))}
+.rh-row[data-overflow=true]:is(:hover,:focus-visible) .rh-title{ text-overflow:clip; mask-image:linear-gradient(to right,#000 0%,#000 calc(100% - 12px),transparent 100%); }
+.rh-row[data-overflow=true]:is(:hover,:focus-visible) .rh-title>span{animation:rh-reveal var(--rh-duration,2s) linear 0s forwards}
+@keyframes rh-reveal{from{transform:translateX(0)}to{transform:translateX(var(--rh-shift,0px))}}
+.research-workspace .rh-dots{position:absolute;right:5px;top:5px;width:26px;height:26px;display:grid;place-items:center;padding:4px;border:0;background:transparent;opacity:0;pointer-events:none;transition:opacity .15s;color:var(--r-muted)}
+.rh-item:is(:hover,:focus-within,[data-open]) .rh-dots{opacity:1;pointer-events:auto}
+.rh-dots svg,.rh-menu svg{width:17px;height:17px;flex:none}
+.research-workspace .rh-dots:hover{background:transparent;color:var(--r-fg)}
+.rh-menu{position:fixed;z-index:150;width:180px;padding:6px;border:1px solid var(--r-edge);border-radius:14px;background:var(--r-panel);color:var(--r-fg);box-shadow:0 8px 28px #0004;animation:rh-menu-in .12s ease-out}
+.research-workspace .rh-menu button{display:flex;align-items:center;gap:11px;width:100%;padding:9px 10px;border:0;border-radius:8px;background:transparent;text-align:left;font-size:13px;box-shadow:none}
+.research-workspace .rh-menu button:hover,.research-workspace .rh-menu button:focus-visible{background:color-mix(in srgb,var(--r-fg) 8%,var(--r-panel))}
+.research-workspace .rh-menu .rh-delete{color:#f08080;border-top:1px solid var(--r-edge);border-radius:0 0 8px 8px;margin-top:4px;padding-top:12px}
+@keyframes rh-menu-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+.rh-check{position:absolute;z-index:1;left:9px;top:9px;width:17px;height:17px;margin:0;accent-color:var(--accent-readable)}
+.research-workspace .rh-row[data-selecting]{padding-left:35px}
+.rh-rename{padding:6px}.rh-rename input{width:100%;padding:7px;border:1px solid var(--r-edge);border-radius:6px;background:var(--r-panel)}
+.rh-rename>div{display:flex;gap:5px;margin-top:5px}.research-workspace .rh-rename button{padding:4px 8px;font-size:11px}
+.rh-error{font-size:11px;color:#f08080;margin:4px 8px}
+.research-workspace .rh-archive-view{border:0;background:transparent;font-size:11px;color:var(--r-muted);padding:7px 10px;margin-bottom:6px}
+@media(hover:none){.research-workspace .rh-dots{opacity:1;pointer-events:auto}.research-workspace .rh-row{padding-right:39px}}
+@media(prefers-reduced-motion:reduce){.rh-row[data-overflow=true]:is(:hover,:focus-visible) .rh-title>span,.rh-menu{animation:none}.research-workspace .rh-row,.research-workspace .rh-dots{transition:none}}

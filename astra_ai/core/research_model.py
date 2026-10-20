@@ -3,6 +3,29 @@ import json,re,asyncio
 from .background_model import BackgroundModel, ModelUnavailable
 from .background_budget import BudgetPaused, BackgroundBudget
 
+def gemini_quota_pause(error):
+    """Use structured quota signals without persisting provider messages or credentials."""
+    import time
+    data=getattr(error,'details',{})
+    data=data.get('error',data) if isinstance(data,dict) else {}
+    details=data.get('details',[]) if isinstance(data,dict) else []
+    delay=65;daily=False;unavailable=False
+    for detail in details if isinstance(details,list) else []:
+        if not isinstance(detail,dict):continue
+        retry=detail.get('retryDelay','')
+        if isinstance(retry,str) and re.fullmatch(r'\d+(?:\.\d+)?s',retry):delay=max(delay,min(86400,float(retry[:-1])))
+        for violation in detail.get('violations',[]) if isinstance(detail.get('violations'),list) else []:
+            if not isinstance(violation,dict):continue
+            quota=str(violation.get('quotaId','')).casefold()
+            daily=daily or 'perday' in quota or 'per_day' in quota
+            unavailable=unavailable or str(violation.get('quotaValue',''))=='0'
+    headers=getattr(getattr(error,'response',None),'headers',{}) or {}
+    try:delay=max(delay,min(86400,float(headers.get('retry-after','0'))))
+    except (TypeError,ValueError):pass
+    # No exact daily reset is assumed. Back off and keep the saved evidence pending.
+    if daily or unavailable:delay=max(delay,3600)
+    return BudgetPaused(time.time()+delay,'gemini_quota_unavailable' if unavailable else 'gemini_daily_quota' if daily else 'gemini_rate_limit')
+
 class IncompleteResearchAnswer(ModelUnavailable):
     def __init__(self,report):
         self.report=report
@@ -89,7 +112,9 @@ class GeminiResearchModel(BackgroundModel):
         factory = self.client_factory or genai.Client
         if max_tokens==6000 and not str(payload.get('query','')).startswith('[QUICK]\n'):max_tokens=12000
         estimate=min(20000,max_tokens+len(json.dumps(payload))//3+500)
-        with self.budget.lease(tokens=estimate) as reservation:
+        from .aegis_ai import CURRENT_OPERATION
+        context=CURRENT_OPERATION.get() or {}
+        with self.budget.lease(tokens=estimate,scope_id=context.get('model_research_id') or context.get('research_id','')) as reservation:
             client = factory(api_key=key, http_options=types.HttpOptions(timeout=90000))
             model=self.model_provider()
             try:
@@ -117,8 +142,9 @@ class GeminiResearchModel(BackgroundModel):
                 # Explicit rejection produced no model output. Network timeouts remain reserved.
                 if code in {400,401,403,404,429} and reservation is not None:reservation.settle(0)
                 if code == 429:
-                    import time
-                    raise BudgetPaused(time.time() + 65, 'gemini_rate_limit') from None
+                    paused=gemini_quota_pause(exc)
+                    self.budget.provider_pause(paused.until,paused.reason)
+                    raise paused from None
                 if isinstance(exc, (ModelUnavailable, BudgetPaused)):
                     raise
                 raise ModelUnavailable('Gemini research synthesis failed') from None
@@ -158,8 +184,9 @@ def resume_research_budget_waits(jobs,artifacts,budget):
     import time
     from datetime import datetime,timezone
     from .research_learning import scope
+    from .background_budget import scoped_requests_remaining
     snapshot=budget.snapshot();today=datetime.now(timezone.utc).date().isoformat()
-    if snapshot.get('day')==today and (snapshot.get('requests',0)>=budget.daily_requests or snapshot.get('tokens',0)+20000>budget.daily_tokens):return 0
+    if snapshot.get('day')==today and snapshot.get('tokens',0)+20000>budget.daily_tokens:return 0
     with jobs.lock:
         data=jobs.load();changed=0
         for job in data.get('jobs',{}).values():
@@ -168,6 +195,7 @@ def resume_research_budget_waits(jobs,artifacts,budget):
             for action in job.get('actions',[]):
                 identifier=action.get('arguments',{}).get('research_id')
                 if action.get('name')!='search_web' or action.get('state')!='waiting_for_retry' or not identifier or (action.get('result') or {}).get('reason')!='background_daily_budget':continue
+                if snapshot.get('day')==today and snapshot.get('requests',0)>=budget.daily_requests and not scoped_requests_remaining(snapshot,identifier,today):continue
                 found=artifacts.get(identifier,context)
                 if found.get('status')!='ok' or found['artifact'].get('completeness')!='pending':continue
                 metadata=artifacts.request_state(identifier,context)
