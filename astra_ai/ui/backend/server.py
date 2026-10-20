@@ -8848,7 +8848,7 @@ async def release_presence(client,socket=None):
 
 async def check_operation_notices(socket):
     client=ws_manager.client_id(socket);live=state.live_sessions.get(socket)
-    if live and (live.guest or live._speech_active or live._audio_started or live._response_pending or live._input_parts or live._text_suspended):return
+    if live and (live.guest or getattr(live,'_tool_tasks',None) or live._speech_active or live._audio_started or live._response_pending or live._input_parts or live._text_suspended):return
     if not live and speaker_recognition.status()['enabled']:return
     c={'client_id':client,'profile_id':getattr(live,'profile_id',''),'project_id':getattr(live,'project_id',''),'session_id':getattr(live,'session_id',CHAT_SESSIONS.get(client,''))}
     # Existing approvals are discoverable even when created by a background worker.

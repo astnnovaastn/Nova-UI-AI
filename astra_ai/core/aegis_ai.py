@@ -971,7 +971,7 @@ class GeminiLiveSession:
 
     async def review_notice(self,notice) -> None:
         import json
-        if not self.connected or getattr(self,'_foreground_preparing',0) or self._speech_active or self._audio_started or self._response_pending or self._input_parts or self._text_suspended:return
+        if not self.connected or getattr(self,'_foreground_preparing',0) or self._tool_tasks or self._speech_active or self._audio_started or self._response_pending or self._input_parts or self._text_suspended:return
         self._internal_notice=True;self._notice_gate=True;self._notice_id=None;self._response_pending=True
         self._await_new_input=False;self._turn_interrupted=False;self._input_parts.clear();self._output_parts.clear()
         self.audio_generation=uuid.uuid4().hex;self._audio_announced=False
@@ -1137,7 +1137,7 @@ class GeminiLiveSession:
                             if self._interrupted_completion_pending:
                                 self._interrupted_completion_pending=False
                                 if self._interruption:self._interruption['settled'].set()
-                            elif not server_content.interrupted and not self._barge_pending and not self._await_new_input and not self._text_suspended:
+                            elif not server_content.interrupted and not self._barge_pending and not self._await_new_input and not self._text_suspended and not response.tool_call and not any(not task.done() and getattr(task,'aegis_turn',None)==self._turn_id for task in self._tool_tasks):
                                 frozen = self._detach_turn()
                                 self._track_task(self._complete_turn(frozen),self._maintenance_tasks,"aegis-turn-persist")
 
@@ -1147,7 +1147,8 @@ class GeminiLiveSession:
                         calls = list(response.tool_call.function_calls or [])
                         frozen_context = self._operation_context()
                         if len(self._tool_tasks)<20:
-                            self._track_task(self._serve_tools(calls,frozen_context,self._session),self._tool_tasks,'aegis-live-tools')
+                            task=self._track_task(self._serve_tools(calls,frozen_context,self._session),self._tool_tasks,'aegis-live-tools')
+                            task.aegis_turn=frozen_context['turn_id']
                         else:
                             await self._session.send_tool_response(function_responses=[types.FunctionResponse(id=c.id,name=c.name,response={'status':'rejected','reason':'foreground_operation_limit'}) for c in calls])
                     if self._rotation_pending and not self._speech_active and not self._response_pending and not self._input_parts and not self._internal_notice:

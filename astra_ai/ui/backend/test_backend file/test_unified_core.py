@@ -161,6 +161,41 @@ def test_tool_latency_does_not_block_the_next_provider_transcript(tmp_path):
     asyncio.run(scenario())
 
 
+def test_tool_only_completion_keeps_research_turn_until_its_answer_arrives(tmp_path):
+    async def scenario():
+        events=[];entered=asyncio.Event();release=asyncio.Event();delivered=asyncio.Event()
+        async def operation(name,args):
+            entered.set();await release.wait()
+            return {'status':'completed','publication_pending':True,'results':[{'id':'S1','content':'Actual evidence.'}]}
+        session=make_session(tmp_path,events,operation_executor=operation)
+        session._turn_focus={'research_id':'tesla','thread_id':'tesla-thread'}
+        session._turn_id=session._request_id='roadster';session._input_parts=['Research Roadster']
+        session._await_new_input=False;session._response_pending=True
+        call=SimpleNamespace(id='roadster-tool',name='search_web',args={'query':'Roadster'})
+        def response(tool=None,output=None):
+            return SimpleNamespace(data=None,tool_call=tool,server_content=SimpleNamespace(interrupted=False,turn_complete=True,input_transcription=None,output_transcription=SimpleNamespace(text=output) if output else None,model_turn=None))
+        async def returned(**kwargs):delivered.set()
+        async def forbidden(**kwargs):raise AssertionError('Notice stole the foreground research turn')
+        async def receive():
+            yield response(SimpleNamespace(function_calls=[call]))
+            await asyncio.wait_for(entered.wait(),1)
+            yield response()
+            assert session._input_parts==['Research Roadster'] and session._turn_id=='roadster'
+            assert not any(event['type']=='live_generation_complete' for event in events)
+            await session.review_notice({'id':'unrelated'})
+            release.set();await asyncio.wait_for(delivered.wait(),1)
+            await asyncio.gather(*list(session._tool_tasks))
+            yield response(output='Here are the supported findings.')
+            session._closed=True
+        session._session=SimpleNamespace(receive=receive,send_tool_response=returned,send_realtime_input=forbidden)
+        await asyncio.wait_for(session._receive_loop(),3)
+        complete=[event for event in events if event['type']=='live_turn_complete']
+        assert len(complete)==1 and complete[0]['request_id']=='roadster'
+        assert complete[0]['input_text']=='Research Roadster' and complete[0]['output_text']=='Here are the supported findings.'
+        assert complete[0]['research_id']=='tesla'
+    asyncio.run(scenario())
+
+
 def test_late_research_tool_retains_question_without_reusing_general_authorisation(tmp_path):
     async def scenario():
         session=make_session(tmp_path,[])
