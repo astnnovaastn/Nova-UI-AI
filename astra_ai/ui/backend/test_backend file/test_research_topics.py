@@ -141,6 +141,37 @@ def test_cache_reuse_happens_before_placeholder_allocation_and_aliases_old_ghost
     assert {'session_id':CTX['session_id'],'turn_id':'followup'} in store.snapshot()['thread_links'][item['id']]
 
 
+def test_repeated_brief_reuses_quota_wait_even_after_five_minutes(tmp_path):
+    from astra_ai.memory.shared_memory import atomic
+    store=ResearchArtifacts(tmp_path/'reports.json')
+    first=store.reserve('OpenAI company and models','detailed',CTX,'original')
+    store.request_state(first['id'],CTX,phase='waiting_for_quota',waiting_reason='gemini_daily_quota',sources=[SOURCE])
+    data=store.snapshot();data['requests'][first['id']]['created_epoch']-=7200;atomic(store.path,data)
+    repeat=store.reserve(' OpenAI company and models\n\n','detailed',CTX,'repeat')
+    assert repeat['id']==first['id'] and repeat['operation_id']=='original'
+    assert len(store.snapshot()['requests'])==1
+    assert store.reserve('OpenAI company and models','detailed',{**CTX,'project_id':'different'},'other')['id']!=first['id']
+
+
+def test_pending_retry_publishes_full_answer_once_without_repeating_search(tmp_path):
+    store=ResearchArtifacts(tmp_path/'reports.json');searches=[];syntheses=[]
+    report='# OpenAI company and models\n\n'+'\n\n'.join('## Topic '+str(i)+'\n\n'+('A substantive explanation grounded in the preserved evidence. '*24)+' [S1].' for i in range(10))
+    async def synth(query,sources):
+        syntheses.append(query)
+        if len(syntheses)==1:raise BudgetPaused(9999999999,'gemini_daily_quota')
+        return report
+    service=ResearchSearch(store,lambda _:None,synthesize=synth)
+    service._request=lambda *args:(searches.append(args) or ([SOURCE],None))
+    first=asyncio.run(service.search({'query':'OpenAI company and models','mode':'detailed'},CTX,'original'))
+    second=asyncio.run(service.search({'query':'OpenAI company and models\n\n','mode':'detailed'},CTX,'repeat'))
+    assert first['status']=='waiting_for_quota' and second['status']=='completed'
+    assert second['research_id']==first['research_id'] and len(searches)==1
+    assert len(store.snapshot()['artifacts'])==len(store.snapshot()['requests'])==1
+    document=store.document(first['research_id'],CTX,bounded=True)
+    assert document['phase']=='complete' and len(document['report'])>12000
+    assert document['next_cursor'] is None and document['waiting_reason']==''
+
+
 def test_deleted_topic_can_be_restarted_and_keeps_followups_together(tmp_path):
     store=ResearchArtifacts(tmp_path/'reports.json')
     first=store.conversation_search('Football scores',CTX,'football')

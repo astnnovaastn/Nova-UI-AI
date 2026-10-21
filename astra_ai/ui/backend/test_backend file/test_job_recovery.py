@@ -15,7 +15,7 @@ def test_requested_research_deadline_allows_bounded_synthesis_without_extending_
             jid=jobs.submit([{'name':name}],context)['job_id'];job=jobs.list(jid)['job']
             await jobs.execute(job,0,job['actions'][0])
             assert jobs.list(jid)['job']['state']=='completed'
-        assert deadlines==[300,60,60]
+        assert deadlines==[600,60,60]
     asyncio.run(run())
 
 def test_transient_retry_completed_dedup_and_mute_independence(tmp_path):

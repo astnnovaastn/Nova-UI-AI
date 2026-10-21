@@ -23,6 +23,7 @@ const names = [
   "previewPlacement",
   "videoTimestamp",
   "researchProgress",
+  "researchWaitMessage",
   "mergeMedia",
   "pausePlayers",
   "researchDestination",
@@ -298,11 +299,19 @@ test("working timer and skeleton reflect real processing, never a quota pause", 
   assert.equal(waiting.time, "00:07");
   assert.equal(waiting.active, false);
   assert.equal(waiting.skeleton, false);
-  assert.equal(waiting.label, "Summary pending");
+  assert.equal(waiting.label, "Report writing paused");
   assert.equal(
     context.researchProgress("queued", 0, null, 9999999, 0).label,
     "Queued",
   );
+});
+
+test("quota messages distinguish Google limits from the app allowance", () => {
+  assert.match(context.researchWaitMessage("gemini_service_unavailable"), /temporarily unavailable.*saved writing/);
+  assert.match(context.researchWaitMessage("gemini_daily_quota"), /Gemini.*daily quota/);
+  assert.match(context.researchWaitMessage("background_daily_budget"), /app’s daily research allowance/);
+  assert.match(context.researchWaitMessage("gemini_quota_unavailable"), /no quota/);
+  assert.match(context.researchWaitMessage("gemini_rate_limit"), /retry from the saved evidence/);
 });
 
 test("media inventory excludes malformed results and deduplicates native player IDs", () => {

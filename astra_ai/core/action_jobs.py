@@ -231,9 +231,9 @@ class ActionJobs:
         started=await self.set_action(job["id"],index,"running",None,attempts=action.get("attempts",0)+1,resolved_arguments=action.get('arguments',{}))
         if not started:return
         try:
-            # Research includes bounded retrieval and up to two 90-second synthesis calls.
+            # One checkpointed writing stage may use two bounded 180-second model attempts.
             # Ordinary operations retain their existing responsive deadline.
-            timeout=300 if action["name"]=='search_web' and context.get('requested_research') else 60
+            timeout=600 if action["name"]=='search_web' and context.get('requested_research') else 60
             result=await asyncio.wait_for(self.executor(action["name"],action.get("arguments",{}),context,action["operation_id"]),timeout=timeout)
         except asyncio.CancelledError:raise
         except Exception as exc:result={"status":"failed","reason":type(exc).__name__,"retryable":isinstance(exc,(TimeoutError,ConnectionError))}

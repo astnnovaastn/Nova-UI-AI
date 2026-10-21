@@ -29,6 +29,7 @@ import {
   registerMediaControls,
 } from "../../aegisWidgetProtocol";
 import "./ResearchWorkspace.css";
+import {ChatComposer} from "./ChatComposer";
 import {ResearchHistoryItem} from "./ResearchHistoryItem";
 import {RecentlyRemovedResearch} from "./RecentlyRemovedResearch";
 import {
@@ -1229,13 +1230,23 @@ function researchProgress(
         ? "Queued"
         : phase === "failed"
           ? "Research interrupted"
-          : "Summary pending",
+          : phase === "waiting_for_quota"
+            ? "Report writing paused"
+            : "Answer not published",
     time:
       String(Math.floor(whole / 60)).padStart(2, "0") +
       ":" +
       String(whole % 60).padStart(2, "0"),
     skeleton: active && elapsed >= 1.5,
   };
+}
+function researchWaitMessage(reason: string) {
+  if (reason === "gemini_service_unavailable") return "Gemini is temporarily unavailable. Your saved writing and sources will be retried automatically.";
+  if (reason === "gemini_daily_quota") return "Gemini has reached its daily quota. The full answer has not been written yet.";
+  if (reason === "gemini_quota_unavailable") return "The configured Gemini project has no quota available for report writing.";
+  if (reason === "gemini_rate_limit") return "Gemini is temporarily rate limited. Report writing will retry from the saved evidence.";
+  if (reason === "background_daily_budget") return "The app’s daily research allowance has been used. The full answer is still queued.";
+  return "Report writing is waiting for its usage allowance. The full answer has not been published.";
 }
 export function PendingResearch({
   report,
@@ -1282,17 +1293,15 @@ export function PendingResearch({
             {!status.active ? " worked" : ""}
           </span>
         )}
-        {report.phase === "waiting_for_quota" && (
-          <details className="research-wait-explanation">
-            <summary>Why the wait?</summary>
-            <p>
-              The report-writing service has reached its usage limit. Your
-              collected sources remain available in Sources. Report writing
-              will resume when its queued job can run.
-            </p>
-          </details>
-        )}
       </div>
+      {report.phase === "waiting_for_quota" && (
+        <div className="research-evidence-summary" role="status">
+          <p>{researchWaitMessage(report.waiting_reason || "")}</p>
+          {typeof report.next_attempt === "number" && report.next_attempt * 1000 > now && (
+            <p>Next retry scheduled for {new Date(report.next_attempt * 1000).toLocaleString(undefined, {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"})}. Your collected sources are saved.</p>
+          )}
+        </div>
+      )}
       {!!report.image_items?.length && (
         <EvidenceGallery images={report.image_items} reportId={report.research_id} onOpen={onImage} />
       )}
@@ -3614,6 +3623,8 @@ function Workspace() {
     kind: "research" | "documentary" | "chat",
     sourceId = "",
   ) {
+    window.dispatchEvent(new Event("nova-composer-reset"));
+    if(kind === "chat") setMessage("");
     if (report)
       sessionStorage.setItem(
         "nova-research-view:" + chat.clientId + ":" + report.research_id,
@@ -3767,6 +3778,7 @@ function Workspace() {
   }
   function sendFollowup() {
     if (!report || !message.trim() || chat.textBusy) return;
+    updateUiContext({view:"research",research_id:report.research_id,research_revision:report.research_revision,selected_id:report.research_id,selected_kind:"research"});
     const id = crypto.randomUUID();
     pendingMessage.current = {
       id,
@@ -4145,37 +4157,8 @@ function Workspace() {
                     ))}
                   </div>
                 )}
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    sendFollowup();
-                  }}
-                >
-                  {entryMenu()}
-                  <textarea
-                    aria-label="Message Aegis"
-                    placeholder="Start a conversation…"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    aria-label={
-                      chat.muted ? "Unmute microphone" : "Mute microphone"
-                    }
-                    onClick={requestMicrophone}
-                  >
-                    <Icon name="mic" />
-                  </button>
-                  <button
-                    aria-label="Send message"
-                    disabled={
-                      !chat.connected || chat.textBusy || !message.trim()
-                    }
-                  >
-                    <Icon name="arrow" />
-                  </button>
-                </form>
+                <ChatComposer key={chat.clientId+":"+report.research_id} value={message} onChange={setMessage} onSubmit={sendFollowup} onNewChat={()=>newEntry("chat")} actions={entryMenu()} status={chat.status} disabled={!chat.connected||chat.textBusy}/>
+
               </section>
             ) : (
               <>

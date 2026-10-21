@@ -9,6 +9,70 @@ from astra_ai.core.research_model import GeminiResearchModel, resume_research_bu
 from astra_ai.core.research_learning import ResearchArtifacts
 from astra_ai.memory.shared_memory import atomic, read, StorageLock
 
+def test_first_report_uses_preferred_text_model_without_waiting_for_live_probe():
+    from astra_ai.core.research_model import research_text_model
+    status={'text':{'effective':None,'verified':False}}
+    assert research_text_model(lambda _:None,status,'preferred-gemini')=='preferred-gemini'
+    status['text']['effective']='verified-gemini'
+    assert research_text_model(lambda _:None,status,'preferred-gemini')=='verified-gemini'
+    assert research_text_model(lambda _:'explicit-gemini',status,'preferred-gemini')=='explicit-gemini'
+
+
+def test_full_research_has_bounded_thinking_and_time_for_complete_prose(tmp_path):
+    options=[];configs=[]
+    class Client:
+        def __init__(self,**kwargs):options.append(kwargs);self.models=self
+        def generate_content(self,**kwargs):
+            configs.append(kwargs['config']);return SimpleNamespace(text='{"answer":"A complete answer."}')
+        def close(self):pass
+    budget=BackgroundBudget(tmp_path/'budget.json',min_interval=0)
+    model=GeminiResearchModel(lambda:'test',budget,lambda:'gemini-3.8-flash',Client)
+    model.structured('Answer',{'mode':'detailed'},{'type':'object'},6000)
+    assert options[0]['http_options'].timeout==180000
+    assert options[0]['http_options'].retry_options.attempts==1
+    assert str(configs[0].thinking_config.thinking_level).split('.')[-1].lower()=='low'
+    assert configs[0].max_output_tokens==12000
+
+
+@pytest.mark.parametrize('code',[404,503,504])
+@pytest.mark.parametrize('interval',[0,.01])
+def test_unavailable_preferred_model_tries_stable_gemini_once_with_its_own_reservation(tmp_path,code,interval):
+    calls=[]
+    class ProviderError(Exception):pass
+    class Client:
+        def __init__(self,**kwargs):self.models=self
+        def generate_content(self,**kwargs):
+            calls.append(kwargs['model'])
+            if len(calls)==1:
+                error=ProviderError();error.code=code;raise error
+            return SimpleNamespace(text='{"answer":"Complete source-grounded answer."}',usage_metadata=SimpleNamespace(total_token_count=300))
+        def close(self):pass
+    budget=BackgroundBudget(tmp_path/'budget.json',min_interval=interval)
+    model=GeminiResearchModel(lambda:'test',budget,lambda:'gemini-3.8-flash',Client)
+    assert model.structured('Answer',{}, {'type':'object'})['answer'].startswith('Complete')
+    assert calls==['gemini-3.8-flash','gemini-flash-latest'] and budget.snapshot()['requests']==2
+    # A new model instance after reconnect skips the failing model briefly.
+    assert budget.model_deferred('gemini-3.8-flash','test')
+    assert not budget.model_deferred('gemini-3.8-flash','different-key')
+    if interval==0:
+        reconnected=GeminiResearchModel(lambda:'test',budget,lambda:'gemini-3.8-flash',Client)
+        reconnected.structured('Answer',{}, {'type':'object'})
+        assert calls[-1]=='gemini-flash-latest' and len(calls)==3
+
+
+def test_stable_model_failure_is_not_an_unbounded_retry(tmp_path):
+    from astra_ai.core.research_model import ResearchModelUnavailable
+    calls=[]
+    class ProviderError(Exception):code=503
+    class Client:
+        def __init__(self,**kwargs):self.models=self
+        def generate_content(self,**kwargs):calls.append(kwargs['model']);raise ProviderError()
+        def close(self):pass
+    budget=BackgroundBudget(tmp_path/'budget.json',min_interval=0)
+    model=GeminiResearchModel(lambda:'test',budget,lambda:'gemini-3.8-flash',Client)
+    with pytest.raises(ResearchModelUnavailable):model.structured('Answer',{}, {'type':'object'})
+    assert len(calls)==2 and budget.snapshot()['requests']==2
+
 
 def allowance(budget, day=None):
     day=day or datetime.now(timezone.utc).date().isoformat()
@@ -127,9 +191,63 @@ def test_provider_retry_signals_are_shared_and_do_not_spend_more_allowance(tmp_p
         started=time.time()
         with pytest.raises(BudgetPaused) as caught:model.structured('Answer',{}, {'type':'object'})
         assert caught.value.reason==reason and caught.value.until>=started+minimum
-        with pytest.raises(BudgetPaused,match='background_quota_paused'):model.structured('Answer',{}, {'type':'object'})
+        with pytest.raises(BudgetPaused,match=reason):model.structured('Answer',{}, {'type':'object'})
     finally:CURRENT_OPERATION.reset(token)
     saved=budget.snapshot()
     assert saved['pause_reason']==reason and saved['requests']==41 and saved['tokens']==1234
     assert saved['research_allowances']['pixel']['used']==1
     assert 'private-provider-message' not in budget.path.read_text()
+
+
+def test_replacement_credential_releases_only_old_provider_pause(tmp_path):
+    import time
+    budget=BackgroundBudget(tmp_path/'budget.json',daily_tokens=400000,min_interval=0)
+    allowance(budget)
+    budget.provider_pause(time.time()+86400,'gemini_daily_quota',provider_key='old-private-key')
+    before=budget.snapshot()
+    assert not budget.provider_changed('old-private-key','old-private-key')
+    assert budget.provider_changed('old-private-key','replacement-private-key')
+    after=budget.snapshot()
+    assert after['requests']==before['requests'] and after['tokens']==before['tokens']
+    assert after['research_allowances']==before['research_allowances']
+    assert after['next_attempt']==0 and after['provider_pause_history'][-1]['until']==before['next_attempt']
+    budget.provider_pause(time.time()+86400,'gemini_daily_quota',provider_key='old-private-key')
+    assert budget.snapshot()['next_attempt']==0  # A late response belongs to the old credential.
+    with pytest.raises(BudgetPaused,match='background_daily_budget'):
+        with budget.lease(10,'unrelated'):pass
+    with budget.lease(10,'pixel'):pass
+    assert budget.snapshot()['requests']==41
+    assert 'private-key' not in budget.path.read_text()
+
+
+def test_provider_reason_survives_day_rollover_then_local_pacing_has_no_stale_reason(tmp_path):
+    import time
+    budget=BackgroundBudget(tmp_path/'budget.json',min_interval=10)
+    atomic(budget.path,{'day':'1900-01-01','next_attempt':time.time()+100,'pause_reason':'gemini_daily_quota'})
+    with pytest.raises(BudgetPaused,match='gemini_daily_quota'):
+        with budget.lease(1):pass
+    data=read(budget.path,{});data['next_attempt']=0;atomic(budget.path,data)
+    with budget.lease(1):pass
+    with pytest.raises(BudgetPaused,match='background_quota_paused'):
+        with budget.lease(1):pass
+
+
+@pytest.mark.parametrize('changed_evidence',[False,True])
+def test_ready_cached_composition_can_publish_during_quota_without_spending_it(tmp_path,changed_evidence):
+    import time
+    from astra_ai.core.research_model import composition_signature
+    context={'profile_id':'owner','project_id':'project','session_id':'main','requested_research':True}
+    store=ResearchArtifacts(tmp_path/'reports.json');row=store.reserve('Company report','detailed',context,'original')
+    sources=[{'url':'https://example.com','title':'Evidence','content':'Saved evidence.'}]
+    composition={'signature':composition_signature(row['query'],sources),'plan':{'title':'Company report','sections':[{}, {}, {}]},
+        'parts':['## Findings\n\nSupported facts [S1].']*3,'coverage_checked':True,'coverage_note':{'after_section':0,'report':''}}
+    if changed_evidence:sources[0]['content']='Different evidence.'
+    store.request_state(row['id'],context,phase='waiting_for_quota',waiting_reason='gemini_daily_quota',sources=sources,synthesis_checkpoint=composition)
+    budget=BackgroundBudget(tmp_path/'budget.json',daily_tokens=400000)
+    state={'day':datetime.now(timezone.utc).date().isoformat(),'requests':40,'tokens':400000,'next_attempt':time.time()+86400,'pause_reason':'gemini_daily_quota'}
+    atomic(budget.path,state)
+    path=tmp_path/'jobs.json'
+    jobs=SimpleNamespace(lock=StorageLock(tmp_path/'jobs.lock'),load=lambda:read(path,{}),write=lambda data:atomic(path,data))
+    atomic(path,{'jobs':{'original':{'state':'waiting_for_retry','context':context,'actions':[{'name':'search_web','state':'waiting_for_retry','arguments':{'research_id':row['id']},'result':{'reason':'gemini_daily_quota'},'attempts':2}]}}})
+    assert resume_research_budget_waits(jobs,store,budget)==(0 if changed_evidence else 1)
+    assert budget.snapshot()==state

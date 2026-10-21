@@ -1,6 +1,6 @@
 """Bounded, checkpointed image discovery. Descriptions are never claim evidence."""
 import asyncio, io, re, hashlib, time
-from .research_learning import scope
+from .research_learning import scope,display_title
 from urllib.parse import urlsplit, urljoin
 from PIL import Image,ImageStat,ImageOps
 from urllib3.exceptions import HTTPError
@@ -31,6 +31,7 @@ def same_picture(first,second):
 
 
 def useful_image(row):
+    if re.search(r'\b(?:official white svgs|partnership card)\b',str(row.get('caption','')),re.I):return False
     return not re.search(r'(?:logo|favicon|avatar|sprite|tracking|banner-ad|\.svg(?:\?|$)|\.gif(?:\?|$))',str(row.get('url','')),re.I) and not re.search(r'\b(?:add (?:us )?as (?:a )?preferred source|follow us|subscribe|newsletter|cookie consent|sign in|advertisement)\b',str(row.get('caption','')),re.I)
 
 
@@ -77,12 +78,20 @@ def terms(text):
     words=set(re.findall(r'[\w]{2,}',text.casefold()))-{'the','and','with','for','research','about','what','image','images','this','that','from','information','can','could','would','you','new','find','search','please','need','want','have','will','which','biggest','bigger','biger','most','run'}
     return {word[:-1] if len(word)>4 and word.endswith('s') else word for word in words}
 
+def relevant_candidate(row,query):
+    """A page's subject must not lend relevance to unrelated recommendation images."""
+    query=display_title(query)
+    wanted={t for t in terms(query) if not t.isdigit()}-{'ai','company','model','latest','current','available','capable','comparison','compare','detail','detailed','report','as','its','in','on','at','to','of','an','by','be','is','are','it','or','not','more','other'}
+    if re.search(r'\bcover\b',row.get('caption',''),re.I) and not wanted & terms(row.get('caption','')):return False
+    host=urlsplit(row.get('source_url','')).hostname or ''
+    return not wanted or bool(wanted & (terms(row.get('caption','')) | terms(host.replace('.',' '))))
+
 
 async def prepare_images(search, identifier, context, sources, query):
     artifacts=search.artifacts
     metadata=await asyncio.to_thread(artifacts.request_state,identifier,context)
     if metadata.get('images_prepared') and metadata.get('image_enrichment_version')==IMAGE_VERSION:
-        verified=[r for r in (metadata.get('validated_images') or metadata.get('selected_images',[])) if useful_image(r)]
+        verified=[r for r in (metadata.get('validated_images') or metadata.get('selected_images',[])) if useful_image(r) and relevant_candidate(r,query)]
         if verified:
             return verified
         return []
@@ -91,13 +100,14 @@ async def prepare_images(search, identifier, context, sources, query):
         for image in source.get('images',[])[:30]:
             url=str(image.get('url',''));caption=safe(str(image.get('caption') or source['title']))[:300]
             if url in seen or not url.startswith(('https://','http://')):continue
-            if not useful_image({'url':url,'caption':caption}):continue
+            if not useful_image({'url':url,'caption':caption}) or not relevant_candidate({'caption':caption,'source_url':source['url']},query):continue
             seen.add(url)
             score=len(wanted & terms(caption+' '+source['title']))
             if not score:continue
             candidates.append({'id':'I'+stable(identifier,url)[:24],'url':url,'caption':caption,'source_id':'S'+str(index+1),'publication':urlsplit(source['url']).hostname,'source_url':source['url'],'score':score})
 
-    candidates.extend(row for row in metadata.get('validated_images',[]) if row.get('url') not in seen and useful_image(row))
+    candidates=[row for row in candidates if relevant_candidate(row,query)]
+    candidates.extend(row for row in metadata.get('validated_images',[]) if row.get('url') not in seen and useful_image(row) and relevant_candidate(row,query))
     attempted=set();selected=[];hashes=set()
     async def validate(rows):
         async def one(row):
@@ -148,7 +158,7 @@ async def prepare_images(search, identifier, context, sources, query):
                 result=[]
                 for row,_ in page_candidates(body,final,source,identifier,'S'+str(index+1)):
                     score=len(wanted & terms(row['caption']+' '+source['title']))
-                    if score and row['url'] not in seen:
+                    if score and row['url'] not in seen and relevant_candidate(row,query):
                         seen.add(row['url']);result.append({**row,'score':score})
                 return result
             except (ValueError,OSError,RuntimeError,HTTPError):return []

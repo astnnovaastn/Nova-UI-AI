@@ -2294,7 +2294,20 @@ background_model=None
 research_model=None
 async def _synthesize_research(query,sources):
     if research_model is None:return ''
-    return await research_model.report(query.removeprefix('[DOCUMENTARY]\n'),sources,kind='documentary' if query.startswith('[DOCUMENTARY]\n') else 'research')
+    from astra_ai.core.aegis_ai import CURRENT_OPERATION
+    context=CURRENT_OPERATION.get() or {}
+    identifier=context.get('model_research_id') or context.get('research_id')
+    options={}
+    if identifier and not query.startswith(('[QUICK]\n','[DOCUMENTARY]\n')):
+        artifacts,_=get_research_services()
+        metadata=await asyncio.to_thread(artifacts.request_state,identifier,context)
+        if metadata.get('status')=='ok':
+            async def checkpoint(value):
+                await asyncio.to_thread(artifacts.request_state,identifier,context,synthesis_checkpoint=value)
+                from astra_ai.core.background_budget import BudgetPaused
+                raise BudgetPaused(time.time()+1,'research_section_saved')
+            options={'state':metadata.get('synthesis_checkpoint',{}),'checkpoint':checkpoint}
+    return await research_model.report(query.removeprefix('[DOCUMENTARY]\n'),sources,kind='documentary' if query.startswith('[DOCUMENTARY]\n') else 'research',**options)
 
 async def _complete_research(report,query,sources):
     if research_model is None:
@@ -5267,9 +5280,9 @@ async def lifespan(app: FastAPI):
     learned_root=Path(__file__).resolve().parents[2]/'core'/'learned'
     background_budget=BackgroundBudget(state.live_memory.memory_path.parent/'background_budget.json')
     background_model=BackgroundModel(_get_groq_api_key,background_budget)
-    from astra_ai.core.research_model import GeminiResearchModel,resume_legacy_research_waits,requested_research_budget,resume_research_budget_waits,resume_published_research
+    from astra_ai.core.research_model import GeminiResearchModel,resume_legacy_research_waits,requested_research_budget,resume_research_budget_waits,resume_published_research,research_text_model
     research_budget=requested_research_budget(state.live_memory.memory_path.parent/'research_gemini_budget.json',background_budget.slot,_get_env_value)
-    research_model=GeminiResearchModel(lambda:state.gemini_api_key,research_budget,lambda:_get_env_value('GEMINI_TEXT_MODEL') or MODEL_STATUS['text'].get('effective') or TEXT_FALLBACK)
+    research_model=GeminiResearchModel(lambda:state.gemini_api_key,research_budget,lambda:research_text_model(_get_env_value,MODEL_STATUS,TEXT_PREFERRED))
     await asyncio.to_thread(resume_legacy_research_waits,action_jobs)
     research_artifacts,_=get_research_services()
     await asyncio.to_thread(resume_published_research,action_jobs,research_artifacts)
@@ -5695,6 +5708,7 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
             if conversational:
                 from astra_ai.memory.shared_memory import stable,normal
                 queue_operation_id=stable('quick-turn',reserved['id'],normal(arguments.get('query','')),int(time.time()//300))
+            else:queue_operation_id=reserved['operation_id']
             if reserved.get('followup'):
                 actions[0]['arguments']={'action':'topic_followup','research_id':reserved['id'],'query':arguments['query'],'mode':'quick'}
             else:actions[0]['arguments']={k:v for k,v in actions[0]['arguments'].items() if k!='query'}|{'research_id':reserved['id']}
@@ -7898,9 +7912,15 @@ async def save_api_keys(data: Dict[str, Any]):
         # Reload environment variables
         load_dotenv(env_file, override=True)
         if key_name == "GEMINI_API_KEY":
+            previous_key=state.gemini_api_key
             state.gemini_api_key = key_value
             os.environ["GEMINI_API_KEY"] = key_value
             os.environ.pop("GOOGLE_API_KEY", None)
+            if research_model is not None:
+                await asyncio.to_thread(research_model.budget.provider_changed,previous_key,key_value)
+                from astra_ai.core.research_model import resume_research_budget_waits
+                artifacts,_=get_research_services()
+                await asyncio.to_thread(resume_research_budget_waits,action_jobs,artifacts,research_model.budget)
         
         logger.info(f"[SETTINGS] Saved {key_name} to .env")
         
@@ -8530,7 +8550,7 @@ async def research_request(request:Request):
         return await asyncio.to_thread(create_entry,artifacts,context,body['kind'],query,operation_id,str(body.get('source_research_id','')))
     reserved=await asyncio.to_thread(artifacts.reserve,query,mode,context,operation_id)
     if reserved['status']!='ok':return JSONResponse(reserved,status_code=400)
-    result=action_jobs.submit([{'name':'search_web','arguments':{'research_id':reserved['id'],'mode':mode,'subquestions':body.get('subquestions',[])}}],{**context,'requested_research':True},operation_id,goal=reserved['display_title'])
+    result=action_jobs.submit([{'name':'search_web','arguments':{'research_id':reserved['id'],'mode':mode,'subquestions':body.get('subquestions',[])}}],{**context,'requested_research':True},reserved['operation_id'],goal=reserved['display_title'])
     if result.get('status') not in {'accepted','queued','duplicate','completed'}:
         await asyncio.to_thread(artifacts.request_state,reserved['id'],context,phase='failed',waiting_reason=result.get('reason','job_not_admitted'))
     else:await asyncio.to_thread(artifacts.request_state,reserved['id'],context,job_id=result.get('job_id',''))

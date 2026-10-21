@@ -11,6 +11,16 @@ from astra_ai.ui.backend.document_api import authored_preview, authored_apply
 
 CTX={'profile_id':'owner','project_id':'project','session_id':'main'}
 
+def test_article_topic_cannot_make_unrelated_recommendation_images_relevant():
+    from astra_ai.core.research_illustrations import relevant_candidate
+    query='OpenAI as a company and its latest AI models in 2026. Include history, founders and CEO. Make it impressive with images, videos and charts.'
+    source='https://tech-insider.org/openai-valuation'
+    assert not relevant_candidate({'caption':"Gemini's Veo API: Generate AI Video in 13 Steps",'source_url':source},query)
+    assert not relevant_candidate({'caption':'Apple HomeView Siri AI payout','source_url':source},query)
+    assert relevant_candidate({'caption':'OpenAI annual revenue forecast','source_url':'https://futuresearch.ai/report'},query)
+    assert not relevant_candidate({'caption':'Teaching students through questions — Cover','source_url':'https://openai.com/index/education'},query)
+    assert relevant_candidate({'caption':'OpenAI research overview — Cover','source_url':'https://openai.com/index/overview'},query)
+
 def entry(tmp_path,kind='research'):
     store=ResearchArtifacts(tmp_path/'reports.json')
     row=store.reserve('NVIDIA workstation comparison','detailed',CTX,'sample',kind)

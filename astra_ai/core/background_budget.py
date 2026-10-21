@@ -1,5 +1,5 @@
 """Shared durable pacing for background work; no provider keys are stored here."""
-import contextlib, threading, time
+import contextlib, hashlib, threading, time
 from datetime import datetime,timezone
 from pathlib import Path
 from astra_ai.memory.shared_memory import read,atomic,StorageLock
@@ -35,9 +35,36 @@ class BackgroundBudget:
         self.path=Path(path);self.lock=StorageLock(self.path.with_suffix('.lock'));self.slot=threading.Lock();self.daily_requests=daily_requests;self.daily_tokens=daily_tokens;self.min_interval=min_interval
     def snapshot(self):
         with self.lock:return read(self.path,{'day':'','requests':0,'tokens':0,'next_attempt':0})
-    def provider_pause(self,until,reason):
+    def defer_model(self,model,provider_key,until):
         with self.lock:
             data=read(self.path,{})
+            marker=hashlib.sha256(provider_key.encode()).hexdigest()
+            if data.get('provider_marker',marker)!=marker:return
+            data.setdefault('model_backoffs',{})[model]={'provider':marker,'until':until}
+            atomic(self.path,data)
+    def model_deferred(self,model,provider_key):
+        item=self.snapshot().get('model_backoffs',{}).get(model,{})
+        return item.get('provider')==hashlib.sha256(provider_key.encode()).hexdigest() and item.get('until',0)>time.time()
+    def provider_changed(self,previous_key,new_key):
+        """A replacement credential may have different quota; usage counters never reset."""
+        if not previous_key or not new_key or previous_key==new_key:return False
+        with self.lock:
+            data=read(self.path,{})
+            if str(data.get('pause_reason','')).startswith('gemini_'):
+                history=data.get('provider_pause_history',[])
+                history.append({'provider':hashlib.sha256(previous_key.encode()).hexdigest(),
+                    'until':data.get('next_attempt',0),'reason':data['pause_reason'],'replaced_at':time.time()})
+                data.update(provider_pause_history=history[-8:],next_attempt=0,pause_reason='')
+            data['provider_marker']=hashlib.sha256(new_key.encode()).hexdigest()
+            atomic(self.path,data)
+        return True
+    def provider_pause(self,until,reason,provider_key=None):
+        with self.lock:
+            data=read(self.path,{})
+            if provider_key:
+                marker=hashlib.sha256(provider_key.encode()).hexdigest()
+                if data.get('provider_marker',marker)!=marker:return
+                data['provider_marker']=marker
             data.update(next_attempt=max(data.get('next_attempt',0),until),pause_reason=reason)
             atomic(self.path,data)
     @contextlib.contextmanager
@@ -46,14 +73,14 @@ class BackgroundBudget:
         try:
             with self.lock:
                 data=read(self.path,{});day=datetime.now(timezone.utc).date().isoformat()
-                if data.get('day')!=day:data={'day':day,'requests':0,'tokens':0,'next_attempt':data.get('next_attempt',0)}
+                if data.get('day')!=day:data={'day':day,'requests':0,'tokens':0,**{k:data[k] for k in ('next_attempt','pause_reason','provider_marker','provider_pause_history','model_backoffs') if k in data}}
                 current=time.time()
-                if current<data.get('next_attempt',0):raise BudgetPaused(data['next_attempt'],'background_quota_paused')
+                if current<data.get('next_attempt',0):raise BudgetPaused(data['next_attempt'],data.get('pause_reason') or 'background_quota_paused')
                 needs_extra=data.get('requests',0)>=self.daily_requests
                 if (needs_extra and not scoped_requests_remaining(data,scope_id,day)) or data.get('tokens',0)+tokens>self.daily_tokens:
                     midnight=(int(current)//86400+1)*86400;raise BudgetPaused(midnight,'background_daily_budget')
                 if needs_extra:data['research_allowances'][scope_id]['used']+=1
-                data.update(requests=data.get('requests',0)+1,tokens=data.get('tokens',0)+tokens,next_attempt=current+self.min_interval);atomic(self.path,data)
+                data.update(requests=data.get('requests',0)+1,tokens=data.get('tokens',0)+tokens,next_attempt=current+self.min_interval,pause_reason='');atomic(self.path,data)
             yield TokenReservation(self,day,tokens)
         finally:self.slot.release()
     def response(self,response):

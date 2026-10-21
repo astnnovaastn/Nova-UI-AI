@@ -311,7 +311,7 @@ class ResearchArtifacts:
                     metadata=requests.get(existing['id'],{})
                     if metadata.get('canonical_research_id'):continue
                     cached=existing.get('completeness')=='complete' and age<3600
-                    active=existing['id'] not in data.get('artifacts',{}) and metadata.get('phase') not in {'failed','draft'} and age<300
+                    active=existing.get('completeness')!='complete' and metadata.get('phase') in {'queued','collecting_sources','comparing_evidence','preparing_report','waiting_for_quota'}
                     if cached or active:return {'status':'ok',**copy.deepcopy(metadata or existing)}
             if not old:
                 self.backup_metadata()
@@ -563,8 +563,10 @@ class ResearchArtifacts:
             updated={**old,'report':report,'summary':report[:1600],'revision':hashlib.sha256(report.encode()).hexdigest(),'display_title':title,'phase':'complete'}
             data['artifacts'][identifier]=updated
             data['requests'][identifier].update(display_title=title,phase='complete',next_attempt=None,waiting_reason='')
-            from .research_illustrations import place_images
-            data['requests'][identifier]['selected_images']=place_images(data['requests'][identifier].get('validated_images') or data['requests'][identifier].get('selected_images',[]),report)
+            from .research_illustrations import place_images,relevant_candidate
+            images=data['requests'][identifier].get('validated_images') or data['requests'][identifier].get('selected_images',[])
+            if old.get('kind','research')=='research':images=[row for row in images if relevant_candidate(row,old['query'])]
+            data['requests'][identifier]['selected_images']=place_images(images,report)
             atomic(self.path,data)
             return self.brief(updated)
 
@@ -576,7 +578,7 @@ class ResearchArtifacts:
                 if operation_id and item.get('operation_id') == operation_id:
                     if (item['query'], item['mode']) != (query, mode):raise ValueError('operation_id_reused')
                     return copy.deepcopy(item)
-                if (item['query'].casefold(), item['mode'], item.get('session_id')) == (query.casefold(), mode, context.get('session_id', '')) and time.time()-item['created_epoch'] < freshness and item['completeness'] == 'complete':return copy.deepcopy(item)
+                if (normal(item['query']), item['mode'], item.get('session_id')) == (normal(query), mode, context.get('session_id', '')) and time.time()-item['created_epoch'] < freshness and item['completeness'] == 'complete':return copy.deepcopy(item)
         return None
 
     def save(self, query, mode, report, sources, failures, context, operation_id):
@@ -1339,8 +1341,11 @@ class ResearchSearch:
             if checkpoint.get('revision')!=item['revision']:checkpoint={}
             try:
                 sources=self.artifacts.source_catalog(item)
-                report=await self.complete(checkpoint.get('report') or item['report'],item['query'],sources) if self.complete else await self.synthesize(item['query']+'\nFinish every requested topic, including recommendations and limitations, within a concise complete report. End with a complete conclusion; do not leave any section or sentence unfinished.',sources)
-            except BudgetPaused as exc:return {'status':'waiting_for_quota','next_attempt':max(time.time()+5,exc.until),'reason':exc.reason,'research_id':identifier}
+                composition=self.artifacts.request_state(identifier,context).get('synthesis_checkpoint',{})
+                if len(composition.get('parts',[]))==3 and not composition.get('coverage_checked'):
+                    report=await self.synthesize(item['query'],item['sources'])
+                else:report=await self.complete(checkpoint.get('report') or item['report'],item['query'],sources) if self.complete else await self.synthesize(item['query']+'\nFinish every requested topic, including recommendations and limitations, within a concise complete report. End with a complete conclusion; do not leave any section or sentence unfinished.',sources)
+            except BudgetPaused as exc:return {'status':'waiting_for_retry' if exc.reason=='research_section_saved' else 'waiting_for_quota','next_attempt':max(time.time()+1,exc.until),'reason':exc.reason,'research_id':identifier}
             except Exception as exc:
                 from .research_model import IncompleteResearchAnswer
                 if not isinstance(exc,IncompleteResearchAnswer):raise
@@ -1377,12 +1382,15 @@ class ResearchSearch:
         if not isinstance(questions,list) or len(questions)>4 or any(not isinstance(q,str) or not 1<=len(q.strip())<=600 or safe(q)!=q for q in questions):return {'status':'rejected','reason':'invalid_research_fanout'}
         if mode=='quick' and questions:return {'status':'rejected','reason':'fanout_requires_detailed_mode'}
         key=stable(scope(context),operation_id or query,mode)
+        if pending is None:
+            pending=await asyncio.to_thread(self.artifacts.reserve,query,mode,context,operation_id or key)
+            if pending['status']!='ok':return pending
+        operation_id=pending['operation_id'];query=pending['query'];mode=pending['mode']
+        key=stable(scope(context),operation_id,mode)
         async with self.operation_locks.setdefault(key,asyncio.Lock()):
             try:cached=await asyncio.to_thread(self.artifacts.find,query,mode,context,operation_id)
             except ValueError:return {'status':'conflict','reason':'operation_id_reused'}
             if cached:return self.artifacts.brief(cached)
-            pending=await asyncio.to_thread(self.artifacts.reserve,query,mode,context,operation_id or key)
-            if pending['status']!='ok':return pending
             identifier=pending['id']
             def checkpoint(**values):return self.artifacts.request_state(identifier,context,**values)
             sources=pending.get('sources',[]);failures=pending.get('failures',[])
@@ -1420,11 +1428,21 @@ class ResearchSearch:
                 await asyncio.to_thread(checkpoint,phase='preparing_report')
                 try:report=await self.synthesize(('[QUICK]\n' if mode=='quick' else '')+query,sources)
                 except BudgetPaused as exc:
-                    until=max(time.time()+5,exc.until)
-                    await asyncio.to_thread(checkpoint,phase='waiting_for_quota',next_attempt=until,waiting_reason=exc.reason)
-                    return {'status':'waiting_for_quota','reason':exc.reason,'next_attempt':until,'research_id':identifier,'research_revision':stable(identifier,'pending'),'query':query,'results':[]}
+                    ready=exc.reason=='research_section_saved';until=max(time.time()+(1 if ready else 5),exc.until)
+                    await asyncio.to_thread(checkpoint,phase='preparing_report' if ready else 'waiting_for_quota',next_attempt=until,waiting_reason='' if ready else exc.reason)
+                    return {'status':'waiting_for_retry' if ready else 'waiting_for_quota','reason':exc.reason,'next_attempt':until,'research_id':identifier,'research_revision':stable(identifier,'pending'),'query':query,'results':[]}
                 except asyncio.CancelledError:raise
-                except Exception:
+                except Exception as exc:
+                    from .research_model import ResearchModelUnavailable
+                    if isinstance(exc,ResearchModelUnavailable):
+                        metadata=await asyncio.to_thread(self.artifacts.request_state,identifier,context)
+                        saved=metadata.get('synthesis_checkpoint',{})
+                        stage=str(context.get('job_id',''))+':'+('plan' if not saved.get('plan') else str(len(saved.get('parts',[]))))
+                        previous=metadata.get('synthesis_failures',{})
+                        attempts=(previous.get('attempts',0) if previous.get('stage')==stage else 0)+1
+                        retry=attempts<3;until=time.time()+30
+                        await asyncio.to_thread(checkpoint,phase='waiting_for_quota' if retry else 'failed',waiting_reason='gemini_service_unavailable',next_attempt=until if retry else None,synthesis_failures={'stage':stage,'attempts':attempts})
+                        return {'status':'waiting_for_retry' if retry else 'failed','reason':'gemini_service_unavailable','next_attempt':until,'research_id':identifier}
                     await asyncio.to_thread(checkpoint,phase='failed',waiting_reason='synthesis_unavailable')
                     return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
                 if not report:return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}

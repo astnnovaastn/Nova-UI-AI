@@ -30,7 +30,15 @@ def atomic(path,data):
     try:
         with temp.open('w',encoding='utf-8') as f:
             json.dump(data,f,ensure_ascii=False,indent=2);f.flush();os.fsync(f.fileno())
-        os.replace(temp,path)
+        # Windows readers, antivirus and cloud-sync clients can briefly deny rename.
+        # Retry the same fsynced file; never discard the authoritative original.
+        for attempt in range(7):
+            try:
+                os.replace(temp,path)
+                break
+            except PermissionError as exc:
+                if getattr(exc,'winerror',None) not in {5,32,33} or attempt==6:raise
+                time.sleep(.025*2**min(attempt,4))
     finally: temp.unlink(missing_ok=True)
 
 def read(path,default):
