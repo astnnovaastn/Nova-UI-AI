@@ -445,3 +445,26 @@ def test_research_context_includes_real_quota_and_followup_status(tmp_path):
     result=asyncio.run(env[handler.name](parent['id'],CTX))
     assert result['followup_question']=='Roadster specifications?'
     assert result['followup_evidence'][0]['url']==row['url'] and result['followup_evidence'][0]['content']==row['content']
+
+
+@pytest.mark.parametrize('phase,checkpoint',[
+    ('preparing_report',{}),
+    ('waiting_for_quota',{'signature':'saved-composition','parts':['Already written.']}),
+    ('waiting_for_quota',{})])
+def test_followup_does_not_invalidate_evidence_already_being_written(tmp_path,phase,checkpoint):
+    store=ResearchArtifacts(tmp_path/'reports.json')
+    parent=store.reserve('Original memory comparison','detailed',CTX,'original')
+    store.request_state(parent['id'],CTX,sources=[SOURCE],phase=phase,synthesis_checkpoint=checkpoint)
+    extra={**SOURCE,'url':'https://example.com/new-memory-evidence','title':'Additional memory evidence'}
+    service=ResearchSearch(store,lambda _:None)
+    service._request=lambda *args:([extra],None)
+    result=asyncio.run(service.quick_followup({'research_id':parent['id'],'query':'Add more about persistence'},
+        {**CTX,'research_id':parent['id']},'followup'))
+    assert result['reason']=='topic_initial_report_pending' and result['research_id']==parent['id']
+    row=store.request_state(parent['id'],CTX)
+    assert row['synthesis_checkpoint']==checkpoint
+    frozen=phase=='preparing_report' or bool(checkpoint)
+    assert len(row['sources'])==(1 if frozen else 2)
+    catalog=store.source_catalog(store.get(parent['id'],CTX)['artifact'])
+    assert [s['url'] for s in catalog]==[SOURCE['url'],extra['url']]
+    assert len(store.snapshot()['requests'])==1

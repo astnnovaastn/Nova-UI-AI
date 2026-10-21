@@ -70,7 +70,8 @@ def test_stable_model_failure_is_not_an_unbounded_retry(tmp_path):
         def close(self):pass
     budget=BackgroundBudget(tmp_path/'budget.json',min_interval=0)
     model=GeminiResearchModel(lambda:'test',budget,lambda:'gemini-3.8-flash',Client)
-    with pytest.raises(ResearchModelUnavailable):model.structured('Answer',{}, {'type':'object'})
+    with pytest.raises(ResearchModelUnavailable) as failure:model.structured('Answer',{}, {'type':'object'})
+    assert failure.value.failure_kind=='http_503'
     assert len(calls)==2 and budget.snapshot()['requests']==2
 
 

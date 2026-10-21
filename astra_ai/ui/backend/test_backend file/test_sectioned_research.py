@@ -143,3 +143,70 @@ def test_quota_before_first_section_keeps_report_pending_then_publishes_same_ide
     assert len(store.document(identifier,context)['report'])>12000
     assert len(searches)==1 and len(calls)==6
     assert len(store.snapshot()['requests'])==1
+
+
+@pytest.mark.parametrize('invalid',[False,True])
+def test_low_remaining_budget_finishes_saved_sections_and_reviews_in_one_call(tmp_path,invalid):
+    from datetime import datetime,timezone
+    from astra_ai.memory.shared_memory import atomic
+    from astra_ai.core.research_model import composition_signature,composition_ready
+    budget=BackgroundBudget(tmp_path/'budget.json',daily_tokens=50000,min_interval=0)
+    atomic(budget.path,{'day':datetime.now(timezone.utc).date().isoformat(),'tokens':33000,'requests':10})
+    first='## Company and history\n\n'+('Substantive supported findings. '*200)+' [S1].'
+    state={'signature':composition_signature('Full brief',SOURCES),'plan':copy.deepcopy(PLAN),'parts':[first]}
+    calls=[];saved=[]
+    class Model(GeminiResearchModel):
+        def structured(self,instruction,payload,schema,max_tokens=1600):
+            calls.append(payload)
+            assert len(payload['remaining_sections'])==2 and payload['written_report']==first
+            assert sum(len(s['content']) for s in payload['evidence'])<=12000
+            assert max_tokens==6500
+            comparison='## Models and comparisons\n\n'+('Supported comparison. '*200)+(' [S99].' if invalid else ' [S1].')
+            return {'parts':[comparison,
+                '## Outlook and limitations\n\n'+('Supported practical guidance. '*150)+' [S2].'],'after_section':0,'report':''}
+    async def checkpoint(value):saved.append(value)
+    model=Model(lambda:'test',budget,lambda:'configured')
+    if invalid:
+        with pytest.raises(ModelUnavailable):asyncio.run(model.report('Full brief',SOURCES,state=state,checkpoint=checkpoint))
+        assert saved==[] and state['parts']==[first]
+    else:
+        report=asyncio.run(model.report('Full brief',SOURCES,state=state,checkpoint=checkpoint))
+        assert len(calls)==1 and len(report)>12000 and report.count(first)==1
+        assert composition_ready({'query':'Full brief','sources':SOURCES,'synthesis_checkpoint':saved[-1]})
+        assert asyncio.run(model.report('Full brief',SOURCES,state=saved[-1],checkpoint=checkpoint))==report
+        assert len(calls)==1
+
+
+def test_complete_substantive_section_is_not_discarded_at_eight_thousand_characters(tmp_path):
+    calls=[]
+    class Model(GeminiResearchModel):
+        def structured(self,instruction,payload,schema,max_tokens=1600):
+            calls.append(payload)
+            if 'written_report' in payload:return {'report':'','after_section':0}
+            if 'section_index' not in payload:return copy.deepcopy(PLAN)
+            return {'report':'## '+payload['write_section']['heading']+'\n\n'+('Substantive supported findings. '*280)+' [S1].'}
+    saved=[]
+    async def checkpoint(value):saved.append(value)
+    model=Model(lambda:'test',BackgroundBudget(tmp_path/'budget.json'),lambda:'configured')
+    report=asyncio.run(model.report('Full brief',SOURCES,checkpoint=checkpoint))
+    assert len(saved[-1]['parts'][0])>8000 and len(calls)==5
+    assert report.count('## Company and history')==1
+
+
+@pytest.mark.parametrize('message,kind',[
+    ('Gemini answer reached its output limit before completion','output_limit'),
+    ('Research section is incomplete or unverifiable','incomplete_section'),
+    ('provider-secret-that-must-not-be-persisted','unavailable')])
+def test_failed_writing_retains_only_a_safe_diagnostic_not_provider_messages(tmp_path,message,kind):
+    from astra_ai.core.research_learning import ResearchArtifacts,ResearchSearch
+    context={'profile_id':'owner','project_id':'project','session_id':'session'}
+    store=ResearchArtifacts(tmp_path/'reports.json')
+    async def synth(*args):raise ModelUnavailable(message)
+    service=ResearchSearch(store,lambda _:None,synthesize=synth)
+    service._request=lambda *args:([SOURCES[0]],None)
+    result=asyncio.run(service.search({'query':'Detailed comparison','mode':'detailed'},context,'original'))
+    assert result['status']=='failed'
+    row=store.request_state(result['research_id'],context)
+    assert row['synthesis_failure_kind']==kind
+    assert not store.document(result['research_id'],context)['report']
+    assert message not in store.path.read_text(encoding='utf-8')

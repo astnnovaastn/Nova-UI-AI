@@ -1272,10 +1272,15 @@ class ResearchSearch:
                 def checkpoint_pending():
                     with self.artifacts.lock:
                         current=self.artifacts.request_state(identifier,context)
-                        merged=list(current.get('sources',[]));seen={row['url'] for row in merged}
-                        for row in sources:
-                            if row['url'] not in seen:merged.append(row);seen.add(row['url'])
-                        self.artifacts.request_state(identifier,context,sources=merged)
+                        # A follow-up has its own durable source receipt above.
+                        # Mutating evidence underneath an in-flight composition
+                        # invalidates its signature and discards saved sections.
+                        writing=current.get('phase')=='preparing_report' or bool(current.get('synthesis_checkpoint',{}).get('signature'))
+                        if not writing:
+                            merged=list(current.get('sources',[]));seen={row['url'] for row in merged}
+                            for row in sources:
+                                if row['url'] not in seen:merged.append(row);seen.add(row['url'])
+                            self.artifacts.request_state(identifier,context,sources=merged)
                         activity=self.artifacts.extension_state(identifier,context)
                         if activity.get('operation_id') in {None,operation_id}:
                             self.artifacts.extension_state(identifier,context,phase='waiting_for_report',view='reader',operation_id=operation_id,reason='initial_report_pending',collected_sources=len(sources))
@@ -1441,9 +1446,18 @@ class ResearchSearch:
                         previous=metadata.get('synthesis_failures',{})
                         attempts=(previous.get('attempts',0) if previous.get('stage')==stage else 0)+1
                         retry=attempts<3;until=time.time()+30
-                        await asyncio.to_thread(checkpoint,phase='waiting_for_quota' if retry else 'failed',waiting_reason='gemini_service_unavailable',next_attempt=until if retry else None,synthesis_failures={'stage':stage,'attempts':attempts})
+                        kind=getattr(exc,'failure_kind','unavailable')
+                        if kind not in {'http_404','http_408','http_500','http_502','http_503','http_504','timeout'}:kind='unavailable'
+                        await asyncio.to_thread(checkpoint,phase='waiting_for_quota' if retry else 'failed',waiting_reason='gemini_service_unavailable',next_attempt=until if retry else None,synthesis_failures={'stage':stage,'attempts':attempts,'kind':kind})
                         return {'status':'waiting_for_retry' if retry else 'failed','reason':'gemini_service_unavailable','next_attempt':until,'research_id':identifier}
-                    await asyncio.to_thread(checkpoint,phase='failed',waiting_reason='synthesis_unavailable')
+                    failure_kind={
+                        'Gemini answer reached its output limit before completion':'output_limit',
+                        'Research section is incomplete or unverifiable':'incomplete_section',
+                        'Research remainder is incomplete or unverifiable':'incomplete_remainder',
+                        'Invalid research remainder':'invalid_response',
+                        'Gemini returned an invalid research answer':'invalid_response',
+                    }.get(str(exc),'unavailable')
+                    await asyncio.to_thread(checkpoint,phase='failed',waiting_reason='synthesis_unavailable',synthesis_failure_kind=failure_kind)
                     return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
                 if not report:return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
             else:
