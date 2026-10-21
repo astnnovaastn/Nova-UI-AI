@@ -5280,13 +5280,14 @@ async def lifespan(app: FastAPI):
     learned_root=Path(__file__).resolve().parents[2]/'core'/'learned'
     background_budget=BackgroundBudget(state.live_memory.memory_path.parent/'background_budget.json')
     background_model=BackgroundModel(_get_groq_api_key,background_budget)
-    from astra_ai.core.research_model import GeminiResearchModel,resume_legacy_research_waits,requested_research_budget,resume_research_budget_waits,resume_published_research,research_text_model
-    research_budget=requested_research_budget(state.live_memory.memory_path.parent/'research_gemini_budget.json',background_budget.slot,_get_env_value)
-    research_model=GeminiResearchModel(lambda:state.gemini_api_key,research_budget,lambda:research_text_model(_get_env_value,MODEL_STATUS,TEXT_PREFERRED))
+    from astra_ai.core.research_model import resume_legacy_research_waits,requested_research_budget,resume_research_budget_waits,resume_published_research,research_budget_path
+    research_budget=requested_research_budget(research_budget_path(state.live_memory.memory_path.parent,_get_env_value),background_budget.slot,_get_env_value)
+    from astra_ai.core.research_openai import configured_research_model
+    research_model=configured_research_model(_get_env_value,lambda:state.gemini_api_key,research_budget,MODEL_STATUS,TEXT_PREFERRED)
     await asyncio.to_thread(resume_legacy_research_waits,action_jobs)
     research_artifacts,_=get_research_services()
     await asyncio.to_thread(resume_published_research,action_jobs,research_artifacts)
-    await asyncio.to_thread(resume_research_budget_waits,action_jobs,research_artifacts,research_budget)
+    await asyncio.to_thread(resume_research_budget_waits,action_jobs,research_artifacts,research_budget,provider_key=research_model.key_provider(),budget_scope=research_model.budget_scope)
     state.memory_organizer.background_budget=background_budget
     from astra_ai.memory.organizer_runtime import OrganizationReview, GeminiMergeReviewer
     state.memory_organizer.organization_review=OrganizationReview(state.live_memory,GeminiMergeReviewer(lambda:state.gemini_api_key,background_budget))
@@ -6401,6 +6402,7 @@ async def health_check():
         "default_voice_provider": "gemini_live",
         "gemini_live_model": MODEL_STATUS["voice"].get("effective") or LIVE_MODEL,
         "models": MODEL_STATUS,
+        "research_writer": {"provider":getattr(research_model,'provider',None),"model":research_model.model_provider() if research_model else None},
         "gemini_live_configured": bool(state.gemini_api_key),
         "gemini_live_sessions": len(state.live_sessions),
         "runtime": {"python": sys.version.split()[0], "google_genai": importlib.metadata.version("google-genai")},
@@ -7916,11 +7918,11 @@ async def save_api_keys(data: Dict[str, Any]):
             state.gemini_api_key = key_value
             os.environ["GEMINI_API_KEY"] = key_value
             os.environ.pop("GOOGLE_API_KEY", None)
-            if research_model is not None:
+            if research_model is not None and getattr(research_model,'provider','gemini')=='gemini':
                 await asyncio.to_thread(research_model.budget.provider_changed,previous_key,key_value)
                 from astra_ai.core.research_model import resume_research_budget_waits
                 artifacts,_=get_research_services()
-                await asyncio.to_thread(resume_research_budget_waits,action_jobs,artifacts,research_model.budget)
+                await asyncio.to_thread(resume_research_budget_waits,action_jobs,artifacts,research_model.budget,provider_key=research_model.key_provider(),budget_scope=research_model.budget_scope)
         
         logger.info(f"[SETTINGS] Saved {key_name} to .env")
         
@@ -8713,6 +8715,7 @@ async def research_document(identifier:str,request:Request,revision:str=''):
     if result['status']=='not_found':
         if metadata.get('status')=='ok' and identifier in artifacts.snapshot().get('removed',{}):raise HTTPException(410,'Research removed from history')
         raise HTTPException(404,'Research unavailable')
+    result['writing_provider']=getattr(research_model,'provider','gemini')
     return result
 
 @app.put('/api/research/{identifier}/draft')

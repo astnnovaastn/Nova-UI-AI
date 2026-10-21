@@ -276,6 +276,7 @@ type Report = {
   processing_seconds?: number;
   active_since?: number | null;
   waiting_reason?: string;
+  writing_provider?: string;
   image_items?: ResearchImage[];
   images_prepared?: boolean;
   image_sources?: Source[];
@@ -1240,18 +1241,20 @@ function researchProgress(
     skeleton: active && elapsed >= 1.5,
   };
 }
-function researchWaitMessage(reason: string) {
+function researchWaitMessage(reason: string, provider?: string) {
+  if (reason === "openai_service_unavailable") return "OpenAI is temporarily unavailable. Your saved writing and sources will be retried automatically.";
+  if (reason === "openai_quota_unavailable") return "The configured OpenAI project has no quota available for report writing. Your writing and sources are saved.";
+  if (reason === "openai_rate_limit") return "OpenAI is temporarily rate limited. Report writing will retry from the saved evidence.";
   if (reason === "gemini_service_unavailable") return "Gemini is temporarily unavailable. Your saved writing and sources will be retried automatically.";
   if (reason === "gemini_daily_quota") return "Gemini has reached its daily quota. The full answer has not been written yet.";
   if (reason === "gemini_quota_unavailable") return "The configured Gemini project has no quota available for report writing.";
   if (reason === "gemini_rate_limit") return "Gemini is temporarily rate limited. Report writing will retry from the saved evidence.";
-  if (reason === "background_daily_budget") return "The app’s daily research allowance has been used. The full answer is still queued.";
+  if (reason === "background_daily_budget") return "The app’s daily research allowance" + (provider === "openai" ? " for OpenAI" : provider === "gemini" ? " for Gemini" : "") + " has been used. The full answer is still queued.";
   return "Report writing is waiting for its usage allowance. The full answer has not been published.";
 }
 export function PendingResearch({
   report,
   onBrowse,
-  onImage,
 }: {
   report: Report;
   onBrowse: () => void;
@@ -1296,14 +1299,11 @@ export function PendingResearch({
       </div>
       {report.phase === "waiting_for_quota" && (
         <div className="research-evidence-summary" role="status">
-          <p>{researchWaitMessage(report.waiting_reason || "")}</p>
+          <p>{researchWaitMessage(report.waiting_reason || "", report.writing_provider)}</p>
           {typeof report.next_attempt === "number" && report.next_attempt * 1000 > now && (
             <p>Next retry scheduled for {new Date(report.next_attempt * 1000).toLocaleString(undefined, {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"})}. Your collected sources are saved.</p>
           )}
         </div>
-      )}
-      {!!report.image_items?.length && (
-        <EvidenceGallery images={report.image_items} reportId={report.research_id} onOpen={onImage} />
       )}
       {status.skeleton && (
         <div className="research-loading-lines" aria-hidden="true">

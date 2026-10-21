@@ -312,6 +312,27 @@ test("quota messages distinguish Google limits from the app allowance", () => {
   assert.match(context.researchWaitMessage("background_daily_budget"), /app’s daily research allowance/);
   assert.match(context.researchWaitMessage("gemini_quota_unavailable"), /no quota/);
   assert.match(context.researchWaitMessage("gemini_rate_limit"), /retry from the saved evidence/);
+  assert.match(context.researchWaitMessage("background_daily_budget", "openai"), /allowance for OpenAI/);
+  assert.match(context.researchWaitMessage("openai_quota_unavailable"), /OpenAI project.*no quota/);
+});
+
+test("unpublished research never looks like a finished images-only report", () => {
+  const pending = tree.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === "PendingResearch");
+  const render = vm.createContext({
+    exports: {}, React: { createElement: (type, props, ...children) => ({ type, props, children }) },
+    Icon: "icon", useState: value => [value, () => {}], useEffect: () => {},
+    researchProgress: context.researchProgress, researchWaitMessage: context.researchWaitMessage,
+  });
+  vm.runInContext(ts.transpileModule(pending.getText(tree), {compilerOptions: {target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React}}).outputText, render);
+  const result = render.PendingResearch({
+    report: {display_title: "New UI research", phase: "waiting_for_quota", sources: [{id: "S1"}],
+      writing_provider: "openai", waiting_reason: "background_daily_budget", image_items: [{caption: "Pending image", id: "I1"}]},
+    onBrowse() {}, onImage() {},
+  });
+  const text = JSON.stringify(result);
+  assert.match(text, /full answer is still queued/);
+  assert.match(text, /composed answer hasn’t been published/);
+  assert.doesNotMatch(text, /Pending image|EvidenceGallery/);
 });
 
 test("media inventory excludes malformed results and deduplicates native player IDs", () => {

@@ -2,7 +2,7 @@ import asyncio,copy
 import pytest
 from astra_ai.core.background_budget import BackgroundBudget,BudgetPaused
 from astra_ai.core.background_model import ModelUnavailable
-from astra_ai.core.research_model import GeminiResearchModel
+from astra_ai.core.research_model import GeminiResearchModel,canonical_citations,composition_signature
 
 SOURCES=[{'url':'https://example.com/'+str(i),'title':'Evidence '+str(i),'retrieved_at':'2026-10-21','content':'Supported company, models, pricing and comparison evidence. '*500} for i in range(12)]
 PLAN={'title':'Company, Models and Outlook','sections':[{'heading':h,'focus':h+' with evidence and limitations'} for h in ('Company and history','Models and comparisons','Outlook and limitations')]}
@@ -38,8 +38,12 @@ def test_invalid_section_is_never_checkpointed_as_complete(tmp_path,bad_part):
         def structured(self,instruction,payload,schema,max_tokens=1600):return {'report':bad_part} if 'section_index' in payload else copy.deepcopy(PLAN)
     async def checkpoint(value):saved.append(value)
     model=Model(lambda:'test',BackgroundBudget(tmp_path/'budget.json'),lambda:'configured')
-    with pytest.raises(ModelUnavailable):asyncio.run(model.report('Full company report',SOURCES,checkpoint=checkpoint))
-    assert len(saved)==1 and saved[0]['parts']==[]
+    with pytest.raises(BudgetPaused):asyncio.run(model.report('Full company report',SOURCES,checkpoint=checkpoint))
+    assert saved[-1]['parts']==[] and saved[-1]['pending_section_repair']['text']==bad_part
+    with pytest.raises(BudgetPaused):asyncio.run(model.report('Full company report',SOURCES,state=saved[-1],checkpoint=checkpoint))
+    assert saved[-1]['pending_section_repair']['attempted'] is True
+    with pytest.raises(ModelUnavailable):asyncio.run(model.report('Full company report',SOURCES,state=saved[-1],checkpoint=checkpoint))
+    assert saved[-1]['parts']==[]
 
 
 def test_changed_brief_or_evidence_cannot_reuse_another_composition(tmp_path):
@@ -191,6 +195,56 @@ def test_complete_substantive_section_is_not_discarded_at_eight_thousand_charact
     report=asyncio.run(model.report('Full brief',SOURCES,checkpoint=checkpoint))
     assert len(saved[-1]['parts'][0])>8000 and len(calls)==5
     assert report.count('## Company and history')==1
+
+
+def test_invalid_section_and_review_repair_once_from_durable_drafts_without_rewriting_prior_sections(tmp_path):
+    from astra_ai.core.research_model import composition_signature,composition_ready
+    first='## Company and history\n\nSupported complete findings [S1].'
+    state={'signature':composition_signature('Full brief',SOURCES),'plan':copy.deepcopy(PLAN),'parts':[first]}
+    saved=[];sections=[];reviews=[]
+    class Model(GeminiResearchModel):
+        def structured(self,instruction,payload,schema,max_tokens=1600):
+            if 'section_index' in payload:
+                sections.append(payload['section_index'])
+                if payload['section_index']==2 and 'unvalidated_draft' not in payload:return {'report':'## Comparison\n\nSupported but unfinished [S1]'}
+                if 'unvalidated_draft' in payload:assert payload['unvalidated_draft'].endswith('[S1]')
+                return {'report':'## '+payload['write_section']['heading']+'\n\nSupported complete comparison [S1].'}
+            reviews.append(payload)
+            assert 'maxLength' not in schema['properties']['report']
+            return {'after_section':2,'report':'' if 'unvalidated_note' in payload else 'Unfinished note [S1]'}
+    async def checkpoint(value):saved.append(value)
+    model=Model(lambda:'test',BackgroundBudget(tmp_path/'budget.json'),lambda:'configured')
+    with pytest.raises(BudgetPaused):asyncio.run(model.report('Full brief',SOURCES,state=state,checkpoint=checkpoint))
+    assert saved[-1]['parts']==[first]
+    with pytest.raises(BudgetPaused):asyncio.run(model.report('Full brief',SOURCES,state=saved[-1],checkpoint=checkpoint))
+    assert len(saved[-1]['parts'])==3 and not saved[-1].get('coverage_checked')
+    report=asyncio.run(model.report('Full brief',SOURCES,state=saved[-1],checkpoint=checkpoint))
+    assert sections==[2,2,3] and len(reviews)==2 and report.count(first)==1
+    assert 'pending_section_repair' not in saved[-1] and 'pending_coverage_repair' not in saved[-1]
+    assert composition_ready({'query':'Full brief','sources':SOURCES,'synthesis_checkpoint':saved[-1]})
+
+
+def test_parenthesized_citations_keep_valid_ids_without_changing_code_or_inventing_evidence():
+    text='Supported (S1, S2). Unknown (S99). Prose (see source one). `literal (S1)`\n```\n(S2)\n```'
+    assert canonical_citations(text)=='Supported [S1, S2]. Unknown [S99]. Prose (see source one). `literal (S1)`\n```\n(S2)\n```'
+
+
+def test_saved_valid_parenthesized_section_recovers_without_another_writing_request(tmp_path):
+    saved=[];calls=[]
+    part='## Company and history\n\nSupported full company facts (S1, S2).'
+    state={'signature':composition_signature('Full brief',SOURCES),'plan':copy.deepcopy(PLAN),'parts':[],
+        'pending_section_repair':{'index':0,'text':part,'attempted':True}}
+    class Model(GeminiResearchModel):
+        def structured(self,instruction,payload,schema,max_tokens=1600):
+            calls.append(payload)
+            if 'written_report' in payload:return {'report':'Supported gap (S1).','after_section':0}
+            assert payload['section_index'] in (2,3)
+            return {'report':'## '+payload['write_section']['heading']+'\n\nSupported complete findings (S1, S2).'}
+    async def checkpoint(value):saved.append(value)
+    model=Model(lambda:'test',BackgroundBudget(tmp_path/'budget.json'),lambda:'configured')
+    report=asyncio.run(model.report('Full brief',SOURCES,state=state,checkpoint=checkpoint))
+    assert canonical_citations(part) in report and len(calls)==3
+    assert 'pending_section_repair' not in saved[-1] and 'Supported gap [S1].' in report
 
 
 @pytest.mark.parametrize('message,kind',[

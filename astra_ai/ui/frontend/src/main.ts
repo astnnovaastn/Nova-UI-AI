@@ -978,11 +978,9 @@ async function recoverRuntime(forceRestart = false) {
       }
       throw new Error('The AI connection could not be restored.');
     };
-    try { await connectSession(); } catch (error) {
-      if (forceRestart || !recoveryVoiceRetryable || /key|quota|auth|permission|429|401|403|invalid/i.test(String(error))) throw error;
-      statusEl.textContent = 'restarting backend for recovery…';
-      await runtimeRequest('restart', 'POST'); await waitForRuntime(); await connectSession();
-    }
+    // A failed voice reconnect must not kill healthy research/document workers.
+    // Explicit Restart remains available; recover only restarts an unhealthy backend.
+    await connectSession();
     statusEl.textContent = isMuted ? 'muted' : 'listening';
   })().catch(error => { showError(error.message); statusEl.textContent = 'recovery failed'; }).finally(() => { runtimeOperation = null; });
   return runtimeOperation;

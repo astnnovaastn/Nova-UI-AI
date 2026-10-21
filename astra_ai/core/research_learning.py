@@ -1448,11 +1448,14 @@ class ResearchSearch:
                         retry=attempts<3;until=time.time()+30
                         kind=getattr(exc,'failure_kind','unavailable')
                         if kind not in {'http_404','http_408','http_500','http_502','http_503','http_504','timeout'}:kind='unavailable'
-                        await asyncio.to_thread(checkpoint,phase='waiting_for_quota' if retry else 'failed',waiting_reason='gemini_service_unavailable',next_attempt=until if retry else None,synthesis_failures={'stage':stage,'attempts':attempts,'kind':kind})
-                        return {'status':'waiting_for_retry' if retry else 'failed','reason':'gemini_service_unavailable','next_attempt':until,'research_id':identifier}
+                        reason='openai_service_unavailable' if getattr(exc,'provider','gemini')=='openai' else 'gemini_service_unavailable'
+                        await asyncio.to_thread(checkpoint,phase='waiting_for_quota' if retry else 'failed',waiting_reason=reason,next_attempt=until if retry else None,synthesis_failures={'stage':stage,'attempts':attempts,'kind':kind})
+                        return {'status':'waiting_for_retry' if retry else 'failed','reason':reason,'next_attempt':until,'research_id':identifier}
                     failure_kind={
                         'Gemini answer reached its output limit before completion':'output_limit',
+                        'OpenAI answer reached its output limit before completion':'output_limit',
                         'Research section is incomplete or unverifiable':'incomplete_section',
+                        'Research coverage review is unverifiable':'incomplete_review',
                         'Research remainder is incomplete or unverifiable':'incomplete_remainder',
                         'Invalid research remainder':'invalid_response',
                         'Gemini returned an invalid research answer':'invalid_response',
