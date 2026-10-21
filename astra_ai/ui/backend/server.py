@@ -2292,6 +2292,7 @@ def _save_search_record(query: str, summary: str, results: Any, record_id: Optio
 _research_services = {}
 background_model=None
 research_model=None
+research_provider_settings=None
 async def _synthesize_research(query,sources):
     if research_model is None:return ''
     from astra_ai.core.aegis_ai import CURRENT_OPERATION
@@ -5276,7 +5277,7 @@ async def lifespan(app: FastAPI):
     from astra_ai.core.background_model import BackgroundModel
     from astra_ai.core.research_learning import ResearchLearning
     from astra_ai.core.learned_capabilities import LearnedCapabilities
-    global learning_service,capability_service,background_budget,learning_warm_task,background_model,research_model
+    global learning_service,capability_service,background_budget,learning_warm_task,background_model,research_model,research_provider_settings
     learned_root=Path(__file__).resolve().parents[2]/'core'/'learned'
     background_budget=BackgroundBudget(state.live_memory.memory_path.parent/'background_budget.json')
     background_model=BackgroundModel(_get_groq_api_key,background_budget)
@@ -5284,6 +5285,12 @@ async def lifespan(app: FastAPI):
     research_budget=requested_research_budget(research_budget_path(state.live_memory.memory_path.parent,_get_env_value),background_budget.slot,_get_env_value)
     from astra_ai.core.research_openai import configured_research_model
     research_model=configured_research_model(_get_env_value,lambda:state.gemini_api_key,research_budget,MODEL_STATUS,TEXT_PREFERRED)
+    from astra_ai.ui.backend.research_provider_settings import ResearchProviderSettings
+    def install_research_writer(writer):
+        global research_model
+        research_model=writer
+    research_provider_settings=ResearchProviderSettings(ROOT_ENV_FILE,state.live_memory.memory_path.parent,_get_env_value,
+        lambda:state.gemini_api_key,background_budget.slot,lambda:research_model,install_research_writer,LIVE_MODEL)
     await asyncio.to_thread(resume_legacy_research_waits,action_jobs)
     research_artifacts,_=get_research_services()
     await asyncio.to_thread(resume_published_research,action_jobs,research_artifacts)
@@ -7691,6 +7698,7 @@ async def get_settings_status():
         
         # Check which API keys are configured in environment
         env_keys_set = {
+            "openai_research": bool(_get_env_value("NOVA_RESEARCH_OPENAI_API_KEY")),
             "quick_search": bool(_get_env_value("QUICK_SEARCH_API_KEY") or _get_env_value("SERPAPI_KEY")),
             "deep_research": bool(_get_env_value("DEEP_RESEARCH_API_KEY") or _get_env_value("TAVILY_API_KEY")),
             "gemini": bool(state.gemini_api_key),
@@ -7706,6 +7714,7 @@ async def get_settings_status():
             "aegis_ai_connected": bool(aegis_ai_connected or state.live_sessions),
             "gemini_live_configured": bool(state.gemini_api_key),
             "models": MODEL_STATUS,
+            "research_writer": await asyncio.to_thread(research_provider_settings.status) if research_provider_settings else None,
             "google_calendar_accessible": google_calendar_accessible,
             "google_mail_accessible": google_mail_accessible,
             "server_port": ServerConfig.PORT,
@@ -7848,6 +7857,30 @@ async def test_groq(data: Dict[str, Any]):
         }
 
 
+@app.get('/api/settings/research-provider')
+async def research_provider_status(request:Request):
+    _learning_context(request)
+    if research_provider_settings is None:raise HTTPException(503,'Research settings are initializing.')
+    return await asyncio.to_thread(research_provider_settings.status)
+
+
+@app.post('/api/settings/research-provider')
+async def activate_research_provider(request:Request,data:Dict[str,Any]):
+    _learning_context(request)
+    if research_provider_settings is None:raise HTTPException(503,'Research settings are initializing.')
+    try:
+        result=await research_provider_settings.activate(data.get('provider'),data.get('model'))
+        if research_model.provider!='none':
+            from astra_ai.core.research_model import resume_research_budget_waits
+            artifacts,_=get_research_services()
+            await asyncio.to_thread(resume_research_budget_waits,action_jobs,artifacts,research_model.budget,
+                provider_key=research_model.key_provider(),budget_scope=research_model.budget_scope)
+        return result
+    except ValueError as exc:raise HTTPException(400,str(exc))
+    except TimeoutError as exc:raise HTTPException(409,str(exc))
+    except OSError:raise HTTPException(503,'Research settings could not be saved. The previous provider remains active.')
+
+
 @app.post("/api/settings/keys")
 async def save_api_keys(data: Dict[str, Any]):
     """
@@ -7877,6 +7910,10 @@ async def save_api_keys(data: Dict[str, Any]):
             key_name = "WEATHER_API_KEY"
         elif key_name.lower() == "elevenlabs_voice_id":
             key_name = "elevenlabs_voice_id"
+        elif key_name.lower() == "nova_research_openai_api_key":
+            key_name = "NOVA_RESEARCH_OPENAI_API_KEY"
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',key_name) or any(c in key_value for c in '\r\n\0'):
+            return JSONResponse(status_code=400,content={"success":False,"error":"Invalid key name or value"})
         
         # Get .env file path
         env_file = ROOT_ENV_FILE
@@ -7886,30 +7923,8 @@ async def save_api_keys(data: Dict[str, Any]):
             env_file.touch()
             logger.info(f"[SETTINGS] Created new .env file: {env_file}")
         
-        # Read current .env content
-        env_content = env_file.read_text() if env_file.exists() else ""
-        lines = env_content.split('\n')
-        
-        # Find and update or add the key
-        found = False
-        new_lines = []
-        for line in lines:
-            if line.startswith(f"{key_name}="):
-                new_lines.append(f"{key_name}={key_value}")
-                found = True
-            elif line.strip():  # Keep non-empty lines
-                new_lines.append(line)
-            else:
-                new_lines.append(line)
-        
-        # If key wasn't found, add it
-        if not found:
-            if new_lines and new_lines[-1].strip():  # Add newline if needed
-                new_lines.append("")
-            new_lines.append(f"{key_name}={key_value}")
-        
-        # Write back to .env
-        env_file.write_text('\n'.join(new_lines))
+        from astra_ai.ui.backend.research_provider_settings import write_environment
+        await asyncio.to_thread(write_environment,env_file,{key_name:key_value})
         
         # Reload environment variables
         load_dotenv(env_file, override=True)

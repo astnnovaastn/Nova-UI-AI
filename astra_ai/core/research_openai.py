@@ -1,6 +1,6 @@
 """Optional OpenAI report writer; evidence retrieval and Gemini Live stay separate."""
 import json,time,requests
-from .research_model import ComposedResearchModel,GeminiResearchModel,ResearchModelUnavailable,research_text_model
+from .research_model import ComposedResearchModel,GeminiResearchModel,ResearchModelUnavailable
 from .background_model import ModelUnavailable
 from .background_budget import BudgetPaused
 
@@ -51,6 +51,7 @@ class OpenAIResearchModel(ComposedResearchModel):
                 if choices[0].get('finish_reason')=='length':raise ModelUnavailable('OpenAI answer reached its output limit before completion')
                 result=json.loads(choices[0].get('message',{}).get('content') or '')
                 if not isinstance(result,dict):raise ModelUnavailable('OpenAI returned an invalid report answer')
+                self.effective_model=self.model_provider()
                 return result
             except requests.RequestException as exc:
                 failure=ResearchModelUnavailable('OpenAI report transport is unavailable')
@@ -59,10 +60,16 @@ class OpenAIResearchModel(ComposedResearchModel):
             except (ValueError,TypeError,KeyError):raise ModelUnavailable('OpenAI returned an invalid report answer') from None
 
 
+class DisabledResearchModel(ComposedResearchModel):
+    provider='none'
+    def structured(self,*args,**kwargs):raise BudgetPaused(time.time()+60,'research_writer_disabled')
+
+
 def configured_research_model(settings,gemini_key,budget,status,preferred):
     provider=(settings('NOVA_RESEARCH_PROVIDER') or 'gemini').strip().lower()
     if provider=='openai':
         return OpenAIResearchModel(lambda:settings('NOVA_RESEARCH_OPENAI_API_KEY') or '',budget,
             lambda:settings('NOVA_RESEARCH_OPENAI_MODEL') or 'gpt-4.1-mini')
+    if provider=='none':return DisabledResearchModel(lambda:'',budget,lambda:'')
     if provider!='gemini':raise ValueError('Unsupported research writer provider')
-    return GeminiResearchModel(gemini_key,budget,lambda:research_text_model(settings,status,preferred))
+    return GeminiResearchModel(gemini_key,budget,lambda:settings('NOVA_RESEARCH_GEMINI_MODEL') or settings('GEMINI_TEXT_MODEL') or 'gemini-3.5-flash')

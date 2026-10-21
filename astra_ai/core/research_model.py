@@ -84,6 +84,7 @@ class ComposedResearchModel(BackgroundModel):
         super().__init__(key_provider, budget)
         self.model_provider = model_provider
         self.client_factory = client_factory
+        self.effective_model = ''
 
     def budget_scope(self,context):
         return context.get('model_research_id') or context.get('research_id','')
@@ -314,6 +315,7 @@ class GeminiResearchModel(ComposedResearchModel):
                 result = json.loads(response.text or '')
                 if not isinstance(result, dict):
                     raise ModelUnavailable('Gemini returned an invalid research answer')
+                self.effective_model=model
                 return result
             except Exception as exc:
                 code=getattr(exc,'code',None) or getattr(exc,'status_code',None)
@@ -369,7 +371,7 @@ def resume_research_budget_waits(jobs,artifacts,budget,provider_key='',budget_sc
     from .research_learning import scope
     from .background_budget import scoped_requests_remaining,scoped_tokens_remaining
     snapshot=budget.snapshot(provider_key=provider_key);today=datetime.now(timezone.utc).date().isoformat()
-    reasons={'background_daily_budget','background_quota_paused','gemini_daily_quota','gemini_rate_limit','gemini_quota_unavailable','openai_rate_limit','openai_quota_unavailable'}
+    reasons={'background_daily_budget','background_quota_paused','gemini_daily_quota','gemini_rate_limit','gemini_quota_unavailable','openai_rate_limit','openai_quota_unavailable','research_writer_disabled','research_provider_switching'}
     with jobs.lock:
         data=jobs.load();changed=0
         for job in data.get('jobs',{}).values():

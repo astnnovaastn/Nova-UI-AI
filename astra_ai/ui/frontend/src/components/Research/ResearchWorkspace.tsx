@@ -1242,6 +1242,8 @@ function researchProgress(
   };
 }
 function researchWaitMessage(reason: string, provider?: string) {
+  if (reason === "research_writer_disabled") return "Research writing is deactivated. Choose Gemini or OpenAI in Settings to continue from the saved sources.";
+  if (reason === "research_provider_switching") return "Research writing is switching providers. Your saved work will continue with the selected provider.";
   if (reason === "openai_service_unavailable") return "OpenAI is temporarily unavailable. Your saved writing and sources will be retried automatically.";
   if (reason === "openai_quota_unavailable") return "The configured OpenAI project has no quota available for report writing. Your writing and sources are saved.";
   if (reason === "openai_rate_limit") return "OpenAI is temporarily rate limited. Report writing will retry from the saved evidence.";

@@ -133,3 +133,14 @@ body.theme-frosted :is(.notepad-widget, .search-widget, .image-widget, .weather-
 #settings-container .settings-section{min-width:0;overflow-wrap:anywhere}
 #settings-container .settings-section :is(input,select,textarea){max-width:100%;min-width:0;box-sizing:border-box}
 #settings-container .settings-input-row{min-width:0}
+#settings-container .research-provider-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0 18px}
+#settings-container .research-provider-choice{display:grid;gap:5px;padding:14px;text-align:left;border:1px solid var(--border);border-radius:12px;background:transparent;color:var(--panel-text);cursor:pointer;min-width:0;font:inherit}
+#settings-container .research-provider-choice[aria-pressed="true"]{border-color:var(--accent-readable);background:color-mix(in srgb,var(--accent-readable) 7%,var(--panel))}
+#settings-container .research-provider-choice strong{font-size:14px;font-weight:600}
+#settings-container .research-provider-choice :is(small,span){font-size:11px;color:var(--panel-text-muted);line-height:1.45}
+#settings-container #section-research-provider p{font-size:11px;line-height:1.6;color:var(--panel-text-muted);margin:9px 0}
+#settings-container #research-provider-active{font-size:13px;color:var(--panel-text)}
+#settings-container #research-provider-budget-warning:not(:empty){color:var(--accent-readable)}
+#settings-container .research-provider-actions{display:flex;gap:8px;flex-wrap:wrap}
+#settings-container :is(.research-provider-choice,.research-provider-actions button):focus-visible{outline:2px solid var(--accent-readable);outline-offset:3px}
+#settings-container :is(.research-provider-choice,.research-provider-actions button):disabled{opacity:.6;cursor:default}

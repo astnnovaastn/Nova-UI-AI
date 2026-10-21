@@ -1,5 +1,6 @@
 import { mountSoundSettings, showNotificationHistory } from "./notifications";
 import {initVoiceEnrollment} from './voiceEnrollment';
+import {conversationSnapshot} from './conversation';
 /**
  * AEGIS — Settings Panel
  *
@@ -14,6 +15,7 @@ import { orbThemes, type OrbTheme } from "./orb-themes";
 // ---------------------------------------------------------------------------
 
 interface StatusResponse {
+  research_writer?: ResearchWriterStatus | null;
   aegis_ai_connected: boolean;
   models?:Record<string,{preferred:string;effective:string|null;verified:boolean;fallback_reason:string|null}>;
   google_calendar_accessible: boolean;
@@ -24,6 +26,7 @@ interface StatusResponse {
   uptime_seconds: number;
   env_keys_set: {
     gemini: boolean;
+    openai_research?: boolean;
     groq: boolean;
     elevenlabs: boolean;
     elevenlabs_voice_id: boolean;
@@ -31,6 +34,15 @@ interface StatusResponse {
     deep_research?: boolean;
   };
   timestamp: string;
+}
+
+type ResearchProvider = "gemini" | "openai";
+interface ResearchWriterStatus {
+  provider: ResearchProvider | "none";
+  switching: boolean;
+  voice_model: string;
+  providers: Array<{id: ResearchProvider; configured: boolean; active: boolean; model: string; effective_model: string;
+    requests_used: number; request_limit: number; tokens_used: number; token_limit: number; local_limit_reached: boolean}>;
 }
 
 interface PreferencesResponse {
@@ -49,26 +61,29 @@ let isOpen = false;
 let isFirstTimeSetup = false;
 let setupStep = 0; // 0=groq, 1=fish, 2=name, 3=done
 let orbThemeChangeHandler: ((themeName: string) => void) | null = null;
+let researchWriterStatus: ResearchWriterStatus | null = null;
+let selectedResearchProvider: ResearchProvider | null = null;
+let changingResearchProvider = false;
 
 // ---------------------------------------------------------------------------
 // API helpers
 // ---------------------------------------------------------------------------
 
 async function apiGet<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+  const res = await fetch(url, {headers: {"X-Nova-Client": conversationSnapshot().clientId || ""}});
   const data = await res.json().catch(() => ({ error: 'Backend unavailable. Start Nova with start_nova_ai.ps1.' }));
-  if (!res.ok) throw new Error(data.error || `Settings request failed (${res.status}).`);
+  if (!res.ok) throw new Error(data.error || data.detail || `Settings request failed (${res.status}).`);
   return data;
 }
 
 async function apiPost<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Nova-Client": conversationSnapshot().clientId || "" },
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({ error: 'Backend unavailable. Start Nova with start_nova_ai.ps1.' }));
-  if (!res.ok) throw new Error(data.error || `Settings request failed (${res.status}).`);
+  if (!res.ok) throw new Error(data.error || data.detail || `Settings request failed (${res.status}).`);
   return data;
 }
 
@@ -91,6 +106,28 @@ function buildPanelHTML(): string {
 
       <div class="settings-body">
 
+        <section class="settings-section" id="section-research-provider" aria-labelledby="research-provider-heading">
+          <h3 id="research-provider-heading">Research writer</h3>
+          <p id="research-provider-active" role="status">Checking the active research writer…</p>
+          <div class="research-provider-choices" role="group" aria-label="Choose a research writer">
+            <button type="button" class="research-provider-choice" data-research-provider="gemini" aria-pressed="false"><strong>Gemini</strong><small>Default</small><span id="research-provider-gemini-state">Checking key…</span></button>
+            <button type="button" class="research-provider-choice" data-research-provider="openai" aria-pressed="false"><strong>OpenAI</strong><small>Research</small><span id="research-provider-openai-state">Checking key…</span></button>
+          </div>
+          <div class="settings-field">
+            <label for="input-research-model">Research model</label>
+            <input type="text" id="input-research-model" autocomplete="off" spellcheck="false" list="research-model-suggestions" />
+            <datalist id="research-model-suggestions"></datalist>
+          </div>
+          <p id="research-provider-usage"></p>
+          <p id="research-provider-budget-warning" role="status"></p>
+          <div class="settings-actions research-provider-actions">
+            <button type="button" class="settings-btn primary" id="btn-activate-research-provider" disabled>Activate writer</button>
+            <button type="button" class="settings-btn" id="btn-deactivate-research-provider" disabled>Deactivate writing</button>
+          </div>
+          <p id="research-provider-result" role="status" aria-live="polite"></p>
+          <p id="research-live-provider-note">Chat and voice continue using Gemini Live. Switching writers preserves your research, drafts, and usage counters.</p>
+        </section>
+
         <!-- API Keys -->
         <section class="settings-section" id="section-api-keys">
           <h3>API Keys</h3>
@@ -101,6 +138,12 @@ function buildPanelHTML(): string {
               <span class="status-dot" id="status-gemini"></span>
             </div>
             <p id="gemini-key-status">Save your key to enable Gemini conversations.</p>
+          </div>
+
+          <div class="settings-field">
+            <label for="input-openai-research-key">OpenAI API Key (research only)</label>
+            <div class="settings-input-row"><input type="password" id="input-openai-research-key" placeholder="Saved keys are never displayed" autocomplete="off" /><span class="status-dot" id="status-openai-research"></span></div>
+            <p>Saving a key does not activate its provider. Choose the research writer above.</p>
           </div>
 
           <div class="settings-field">
@@ -142,6 +185,7 @@ function buildPanelHTML(): string {
           <div class="settings-actions">
             <button class="settings-btn primary" id="btn-save-keys">Save Keys</button>
           </div>
+          <p id="keys-save-result" role="status" aria-live="polite"></p>
         </section>
 
         <!-- Connection Status -->
@@ -282,6 +326,71 @@ export function registerOrbThemeChangedHandler(handler: (themeName: string) => v
   orbThemeChangeHandler = handler;
 }
 
+function researchWriterPresentation(status: ResearchWriterStatus, selected: ResearchProvider, model: string, busy: boolean) {
+  const active = status.providers.find(row => row.id === status.provider);
+  const choice = status.providers.find(row => row.id === selected);
+  const label = selected === "gemini" ? "Gemini" : "OpenAI";
+  const same = status.provider === selected && choice?.model === model.trim();
+  return {
+    active: status.switching ? "Switching research writer…" : active ? `Active: ${active.id === "gemini" ? "Gemini" : "OpenAI"} · ${active.model}${active.effective_model && active.effective_model !== active.model ? ` · last used ${active.effective_model}` : ""}` : "Research writing is deactivated.",
+    activateLabel: same ? `${label} is active` : `Activate ${label}`,
+    activateDisabled: busy || status.switching || !choice?.configured || !model.trim() || same,
+    deactivateDisabled: busy || status.switching || status.provider === "none",
+    usage: choice ? `${label} today: ${choice.requests_used.toLocaleString()} / ${choice.request_limit.toLocaleString()} requests · ${choice.tokens_used.toLocaleString()} / ${choice.token_limit.toLocaleString()} tokens.` : "",
+    warning: choice?.local_limit_reached ? "This provider’s local daily allowance is used up. Saved research will wait for its next allowance; switching preserves usage." : !choice?.configured ? `Save a ${label} key below before activating it.` : "",
+  };
+}
+
+function renderResearchWriter(status: ResearchWriterStatus) {
+  researchWriterStatus = status;
+  const model = document.getElementById("input-research-model") as HTMLInputElement | null;
+  if (!model) return;
+  if (!selectedResearchProvider) {
+    selectedResearchProvider = status.provider === "none" ? "gemini" : status.provider;
+    model.value = status.providers.find(row => row.id === selectedResearchProvider)?.model || "";
+  }
+  const view = researchWriterPresentation(status, selectedResearchProvider, model.value, changingResearchProvider);
+  document.getElementById("research-provider-active")!.textContent = view.active;
+  document.getElementById("research-provider-usage")!.textContent = view.usage;
+  document.getElementById("research-provider-budget-warning")!.textContent = view.warning;
+  for (const row of status.providers) {
+    document.getElementById(`research-provider-${row.id}-state`)!.textContent = row.active ? "Active" : row.configured ? "Key saved · inactive" : "No key saved";
+  }
+  document.querySelectorAll<HTMLButtonElement>("[data-research-provider]").forEach(button => {
+    button.setAttribute("aria-pressed", String(button.dataset.researchProvider === selectedResearchProvider));
+    button.disabled = changingResearchProvider || status.switching;
+  });
+  const activate = document.getElementById("btn-activate-research-provider") as HTMLButtonElement;
+  activate.textContent = view.activateLabel; activate.disabled = view.activateDisabled;
+  (document.getElementById("btn-deactivate-research-provider") as HTMLButtonElement).disabled = view.deactivateDisabled;
+  model.disabled = changingResearchProvider || status.switching;
+  const list = document.getElementById("research-model-suggestions")!;
+  const suggestions = selectedResearchProvider === "gemini" ? ["gemini-3.5-flash", "gemini-3.8-flash", "gemini-flash-latest"] : ["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini"];
+  list.replaceChildren(...suggestions.map(value => { const option = document.createElement("option"); option.value = value; return option; }));
+  document.getElementById("research-live-provider-note")!.textContent = `Chat and voice stay on Gemini Live · ${status.voice_model}. Inactive research writers receive no new requests. Your reports, drafts, and keys stay saved.`;
+}
+
+async function changeResearchWriter(deactivate: boolean) {
+  if (changingResearchProvider || !selectedResearchProvider) return;
+  const result = document.getElementById("research-provider-result")!;
+  changingResearchProvider = true;
+  if (researchWriterStatus) renderResearchWriter(researchWriterStatus);
+  result.textContent = "Finishing any current write before changing the research writer…";
+  try {
+    const provider = deactivate ? "none" : selectedResearchProvider;
+    const model = (document.getElementById("input-research-model") as HTMLInputElement).value.trim();
+    const status = await apiPost<ResearchWriterStatus>("/api/settings/research-provider", {provider, ...(deactivate ? {} : {model})});
+    renderResearchWriter(status);
+    result.textContent = deactivate ? "Research writing deactivated. Saved work is preserved; Gemini Live continues." : `${provider === "gemini" ? "Gemini" : "OpenAI"} activated for research. Gemini Live chat and voice are unchanged.`;
+  } catch (error) {
+    result.textContent = error instanceof Error ? error.message : "The research writer could not be changed. Your previous choice is preserved.";
+    await loadStatus();
+  } finally {
+    changingResearchProvider = false;
+    if (researchWriterStatus) renderResearchWriter(researchWriterStatus);
+  }
+}
+
 async function loadStatus() {
   // Always start with red (disconnected)
   setDotStatus("status-server", "red");
@@ -292,6 +401,7 @@ async function loadStatus() {
   setDotStatus("status-fish", "red");
   try {
     const status = await apiGet<StatusResponse>("/api/settings/status");
+    if (status.research_writer) renderResearchWriter(status.research_writer);
     // If we got a response, server is definitely connected
     setDotStatus("status-server", "green");
     // Aegis_AI connection - if server is running and aegis_ai.py is the subprocess
@@ -308,6 +418,7 @@ async function loadStatus() {
     // API key status dots (in the API Keys section)
     const geminiConfigured = status.env_keys_set?.gemini === true;
     setDotStatus("status-gemini", geminiConfigured ? "green" : "red");
+    setDotStatus("status-openai-research", status.env_keys_set?.openai_research ? "green" : "off");
     const geminiStatus = document.getElementById("gemini-key-status");
     if (geminiStatus) geminiStatus.textContent = geminiConfigured ? "Gemini key configured. Start a conversation to check access." : "Save your key to enable Gemini conversations.";
     const groqConnected = status.env_keys_set?.groq === true;
@@ -356,6 +467,17 @@ async function loadPreferences() {
 }
 
 function wireEvents() {
+  document.querySelectorAll<HTMLButtonElement>("[data-research-provider]").forEach(button => {
+    button.addEventListener("click", () => {
+      selectedResearchProvider = button.dataset.researchProvider as ResearchProvider;
+      const model = document.getElementById("input-research-model") as HTMLInputElement;
+      model.value = researchWriterStatus?.providers.find(row => row.id === selectedResearchProvider)?.model || (selectedResearchProvider === "gemini" ? "gemini-3.5-flash" : "gpt-4.1-mini");
+      if (researchWriterStatus) renderResearchWriter(researchWriterStatus);
+    });
+  });
+  document.getElementById("input-research-model")?.addEventListener("input", () => { if (researchWriterStatus) renderResearchWriter(researchWriterStatus); });
+  document.getElementById("btn-activate-research-provider")?.addEventListener("click", () => { void changeResearchWriter(false); });
+  document.getElementById("btn-deactivate-research-provider")?.addEventListener("click", () => { void changeResearchWriter(true); });
   const soundHost=document.getElementById("settings-sound-controls");
   if(soundHost) mountSoundSettings(soundHost);
   document.getElementById("btn-notification-history")?.addEventListener("click", showNotificationHistory);
@@ -366,11 +488,21 @@ function wireEvents() {
 
   // Save keys
   document.getElementById("btn-save-keys")?.addEventListener("click", async () => {
+    const button = document.getElementById("btn-save-keys") as HTMLButtonElement;
+    const feedback = document.getElementById("keys-save-result")!;
+    button.disabled = true;
+    feedback.textContent = "Saving keys…";
+    try {
     for (const [id, key] of [["input-quick-search-key", "QUICK_SEARCH_API_KEY"], ["input-deep-research-key", "DEEP_RESEARCH_API_KEY"]]) {
       const input = document.getElementById(id) as HTMLInputElement;
       if (input.value.trim()) { await apiPost("/api/settings/keys", {key_name: key, key_value: input.value.trim()}); input.value = ""; }
     }
     const geminiInput = document.getElementById("input-gemini-key") as HTMLInputElement;
+    const openaiInput = document.getElementById("input-openai-research-key") as HTMLInputElement;
+    if (openaiInput.value.trim()) {
+      await apiPost("/api/settings/keys", {key_name: "NOVA_RESEARCH_OPENAI_API_KEY", key_value: openaiInput.value.trim()});
+      openaiInput.value = "";
+    }
     const geminiKey = geminiInput.value.trim();
     if (geminiKey) {
       await apiPost("/api/settings/keys", { key_name: "GEMINI_API_KEY", key_value: geminiKey });
@@ -390,6 +522,10 @@ function wireEvents() {
       await apiPost("/api/settings/keys", { key_name: "elevenlabs_voice_id", key_value: elevenlabsVoiceId });
     }
     await loadStatus();
+    feedback.textContent = "Keys saved. The active research writer has not changed.";
+    } catch (error) {
+      feedback.textContent = error instanceof Error ? error.message : "Keys could not be saved. Your entries are preserved.";
+    } finally { button.disabled = false; }
   });
 
   // Save voice ID
@@ -480,7 +616,7 @@ function enterSetupMode() {
 }
 
 function showSetupStep(step: number) {
-  const sections = ["section-api-keys", "section-status", "section-preferences", "section-sysinfo"];
+  const sections = ["section-api-keys", "section-status", "section-preferences", "section-sysinfo", "section-research-provider"];
   sections.forEach((id, i) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -511,7 +647,7 @@ async function advanceSetup() {
     if (nav) nav.style.display = "none";
 
     // Show all sections
-    ["section-api-keys", "section-status", "section-preferences", "section-sysinfo"].forEach((id) => {
+    ["section-api-keys", "section-status", "section-preferences", "section-sysinfo", "section-research-provider"].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.style.display = "";
     });

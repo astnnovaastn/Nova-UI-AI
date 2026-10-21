@@ -49,7 +49,7 @@ class TokenReservation:
 
 class BackgroundBudget:
     def __init__(self,path,daily_requests=40,daily_tokens=80000,min_interval=65):
-        self.path=Path(path);self.lock=StorageLock(self.path.with_suffix('.lock'));self.slot=threading.Lock();self.daily_requests=daily_requests;self.daily_tokens=daily_tokens;self.min_interval=min_interval
+        self.path=Path(path);self.lock=StorageLock(self.path.with_suffix('.lock'));self.slot=threading.Lock();self.daily_requests=daily_requests;self.daily_tokens=daily_tokens;self.min_interval=min_interval;self.suspension_reason=''
     def snapshot(self,provider_key=''):
         with self.lock:data=read(self.path,{'day':'','requests':0,'tokens':0,'next_attempt':0})
         if provider_key:
@@ -96,9 +96,11 @@ class BackgroundBudget:
             atomic(self.path,data)
     @contextlib.contextmanager
     def lease(self,tokens=4000,scope_id='',provider_key=''):
+        if self.suspension_reason:raise BudgetPaused(time.time()+5,self.suspension_reason)
         if not self.slot.acquire(False):raise BudgetPaused(time.time()+5,'background_model_busy')
         try:
             with self.lock:
+                if self.suspension_reason:raise BudgetPaused(time.time()+5,self.suspension_reason)
                 data=read(self.path,{});day=datetime.now(timezone.utc).date().isoformat()
                 if data.get('day')!=day:data={'day':day,'requests':0,'tokens':0,**{k:data[k] for k in ('next_attempt','pause_reason','provider_marker','provider_pause_history','model_backoffs','provider_pauses') if k in data}}
                 current=time.time()
