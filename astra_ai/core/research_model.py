@@ -313,7 +313,10 @@ def resume_research_budget_waits(jobs,artifacts,budget):
                 ready=composition_ready(metadata)
                 if not ready:
                     if snapshot.get('next_attempt',0)>time.time():continue
-                    if snapshot.get('day')==today and (snapshot.get('tokens',0)+20000>budget.daily_tokens or snapshot.get('requests',0)>=budget.daily_requests and not scoped_requests_remaining(snapshot,identifier,today)):continue
+                    # The next checkpoint may be a small outline or review. Its actual
+                    # reservation is enforced by lease(); a fixed 20k preflight can
+                    # strand an affordable stage under a stale provider-quota label.
+                    if snapshot.get('day')==today and (snapshot.get('tokens',0)>=budget.daily_tokens or snapshot.get('requests',0)>=budget.daily_requests and not scoped_requests_remaining(snapshot,identifier,today)):continue
                 action.update(state='queued',next_attempt=time.time() if ready else max(time.time(),snapshot.get('next_attempt',0)))
                 job['state']='queued';changed+=1
         if changed:jobs.write(data)

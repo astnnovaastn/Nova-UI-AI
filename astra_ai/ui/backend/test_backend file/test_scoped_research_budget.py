@@ -170,6 +170,28 @@ def test_only_authorised_checkpoint_is_resumed_at_daily_limit(tmp_path):
     assert budget.snapshot()['requests']==40
 
 
+@pytest.mark.parametrize('remaining,expected',[(15717,1),(0,0)])
+def test_replaced_provider_resumes_small_stage_without_fixed_twenty_thousand_token_gate(tmp_path,remaining,expected):
+    context={'profile_id':'owner','project_id':'project','session_id':'main','requested_research':True}
+    artifacts=ResearchArtifacts(tmp_path/'reports.json')
+    item=artifacts.reserve('Saved detailed comparison','detailed',context,'memory')
+    artifacts.request_state(item['id'],context,phase='waiting_for_quota',waiting_reason='gemini_daily_quota',sources=[{'url':'https://example.com','content':'Saved evidence'}])
+    budget=BackgroundBudget(tmp_path/'budget.json',daily_tokens=400000,min_interval=0)
+    day=datetime.now(timezone.utc).date().isoformat()
+    atomic(budget.path,{'day':day,'requests':28,'tokens':400000-remaining,'next_attempt':0,'pause_reason':''})
+    path=tmp_path/'jobs.json'
+    jobs=SimpleNamespace(lock=StorageLock(tmp_path/'jobs.lock'),load=lambda:read(path,{}),write=lambda data:atomic(path,data))
+    atomic(path,{'jobs':{'memory':{'state':'waiting_for_retry','context':context,'actions':[{'name':'search_web','state':'waiting_for_retry','arguments':{'research_id':item['id']},'result':{'reason':'gemini_daily_quota'}}]}}})
+    assert resume_research_budget_waits(jobs,artifacts,budget)==expected
+    assert budget.snapshot()['tokens']==400000-remaining and budget.snapshot()['requests']==28
+    # Recovery only schedules work; every real request still needs its full lease.
+    with pytest.raises(BudgetPaused,match='background_daily_budget'):
+        with budget.lease(remaining+1,item['id']):pass
+    if expected:
+        with budget.lease(1000,item['id']) as reservation:reservation.settle(500)
+        assert budget.snapshot()['tokens']==400000-remaining+500
+
+
 @pytest.mark.parametrize('quota,value,reason,minimum',[
     ('GenerateRequestsPerDayPerProjectPerModel-FreeTier','20','gemini_daily_quota',3600),
     ('GenerateRequestsPerMinutePerProjectPerModel-FreeTier','5','gemini_rate_limit',125),
