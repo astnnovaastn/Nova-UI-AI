@@ -16,16 +16,30 @@ def scoped_requests_remaining(data,scope_id,day):
     if type(extra) is not int or type(used) is not int or not 0<=used<=extra<=3:return 0
     return extra-used
 
+def scoped_tokens_remaining(data,scope_id,day):
+    """A trusted token grant applies to one report on its authorised day only."""
+    grants=data.get('research_token_allowances',{})
+    grant=grants.get(scope_id,{}) if scope_id and isinstance(grants,dict) else {}
+    if not isinstance(grant,dict) or data.get('day')!=day or grant.get('day')!=day:return 0
+    extra,used=grant.get('extra_tokens'),grant.get('used')
+    if type(extra) is not int or type(used) is not int or not 0<=used<=extra<=40000:return 0
+    return extra-used
+
 class TokenReservation:
     """Settle one estimate against provider usage; never refund uncertain requests."""
-    def __init__(self,budget,day,tokens):self.budget=budget;self.day=day;self.tokens=tokens;self.settled=False
+    def __init__(self,budget,day,tokens,scope_id='',extra_tokens=0):self.budget=budget;self.day=day;self.tokens=tokens;self.scope_id=scope_id;self.extra_tokens=extra_tokens;self.settled=False
     def settle(self,actual_tokens):
         if type(actual_tokens) is not int or actual_tokens<0:return
         with self.budget.lock:
             if self.settled:return
             self.settled=True;data=read(self.budget.path,{})
             if data.get('day')!=self.day:return
-            data['tokens']=max(0,data.get('tokens',0)-self.tokens+actual_tokens)
+            baseline=max(0,data.get('tokens',0)-self.tokens)
+            data['tokens']=baseline+actual_tokens
+            grant=data.get('research_token_allowances',{}).get(self.scope_id,{})
+            if self.extra_tokens and grant.get('day')==self.day:
+                actual_extra=min(actual_tokens,max(0,baseline+actual_tokens-self.budget.daily_tokens))
+                grant['used']=max(0,grant.get('used',0)-self.extra_tokens+actual_extra)
             data['settled_requests']=data.get('settled_requests',0)+1
             data['settled_tokens']=data.get('settled_tokens',0)+actual_tokens
             atomic(self.budget.path,data)
@@ -77,11 +91,13 @@ class BackgroundBudget:
                 current=time.time()
                 if current<data.get('next_attempt',0):raise BudgetPaused(data['next_attempt'],data.get('pause_reason') or 'background_quota_paused')
                 needs_extra=data.get('requests',0)>=self.daily_requests
-                if (needs_extra and not scoped_requests_remaining(data,scope_id,day)) or data.get('tokens',0)+tokens>self.daily_tokens:
+                extra_tokens=min(tokens,max(0,data.get('tokens',0)+tokens-self.daily_tokens))
+                if (needs_extra and not scoped_requests_remaining(data,scope_id,day)) or extra_tokens>scoped_tokens_remaining(data,scope_id,day):
                     midnight=(int(current)//86400+1)*86400;raise BudgetPaused(midnight,'background_daily_budget')
                 if needs_extra:data['research_allowances'][scope_id]['used']+=1
+                if extra_tokens:data['research_token_allowances'][scope_id]['used']+=extra_tokens
                 data.update(requests=data.get('requests',0)+1,tokens=data.get('tokens',0)+tokens,next_attempt=current+self.min_interval,pause_reason='');atomic(self.path,data)
-            yield TokenReservation(self,day,tokens)
+            yield TokenReservation(self,day,tokens,scope_id,extra_tokens)
         finally:self.slot.release()
     def response(self,response):
         with self.lock:

@@ -294,7 +294,7 @@ def resume_research_budget_waits(jobs,artifacts,budget):
     import time
     from datetime import datetime,timezone
     from .research_learning import scope
-    from .background_budget import scoped_requests_remaining
+    from .background_budget import scoped_requests_remaining,scoped_tokens_remaining
     snapshot=budget.snapshot();today=datetime.now(timezone.utc).date().isoformat()
     reasons={'background_daily_budget','background_quota_paused','gemini_daily_quota','gemini_rate_limit','gemini_quota_unavailable'}
     with jobs.lock:
@@ -316,7 +316,7 @@ def resume_research_budget_waits(jobs,artifacts,budget):
                     # The next checkpoint may be a small outline or review. Its actual
                     # reservation is enforced by lease(); a fixed 20k preflight can
                     # strand an affordable stage under a stale provider-quota label.
-                    if snapshot.get('day')==today and (snapshot.get('tokens',0)>=budget.daily_tokens or snapshot.get('requests',0)>=budget.daily_requests and not scoped_requests_remaining(snapshot,identifier,today)):continue
+                    if snapshot.get('day')==today and (snapshot.get('tokens',0)>=budget.daily_tokens and not scoped_tokens_remaining(snapshot,identifier,today) or snapshot.get('requests',0)>=budget.daily_requests and not scoped_requests_remaining(snapshot,identifier,today)):continue
                 action.update(state='queued',next_attempt=time.time() if ready else max(time.time(),snapshot.get('next_attempt',0)))
                 job['state']='queued';changed+=1
         if changed:jobs.write(data)
