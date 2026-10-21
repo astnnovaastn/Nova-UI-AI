@@ -2303,11 +2303,15 @@ async def _synthesize_research(query,sources):
         artifacts,_=get_research_services()
         metadata=await asyncio.to_thread(artifacts.request_state,identifier,context)
         if metadata.get('status')=='ok':
+            extension_operation=context.get('operation_id','') if query.startswith(('Continue this same research','Original report subject:')) else ''
             async def checkpoint(value):
-                await asyncio.to_thread(artifacts.request_state,identifier,context,synthesis_checkpoint=value)
+                if extension_operation:
+                    latest=await asyncio.to_thread(artifacts.request_state,identifier,context)
+                    await asyncio.to_thread(artifacts.request_state,identifier,context,extension_compositions={**latest.get('extension_compositions',{}),extension_operation:value})
+                else:await asyncio.to_thread(artifacts.request_state,identifier,context,synthesis_checkpoint=value)
                 from astra_ai.core.background_budget import BudgetPaused
                 raise BudgetPaused(time.time()+1,'research_section_saved')
-            options={'state':metadata.get('synthesis_checkpoint',{}),'checkpoint':checkpoint}
+            options={'state':metadata.get('extension_compositions',{}).get(extension_operation,{}) if extension_operation else metadata.get('synthesis_checkpoint',{}),'checkpoint':checkpoint}
     return await research_model.report(query.removeprefix('[DOCUMENTARY]\n'),sources,kind='documentary' if query.startswith('[DOCUMENTARY]\n') else 'research',**options)
 
 async def _complete_research(report,query,sources):
@@ -2323,7 +2327,7 @@ def get_research_services():
     key=str(path.resolve())
     if key not in _research_services:
         artifacts=ResearchArtifacts(path)
-        _research_services[key]=(artifacts,ResearchSearch(artifacts,_get_env_value,synthesize=_synthesize_research,illustrate=True,complete=_complete_research,read_evidence=True))
+        _research_services[key]=(artifacts,ResearchSearch(artifacts,_get_env_value,synthesize=_synthesize_research,illustrate=True,complete=_complete_research,read_evidence=True,prepare_media=True))
     return _research_services[key]
 
 async def _aegis_search_web(arguments):
@@ -2369,7 +2373,9 @@ async def _aegis_search_web(arguments):
         metadata=await asyncio.to_thread(artifacts.request_state,result['research_id'],context)
         title=metadata.get('display_title') or result['query'][:90]
         notice_id=await asyncio.to_thread(notice_store.enqueue,'research',result['research_id'],result.get('media_revision') or result.get('extension_revision') or result['research_revision'],{'title':'Research ready: '+title},context)
-        await ws_manager.send_to_client_id(context['client_id'],{'type':'research_ready','notice_id':notice_id,'research_id':result['research_id'],'research_revision':result['research_revision'],'query':title})
+        from astra_ai.core.research_sessions import publication_info
+        publication=publication_info(artifacts.snapshot(),result['research_id'])
+        await ws_manager.send_to_client_id(context['client_id'],{'type':'research_ready','notice_id':notice_id,'research_id':result['research_id'],'research_revision':result['research_revision'],'query':title,**publication})
     return result
 
 
@@ -5776,7 +5782,7 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
             return await document_tool(artifacts,context,arguments,operation_id,action_jobs)
         if arguments.get('action') in {'expand','continue','more_media','more_sources'}:
             action=arguments.get('action');view='media' if action=='more_media' else 'sources' if action=='more_sources' else ''
-            receipt=await continue_research(identifier,context,operation_id,view=view,detail=str(arguments.get('detail') or context.get('user_text') or context.get('research_user_text',''))[:2000])
+            receipt=await continue_research(identifier,context,operation_id,view=view,detail=str(arguments.get('detail') or context.get('user_text') or context.get('research_user_text',''))[:2000],page_action=str(arguments.get('page_action','')))
             return await _research_collection_receipt(receipt,context) if receipt.get('job_id') else receipt
         if arguments.get('action')=='reader':return await asyncio.to_thread(artifacts.reader,identifier,context,str(arguments.get('research_revision','')),arguments.get('offset',0),arguments.get('limit',12000))
         return await asyncio.to_thread(artifacts.page,identifier,context,str(arguments.get('research_revision','')),arguments.get('offset',0),arguments.get('limit',12000))
@@ -8494,10 +8500,26 @@ def research_followup(text):
 
 _research_continuation_locks={}
 
-async def continue_research(identifier,context,operation_id,view='',detail=''):
+async def start_research_page(identifier,context,operation_id,query,mode=None):
+    from astra_ai.core.research_sessions import reserve_page
+    artifacts,_=get_research_services()
+    reserved=await asyncio.to_thread(reserve_page,artifacts,identifier,context,query,operation_id,mode)
+    if reserved.get('status')!='ok':return reserved
+    page_context={**context,'research_id':reserved['id'],'research_session_id':reserved['research_session_id'],'research_page_request':True,'requested_research':True}
+    result=action_jobs.submit([{'name':'search_web','arguments':{'research_id':reserved['id'],'mode':reserved['mode']}}],page_context,reserved['operation_id'],goal=reserved['display_title'])
+    if result.get('status') in {'accepted','queued','duplicate','completed'}:
+        await asyncio.to_thread(artifacts.request_state,reserved['id'],context,job_id=result.get('job_id',''))
+        await ws_manager.send_to_client_id(context.get('client_id',''),{'type':'research_page_created','research_id':reserved['id'],'research_session_id':reserved['research_session_id'],'parent_page_id':identifier})
+    else:await asyncio.to_thread(artifacts.request_state,reserved['id'],context,phase='failed',waiting_reason=result.get('reason','job_not_admitted'))
+    return {**result,'research_id':reserved['id'],'research_session_id':reserved['research_session_id'],'thread_id':reserved['thread_id'],'summary':'A new research page is saved in this conversation. Its report is not published yet.'}
+
+async def continue_research(identifier,context,operation_id,view='',detail='',page_action=''):
     artifacts,_=get_research_services();fetched=await asyncio.to_thread(artifacts.get,identifier,context)
     if fetched['status']!='ok':return fetched
     item=fetched['artifact']
+    if detail.strip() and not view and item.get('kind','research')=='research':
+        from astra_ai.core.research_sessions import continuation_kind
+        if continuation_kind(detail,item['query'],page_action)=='new_page':return await start_research_page(identifier,context,operation_id,detail)
     from astra_ai.core.research_topics import followup_view
     view=view or followup_view(detail)
     request_id='research-more-'+operation_id
@@ -8529,7 +8551,7 @@ async def continue_research(identifier,context,operation_id,view='',detail=''):
                     'summary':'Use the supplied excerpts to answer the question now, with citations and limitations. The composed report is paused; do not merely promise future research or claim report publication.' if evidence else 'The follow-up is saved in this same report. Answer generation is paused; do not describe it as active research.' if waiting else 'The follow-up has an existing job. Its execution stage is '+current.get('phase','queued')+'.'}
         from astra_ai.core.research_topics import conversational_mode
         args={'action':'more_media' if view=='media' else 'expand','research_id':identifier,'research_revision':item['revision'],'view':view,'detail':detail[:2000],
-              'mode':conversational_mode({'mode':'detailed'},context)}
+              'mode':item.get('mode','detailed')}
         if initial_pending:args={'action':'topic_followup','research_id':identifier,'query':detail[:2000],'mode':args['mode'],'report_mode':item.get('mode','detailed')}
         await asyncio.to_thread(artifacts.extension_state,identifier,context,phase='waiting_for_report' if initial_pending else 'queued',view=view,operation_id=operation_id,detail=detail[:2000],outbound_started=False,search_checkpoint=None,collected_sources=0,reason='initial_report_pending' if initial_pending else '')
         result=action_jobs.submit([{'name':'search_web','arguments':args}],{**context,'research_id':identifier,'requested_research':True},operation_id,goal='Continue '+(item.get('display_title') or item['query'][:90]))
@@ -8632,20 +8654,37 @@ async def research_reader(identifier:str,request:Request,revision:str='',cursor:
 async def research_conversation(identifier:str,request:Request):
     return await _research_thread(identifier,_learning_context(request))
 
+@app.get('/api/research/{identifier}/pages')
+async def research_pages(identifier:str,request:Request):
+    from astra_ai.core.research_sessions import pages
+    artifacts,_=get_research_services();return await asyncio.to_thread(pages,artifacts,identifier,_learning_context(request))
+
+@app.post('/api/research/{identifier}/pages')
+async def research_new_page(identifier:str,request:Request):
+    body=await request.json()
+    return await start_research_page(identifier,_learning_context(request),str(body.get('operation_id') or uuid.uuid4().hex),body.get('query',''),body.get('mode'))
+
 async def _research_thread(identifier,context):
     artifacts,_=get_research_services();found=await asyncio.to_thread(artifacts.get,identifier,context)
     if found['status']!='ok':return found
     item=found['artifact'];metadata=await asyncio.to_thread(artifacts.request_state,identifier,context)
-    thread_id=metadata.get('thread_id','research-'+identifier)
+    from astra_ai.core.research_sessions import pages
+    session=await asyncio.to_thread(pages,artifacts,identifier,context)
+    root=session.get('research_session_id',identifier)
+    thread_id='research-'+root
+    origins=[artifacts.request_state(row['research_id'],context) for row in session.get('pages',[])]
     with artifacts.lock:
-        linked=artifacts.snapshot().get('thread_links',{}).get(identifier,[])
+        linked=[link for row in session.get('pages',[]) for link in artifacts.snapshot().get('thread_links',{}).get(row['research_id'],[])]
+        linked.extend({'session_id':row.get('origin_session_id'),'turn_id':row.get('origin_turn_id')} for row in origins if row.get('origin_turn_id'))
     def messages():
         from astra_ai.memory.category_policy import matches_scope
         with state.live_memory._lock:
             rows=[r for r in state.live_memory._messages() if matches_scope(r,context.get('profile_id',''),context.get('project_id','')) and (r.get('session_id')==thread_id or metadata.get('origin_turn_id') and r.get('session_id')==metadata.get('origin_session_id') and r.get('turn_id')==metadata['origin_turn_id'] or {'session_id':r.get('session_id'),'turn_id':r.get('turn_id')} in linked)]
         # Reference the initiating turn; do not append it or learn it again.
-        if metadata.get('origin_text') and not any(r.get('role')=='user' and r.get('turn_id')==metadata.get('origin_turn_id') for r in rows):
-            rows.insert(0,{'id':'origin:'+identifier,'role':'user','content':metadata['origin_text'],'timestamp':metadata.get('created'),'origin_session_id':metadata.get('origin_session_id'),'attribution':'initiating_request'})
+        for origin in origins:
+            if origin.get('origin_text') and not any(r.get('role')=='user' and (origin.get('origin_turn_id') and r.get('turn_id')==origin['origin_turn_id'] or r.get('content')==origin['origin_text']) for r in rows):
+                rows.append({'id':'origin:'+origin['id'],'role':'user','content':origin['origin_text'],'timestamp':origin.get('created'),'attribution':'initiating_request'})
+        rows.sort(key=lambda row:str(row.get('timestamp','')))
         return rows[-100:]
     rows=await asyncio.to_thread(messages)
     document=await asyncio.to_thread(artifacts.reader,identifier,context,item['revision'],0,8000)
@@ -8659,7 +8698,7 @@ async def _research_thread(identifier,context):
     followup_evidence=await asyncio.to_thread(artifacts.followup_evidence,identifier,context,activity.get('operation_id',''))
     progress={'completeness':item.get('completeness'),'phase':metadata.get('phase'),'waiting_reason':metadata.get('waiting_reason'),'next_attempt':metadata.get('next_attempt'),
               'followup':{key:activity.get(key) for key in ('phase','reason','job_id','collected_sources')}}
-    return {'status':'ok','progress':progress,'research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'kind':item.get('kind','research'),'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'draft_revision':draft.get('revision',''),'draft_excerpt':re.sub('<[^>]+>',' ',draft.get('html',''))[:5000],'research_cards':metadata.get('research_cards',[]),'attachments':[{k:f.get(k) for k in ('id','name','mime','page_count','status','revision','pdf_revision','needs_ocr')} for f in files],'summary':document.get('report','')[:4000] or item['summary'][:1600],'followup_question':followup.get('query',''),'followup_evidence':followup_evidence,'evidence':[{'id':'S'+str(i+1),'title':r['title'][:180],'url':r['url'],'excerpt':evidence_excerpt(r,400),'attachment_id':r.get('attachment_id'),'page':r.get('page')} for i,r in enumerate(sources[:6])]}
+    return {'status':'ok','progress':progress,'research_session_id':root,'research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'kind':item.get('kind','research'),'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'draft_revision':draft.get('revision',''),'draft_excerpt':re.sub('<[^>]+>',' ',draft.get('html',''))[:5000],'research_cards':metadata.get('research_cards',[]),'attachments':[{k:f.get(k) for k in ('id','name','mime','page_count','status','revision','pdf_revision','needs_ocr')} for f in files],'summary':document.get('report','')[:4000] or item['summary'][:1600],'followup_question':followup.get('query',''),'followup_evidence':followup_evidence,'evidence':[{'id':'S'+str(i+1),'title':r['title'][:180],'url':r['url'],'excerpt':evidence_excerpt(r,400),'attachment_id':r.get('attachment_id'),'page':r.get('page')} for i,r in enumerate(sources[:6])]}
 
 async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     snapshot=snapshot if snapshot is not None else ui_context(client_id).get('snapshot',{})
@@ -8679,7 +8718,7 @@ async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     item=found['artifact'];key=(identifier,item['revision'],artifacts._snapshot_key,context['profile_id'],context['project_id'],snapshot.get('selection_revision'),snapshot.get('reader_end'),snapshot.get('research_tab'),snapshot.get('attachment_id'),snapshot.get('attachment_page'),snapshot.get('attachment_revision'),snapshot.get('editor_selection'),snapshot.get('editor_draft_revision'))
     cached=getattr(live,'_research_context_cache',None) if live else None
     if hydrate and cached and cached[0]==key and time.monotonic()-cached[1]<20:return cached[2]
-    focus=await _research_thread(identifier,context) if hydrate else {'research_id':identifier,'research_revision':item['revision'],'thread_id':item.get('thread_id','research-'+identifier)}
+    focus=await _research_thread(identifier,context) if hydrate else {'research_id':identifier,'research_revision':item['revision'],'thread_id':item.get('thread_id','research-'+identifier),'research_session_id':item.get('research_session_id',identifier)}
     if hydrate and focus.get('status')!='ok':return {}
     focus.update({k:snapshot.get(k) for k in ('selection_revision','reader_cursor','reader_end','research_tab','source_visible_count','media_visible_count')})
     artifacts,_=get_research_services()

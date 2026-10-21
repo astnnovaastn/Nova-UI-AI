@@ -383,6 +383,7 @@ socket.onMessage((msg) => {
   if(type==='application_confirmation'){void confirmOwner(String(msg.title),String(msg.target),String(msg.revision)).then(confirmed=>socket.send({type:'widget_action_result',widget:'application_confirmation',request_id:msg.request_id,revision:msg.revision,confirmed,status:confirmed?'completed':'failed'}));return;}
   if(type==='application_control'){void applicationControl(msg).then(result=>socket.send({type:'widget_action_result',widget:'application',command:msg.action,request_id:msg.request_id,...result})).catch(e=>socket.send({type:'widget_action_result',widget:'application',request_id:msg.request_id,status:'failed',detail:e.message}));return;}
   if(type==='research_focus_ack'){conversationState({focusId:String(msg.research_id||''),focusRevision:Number(msg.selection_revision||0)});window.dispatchEvent(new CustomEvent('nova-research-focus-ack',{detail:msg}));return;}
+  if(type==='research_page_created'){window.dispatchEvent(new CustomEvent('nova-research-page-created',{detail:msg}));return;}
   if(type==='research_continue'){window.dispatchEvent(new CustomEvent('nova-research-continue',{detail:msg}));return;}
   if(type==='research_refresh'){window.dispatchEvent(new CustomEvent('nova-research-refresh',{detail:msg}));return;}
   if(type==='research_ready'){window.dispatchEvent(new CustomEvent('nova-research-ready',{detail:msg}));return;}

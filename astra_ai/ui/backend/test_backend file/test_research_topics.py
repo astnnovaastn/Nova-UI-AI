@@ -336,7 +336,8 @@ def test_quota_wait_exposes_bounded_followup_evidence_with_stable_citations(tmp_
     assert result['status'] in {'waiting_for_retry','waiting_for_quota'} and result['results']
     assert calls[0][0]=='Tesla models: '+question and calls[0][1]=='quick'
     evidence=result['results'][0];document=store.document(parent['id'],CTX,bounded=True)
-    assert document['sources'][int(evidence['id'][1:])-1]['url']==row['url']
+    assert store.source_catalog(store.get(parent['id'],CTX)['artifact'])[int(evidence['id'][1:])-1]['url']==row['url']
+    if pending:assert document['sources']==[]
     assert len(evidence['content'])<=1200 and ('promise' in result['summary'] or 'conversationally' in result['summary'])
     assert not document['extensions']['sections'] and not document['extensions']['report'].strip()
     assert store.followup_evidence(parent['id'],{**context,'project_id':'foreign'},'roadster-turn')==[]

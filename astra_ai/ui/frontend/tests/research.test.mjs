@@ -125,7 +125,7 @@ test("a removed saved selection clears cleanly while an unknown entry remains re
   function visit(node) { if(ts.isFunctionDeclaration(node) && node.name?.text==="select") declaration=node.getText(tree); ts.forEachChild(node,visit); }
   visit(tree);
   const noop=()=>{};
-  const run={setEditorGeneration:noop,setMessage:noop,reportCache:{current:new Map()},report:null,loadEpoch:{current:0},lastSelection:{current:"removed"},reader:{current:null},location:{hash:""},researchDestination:()=>null,conversationSnapshot:()=>({clientId:"owner",guest:false}),setTab:noop,setError:message=>{run.error=message;},setSelectionLoading:noop,setFailedSelection:value=>{run.failed=value;},setPreview:noop,setImageView:noop,setAttachment:noop,setDocumentEdit:noop,setReport:value=>{run.report=value;},updateUiContext:noop,api:async()=>null,loadReport:async()=>{throw {status:410,message:"Removed"};},sessionStorage:{removeItem:()=>{run.cleared=true;}},refresh:async()=>{}};
+  const run={reportRef:{current:null},pageViews:{current:new Map()},tabRef:{current:"reader"},revealStop:{current:noop},revealFollow:{current:true},setConversationSession:noop,publicationWorking:()=>false,setEditorGeneration:noop,setMessage:noop,reportCache:{current:new Map()},report:null,loadEpoch:{current:0},lastSelection:{current:"removed"},reader:{current:null},location:{hash:""},researchDestination:()=>null,conversationSnapshot:()=>({clientId:"owner",guest:false}),setTab:noop,setError:message=>{run.error=message;},setSelectionLoading:noop,setFailedSelection:value=>{run.failed=value;},setPreview:noop,setImageView:noop,setAttachment:noop,setDocumentEdit:noop,setReport:value=>{run.report=value;},updateUiContext:noop,api:async()=>null,loadReport:async()=>{throw {status:410,message:"Removed"};},sessionStorage:{removeItem:()=>{run.cleared=true;}},refresh:async()=>{}};
   vm.createContext(run);vm.runInContext(ts.transpileModule(declaration,{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText,run);
   await run.select("removed");
   assert.equal(run.error,"");assert.equal(run.failed,"");assert.equal(run.lastSelection.current,"");assert.equal(run.cleared,true);
@@ -280,7 +280,7 @@ test("working timer and skeleton reflect real processing, never a quota pause", 
   );
   assert.equal(active.time, "00:07");
   assert.equal(active.skeleton, true);
-  assert.equal(active.label, "Working");
+  assert.equal(active.label, "Collecting evidence");
   assert.equal(
     context.researchProgress("collecting_sources", 0, 100, 100500, 0).skeleton,
     false,
@@ -331,7 +331,7 @@ test("unpublished research never looks like a finished images-only report", () =
   });
   const text = JSON.stringify(result);
   assert.match(text, /full answer is still queued/);
-  assert.match(text, /composed answer hasn’t been published/);
+  assert.doesNotMatch(text, /Browse collected sources|source-S1/);
   assert.doesNotMatch(text, /Pending image|EvidenceGallery/);
 });
 

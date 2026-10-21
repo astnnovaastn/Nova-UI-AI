@@ -8,8 +8,18 @@ export type ChatMessage = {
 };
 const messages: ChatMessage[] = [];
 const researchMessages: Record<string, ChatMessage[]> = {};
+const researchThreads: Record<string,string> = {};
 const requestResearch = new Map<string, string>();
-export function conversationResearch(id: string, items?: any[]) {
+export function conversationResearch(id: string, items?: any[], sessionId?: string) {
+  if (sessionId) {
+    researchThreads[id] = sessionId;
+    if (id !== sessionId && researchMessages[id]?.length) {
+      const existing = researchMessages[sessionId] ||= [];
+      for (const message of researchMessages[id]) if (!existing.some(m => m.id === message.id)) existing.push(message);
+      delete researchMessages[id];
+    }
+  }
+  id = researchThreads[id] || id;
   if (items) {
     const old = researchMessages[id] || [];
     const loaded = items.map((m) => ({
@@ -87,6 +97,7 @@ export function conversationState(update: Partial<typeof connection>) {
     for (const key of Object.keys(researchMessages))
       delete researchMessages[key];
     requestResearch.clear();
+    for (const key of Object.keys(researchThreads)) delete researchThreads[key];
     updateUiContext({
       research_id: "",
       research_revision: "",
@@ -114,7 +125,8 @@ export function conversationMessage(
         requestResearch.get(id.replace(/^reply:/, "")) ||
         ""
       : researchId;
-  const rows = target ? (researchMessages[target] ??= []) : messages;
+  const thread = researchThreads[target] || target;
+  const rows = thread ? (researchMessages[thread] ??= []) : messages;
   messageRevision++;
   const old = rows.find((m) => m.id === id);
   if (old) Object.assign(old, { text, status });

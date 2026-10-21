@@ -261,6 +261,13 @@ class ResearchArtifacts:
         backup=self.path.with_suffix('.before-reader-threads.bak')
         if self.path.exists() and not backup.exists():shutil.copy2(self.path,backup)
 
+    def ensure_metadata(self,data,identifier):
+        rows=data.setdefault('requests',{})
+        if not rows.get(identifier,{}).get('id'):
+            legacy=data.get('artifacts',{}).get(identifier,{})
+            rows[identifier]={**{k:legacy[k] for k in ('id','query','mode','operation_id','created','created_epoch','profile_id','project_id','guest','session_id','research_session_id','thread_id','kind','display_title') if k in legacy},**rows.get(identifier,{})}
+        return rows.setdefault(identifier,{})
+
     def reconcile_publication(self, context, identifier=''):
         """Repair stale labels only when a composed answer is durably published."""
         with self.lock:
@@ -268,6 +275,7 @@ class ResearchArtifacts:
             for key,item in data.get('artifacts',{}).items():
                 if identifier and key!=identifier or scope(item)!=scope(context):continue
                 if item.get('kind','research')!='research' or not item.get('sources') or not item.get('report','').strip():continue
+                if data.get('requests',{}).get(key,{}).get('publication_state')=='preparing':continue
                 if any(marker in item['report'] for marker in ('Sourced research excerpts.','not a completed synthesis.')):continue
                 metadata=data.get('requests',{}).get(key,{})
                 if metadata.get('phase') in {'queued','collecting_sources','comparing_evidence','preparing_report','waiting_for_quota','failed'}:
@@ -308,6 +316,7 @@ class ResearchArtifacts:
                     age=time.time()-existing.get('created_epoch',0)
                     if existing['id'] in data.get('removed',{}) or scope(existing)!=scope(context) or existing.get('session_id','')!=context.get('session_id',''):continue
                     if (normal(existing['query']),existing['mode'],existing.get('kind','research'))!=(normal(query),mode,kind):continue
+                    if (existing.get('research_session_id') or existing['id'])!=(context.get('research_session_id') or existing['id']):continue
                     metadata=requests.get(existing['id'],{})
                     if metadata.get('canonical_research_id'):continue
                     cached=existing.get('completeness')=='complete' and age<3600
@@ -315,7 +324,7 @@ class ResearchArtifacts:
                     if cached or active:return {'status':'ok',**copy.deepcopy(metadata or existing)}
             if not old:
                 self.backup_metadata()
-                requests[identifier]={'kind':kind,'source_research_id':source_research_id,'id':identifier,'query':query,'mode':mode,'operation_id':operation_id,'display_title':display_title(query),'thread_id':'research-'+identifier,'phase':'queued','created':now(),'created_epoch':time.time(),'origin_session_id':context.get('session_id',''),'origin_turn_id':context.get('turn_id',''),'origin_text':context.get('user_text') or query,**{k:context.get(k,False if k=='guest' else '') for k in ('profile_id','project_id','guest','session_id')}}
+                requests[identifier]={'kind':kind,'source_research_id':source_research_id,'id':identifier,'query':query,'mode':mode,'operation_id':operation_id,'display_title':display_title(query),'thread_id':'research-'+(context.get('research_session_id') or identifier),'research_session_id':context.get('research_session_id') or identifier,'update_sequence':1,'phase':'queued','created':now(),'created_epoch':time.time(),'origin_session_id':context.get('session_id',''),'origin_turn_id':context.get('turn_id',''),'origin_text':context.get('user_text') or query,**{k:context.get(k,False if k=='guest' else '') for k in ('profile_id','project_id','guest','session_id')}}
                 atomic(self.path,data)
             return {'status':'ok',**copy.deepcopy(requests[identifier])}
 
@@ -349,14 +358,14 @@ class ResearchArtifacts:
             if not item or scope(item)!=scope(context):return {'status':'not_found'}
             if updates:
                 self.backup_metadata()
-                active={'collecting_sources','comparing_evidence','preparing_report'}
+                active={'collecting_sources','comparing_evidence','preparing_report','preparing_images','preparing_layout'}
                 next_phase=updates.get('phase',item.get('phase'))
                 if next_phase!=item.get('phase'):
                     stamp=time.time();started=item.get('active_since')
                     if item.get('phase') in active and isinstance(started,(int,float)):
                         item['processing_seconds']=item.get('processing_seconds',0)+max(0,stamp-started)
                     item['active_since']=stamp if next_phase in active else None
-                item.update(updates);atomic(self.path,data)
+                item.update(updates);item['update_sequence']=item.get('update_sequence',0)+1;atomic(self.path,data)
             return {'status':'ok',**copy.deepcopy(item)}
 
     def extension_state(self, identifier, context, **updates):
@@ -366,8 +375,20 @@ class ResearchArtifacts:
             data=read(self.path,{}) if updates else self.snapshot()
             activity=data.get('extension_activity',{}).get(identifier,{})
             if updates:
-                self.backup_metadata();activity={**activity,**updates,'updated':now()};data.setdefault('extension_activity',{})[identifier]=activity;atomic(self.path,data)
+                self.backup_metadata()
+                operation=updates.get('operation_id') or activity.get('operation_id','')
+                journal=data.setdefault('extension_operations',{}).setdefault(identifier,{})
+                previous=journal.get(operation,activity if activity.get('operation_id')==operation else {})
+                activity={**previous,**updates,'updated':now()};journal[operation]=activity
+                data.setdefault('extension_activity',{})[identifier]=activity
+                metadata=self.ensure_metadata(data,identifier)
+                metadata['update_sequence']=metadata.get('update_sequence',0)+1;atomic(self.path,data)
             return copy.deepcopy(activity)
+
+    def extension_operation(self,identifier,context,operation_id):
+        if self.get(identifier,context)['status']!='ok':return {}
+        data=self.snapshot();current=data.get('extension_activity',{}).get(identifier,{})
+        return copy.deepcopy(data.get('extension_operations',{}).get(identifier,{}).get(operation_id,current if current.get('operation_id')==operation_id else {}))
 
     def source_catalog(self, item):
         rows=copy.deepcopy(item['sources']);seen={r['url'] for r in rows}
@@ -389,7 +410,9 @@ class ResearchArtifacts:
         result=self.get(identifier,context)
         if result['status']!='ok':return result
         item=result['artifact'];data=self.snapshot()
-        revision=stable(item['revision'],[e['revision'] for e in data.get('extensions',{}).get(identifier,[])],data.get('drafts',{}).get(identifier,{}).get('revision',''),data.get('requests',{}).get(identifier,{}).get('phase',''))
+        from .research_sessions import root_id
+        members={key:row for key,row in {**data.get('artifacts',{}),**data.get('requests',{})}.items() if root_id(data,key)==identifier}
+        revision=stable(item['revision'],[e['revision'] for e in data.get('extensions',{}).get(identifier,[])],data.get('drafts',{}).get(identifier,{}).get('revision',''),data.get('requests',{}).get(identifier,{}).get('phase',''),[(key,row.get('update_sequence',0),data.get('drafts',{}).get(key,{}).get('revision','')) for key,row in sorted(members.items())])
         return {'status':'ok','research_id':identifier,'revision':revision,'title':item.get('display_title') or display_title(item['query'])}
 
     def remove(self, identifier, context, revision, operation_id):
@@ -472,6 +495,8 @@ class ResearchArtifacts:
         result=self.get(identifier,context,revision)
         if result['status']!='ok':return result
         item=result['artifact'];metadata=self.request_state(identifier,context)
+        if item.get('kind','research')=='research' and (item.get('completeness') in {'pending','failed'} or metadata.get('publication_state')=='preparing'):
+            return {'status':'ok','research_id':identifier,'research_revision':item['revision'],'report':'','blocks':[],'sections':[],'reader_end':0,'next_cursor':None,'extension_revision':'','stream':stream}
         title=metadata.get('display_title') or display_title(item['query'])
         headline=re.search(r'^# (.+)',item['report'],re.M)
         if headline:
@@ -529,7 +554,17 @@ class ResearchArtifacts:
             if existing:return {'status':'completed','extension_revision':existing['revision'],'research_id':identifier,'research_revision':revision}
             self.backup_metadata();entry={'revision':stable(report),'report':reader_text(report),'sources':sources or [],'operation_id':operation_id,'created':now()}
             if title:entry['title']=display_title(title)
-            rows.append(entry);atomic(self.path,data)
+            rows.append(entry)
+            metadata=self.ensure_metadata(data,identifier)
+            metadata['update_sequence']=metadata.get('update_sequence',0)+1
+            if report.strip():
+                from .research_illustrations import place_images
+                metadata['selected_images']=place_images(metadata.get('validated_images') or metadata.get('selected_images',[]),fetched['artifact']['report']+'\n\n'+'\n\n'.join(e['report'] for e in rows))
+                activity=data.get('extension_activity',{}).get(identifier,{})
+                if activity.get('operation_id')==operation_id:activity.update(phase='complete',reason='',next_attempt=None)
+                operation=data.setdefault('extension_operations',{}).setdefault(identifier,{}).setdefault(operation_id,{})
+                operation.update(phase='complete',reason='',next_attempt=None,operation_id=operation_id)
+            atomic(self.path,data)
             return {'status':'completed','extension_revision':entry['revision'],'research_id':identifier,'research_revision':revision}
 
     def get(self, identifier, context, revision=''):
@@ -539,7 +574,8 @@ class ResearchArtifacts:
             pending=data.get('requests',{}).get(identifier)
             if not item and pending and pending.get('canonical_research_id') and scope(pending)==scope(context) and identifier not in data.get('removed',{}):return self.get(pending['canonical_research_id'],context,revision)
             if not item and pending:item={**pending,'revision':stable(identifier,'pending'),'report':'','summary':'','sources':pending.get('sources',[]),'failures':pending.get('failures',[]),'completeness':'failed' if pending.get('phase')=='failed' else 'pending'}
-            if not item or scope(item) != scope(context) or identifier in data.get('removed',{}):return {'status': 'not_found'}
+            from .research_sessions import root_id
+            if not item or scope(item) != scope(context) or identifier in data.get('removed',{}) or root_id(data,identifier) in data.get('removed',{}):return {'status': 'not_found'}
             if revision and revision != item['revision']:
                 archived=next((r['artifact'] for r in data.get('report_history',{}).get(identifier,[]) if r['artifact']['revision']==revision),None)
                 if not archived:return {'status': 'conflict', 'reason': 'research_revision_changed'}
@@ -578,6 +614,7 @@ class ResearchArtifacts:
                 if operation_id and item.get('operation_id') == operation_id:
                     if (item['query'], item['mode']) != (query, mode):raise ValueError('operation_id_reused')
                     return copy.deepcopy(item)
+                if context.get('research_page_request'):continue
                 if (normal(item['query']), item['mode'], item.get('session_id')) == (normal(query), mode, context.get('session_id', '')) and time.time()-item['created_epoch'] < freshness and item['completeness'] == 'complete':return copy.deepcopy(item)
         return None
 
@@ -601,13 +638,13 @@ class ResearchArtifacts:
                 if old['query']!=query or old['mode']!=mode:raise ValueError('operation_id_reused')
                 return copy.deepcopy(old)
             metadata=data.get('requests',{}).get(item['id'],{})
-            item.update({k:metadata[k] for k in ('display_title','thread_id','kind','source_research_id') if k in metadata})
+            item.update({k:metadata[k] for k in ('display_title','thread_id','kind','source_research_id','research_session_id') if k in metadata})
             # Report, prepared images and terminal state publish in one authoritative write.
             item['phase']='complete'
             if metadata:
                 started=metadata.get('active_since')
                 if isinstance(started,(int,float)):metadata['processing_seconds']=metadata.get('processing_seconds',0)+max(0,time.time()-started)
-                metadata.update(phase='complete',active_since=None,next_attempt=None,waiting_reason='')
+                metadata.update(phase='preparing_layout' if context.get('prepare_publication') else 'complete',publication_state='preparing' if context.get('prepare_publication') else 'published',active_since=None,next_attempt=None,waiting_reason='',update_sequence=metadata.get('update_sequence',0)+1)
             data['artifacts'][item['id']]=item;atomic(self.path, data)
         return copy.deepcopy(item)
 
@@ -662,7 +699,9 @@ class ResearchArtifacts:
             data=self.snapshot()
             rows=[r for r in data['artifacts'].values() if scope(r)==scope(context) and r['id'] not in data.get('removed',{})]
             for identifier,pending in data.get('requests',{}).items():
-                if identifier not in data['artifacts'] and identifier not in data.get('removed',{}) and not pending.get('canonical_research_id') and scope(pending)==scope(context):rows.append(self.get(identifier,context)['artifact'])
+                if identifier not in data['artifacts'] and identifier not in data.get('removed',{}) and not pending.get('canonical_research_id') and scope(pending)==scope(context):
+                    found=self.get(identifier,context)
+                    if found['status']=='ok':rows.append(found['artifact'])
             rows.sort(key=lambda r:r['created'],reverse=True)
             removed=[]
             for identifier,entry in data.get('removed',{}).items():
@@ -670,6 +709,9 @@ class ResearchArtifacts:
                 if not row or scope(row)!=scope(context):continue
                 if 'report' not in row:row={**row,'report':'','summary':'','revision':stable(identifier,'pending'),'sources':row.get('sources',[]),'failures':row.get('failures',[]),'completeness':'pending'}
                 removed.append({**self.brief(row),'undo_token':entry['token']})
+            from .research_sessions import root_id
+            rows=[row for row in rows if root_id(data,row['id'])==row['id']]
+            removed=[row for row in removed if root_id(data,row['research_id'])==row['research_id']]
             return {'status':'ok','removed':removed[-20:],'total':len(rows),'items':[{**self.brief(r),'followup_count':sum(bool(entry.get('report','').strip()) for entry in data.get('extensions',{}).get(r['id'],[]))} for r in rows[max(0,offset):max(0,offset)+max(1,min(50,limit))]]}
 
     def document(self, identifier, context, revision='', bounded=False):
@@ -708,11 +750,28 @@ class ResearchArtifacts:
             document['extensions']=self.reader(identifier,context,revision,stream='extensions')
             document['sources']=[{**r,'content':evidence_excerpt(r)} for r in sources]
             document['summary']=document['summary'][:1000]
+        from .research_sessions import publication_info,pages
+        document.update(publication_info(self.snapshot(),identifier))
+        document['pages']=pages(self,identifier,context).get('pages',[])
+        if item.get('kind','research')=='research' and (item.get('completeness') in {'pending','failed'} or document['publication_state']=='preparing'):
+            document.update(report='',summary='',sources=[],linked_sources=[],image_items=[],image_sources=[],media=[],sections=[],extensions={'report':'','blocks':[],'sections':[],'reader_end':0,'next_cursor':None},next_cursor=None,completeness='failed' if metadata.get('phase')=='failed' else 'pending')
         if bounded:
             with self.lock:
                 self._document_cache[cache_key]=(time.time(),copy.deepcopy(document))
                 while len(self._document_cache)>24:self._document_cache.pop(next(iter(self._document_cache)))
         return document
+
+    def publish_prepared(self,identifier,context):
+        """The terminal publication is one write after optional assets settle."""
+        with self.lock:
+            found=self.get(identifier,context)
+            if found['status']!='ok':return found
+            data=read(self.path,{})
+            metadata=self.ensure_metadata(data,identifier)
+            metadata.update(publication_state='published',phase='complete',next_attempt=None,waiting_reason='',update_sequence=metadata.get('update_sequence',0)+1)
+            data['artifacts'][identifier]['phase']='complete'
+            atomic(self.path,data)
+            return self.brief(data['artifacts'][identifier])
 
 
     def save_draft(self, identifier, context, revision, expected_revision, html):
@@ -729,7 +788,9 @@ class ResearchArtifacts:
             if self.path.exists() and not self.path.with_suffix('.before-drafts.bak').exists():shutil.copy2(self.path,self.path.with_suffix('.before-drafts.bak'))
             draft={'html':html,'revision':hashlib.sha256(html.encode()).hexdigest(),'source_revision':revision,'updated':now()}
             data.setdefault('draft_history',{}).setdefault(identifier,[]).append(copy.deepcopy(previous or {'html':'','revision':''}))
-            drafts[identifier]=draft;atomic(self.path,data)
+            drafts[identifier]=draft
+            metadata=self.ensure_metadata(data,identifier)
+            metadata['update_sequence']=metadata.get('update_sequence',0)+1;atomic(self.path,data)
         return {'status':'completed','draft':draft}
 
     def export(self, identifier, context, revision, format, draft=False):
@@ -900,7 +961,9 @@ class ResearchArtifacts:
             if failures is not None:current['failures']=failures
             if job_id is not None:current['job_id']=job_id
             current['revision']=hashlib.sha256(json.dumps(current,sort_keys=True).encode()).hexdigest()
-            data['media'][identifier]=current;atomic(self.path,data)
+            data['media'][identifier]=current
+            metadata=self.ensure_metadata(data,identifier)
+            metadata['update_sequence']=metadata.get('update_sequence',0)+1;atomic(self.path,data)
             return copy.deepcopy(current)
 
     @staticmethod
@@ -1046,9 +1109,9 @@ class ResearchArtifacts:
 
 
 class ResearchSearch:
-    def __init__(self, artifacts, key_provider, transport=requests, synthesize=None, illustrate=False, complete=None, read_evidence=False):
+    def __init__(self, artifacts, key_provider, transport=requests, synthesize=None, illustrate=False, complete=None, read_evidence=False, prepare_media=False):
         self.artifacts=artifacts;self.key_provider=key_provider;self.transport=transport
-        self.synthesize=synthesize;self.illustrate=illustrate;self.complete=complete;self.read_evidence=read_evidence
+        self.synthesize=synthesize;self.illustrate=illustrate;self.complete=complete;self.read_evidence=read_evidence;self.prepare_media=prepare_media
         self.network=asyncio.Semaphore(4);self.operation_locks={};self.provider_states={}
 
     async def read_collected_evidence(self,identifier,context,sources):
@@ -1181,7 +1244,7 @@ class ResearchSearch:
         async with self.operation_locks.setdefault(stable('expand',scope(context),identifier,operation_id),asyncio.Lock()):
             fetched=await asyncio.to_thread(self.artifacts.get,identifier,context,revision)
             if fetched['status']!='ok':return fetched
-            item=fetched['artifact'];activity=await asyncio.to_thread(self.artifacts.extension_state,identifier,context)
+            item=fetched['artifact'];activity=await asyncio.to_thread(self.artifacts.extension_operation,identifier,context,operation_id)
             with self.artifacts.lock:
                 entries=self.artifacts.snapshot().get('extensions',{}).get(identifier,[])
                 existing=next((e for e in entries if e['operation_id']==operation_id),None)
@@ -1202,8 +1265,9 @@ class ResearchSearch:
                 search_mode=arguments.get('mode') if arguments.get('mode') in {'quick','detailed'} else item.get('mode','detailed')
                 async with self.network:rows,error=await asyncio.to_thread(self._request,query,search_mode,8)
                 if error:
-                    await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed',reason=error['reason'])
-                    return {'status':'failed','reason':error['reason'],'research_id':identifier}
+                    retry=bool(error.get('retryable'));until=time.time()+error.get('retry_after_seconds',65)
+                    await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='waiting_for_quota' if retry else 'failed',operation_id=operation_id,view=view,reason='search_'+error['reason'],outbound_started=False,next_attempt=until if retry else None)
+                    return {'status':'waiting_for_quota' if retry else 'failed','reason':'search_'+error['reason'],'next_attempt':until,'research_id':identifier}
                 seen={r['url'] for r in sources};additional=[r for r in rows if r['url'] not in seen]
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,search_checkpoint=additional)
             sources=[*sources,*additional]
@@ -1215,8 +1279,9 @@ class ResearchSearch:
             await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='preparing_report',view=view,operation_id=operation_id)
             try:report=await self.synthesize(('[DOCUMENTARY]\n' if item.get('kind')=='documentary' else '')+'Continue this same research with additional supported detail. Do not repeat the existing overview or already composed findings. Original subject: '+item['query']+'\nRequested detail: '+detail+'\nAlready composed: '+item['report'][:4000]+'\nPrior extensions: '+' '.join(e['report'][:1000] for e in entries[-3:]),sources)
             except BudgetPaused as exc:
-                await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='waiting_for_quota',view=view,operation_id=operation_id,reason=exc.reason)
-                return {'status':'waiting_for_quota','next_attempt':max(time.time()+5,exc.until),'reason':exc.reason,'research_id':identifier}
+                checkpointed=exc.reason=='research_section_saved'
+                await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='preparing_report' if checkpointed else 'waiting_for_quota',view=view,operation_id=operation_id,reason='' if checkpointed else exc.reason,next_attempt=exc.until)
+                return {'status':'waiting_for_retry' if checkpointed else 'waiting_for_quota','next_attempt':max(time.time()+1,exc.until),'reason':exc.reason,'research_id':identifier}
             except Exception:
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed',reason='extension_unavailable')
                 return {'status':'failed','reason':'extension_unavailable','research_id':identifier}
@@ -1321,7 +1386,7 @@ class ResearchSearch:
         # before topic allocation, including a mistakenly supplied child ID.
         from .research_topics import new_research_request,conversational_mode
         parent_id=context.get('research_id')
-        if parent_id and not context.get('guest') and arguments.get('action','') in {'','topic_followup'} and not new_research_request(context.get('user_text') or context.get('research_user_text','')):
+        if parent_id and not context.get('research_page_request') and not context.get('guest') and arguments.get('action','') in {'','topic_followup'} and not new_research_request(context.get('user_text') or context.get('research_user_text','')):
             parent=await asyncio.to_thread(self.artifacts.get,parent_id,context)
             if parent.get('status')=='ok' and parent['artifact'].get('kind') not in {'chat','documentary'}:
                 query=str(context.get('user_text') or context.get('research_user_text') or arguments.get('query') or '').strip()
@@ -1395,7 +1460,11 @@ class ResearchSearch:
         async with self.operation_locks.setdefault(key,asyncio.Lock()):
             try:cached=await asyncio.to_thread(self.artifacts.find,query,mode,context,operation_id)
             except ValueError:return {'status':'conflict','reason':'operation_id_reused'}
-            if cached:return self.artifacts.brief(cached)
+            if cached:
+                if self.artifacts.request_state(cached['id'],context).get('publication_state')=='preparing':
+                    if self.prepare_media:await self.enrich_media(cached['id'],context,cached['revision'])
+                    return await asyncio.to_thread(self.artifacts.publish_prepared,cached['id'],context)
+                return self.artifacts.brief(cached)
             identifier=pending['id']
             def checkpoint(**values):return self.artifacts.request_state(identifier,context,**values)
             sources=pending.get('sources',[]);failures=pending.get('failures',[])
@@ -1421,8 +1490,9 @@ class ResearchSearch:
                         else:sources[next(i for i,r in enumerate(sources) if r['url']==row['url'])]=row
                 if not sources:
                     first=failures[0] if failures else {'reason':'no_supported_results'}
-                    await asyncio.to_thread(checkpoint,phase='failed',failures=failures)
-                    return {'status':'failed','reason':first['reason'],'retryable':bool(first.get('retryable')),'retry_after_seconds':first.get('retry_after_seconds',65),'query':query,'results':[],'failures':failures,'completeness':'unavailable'}
+                    retry=bool(first.get('retryable'));until=time.time()+first.get('retry_after_seconds',65)
+                    await asyncio.to_thread(checkpoint,phase='waiting_for_quota' if retry else 'failed',waiting_reason='search_'+first['reason'],next_attempt=until if retry else None,failures=failures)
+                    return {'status':'waiting_for_quota' if retry else 'failed','reason':first['reason'],'next_attempt':until,'research_id':identifier,'retryable':retry,'retry_after_seconds':first.get('retry_after_seconds',65),'query':query,'results':[],'failures':failures,'completeness':'unavailable'}
                 await asyncio.to_thread(checkpoint,phase='comparing_evidence',sources=sources,failures=failures)
             if mode=='quick' and self.read_evidence and not pending.get('source_pages_checked'):
                 sources=await self.read_collected_evidence(identifier,context,sources)
@@ -1468,5 +1538,7 @@ class ResearchSearch:
             await asyncio.to_thread(self.artifacts.request_state,identifier,context,selected_images=place_images(illustrations,report))
             title=display_title(re.search(r'^# (.+)',report,re.M).group(1)) if re.search(r'^# (.+)',report,re.M) else display_title(query)
             await asyncio.to_thread(checkpoint,display_title=title)
-            item=await asyncio.to_thread(self.artifacts.save,query,mode,report,sources,failures,context,operation_id or key)
-            return self.artifacts.brief(item)
+            await asyncio.to_thread(checkpoint,phase='preparing_layout',publication_state='preparing')
+            item=await asyncio.to_thread(self.artifacts.save,query,mode,report,sources,failures,{**context,'prepare_publication':True},operation_id or key)
+            if self.prepare_media:await self.enrich_media(item['id'],context,item['revision'])
+            return await asyncio.to_thread(self.artifacts.publish_prepared,item['id'],context)

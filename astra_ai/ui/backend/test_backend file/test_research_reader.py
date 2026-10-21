@@ -67,7 +67,7 @@ def test_quota_restart_uses_checkpoint_without_another_search(tmp_path):
     first=asyncio.run(ResearchSearch(store,lambda k:'fixture',Transport(),paused).search({'query':'Public honeybee topic','mode':'detailed'},CTX,'op'))
     assert first['status']=='waiting_for_quota' and len(calls)==1
     doc=store.document(first['research_id'],CTX,bounded=True)
-    assert doc['phase']=='waiting_for_quota' and doc['sources'][0]['content']=='Real supported evidence.' and doc['report']==''
+    assert doc['phase']=='waiting_for_quota' and not doc['sources'] and doc['report']==''
     async def done(*args):return '# Honeybee Communication\n\nSupported finding [S1].'
     restarted=ResearchArtifacts(store.path)
     result=asyncio.run(ResearchSearch(restarted,lambda k:'fixture',Transport(),done).search({'research_id':first['research_id']},CTX,'ignored'))
@@ -205,7 +205,8 @@ def test_processing_timer_freezes_during_quota_wait_and_resumes(tmp_path,monkeyp
     stamp[0]=10003.0;done=restarted.request_state(item['id'],CTX,phase='complete')
     assert done['processing_seconds']==10 and done['active_since'] is None
     doc=restarted.document(item['id'],CTX,bounded=True)
-    assert doc['processing_seconds']==10 and doc['sources']
+    assert doc['processing_seconds']==10 and not doc['sources']
+    assert restarted.request_state(item['id'],CTX)['sources']
 
 
 def test_history_projection_cache_invalidates_after_external_save_and_is_scoped(tmp_path):
@@ -314,6 +315,6 @@ def test_continuation_reveals_saved_content_before_queueing_same_report(tmp_path
     if revealed and reveal_saved:assert not submitted and result['provider_calls']==0
     else:
         assert submitted[0][0]['arguments']['research_id']==item['id']
-        assert submitted[0][0]['arguments']['mode']=='quick'
+        assert submitted[0][0]['arguments']['mode']=='detailed'
         activity=store.extension_state(item['id'],CTX)
         assert activity['phase']=='collecting_sources' and activity['search_checkpoint']==[source()]

@@ -29,6 +29,7 @@ import {
   registerMediaControls,
 } from "../../aegisWidgetProtocol";
 import "./ResearchWorkspace.css";
+import {acceptPublication, mergePublication, publicationPending, publicationWorking, revealDuration} from "./researchPublication";
 import {ChatComposer} from "./ChatComposer";
 import {ResearchHistoryItem} from "./ResearchHistoryItem";
 import {RecentlyRemovedResearch} from "./RecentlyRemovedResearch";
@@ -288,6 +289,11 @@ type Report = {
     blocks: { id: string; text: string; section_id?: string; section_title?: string; section_created?: string }[];
   };
   research_id: string;
+  research_session_id?: string;
+  publication_revision?: string;
+  publication_state?: string;
+  update_sequence?: number;
+  pages?: {research_id:string; title:string; phase:string; created:string}[];
   research_revision: string;
   query: string;
   report: string;
@@ -1215,6 +1221,8 @@ function researchProgress(
     "collecting_sources",
     "comparing_evidence",
     "preparing_report",
+    "preparing_images",
+    "preparing_layout",
   ].includes(phase);
   const elapsed =
     Math.max(0, seconds) +
@@ -1226,7 +1234,7 @@ function researchProgress(
     active,
     elapsed,
     label: active
-      ? "Working"
+      ? ({collecting_sources:"Collecting evidence", comparing_evidence:"Checking evidence", preparing_report:"Composing the answer", preparing_images:"Preparing illustrations", preparing_layout:"Arranging the report"}[phase] || "Working")
       : phase === "queued"
         ? "Queued"
         : phase === "failed"
@@ -1242,6 +1250,10 @@ function researchProgress(
   };
 }
 function researchWaitMessage(reason: string, provider?: string) {
+  if (reason === "search_provider_quota") return "The search provider has reached its allowance. Your saved work is preserved.";
+  if (reason === "search_provider_not_configured") return "A search API key is missing. Configure the key for this research depth in Settings.";
+  if (reason === "search_provider_authentication_required") return "The search provider rejected its API key. Update that search key in Settings to continue.";
+  if (reason.startsWith("search_")) return "Evidence collection is temporarily unavailable. Your saved work is preserved.";
   if (reason === "research_writer_disabled") return "Research writing is deactivated. Choose Gemini or OpenAI in Settings to continue from the saved sources.";
   if (reason === "research_provider_switching") return "Research writing is switching providers. Your saved work will continue with the selected provider.";
   if (reason === "openai_service_unavailable") return "OpenAI is temporarily unavailable. Your saved writing and sources will be retried automatically.";
@@ -1307,35 +1319,18 @@ export function PendingResearch({
           )}
         </div>
       )}
-      {status.skeleton && (
-        <div className="research-loading-lines" aria-hidden="true">
-          {[0, 1, 2].map((n) => (
-            <div className="research-skeleton" key={n}>
-              <i />
-              <i />
-              <i />
-              <i />
-            </div>
-          ))}
-        </div>
-      )}
-      {!!report.sources.length && (
-        <div className="research-evidence-summary">
-          <p>The composed answer hasn’t been published. {report.sources.length} collected sources are available to inspect while report writing is pending.</p>
-          <button className="research-inline-action" onClick={onBrowse}>
-            <Icon name="citation" /> Browse collected sources
-          </button>
-        </div>
-      )}
-      {!status.active && !report.sources.length && (
-        <p>
-          {report.phase === "failed"
-            ? "No findings are available. Please try this research again."
-            : "Waiting to continue. Findings will appear here as soon as sources arrive."}
-        </p>
-      )}
-    </section>
+      {(status.active || report.phase === "queued") && <ResearchSkeleton />}
+      {report.phase === "failed" && <p role="status">{report.waiting_reason?.startsWith("search_") ? researchWaitMessage(report.waiting_reason) : "Research could not finish. Your saved work is preserved."}</p>}
+        </section>
   );
+}
+function ResearchSkeleton() {
+  return <div className="research-layout-skeleton" aria-hidden="true">
+    <div className="skeleton-heading" /><div className="skeleton-intro">{[0,1,2,3].map(n=><i key={n}/>)}</div>
+    <div className="skeleton-illustrated"><div className="skeleton-visual"/><div>{[0,1,2,3,4].map(n=><i key={n}/>)}</div></div>
+    <div className="skeleton-heading short"/><div className="skeleton-intro">{[0,1,2,3,4,5].map(n=><i key={n}/>)}</div>
+    <div className="skeleton-table">{[0,1,2].map(n=><i key={n}/>)}</div>
+  </div>;
 }
 function sourceLinkKey(url: string) {
   const video = videoId(url);
@@ -1408,6 +1403,30 @@ type ResearchImage = {
   source_id: string;
   publication: string;
 };
+const preparedImageBytes = new Map<string,Promise<Blob>>();
+function preparedImage(image:ResearchImage,reportId:string,client:string):Promise<Blob> {
+  const key=client+":"+reportId+":"+image.id+":"+(image.content_hash || "");
+  const cached=preparedImageBytes.get(key);if(cached)return cached;
+  const local=image.url && /^\/api\/research\/[a-f0-9]{32}\/(?:attachments\/[a-f0-9]{32}\/images\/A[a-f0-9]{24}|images\/I[a-f0-9]{24})$/.test(image.url) ? image.url : "/api/research/"+reportId+"/images/"+image.id;
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),12000);
+  const pending=fetch(local,{headers:{...headers(),"X-Nova-Client":client},signal:controller.signal}).then(async response=>{
+    if(!response.ok)throw Error("Illustration unavailable");
+    const blob=await response.blob();
+    const url=URL.createObjectURL(blob);
+    try {const picture=new window.Image();picture.src=url;await picture.decode();} finally {URL.revokeObjectURL(url);}
+    return blob;
+  }).catch(error=>{preparedImageBytes.delete(key);throw error;}).finally(()=>clearTimeout(timer));
+  preparedImageBytes.set(key,pending);
+  while(preparedImageBytes.size>12)preparedImageBytes.delete(preparedImageBytes.keys().next().value!);
+  return pending;
+}
+async function prepareClientPublication(report:Report):Promise<Report> {
+  if(publicationPending(report) || report.kind==="documentary" || report.kind==="chat")return report;
+  const client=conversationSnapshot().clientId;
+  const rows=(report.image_items || []).slice(0,6);
+  const outcomes=await Promise.allSettled(rows.map(image=>preparedImage(image,report.research_id,client)));
+  return {...report,image_items:rows.filter((_,index)=>outcomes[index].status==="fulfilled")};
+}
 function EvidenceImage({
   image,
   reportId,
@@ -1435,22 +1454,7 @@ function EvidenceImage({
     let active = true,
       blob = "";
     const controller = new AbortController();
-    fetch(
-      image.url &&
-        /^\/api\/research\/[a-f0-9]{32}\/(?:attachments\/[a-f0-9]{32}\/images\/A[a-f0-9]{24}|images\/I[a-f0-9]{24})$/.test(
-          image.url,
-        )
-        ? image.url
-        : "/api/research/" + reportId + "/images/" + image.id,
-      {
-        headers: {...headers(),"X-Nova-Client":client},
-        signal: controller.signal,
-      },
-    )
-      .then((r) => {
-        if (!r.ok) throw Error();
-        return r.blob();
-      })
+    preparedImage(image,reportId,client)
       .then((b) => {
         blob = URL.createObjectURL(b);
         if (active && conversationSnapshot().clientId===client && !conversationSnapshot().guest) setUrl(blob);
@@ -2471,6 +2475,7 @@ export function initialDraft(report: Report) {
   }
   return clean(doc.body.innerHTML);
 }
+function reportRefProvider(reason:string) { return reason.startsWith("openai") ? "openai" : reason.startsWith("gemini") ? "gemini" : undefined; }
 function ContinuationStatus({
   activity,
   view,
@@ -2479,9 +2484,10 @@ function ContinuationStatus({
   view: string;
 }) {
   if (!activity || activity.view !== view) return null;
-  const active = ["queued", "collecting_sources", "preparing_report"].includes(
+  const active = ["queued", "collecting_sources", "preparing_report", "preparing_images", "preparing_layout"].includes(
     activity.phase || "",
   );
+  if (activity.phase === "complete" && !activity.reason) return null;
   return (
     <section
       className="research-continuation"
@@ -2489,29 +2495,22 @@ function ContinuationStatus({
     >
       <p role="status">
         {active
-          ? "Adding more " + (view === "reader" ? "details" : view) + "…"
+          ? ({queued:"Queued",collecting_sources:"Collecting supporting evidence…",preparing_report:"Composing additional findings…",preparing_images:"Preparing illustrations…",preparing_layout:"Arranging additional findings…"}[activity.phase || ""] || "Preparing additional findings…")
           : activity.phase === "waiting_for_report"
             ? activity.collected_sources
               ? `${activity.collected_sources} follow-up sources collected. Answer generation is waiting for the original report.`
               : "Follow-up saved. Waiting for the original report."
           : activity.phase === "waiting_for_quota"
-            ? "More details are pending. Your current findings remain available."
+            ? researchWaitMessage(activity.reason || "", reportRefProvider(activity.reason || ""))
             : activity.reason === "no_more_videos"
               ? "No more relevant videos were returned for this topic."
               : activity.reason === "no_more_sources"
                 ? "No additional sources were returned."
                 : activity.phase === "failed"
-                  ? "Additional results could not be retrieved. Your current findings are preserved."
+                  ? activity.reason?.startsWith("search_") ? researchWaitMessage(activity.reason) : "Additional results could not be retrieved. Your current findings are preserved."
                   : ""}
       </p>
-      {active && (
-        <div className="research-skeleton" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-          <i />
-        </div>
-      )}
+      {active && <ResearchSkeleton />}
     </section>
   );
 }
@@ -2641,13 +2640,14 @@ function Workspace() {
   function loadReport(id: string) {
     const key = conversationSnapshot().clientId + ":" + id;
     const cached = reportCache.current.get(key);
-    if (cached && Date.now() - cached.at < 30000)
+    if (cached && !publicationWorking(cached.report) && !publicationPending(cached.report) && Date.now() - cached.at < 30000)
       return Promise.resolve(cached.report);
     let pending = reportLoads.current.get(key);
     if (!pending) {
       const client = conversationSnapshot().clientId;
       pending = api("/" + encodeURIComponent(id) + "/document")
-        .then((d) => {
+        .then(async (d) => {
+          d=await prepareClientPublication(d);
           if (
             conversationSnapshot().clientId === client &&
             !conversationSnapshot().guest
@@ -2725,6 +2725,14 @@ function Workspace() {
     report?.completeness,
     chat.clientId,
   ]);
+  const [conversationSession, setConversationSession] = useState("");
+  const tabRef = useRef(tab);tabRef.current=tab;
+  const pageViews = useRef(new Map<string,{tab:string;scroll:number}>());
+  const updateLoads = useRef(new Map<string,Promise<void>>());
+  const awaitingReveal = useRef(new Map<string,{revision:string;extension:boolean}>());
+  const revealFollow = useRef(true);
+  const revealStop = useRef<() => void>(()=>{});
+  const [revealingPublication, setRevealingPublication] = useState(false);
   const reportRef = useRef(report);
   reportRef.current = report;
   const [revealingSaved, setRevealingSaved] = useState(false);
@@ -2751,6 +2759,16 @@ function Workspace() {
   const continueSeen = useRef(new Map<string, any>());
   const continuePending = useRef(new Set<string>());
   async function reloadReport(id: string) {
+    const key = conversationSnapshot().clientId + ":" + id;
+    const pending = updateLoads.current.get(key);
+    if (pending) return pending;
+    const promise = updateReport(id).finally(()=>updateLoads.current.delete(key));
+    updateLoads.current.set(key,promise);
+    return promise;
+  }
+  async function updateReport(id: string) {
+    const owner = conversationSnapshot().clientId;
+    const epoch = loadEpoch.current;
     const old = reportRef.current;
     const follow =
       !!reader.current &&
@@ -2759,7 +2777,9 @@ function Workspace() {
         reader.current.clientHeight <
         90 &&
       !window.getSelection()?.toString();
-    const d = await api("/" + id + "/document");
+    const d = await prepareClientPublication(await api("/" + id + "/document"));
+    if (owner !== conversationSnapshot().clientId || epoch !== loadEpoch.current || !acceptPublication(reportRef.current,d)) return;
+    if (!publicationPending(old)) revealFollow.current=follow;
     if (
       old?.research_id === id &&
       old.report &&
@@ -2788,7 +2808,9 @@ function Workspace() {
       if (document.querySelector('[data-draft-dirty="true"]'))
         d.draft = old.draft;
     }
-    setReport((current) => (current?.research_id === id ? d : current));
+    if (document.querySelector('[data-draft-dirty="true"]') || reportRef.current?.draft?.revision !== old?.draft?.revision) d.draft = reportRef.current?.draft;
+    const draftDirty=!!document.querySelector('[data-draft-dirty="true"]');
+    setReport(current=>mergePublication(current,d,old?.draft?.revision || "",draftDirty));
     if (follow && old?.extension_revision !== d.extension_revision)
       requestAnimationFrame(() => {
         if (reportRef.current?.research_id === id && reader.current)
@@ -2843,7 +2865,7 @@ function Workspace() {
       if (result.status !== "completed")
         throw Error(result.reason || "Removal was not confirmed");
       reportCache.current.delete(chat.clientId + ":" + item.research_id);
-      if (lastSelection.current === item.research_id) {
+      if (lastSelection.current === item.research_id || reportRef.current?.research_session_id === item.research_id) {
         ++loadEpoch.current;
         lastSelection.current = "";
         setReport(null);
@@ -2907,7 +2929,7 @@ function Workspace() {
       const detail = (e as CustomEvent).detail || {};
       const removedIds: string[] = detail.removed_research_ids || [];
       for (const id of removedIds) reportCache.current.delete(chat.clientId + ":" + id);
-      if (removedIds.includes(lastSelection.current)) {
+      if (removedIds.includes(lastSelection.current) || removedIds.includes(reportRef.current?.research_session_id || "")) {
         ++loadEpoch.current; lastSelection.current = ""; setReport(null); setPreview(null); setAttachment(null); setDocumentEdit(null); setSelectionLoading(""); setFailedSelection(""); setError("");
         sessionStorage.removeItem("nova-selected-research");
         updateUiContext({research_id:"",research_revision:"",selected_id:"",title:""});
@@ -3059,26 +3081,6 @@ function Workspace() {
     sourceLimit,
     mediaLimit,
   ]);
-  useEffect(() => {
-    if (
-      !open ||
-      !report ||
-      ![
-        "queued",
-        "collecting_sources",
-        "preparing_report",
-        "waiting_for_quota",
-        "waiting_for_report",
-      ].includes(report.extension_activity?.phase || "")
-    )
-      return;
-    const id = report.research_id;
-    const timer = setInterval(
-      () => void reloadReport(id).catch(() => {}),
-      2000,
-    );
-    return () => clearInterval(timer);
-  }, [open, report?.research_id, report?.extension_activity?.phase]);
   async function refresh() {
     const client = conversationSnapshot().clientId;
     if (!client || conversationSnapshot().guest) return;
@@ -3097,7 +3099,11 @@ function Workspace() {
       setError(e.message);
     }
   }
-  async function select(id: string) {
+  async function select(id: string, withinSession = false) {
+    const previous = reportRef.current;
+    if (previous) pageViews.current.set(previous.research_id,{tab:tabRef.current,scroll:reader.current?.scrollTop || 0});
+    revealStop.current();
+    revealFollow.current=true;
     setTab("reader");
     const destination = researchDestination(location.hash);
     if (destination && destination.id !== id)
@@ -3118,9 +3124,9 @@ function Workspace() {
     setAttachment(null);
     setDocumentEdit(null);
     setEditorGeneration(0);
-    setMessage("");
+    if (!withinSession) {setMessage("");setConversationSession("");}
     const cached = reportCache.current.get(client + ":" + id);
-    setReport(cached && Date.now() - cached.at < 30000 ? cached.report : null);
+    setReport(cached && !publicationWorking(cached.report) && Date.now() - cached.at < 30000 ? cached.report : null);
     updateUiContext({
       view: "research",
       research_id: id,
@@ -3145,6 +3151,10 @@ function Workspace() {
       if (d.status === "redirect" && d.research_id !== id) { await select(d.research_id); return; }
       setImageView(null);
       setReport(d);
+      const session = d.research_session_id || id;
+      setConversationSession(session);
+      conversationResearch(id,undefined,session);
+      if (withinSession && pageViews.current.has(id)) setTab(pageViews.current.get(id)!.tab);
       setEntryKind(d.kind || "research");
       void threadLoad
         .then((thread) => {
@@ -3153,7 +3163,7 @@ function Workspace() {
             client === conversationSnapshot().clientId &&
             !conversationSnapshot().guest
           )
-            conversationResearch(id, thread.messages || []);
+            conversationResearch(id, thread.messages || [], thread.research_session_id || session);
         })
         .catch(() => {
           if (epoch === loadEpoch.current)
@@ -3165,15 +3175,15 @@ function Workspace() {
         sessionStorage.getItem("nova-research-view:" + client + ":" + id) ||
           "{}",
       );
-      setMessage(saved.message || "");
+      if (!withinSession) setMessage(saved.message || "");
       requestAnimationFrame(() => {
-        if (reader.current) reader.current.scrollTop = saved.scroll || 0;
+        if (reader.current) reader.current.scrollTop = pageViews.current.get(id)?.scroll ?? saved.scroll ?? 0;
       });
       setReaderChars(20000);
       setSourceLimit(10);
       setMediaLimit(3);
       setOriginal(false);
-      setEditOpened(false);
+      setEditOpened(withinSession && pageViews.current.get(id)?.tab === "edit");
       setExpandedVideo("");
       setExtraMedia([]);
       setPreview(null);
@@ -3218,6 +3228,7 @@ function Workspace() {
       ++loadEpoch.current;
       setReport(null);
       setItems([]);
+      setConversationSession("");pageViews.current.clear();awaitingReveal.current.clear();
       setPreview(null);
       if (open && !chat.guest && chat.clientId) {
         setError("");
@@ -3271,16 +3282,18 @@ function Workspace() {
         event: "nova-open-research",
         target: d,
       });
-      if (
-        researchMayNavigate() &&
-        !["speaking", "thinking"].includes(conversationSnapshot().state)
-      )
-        openResearch(d.research_id);
     };
     window.addEventListener("nova-open-research", show);
     window.addEventListener("nova-open-memory", hide);
     window.addEventListener("nova-open-dashboard", hide);
     window.addEventListener("nova-conversation", sync);
+    const pageCreated = (e:Event)=>{
+      const d=(e as CustomEvent).detail;
+      const current=reportRef.current;
+      if (current && current.research_id===d.parent_page_id && (current.research_session_id || current.research_id)===d.research_session_id) void select(d.research_id,true);
+      else if (current && (current.research_session_id || current.research_id)===d.research_session_id) void reloadReport(current.research_id);
+    };
+    window.addEventListener("nova-research-page-created",pageCreated);
     window.addEventListener("nova-research-ready", ready);
     if (open) show(new Event("restore"));
     return () => {
@@ -3289,6 +3302,7 @@ function Workspace() {
       window.removeEventListener("nova-open-dashboard", hide);
       window.removeEventListener("nova-conversation", sync);
       window.removeEventListener("nova-research-ready", ready);
+      window.removeEventListener("nova-research-page-created",pageCreated);
     };
   }, []);
   useEffect(() => {
@@ -3306,30 +3320,18 @@ function Workspace() {
         JSON.stringify({ message, scroll: reader.current?.scrollTop || 0 }),
       );
   }, [message, report?.research_id]);
+  const hasResearchWork=chat.textBusy || chat.jobs.some(job=>["running","queued","retrying"].includes(job.state));
   useEffect(() => {
-    if (
-      !open ||
-      !report ||
-      ![
-        "queued",
-        "collecting_sources",
-        "comparing_evidence",
-        "preparing_report",
-        "waiting_for_quota",
-      ].includes(report.phase || "")
-    )
-      return;
-    const id = report.research_id;
-    const interval = setInterval(() => {
-      void api("/" + id + "/document")
-        .then((d) => {
-          setReport((old) => (old?.research_id === id ? d : old));
-          void refresh();
-        })
-        .catch(() => {});
-    }, 2500);
-    return () => clearInterval(interval);
-  }, [open, report?.research_id, report?.phase]);
+    if (!open || !report || chat.guest) return;
+    const id=report.research_id;
+    const update=()=>{if(document.visibilityState!=="hidden") void reloadReport(id).catch(()=>{});};
+    const visible=()=>{if(document.visibilityState==="visible") update();};
+    window.addEventListener("focus",update);
+    document.addEventListener("visibilitychange",visible);
+    update();
+    const interval=publicationWorking(report) || hasResearchWork ? setInterval(update,2500) : undefined;
+    return ()=>{clearInterval(interval);window.removeEventListener("focus",update);document.removeEventListener("visibilitychange",visible);};
+  },[open,chat.clientId,chat.connected,hasResearchWork,report?.research_id,report?.phase,report?.extension_activity?.phase,report?.media_status]);
   async function more() {
     if (!report || report.next_cursor == null) return;
     const id = report.research_id,
@@ -3413,6 +3415,7 @@ function Workspace() {
     );
   }
   function selectTab(value: string) {
+    revealStop.current();
     closePreview(false);
     setImageView(null);
     setTab(value);
@@ -3473,21 +3476,6 @@ function Workspace() {
         ),
       );
   }, [open, tab, report?.research_id, report?.media_status, chat.clientId]);
-  useEffect(() => {
-    if (!open || !["pending", "running"].includes(report?.media_status || ""))
-      return;
-    const id = report!.research_id,
-      client = chat.clientId;
-    const timer = window.setInterval(() => {
-      void api("/" + id + "/media")
-        .then((d) => {
-          if (conversationSnapshot().clientId === client)
-            setReport((r) => (r?.research_id === id ? { ...r, ...d } : r));
-        })
-        .catch(() => {});
-    }, 2000);
-    return () => clearInterval(timer);
-  }, [open, report?.research_id, report?.media_status, chat.clientId]);
   const media = mergeMedia([
     ...(report?.sources || []),
     ...(report?.media || []),
@@ -3511,6 +3499,32 @@ function Workspace() {
     });
     return () => cancelAnimationFrame(frame);
   }, [videoDestination, report?.research_id, tab, mediaLimit, media]);
+  useLayoutEffect(()=>{
+    if(!report || !open || report.kind==="documentary" || report.kind==="chat") return;
+    const id=report.research_id;
+    if(publicationPending(report) || publicationWorking({...report,phase:"complete",media_status:"complete"})) {
+      awaitingReveal.current.set(id,{revision:report.publication_revision || "",extension:!publicationPending(report)});return;
+    }
+    if(!awaitingReveal.current.has(id)) return;
+    const before=awaitingReveal.current.get(id);awaitingReveal.current.delete(id);
+    if(before?.revision===report.publication_revision || tab==="edit" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const surface=document.querySelector<HTMLElement>(tab==="sources" ? ".research-sources:not([hidden])" : tab==="media" ? ".research-media:not([hidden])" : ".research-reader:not([hidden])");
+    if(!surface) return;
+    const selectors=tab==="reader" ? before?.extension ? ".research-extension-block:last-child .research-prose > *" : ".research-prose > *, .research-source-chips > *, .research-related-media > *" : ":scope > *";
+    const nodes=Array.from(surface.querySelectorAll<HTMLElement>(selectors));
+    if(!nodes.length) return;
+    const scrollContainer=surface;
+    let follow=revealFollow.current;
+    let stopped=false,frame=0;const start=performance.now(),duration=revealDuration(report.report.length);
+    const animations=nodes.map((node,i)=>node.animate([{opacity:0,clipPath:"inset(0 100% 0 0)"},{opacity:1,clipPath:"inset(0 0 0 0)"}],{duration:240,delay:i*duration/nodes.length,fill:"backwards",easing:"ease-out"}));
+    const stopFollowing=()=>{follow=false;};
+    const stop=()=>{if(stopped)return;stopped=true;animations.forEach(a=>a.finish());cancelAnimationFrame(frame);setRevealingPublication(false);};
+    revealStop.current=stop;setRevealingPublication(true);
+    const tick=(now:number)=>{if(stopped)return;if(follow){const index=Math.min(nodes.length-1,Math.floor((now-start)/duration*nodes.length));const node=nodes[index];if(node)scrollContainer.scrollTo({top:Math.max(0,node.offsetTop-scrollContainer.clientHeight*.65),behavior:"smooth"});}if(now-start<duration+250)frame=requestAnimationFrame(tick);else stop();};
+    frame=requestAnimationFrame(tick);
+    surface.addEventListener("wheel",stopFollowing,{passive:true});surface.addEventListener("touchstart",stopFollowing,{passive:true});surface.addEventListener("keydown",stopFollowing);
+    return ()=>{stop();surface.removeEventListener("wheel",stopFollowing);surface.removeEventListener("touchstart",stopFollowing);surface.removeEventListener("keydown",stopFollowing);};
+  },[open,report?.research_id,report?.publication_revision,report?.phase,report?.extension_activity?.phase,report?.completeness,tab]);
   function openSource(source: Source) {
     if (source.attachment_id && report) {
       const reportId = report.research_id,
@@ -3879,10 +3893,7 @@ function Workspace() {
   const readerExtensionBlocks = report?.extensions?.blocks || (report?.extensions?.report ? [{id: report.extension_revision || "extension", text: report.extensions.report}] : []);
   const readerFollowups = followupGroups(readerExtensionBlocks);
   const readerVideoKeys = readerVideos.map(video => sourceLinkKey(video.url));
-  const readerFooterSources = freshSourceLinks(report?.sources || [], new Set([
-    ...readerBaseKeys, ...readerVideoKeys,
-    ...citedSourceKeys(readerExtensionBlocks.map(block => block.text).join("\n"), readerSources),
-  ]));
+  const readerFooterSources = freshSourceLinks(readerSources, new Set());
   return (
     <section
       className="research-workspace"
@@ -3936,7 +3947,7 @@ function Workspace() {
           </div>}
           <button className="rh-archive-view" aria-pressed={archivedHistory} onClick={()=>{setArchivedHistory(!archivedHistory);setOffset(0);setSelectedHistory(new Set());setSelectingHistory(false);}}>{archivedHistory ? "← Back to recent research" : "View archived research"}</button>
           {!items.length && <p>{archivedHistory ? "No archived research." : "No saved research yet."}</p>}
-          {items.map(item => <ResearchHistoryItem key={item.research_id} item={item} active={(selectionLoading || report?.research_id)===item.research_id} selecting={selectingHistory} checked={selectedHistory.has(item.research_id)} disabled={!!deleting}
+          {items.map(item => <ResearchHistoryItem key={item.research_id} item={item} active={(report?.research_session_id || selectionLoading || report?.research_id)===item.research_id} selecting={selectingHistory} checked={selectedHistory.has(item.research_id)} disabled={!!deleting}
             onPick={()=>void select(item.research_id)} onWarm={()=>void loadReport(item.research_id).catch(()=>{})}
             onToggle={()=>setSelectedHistory(previous=>{const next=new Set(previous);if(next.has(item.research_id))next.delete(item.research_id);else next.add(item.research_id);return next;})}
             onUpdate={async(value:any)=>{const result=await api("/"+item.research_id+"/history",{method:"PATCH",body:JSON.stringify(value)});if(result.status!=="completed")throw Error(result.reason||"Could not update research.");await refresh();}}
@@ -4007,6 +4018,11 @@ function Workspace() {
               <button className="research-history-toggle" aria-controls="research-history-panel" aria-expanded={narrowPanel === "history"} onClick={() => setNarrowPanel(narrowPanel === "history" ? "" : "history")}>History</button>
               <button className="research-chat-toggle" aria-controls="research-conversation-panel" aria-expanded={narrowPanel === "conversation"} onClick={() => setNarrowPanel(narrowPanel === "conversation" ? "" : "conversation")}>Conversation</button>
             </div>
+            {!!report?.pages?.length && report.kind !== "documentary" && report.kind !== "chat" && <div className="research-page-navigation" aria-label="Research pages">
+              <button aria-label="Previous research page" disabled={report.pages.findIndex(p=>p.research_id===report.research_id)<=0} onClick={()=>{const i=report.pages!.findIndex(p=>p.research_id===report.research_id);void select(report.pages![i-1].research_id,true);}}>‹</button>
+              <select aria-label="Research page" value={report.research_id} onChange={e=>void select(e.target.value,true)}>{report.pages.map((p,i)=><option key={p.research_id} value={p.research_id}>{i+1} of {report.pages!.length} · {p.title}{p.phase!=="complete" ? " · "+p.phase.replace(/_/g," ") : ""}</option>)}</select>
+              <button aria-label="Next research page" disabled={report.pages.findIndex(p=>p.research_id===report.research_id)>=report.pages.length-1} onClick={()=>{const i=report.pages!.findIndex(p=>p.research_id===report.research_id);void select(report.pages![i+1].research_id,true);}}>›</button>
+            </div>}
             <nav aria-label="Report views">
               {(report?.kind === "chat"
                 ? []
@@ -4028,7 +4044,7 @@ function Workspace() {
                   disabled={
                     v === "edit" &&
                     (!report ||
-                      (report.completeness === "pending" &&
+                      (report.kind === "documentary" && report.completeness === "pending" &&
                         report.phase !== "draft") ||
                       report.phase === "failed")
                   }
@@ -4075,7 +4091,8 @@ function Workspace() {
                 </details>
               )}
           </header>
-          <div className="research-stage" aria-busy={!!selectionLoading}>
+          <div className="research-stage" aria-busy={!!selectionLoading || publicationPending(report)}>
+            {revealingPublication && <button className="research-reveal-skip" onClick={()=>revealStop.current()}>Show all now</button>}
             {selectionLoading && (
               <span className="research-selection-loading" role="status">
                 Opening research…
@@ -4088,14 +4105,7 @@ function Workspace() {
                 aria-label="Opening research"
               >
                 <p>Opening research</p>
-                {selectionSkeleton && (
-                  <div className="research-skeleton" aria-hidden="true">
-                    <i />
-                    <i />
-                    <i />
-                    <i />
-                  </div>
-                )}
+                {selectionSkeleton && <ResearchSkeleton />}
               </section>
             ) : !report && failedSelection ? (
               <section className="research-empty">
@@ -4122,6 +4132,8 @@ function Workspace() {
                     </p>
                   ))}
               </div>
+            ) : publicationPending(report) ? (
+              <div className="research-reader research-pending-page" onWheel={()=>{revealFollow.current=false;}}><PendingResearch report={report} onBrowse={()=>{}} onImage={()=>{}} /></div>
             ) : report.kind === "chat" ? (
               <section
                 className="research-central-chat"
@@ -4132,7 +4144,7 @@ function Workspace() {
                   role="log"
                   aria-label="Standalone conversation"
                 >
-                  {(chat.researchMessages[report.research_id] || []).map(
+                  {(chat.researchMessages[conversationSession || report.research_session_id || report.research_id] || []).map(
                     (m) => (
                       <article key={m.id} data-speaker={m.role}>
                         <small>{m.role === "user" ? "You" : "Aegis"}</small>
@@ -4336,7 +4348,7 @@ function Workspace() {
                         onClick={() => openSource(source)}
                       /></span>
                     ))}
-                    {!readerFooterSources.length && <p>Sources are linked where they first appear in the report.</p>}
+                    {!readerFooterSources.length && <p>No sources were available for this report.</p>}
                   </div>
                 </div>
                 {editOpened && (
@@ -4688,8 +4700,8 @@ function Workspace() {
                 el.scrollHeight - el.scrollTop - el.clientHeight < 70;
             }}
           >
-            {(report
-              ? chat.researchMessages[report.research_id] || []
+            {(conversationSession
+              ? chat.researchMessages[conversationSession] || []
               : []
             ).map((m) => (
               <article key={m.id} data-speaker={m.role}>

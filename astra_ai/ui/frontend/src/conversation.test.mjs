@@ -57,3 +57,16 @@ test('canonical research hydration deduplicates optimistic turn IDs without assi
  assert.equal(h.api.conversationResearch('report').length,1);
  h.api.conversationState({clientId:'new-owner'});assert.equal(h.api.conversationResearch('report').length,0);
 });
+test('research pages share one conversation and late answers cannot enter a different session',()=>{
+ const h=harness();
+ h.api.conversationResearch('page-one',[],'root');
+ h.api.conversationResearch('page-two',undefined,'root');
+ h.api.conversationMessage('user','Research NASA','completed','turn-nasa','page-two');
+ h.api.conversationMessage('assistant','Saved findings','completed','reply:turn-nasa','page-two');
+ assert.equal(h.api.conversationSnapshot().researchMessages.root.length,2);
+ h.api.conversationResearch('another-page',[],'another-root');
+ h.api.conversationMessage('assistant','Late answer','completed','late','page-one');
+ assert.equal(h.api.conversationSnapshot().researchMessages.root.length,3);
+ assert.equal(h.api.conversationSnapshot().researchMessages['another-root'].length,0);
+ assert.equal(h.api.conversationSnapshot().messages.length,0);
+});

@@ -266,15 +266,15 @@ def test_image_placement_keeps_paragraph_immediately_below_heading():
     assert placed[0]['placement_text']=='AI PCs provide everyday assistance.'
 
 
-def test_pending_reports_expose_collected_images_before_synthesis_budget_resumes(tmp_path,monkeypatch):
+def test_pending_reports_keep_collected_images_private_until_synthesis_publishes(tmp_path,monkeypatch):
     store,identifier=entry(tmp_path)
     monkeypatch.setattr(store,'_fetch_public_source',lambda url,image=False:(picture(),'image/png',url))
     rows=asyncio.run(prepare_images(ResearchSearch(store,lambda _:None),identifier,CTX,[{'url':'https://example.com','title':'NVIDIA workstation','images':[{'url':'https://example.com/photo.png','caption':'NVIDIA workstation'}]}],'NVIDIA workstation'))
     store.request_state(identifier,CTX,phase='waiting_for_quota',sources=[{'url':'https://example.com','title':'NVIDIA workstation','content':'Collected evidence.','retrieved_at':'2026-10-19'}])
     asyncio.run(ResearchSearch(store,lambda _:None).search({'action':'images','research_id':identifier},CTX,'pending-images'))
     document=store.document(identifier,CTX,bounded=True)
-    assert document['completeness']=='pending' and document['image_items'][0]['id']==rows[0]['id']
-    assert 'url' not in document['image_items'][0]
+    assert document['completeness']=='pending' and document['image_items']==[]
+    assert store.request_state(identifier,CTX)['selected_images'][0]['id']==rows[0]['id']
 
 
 def test_image_validation_continues_past_failed_first_batch_and_keeps_more_than_four(tmp_path,monkeypatch):

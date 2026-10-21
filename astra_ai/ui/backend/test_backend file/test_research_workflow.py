@@ -87,7 +87,7 @@ def test_authentication_failure_does_not_repeat_or_create_a_report(tmp_path):
     for operation in ('one','two'):
         result=asyncio.run(service.search({'query':'Public query','mode':'detailed'},CTX,operation))
         assert result['reason']=='provider_authentication_required' and not result['retryable']
-        assert not result.get('research_id')
+        assert not service.artifacts.get(result['research_id'],CTX)['artifact']['report']
     assert calls==[1]
 
 def test_saved_task_uses_the_existing_queue_and_preserves_results(tmp_path):

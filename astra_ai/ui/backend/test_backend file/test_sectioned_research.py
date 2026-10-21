@@ -136,7 +136,8 @@ def test_quota_before_first_section_keeps_report_pending_then_publishes_same_ide
     assert pending['status']=='waiting_for_quota' and pending['reason']=='gemini_daily_quota'
     document=store.document(identifier,context)
     assert document['phase']=='waiting_for_quota' and not document['report']
-    assert len(document['sources'])==1 and len(calls)==1
+    assert not document['sources'] and len(calls)==1
+    assert len(store.request_state(identifier,context)['sources'])==1
     blocked=False
     for _ in range(5):
         resumed=asyncio.run(service.search(args,context,'memory-comparison'))
