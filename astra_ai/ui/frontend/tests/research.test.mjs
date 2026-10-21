@@ -309,7 +309,7 @@ test("working timer and skeleton reflect real processing, never a quota pause", 
 test("quota messages distinguish Google limits from the app allowance", () => {
   assert.match(context.researchWaitMessage("gemini_service_unavailable"), /temporarily unavailable.*saved writing/);
   assert.match(context.researchWaitMessage("gemini_daily_quota"), /Gemini.*daily quota/);
-  assert.match(context.researchWaitMessage("background_daily_budget"), /app’s daily research allowance/);
+  assert.match(context.researchWaitMessage("background_daily_budget"), /app’s remaining daily writing allowance/);
   assert.match(context.researchWaitMessage("gemini_quota_unavailable"), /no quota/);
   assert.match(context.researchWaitMessage("gemini_rate_limit"), /retry from the saved evidence/);
   assert.match(context.researchWaitMessage("background_daily_budget", "openai"), /allowance for OpenAI/);
@@ -330,7 +330,7 @@ test("unpublished research never looks like a finished images-only report", () =
     onBrowse() {}, onImage() {},
   });
   const text = JSON.stringify(result);
-  assert.match(text, /full answer is still queued/);
+  assert.match(text, /saved work is queued/);
   assert.doesNotMatch(text, /Browse collected sources|source-S1/);
   assert.doesNotMatch(text, /Pending image|EvidenceGallery/);
 });
@@ -386,4 +386,10 @@ test("exported attachment links accept only opaque report and real source identi
     "#source=S1",
   ])
     assert.equal(context.researchDestination(hash), null);
+});
+
+test("short pacing and occupied writer waits never claim the daily allowance is exhausted",()=>{
+ assert.match(context.researchWaitMessage('background_model_busy'),/Another writing request/);
+ assert.match(context.researchWaitMessage('background_quota_paused'),/briefly between writing/);
+ assert.doesNotMatch(context.researchWaitMessage('background_quota_paused'),/daily|quota|allowance/);
 });

@@ -1,4 +1,4 @@
-/** One presentation layer for notices; dismissal never changes authoritative work. */
+/** Sound-only event notices; the optional history and owner confirmations remain available. */
 export type Notice = {
   id: string;
   title: string;
@@ -69,13 +69,7 @@ export function confirmOwner(
   });
 }
 const inbox: Notice[] = [];
-const queue: Notice[] = [];
-let active: Notice | null = null,
-  timer = 0,
-  started = 0,
-  remaining = 3000,
-  paused = false,
-  scope = "";
+let scope = '';
 let audio: AudioContext | null = null;
 const cued = new Set<string>();
 const pref = (name: string, fallback: number) => {
@@ -161,7 +155,7 @@ export function noticeScope(value: string) {
       );
   } catch {}
   scope = value;
-  inbox.length = queue.length = 0;
+  inbox.length = 0;
   try {
     inbox.push(
       ...JSON.parse(
@@ -169,8 +163,6 @@ export function noticeScope(value: string) {
       ),
     );
   } catch {}
-  active = null;
-  clearTimeout(timer);
   document.getElementById("aegis-work-notice")?.remove();
   document.getElementById("nova-notification-inbox")?.remove();
 }
@@ -181,73 +173,10 @@ function route(n: Notice) {
     new CustomEvent(n.event || "nova-open-work", { detail: n.target || {} }),
   );
 }
-function dismiss() {
-  clearTimeout(timer);
-  const box = document.getElementById("aegis-work-notice");
-  active = null;
-  box?.classList.add("leaving");
-  setTimeout(() => {
-    box?.remove();
-    showNext();
-  }, 200);
-}
-function arm() {
-  started = performance.now();
-  timer = window.setTimeout(dismiss, remaining);
-}
-function showNext() {
-  if (active || !queue.length) return;
-  active = queue.shift()!;
-  const n = active;
-  remaining = 3000;
-  paused = false;
-  const box = document.createElement("aside");
-  box.id = "aegis-work-notice";
-  box.className = "aegis-work-notice";
-  box.setAttribute("role", "status");
-  const open = document.createElement("button");
-  open.className = "aegis-work-notice-open";
-  const kicker = document.createElement("small");
-  kicker.textContent = n.kind === "approval" ? "REVIEW NEEDED" : "AEGIS";
-  const title = document.createElement("strong");
-  title.textContent = n.title;
-  const text = document.createElement("span");
-  text.textContent = n.message || "View details →";
-  open.append(kicker, title, text);
-  open.onclick = () => {
-    route(n);
-    dismiss();
-  };
-  const close = document.createElement("button");
-  close.className = "aegis-work-notice-close";
-  close.textContent = "×";
-  close.setAttribute("aria-label", "Dismiss notification");
-  close.onclick = dismiss;
-  box.append(open, close);
-  const pause = () => {
-    if (paused) return;
-    paused = true;
-    clearTimeout(timer);
-    remaining = Math.max(0, remaining - (performance.now() - started));
-  };
-  const resume = () => {
-    if (box.matches(":hover") || box.contains(document.activeElement)) return;
-    paused = false;
-    arm();
-  };
-  box.addEventListener("mouseenter", pause);
-  box.addEventListener("mouseleave", resume);
-  box.addEventListener("focusin", pause);
-  box.addEventListener("focusout", () => setTimeout(resume, 0));
-  document.body.append(box);
-  if (!n.silent) cue("notification", n.id);
-  arm();
-}
 export function notify(n: Notice) {
   const researchId = n.kind === "research" ? String(n.target?.research_id || "") : "";
   if (researchId) {
-    n = { ...n, id: "research-ready:" + researchId,
-      inboxOnly: n.inboxOnly || document.body.classList.contains("research-workspace-open") };
+    n = { ...n, id: "research-ready:" + researchId };
   }
   const existing = inbox.find((x) => x.id === n.id || (researchId && x.kind === "research" && x.target?.research_id === researchId));
   if (existing) {
@@ -266,9 +195,7 @@ export function notify(n: Notice) {
     sessionStorage.setItem("nova-notice-inbox:" + scope, JSON.stringify(inbox));
   } catch {}
   if (n.inboxOnly) return;
-  queue.push(n);
-  if (queue.length > 20) queue.splice(0, queue.length - 20);
-  showNext();
+  if (!n.silent) cue("notification", n.id);
 }
 export function showNotificationHistory() {
   document.getElementById("nova-notification-inbox")?.remove();

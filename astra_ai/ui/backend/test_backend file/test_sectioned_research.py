@@ -265,3 +265,45 @@ def test_failed_writing_retains_only_a_safe_diagnostic_not_provider_messages(tmp
     assert row['synthesis_failure_kind']==kind
     assert not store.document(result['research_id'],context)['report']
     assert message not in store.path.read_text(encoding='utf-8')
+
+
+def test_targeted_extension_writes_once_then_resumes_its_saved_publication(tmp_path):
+    saved=[];calls=[]
+    class Model(GeminiResearchModel):
+        def structured(self,instruction,payload,schema,max_tokens=1600):
+            calls.append(payload)
+            assert max_tokens==4500
+            assert sum(len(s['content']) for s in payload['evidence'])<=16000
+            assert [s['id'] for s in payload['evidence']]==['S'+str(i+1) for i in range(len(SOURCES))]
+            return {'report':'## Instruments\n\nSupported instrument comparison with limitations [S1].'}
+    async def checkpoint(value):
+        saved.append(value)
+        raise BudgetPaused(9999999999,'research_section_saved')
+    model=Model(lambda:'test',BackgroundBudget(tmp_path/'budget.json'),lambda:'configured')
+    query='Continue this same research with additional supported detail.\nRequested detail: Compare its instruments\nAlready composed: Existing report.'
+    with pytest.raises(BudgetPaused):asyncio.run(model.report(query,SOURCES,checkpoint=checkpoint))
+    report=asyncio.run(model.report(query,SOURCES,state=saved[-1],checkpoint=checkpoint))
+    assert report==saved[-1]['extension_report'] and len(calls)==1
+    assert 'Requested detail' in calls[0]['query']
+
+
+@pytest.mark.parametrize('text',['Unsupported [S99].','An unfinished instrument comparison [S1]'])
+def test_invalid_extension_never_reaches_publication_checkpoint(tmp_path,text):
+    saved=[]
+    class Model(GeminiResearchModel):
+        def structured(self,*args):return {'report':text}
+    async def checkpoint(value):saved.append(value)
+    model=Model(lambda:'test',BackgroundBudget(tmp_path/'budget.json'),lambda:'configured')
+    with pytest.raises(ModelUnavailable):asyncio.run(model.report('Continue this same research: instruments',SOURCES,checkpoint=checkpoint))
+    assert saved==[]
+
+
+def test_targeted_extension_respects_writer_quota_and_does_not_publish_excerpts(tmp_path):
+    saved=[]
+    class Model(GeminiResearchModel):
+        def structured(self,*args):raise BudgetPaused(9999999999,'background_daily_budget')
+    async def checkpoint(value):saved.append(value)
+    model=Model(lambda:'test',BackgroundBudget(tmp_path/'budget.json'),lambda:'configured')
+    with pytest.raises(BudgetPaused,match='background_daily_budget'):
+        asyncio.run(model.report('Continue this same research: instruments',SOURCES,checkpoint=checkpoint))
+    assert saved==[]

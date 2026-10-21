@@ -269,6 +269,7 @@ type Report = {
     reason?: string;
     job_id?: string;
     collected_sources?: number;
+    next_attempt?: number;
   };
   next_cursor?: number | null;
   thread_id?: string;
@@ -1250,6 +1251,8 @@ function researchProgress(
   };
 }
 function researchWaitMessage(reason: string, provider?: string) {
+  if (reason === "background_model_busy") return "Another writing request is finishing. This saved request will resume automatically.";
+  if (reason === "background_quota_paused") return "Waiting briefly between writing requests. Your saved work will resume automatically.";
   if (reason === "search_provider_quota") return "The search provider has reached its allowance. Your saved work is preserved.";
   if (reason === "search_provider_not_configured") return "A search API key is missing. Configure the key for this research depth in Settings.";
   if (reason === "search_provider_authentication_required") return "The search provider rejected its API key. Update that search key in Settings to continue.";
@@ -1263,16 +1266,18 @@ function researchWaitMessage(reason: string, provider?: string) {
   if (reason === "gemini_daily_quota") return "Gemini has reached its daily quota. The full answer has not been written yet.";
   if (reason === "gemini_quota_unavailable") return "The configured Gemini project has no quota available for report writing.";
   if (reason === "gemini_rate_limit") return "Gemini is temporarily rate limited. Report writing will retry from the saved evidence.";
-  if (reason === "background_daily_budget") return "The app’s daily research allowance" + (provider === "openai" ? " for OpenAI" : provider === "gemini" ? " for Gemini" : "") + " has been used. The full answer is still queued.";
-  return "Report writing is waiting for its usage allowance. The full answer has not been published.";
+  if (reason === "background_daily_budget") return "The app’s remaining daily writing allowance" + (provider === "openai" ? " for OpenAI" : provider === "gemini" ? " for Gemini" : "") + " cannot cover the next writing request. Your saved work is queued for the next allowance window.";
+  return "Report writing is paused. Your saved work will retry automatically.";
 }
 export function PendingResearch({
   report,
   onBrowse,
+  view = "reader",
 }: {
   report: Report;
   onBrowse: () => void;
   onImage: (image: ResearchImage) => void;
+  view?: string;
 }) {
   const [now, setNow] = useState(Date.now());
   const status = researchProgress(
@@ -1319,13 +1324,13 @@ export function PendingResearch({
           )}
         </div>
       )}
-      {(status.active || report.phase === "queued") && <ResearchSkeleton />}
+      {(status.active || report.phase === "queued") && <ResearchSkeleton variant={view} />}
       {report.phase === "failed" && <p role="status">{report.waiting_reason?.startsWith("search_") ? researchWaitMessage(report.waiting_reason) : "Research could not finish. Your saved work is preserved."}</p>}
         </section>
   );
 }
-function ResearchSkeleton() {
-  return <div className="research-layout-skeleton" aria-hidden="true">
+function ResearchSkeleton({ variant = "reader" }: {variant?: string}) {
+  return <div className={"research-layout-skeleton skeleton-" + variant} aria-hidden="true">
     <div className="skeleton-heading" /><div className="skeleton-intro">{[0,1,2,3].map(n=><i key={n}/>)}</div>
     <div className="skeleton-illustrated"><div className="skeleton-visual"/><div>{[0,1,2,3,4].map(n=><i key={n}/>)}</div></div>
     <div className="skeleton-heading short"/><div className="skeleton-intro">{[0,1,2,3,4,5].map(n=><i key={n}/>)}</div>
@@ -1515,7 +1520,7 @@ function EvidenceGallery({ images, reportId, onOpen, layout = "gallery" }: {
   </>;
 }
 
-function JumpToBottom({ target, active, identity, clearance = 22 }: {
+function JumpToBottom({ target, active, identity, clearance = 52 }: {
   target: React.RefObject<HTMLElement | null>; active: boolean; identity: string; clearance?: number;
 }) {
   const [position, setPosition] = useState<{left: number; top: number} | null>(null);
@@ -1524,19 +1529,23 @@ function JumpToBottom({ target, active, identity, clearance = 22 }: {
     if (!active || !root) { setPosition(null); return; }
     const update = () => {
       const rect = root.getBoundingClientRect();
+      const composer = root.closest(".research-document")?.querySelector(".research-query")?.getBoundingClientRect();
+      const bottom = Math.min(rect.bottom, innerHeight, composer?.top ?? Infinity);
       setPosition(rect.width && root.scrollHeight - root.scrollTop - root.clientHeight > 320
-        ? {left: rect.left + rect.width / 2, top: Math.min(rect.bottom, innerHeight) - clearance} : null);
+        ? {left: rect.left + rect.width / 2, top: Math.max(rect.top + 24, bottom - clearance)} : null);
     };
     update();
     root.addEventListener("scroll", update, {passive: true});
     window.addEventListener("resize", update);
     const observer = new ResizeObserver(update);
     observer.observe(root);
+    const composer = root.closest(".research-document")?.querySelector(".research-query");
+    if (composer) observer.observe(composer);
     for (const child of Array.from(root.children)) observer.observe(child);
     return () => { root.removeEventListener("scroll", update); window.removeEventListener("resize", update); observer.disconnect(); };
   }, [target, active, identity, clearance]);
   return position && active ? createPortal(<button className="research-jump-bottom" style={position} aria-label="Go to end" title="Go to end"
-    onClick={() => target.current?.scrollTo({top: target.current.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"})}><Icon name="down" /></button>, document.body) : null;
+    onClick={() => target.current?.scrollTo({top: target.current.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"})}><Icon name="down" /></button>, target.current?.closest(".research-workspace") || document.body) : null;
 }
 
 export function SourceArticle({ html, images, reportId, onImage }: {
@@ -1846,6 +1855,7 @@ function DocumentPreview({
     [error, setError] = useState(""),
     [page, setPage] = useState(1),
     [pages, setPages] = useState(0),
+    [pageReady, setPageReady] = useState(false),
     [current, setCurrent] = useState(source),
     [links, setLinks] = useState<Record<string, string>>({}),
     [articleImages, setArticleImages] = useState<ResearchImage[]>([]),
@@ -1914,6 +1924,7 @@ function DocumentPreview({
   }, [data]);
   useEffect(() => {
     if (!pdf.current || !canvas.current) return;
+    setPageReady(false);
     let render: any,
       gone = false;
     pdf.current
@@ -1924,9 +1935,9 @@ function DocumentPreview({
         canvas.current.width = view.width;
         canvas.current.height = view.height;
         render = p.render({ canvas: canvas.current, viewport: view });
-        return render.promise;
+        return render.promise.then(() => { if (!gone) setPageReady(true); });
       })
-      .catch(() => {});
+      .catch(() => { if (!gone) setError("This PDF page could not be rendered. Try another page or reopen the source."); });
     return () => {
       gone = true;
       render?.cancel();
@@ -1978,7 +1989,7 @@ function DocumentPreview({
           <Icon name="undo" /> Previous source
         </button>
       )}
-      {!html && !!report.image_items?.some((i) => i.source_id === current.id) && (
+      {!!html && !!report.image_items?.some((i) => i.source_id === current.id) && !articleImages.length && (
         <div className="research-image-composition gallery">
           {report.image_items
             .filter((i) => i.source_id === current.id)
@@ -2021,7 +2032,8 @@ function DocumentPreview({
               Next
             </button>
           </nav>
-          <canvas ref={canvas} aria-label={"PDF page " + page} />
+          {!pageReady && <div role="status" aria-label="Loading document page"><ResearchSkeleton variant="edit" /></div>}
+          <canvas ref={canvas} aria-label={"PDF page " + page} style={!pageReady ? {visibility:"hidden",position:"absolute"} : undefined} />
         </>
       ) : html ? (
         <div
@@ -2059,7 +2071,7 @@ function DocumentPreview({
           <SourceArticle html={html} images={articleImages} reportId={report.research_id} onImage={setSourceImage} />
         </div>
       ) : (
-        <p role="status">Loading source…</p>
+        <div role="status" aria-label="Loading source" aria-busy="true"><ResearchSkeleton variant="source" /></div>
       )}
     </section>
   );
@@ -2202,8 +2214,10 @@ function Video({ source }: { source: Source }) {
     normal = useRef<number | null>(null),
     [error, setError] = useState(""),
     [playing, setPlaying] = useState(false),
-    [blocked, setBlocked] = useState(false);
+    [blocked, setBlocked] = useState(false),
+    [ready, setReady] = useState(false);
   useEffect(() => {
+    setReady(false); setError("");
     let canceled = false,
       userSpeaking = false;
     let unregister: (() => void) | undefined;
@@ -2265,6 +2279,7 @@ function Video({ source }: { source: Source }) {
             onReady: () => {
               clearTimeout(readyTimeout);
               if (!canceled) {
+                setReady(true);
                 player.current
                   ?.getIframe()
                   ?.setAttribute("title", source.title);
@@ -2371,7 +2386,8 @@ function Video({ source }: { source: Source }) {
       data-video-id={videoId(source.url)}
       data-playing={playing}
     >
-      <div ref={target} hidden={!!error} />
+      {!ready && !error && <div className="research-video-loading" role="status" aria-label="Loading video" aria-busy="true"><ResearchSkeleton variant="media" /></div>}
+      <div ref={target} hidden={!!error} style={!ready ? {position:"absolute",opacity:0,pointerEvents:"none"} : undefined} />
       {error && <p role="status">{error}</p>}
       {blocked && (
         <p role="status">Use the video's play button to begin playback.</p>
@@ -2510,6 +2526,7 @@ function ContinuationStatus({
                   ? activity.reason?.startsWith("search_") ? researchWaitMessage(activity.reason) : "Additional results could not be retrieved. Your current findings are preserved."
                   : ""}
       </p>
+      {activity.phase === "waiting_for_quota" && typeof activity.next_attempt === "number" && <p className="research-continuation-retry">Next retry: {new Date(activity.next_attempt * 1000).toLocaleString(undefined, {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}.</p>}
       {active && <ResearchSkeleton />}
     </section>
   );
@@ -2629,14 +2646,7 @@ function Workspace() {
   const reportCache = useRef(new Map<string, { report: Report; at: number }>()),
     reportLoads = useRef(new Map<string, Promise<Report>>());
   const [selectionLoading, setSelectionLoading] = useState("");
-  const [selectionSkeleton, setSelectionSkeleton] = useState(false),
-    [failedSelection, setFailedSelection] = useState("");
-  useEffect(() => {
-    setSelectionSkeleton(false);
-    if (!selectionLoading) return;
-    const timer = setTimeout(() => setSelectionSkeleton(true), 150);
-    return () => clearTimeout(timer);
-  }, [selectionLoading]);
+  const [failedSelection, setFailedSelection] = useState("");
   function loadReport(id: string) {
     const key = conversationSnapshot().clientId + ":" + id;
     const cached = reportCache.current.get(key);
@@ -4018,10 +4028,10 @@ function Workspace() {
               <button className="research-history-toggle" aria-controls="research-history-panel" aria-expanded={narrowPanel === "history"} onClick={() => setNarrowPanel(narrowPanel === "history" ? "" : "history")}>History</button>
               <button className="research-chat-toggle" aria-controls="research-conversation-panel" aria-expanded={narrowPanel === "conversation"} onClick={() => setNarrowPanel(narrowPanel === "conversation" ? "" : "conversation")}>Conversation</button>
             </div>
-            {!!report?.pages?.length && report.kind !== "documentary" && report.kind !== "chat" && <div className="research-page-navigation" aria-label="Research pages">
-              <button aria-label="Previous research page" disabled={report.pages.findIndex(p=>p.research_id===report.research_id)<=0} onClick={()=>{const i=report.pages!.findIndex(p=>p.research_id===report.research_id);void select(report.pages![i-1].research_id,true);}}>‹</button>
-              <select aria-label="Research page" value={report.research_id} onChange={e=>void select(e.target.value,true)}>{report.pages.map((p,i)=><option key={p.research_id} value={p.research_id}>{i+1} of {report.pages!.length} · {p.title}{p.phase!=="complete" ? " · "+p.phase.replace(/_/g," ") : ""}</option>)}</select>
-              <button aria-label="Next research page" disabled={report.pages.findIndex(p=>p.research_id===report.research_id)>=report.pages.length-1} onClick={()=>{const i=report.pages!.findIndex(p=>p.research_id===report.research_id);void select(report.pages![i+1].research_id,true);}}>›</button>
+            {(report?.pages?.length || 0) > 1 && report && report.kind !== "documentary" && report.kind !== "chat" && <div className="research-page-navigation" aria-label="Research pages">
+              <button aria-label="Previous research page" disabled={report.pages!.findIndex(p=>p.research_id===report.research_id)<=0} onClick={()=>{const i=report.pages!.findIndex(p=>p.research_id===report.research_id);void select(report.pages![i-1].research_id,true);}}>‹</button>
+              <span className="research-page-label" title={report.pages!.find(p=>p.research_id===report.research_id)?.title}><span className="research-page-title">{report.pages!.find(p=>p.research_id===report.research_id)?.title}</span><small>{report.pages!.findIndex(p=>p.research_id===report.research_id)+1} of {report.pages!.length}</small></span>
+              <button aria-label="Next research page" disabled={report.pages!.findIndex(p=>p.research_id===report.research_id)>=report.pages!.length-1} onClick={()=>{const i=report.pages!.findIndex(p=>p.research_id===report.research_id);void select(report.pages![i+1].research_id,true);}}>›</button>
             </div>}
             <nav aria-label="Report views">
               {(report?.kind === "chat"
@@ -4093,19 +4103,13 @@ function Workspace() {
           </header>
           <div className="research-stage" aria-busy={!!selectionLoading || publicationPending(report)}>
             {revealingPublication && <button className="research-reveal-skip" onClick={()=>revealStop.current()}>Show all now</button>}
-            {selectionLoading && (
-              <span className="research-selection-loading" role="status">
-                Opening research…
-              </span>
-            )}
             {!report && selectionLoading ? (
               <section
                 className="research-opening"
                 role="status"
                 aria-label="Opening research"
               >
-                <p>Opening research</p>
-                {selectionSkeleton && <ResearchSkeleton />}
+                <ResearchSkeleton variant={tab} />
               </section>
             ) : !report && failedSelection ? (
               <section className="research-empty">
@@ -4133,7 +4137,7 @@ function Workspace() {
                   ))}
               </div>
             ) : publicationPending(report) ? (
-              <div className="research-reader research-pending-page" onWheel={()=>{revealFollow.current=false;}}><PendingResearch report={report} onBrowse={()=>{}} onImage={()=>{}} /></div>
+              <div className="research-reader research-pending-page" onWheel={()=>{revealFollow.current=false;}}><PendingResearch report={report} view={tab} onBrowse={()=>{}} onImage={()=>{}} /></div>
             ) : report.kind === "chat" ? (
               <section
                 className="research-central-chat"
@@ -4315,7 +4319,7 @@ function Workspace() {
                       {revealingSaved ? "Revealing saved findings…" : "Show more saved findings"}
                     </button>
                   )}
-                  {revealingSaved && <div className="research-saved-reveal" role="status" aria-label="Revealing saved findings"><span /><span /><span /></div>}
+                  {revealingSaved && <div className="research-saved-reveal" role="status" aria-label="Revealing saved findings"><ResearchSkeleton /></div>}
                   {!!readerVideos.length && (
                     <section
                       className="research-related-media"
