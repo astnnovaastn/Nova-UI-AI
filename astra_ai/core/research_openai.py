@@ -72,4 +72,7 @@ def configured_research_model(settings,gemini_key,budget,status,preferred):
             lambda:settings('NOVA_RESEARCH_OPENAI_MODEL') or 'gpt-4.1-mini')
     if provider=='none':return DisabledResearchModel(lambda:'',budget,lambda:'')
     if provider!='gemini':raise ValueError('Unsupported research writer provider')
-    return GeminiResearchModel(gemini_key,budget,lambda:settings('NOVA_RESEARCH_GEMINI_MODEL') or settings('GEMINI_TEXT_MODEL') or 'gemini-3.5-flash')
+    writer=GeminiResearchModel(lambda:settings('NOVA_RESEARCH_GEMINI_API_KEY') or gemini_key(),budget,lambda:settings('NOVA_RESEARCH_GEMINI_MODEL') or settings('GEMINI_TEXT_MODEL') or 'gemini-3.5-flash')
+    writer.batch_detailed=str(settings('NOVA_RESEARCH_BATCH_DETAILED') or '1').lower() not in {'0','false','off'}
+    writer.allow_model_fallback=str(settings('NOVA_RESEARCH_GEMINI_MODEL_FALLBACK') or '1').lower() not in {'0','false','off'}
+    return writer

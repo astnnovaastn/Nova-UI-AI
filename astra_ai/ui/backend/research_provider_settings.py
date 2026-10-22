@@ -42,16 +42,20 @@ class ResearchProviderSettings:
         key='NOVA_RESEARCH_GEMINI_MODEL' if provider=='gemini' else 'NOVA_RESEARCH_OPENAI_MODEL'
         return self.settings(key) or (self.settings('GEMINI_TEXT_MODEL') if provider=='gemini' else '') or DEFAULT_MODELS[provider]
 
+    def key(self,provider):
+        return (self.settings('NOVA_RESEARCH_GEMINI_API_KEY') or self.gemini_key()) if provider=='gemini' else self.settings('NOVA_RESEARCH_OPENAI_API_KEY')
+
     def status(self):
         active=self.current();today=datetime.now(timezone.utc).date().isoformat();rows=[]
         for provider in ('gemini','openai'):
             settings=lambda name:self.settings(name) if name!='NOVA_RESEARCH_PROVIDER' else provider
             budget=requested_research_budget(research_budget_path(self.memory_dir,settings),self.slot,settings)
-            key=self.gemini_key() if provider=='gemini' else self.settings('NOVA_RESEARCH_OPENAI_API_KEY')
+            key=self.key(provider)
             snapshot=budget.snapshot(provider_key=key or '');same_day=snapshot.get('day')==today
             requests=snapshot.get('requests',0) if same_day else 0;tokens=snapshot.get('tokens',0) if same_day else 0
             selected=bool(active and active.provider==provider)
             rows.append({'id':provider,'configured':bool(key),'active':selected,'model':self.model(provider),
+                'credential_source':'research' if provider=='openai' or self.settings('NOVA_RESEARCH_GEMINI_API_KEY') else 'shared_live',
                 'effective_model':getattr(active,'effective_model','') if selected else '',
                 'requests_used':requests,'request_limit':budget.daily_requests,'tokens_used':tokens,'token_limit':budget.daily_tokens,
                 'local_limit_reached':requests>=budget.daily_requests or tokens>=budget.daily_tokens,
@@ -63,7 +67,7 @@ class ResearchProviderSettings:
         if provider not in DEFAULT_MODELS:raise ValueError('Choose Gemini, OpenAI, or deactivate research writing.')
         chosen=(model if model is not None else self.model(provider)) if provider!='none' else ''
         if provider!='none' and (not isinstance(chosen,str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{1,100}',chosen)):raise ValueError('Enter a valid model ID.')
-        key=self.gemini_key() if provider=='gemini' else self.settings('NOVA_RESEARCH_OPENAI_API_KEY') if provider=='openai' else True
+        key=self.key(provider) if provider!='none' else True
         if not key:raise ValueError('Save a '+('Gemini' if provider=='gemini' else 'OpenAI')+' API key before activating it.')
         async with self.lock:
             old=self.current();self.switching=True;acquired=False;installed=False

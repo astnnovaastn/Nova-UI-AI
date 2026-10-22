@@ -18,6 +18,31 @@ def test_document_and_pages_share_exact_report_and_scope(artifact):
     assert store.document(r['id'],CTX,'old')['status']=='conflict'
     assert store.get(r['id'],CTX)['artifact']['report']==d['report']
 
+
+@pytest.mark.parametrize('recover',[True,False])
+def test_extension_service_failure_retries_same_operation_without_research_or_duplicates(artifact,recover):
+    from astra_ai.core.research_model import ResearchModelUnavailable
+    store,r=artifact;calls=[]
+    async def synth(*args):
+        calls.append(args)
+        if len(calls)==1 or not recover:raise ResearchModelUnavailable('Temporary outage')
+        return '## Additional findings\n\nSupported findings with evidence [S1].'
+    service=ResearchSearch(store,lambda _:None,synthesize=synth)
+    service._request=lambda *args:pytest.fail('Saved evidence must not be searched again')
+    args={'research_id':r['id'],'research_revision':r['revision'],'detail':'Explain the supported finding'}
+    first=asyncio.run(service.expand_report(args,CTX,'same-addition'))
+    assert first['status']=='waiting_for_retry' and first['reason']=='gemini_service_unavailable'
+    second=asyncio.run(service.expand_report(args,CTX,'same-addition'))
+    if recover:
+        assert second['status']=='completed'
+        asyncio.run(service.expand_report(args,CTX,'same-addition'))
+        assert len(calls)==2 and len(store.snapshot()['extensions'][r['id']])==1
+    else:
+        assert second['status']=='waiting_for_retry'
+        assert asyncio.run(service.expand_report(args,CTX,'same-addition'))['status']=='failed'
+        assert not store.snapshot().get('extensions',{}).get(r['id'])
+        assert store.extension_operation(r['id'],CTX,'same-addition')['writer_service_attempts']==3
+
 def test_draft_sanitization_optimistic_revision_and_recovery(artifact):
     store,r=artifact
     saved=store.save_draft(r['id'],CTX,r['revision'],'','<p>Hello <a href="javascript:evil()">bad</a><a href="https://example.org">good</a></p><script>evil()</script><img src="x" onerror="evil()">')

@@ -127,3 +127,16 @@ def test_provider_routes_require_owner_session(tmp_path,monkeypatch):
     with pytest.raises(HTTPException) as error:asyncio.run(server.activate_research_provider(object(),{'provider':'openai'}))
     assert error.value.status_code==403 and state['writer'].provider=='gemini'
     with pytest.raises(HTTPException):asyncio.run(server.research_provider_status(object()))
+
+
+def test_dedicated_gemini_research_key_preserves_live_key_and_enables_batched_writer(tmp_path):
+    manager,state,env=fixture(tmp_path)
+    live=state['live']
+    write_environment(env,{'NOVA_RESEARCH_GEMINI_API_KEY':'private-research-only'})
+    result=asyncio.run(manager.activate('gemini','gemini-3.6-flash'))
+    assert state['writer'].key_provider()=='private-research-only'
+    assert state['writer'].model_provider()=='gemini-3.6-flash' and state['writer'].batch_detailed is True
+    assert dotenv_values(env)['GEMINI_API_KEY']=='private-google' and state['live'] is live
+    gemini=next(row for row in result['providers'] if row['id']=='gemini')
+    assert gemini['credential_source']=='research'
+    assert 'private-research-only' not in json.dumps(result) and 'private-google' not in json.dumps(result)

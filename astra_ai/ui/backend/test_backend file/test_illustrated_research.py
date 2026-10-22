@@ -135,6 +135,27 @@ def test_image_fallback_is_once_even_when_empty_and_reopened(tmp_path):
     assert len(calls)==1 and calls[0]['params']['engine']=='google_images'
     assert store.request_state(identifier,CTX)['images_prepared']
 
+
+def test_empty_image_cache_recovers_after_sources_arrive_without_another_search(tmp_path,monkeypatch):
+    store,identifier=entry(tmp_path);body=picture();calls=[]
+    monkeypatch.setattr(store,'_fetch_public_source',lambda url,image=False:(calls.append(url) or (body,'image/png',url)))
+    store.request_state(identifier,CTX,images_prepared=True,image_enrichment_version=5,image_search_attempted=True,validated_images=[])
+    source={'url':'https://example.com/nvidia','title':'NVIDIA workstation','content':'NVIDIA workstation evidence','images':[{'url':'https://example.com/workstation.png','caption':'NVIDIA workstation'}]}
+    service=ResearchSearch(store,lambda _:None)
+    rows=asyncio.run(prepare_images(service,identifier,CTX,[source],'NVIDIA workstation'))
+    assert len(rows)==1 and rows[0]['width']==800
+    assert asyncio.run(prepare_images(service,identifier,CTX,[source],'NVIDIA workstation'))==rows
+    assert calls.count('https://example.com/workstation.png')==1
+    assert store.request_state(identifier,CTX)['image_search_attempted']
+
+
+def test_early_image_enrichment_cannot_finish_before_initial_collection(tmp_path):
+    store,identifier=entry(tmp_path)
+    service=ResearchSearch(store,lambda _:None)
+    result=asyncio.run(service.search({'action':'images','research_id':identifier},CTX,'early-images'))
+    assert result['reason']=='research_completion_pending'
+    assert not store.request_state(identifier,CTX).get('images_prepared')
+
 def test_image_placement_omits_unrelated_images():
     rows=[{'id':'I1','source_id':'S1','caption':'NVIDIA workstation'},{'id':'I2','source_id':'S2','caption':'Unrelated flowers'}]
     result=place_images(rows,'# Answer\n\nThe NVIDIA workstation meets the requirements. [S1]')
@@ -511,6 +532,13 @@ def test_illustration_budget_is_four_normally_and_never_exceeds_six():
     assert len(place_images(images,short))==4
     long=short+'\n\n'+('Supported NVIDIA workstation architecture findings. '*400)
     assert len(place_images(images,long))==6
+
+
+@pytest.mark.parametrize('query,limit',[('Include three or four relevant technical images.',4),('Add 2 supporting images.',2),('Use five to six images.',6)])
+def test_explicit_image_count_is_honored_even_for_long_reports(query,limit):
+    images=[{'id':'I'+str(n),'source_id':'S1','caption':'NVIDIA workstation architecture'} for n in range(10)]
+    report='# NVIDIA Workstations\n\n'+''.join(f'NVIDIA workstation architecture comparison {i} [S1].\n\n' for i in range(450))
+    assert len(place_images(images,report,query))==limit
 
 
 def test_saved_report_presentation_caps_legacy_images_without_fetch_or_draft_changes(tmp_path,monkeypatch):

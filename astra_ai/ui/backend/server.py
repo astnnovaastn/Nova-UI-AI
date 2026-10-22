@@ -7918,6 +7918,8 @@ async def save_api_keys(data: Dict[str, Any]):
             key_name = "elevenlabs_voice_id"
         elif key_name.lower() == "nova_research_openai_api_key":
             key_name = "NOVA_RESEARCH_OPENAI_API_KEY"
+        elif key_name.lower() == "nova_research_gemini_api_key":
+            key_name = "NOVA_RESEARCH_GEMINI_API_KEY"
         if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',key_name) or any(c in key_value for c in '\r\n\0'):
             return JSONResponse(status_code=400,content={"success":False,"error":"Invalid key name or value"})
         
@@ -7930,20 +7932,20 @@ async def save_api_keys(data: Dict[str, Any]):
             logger.info(f"[SETTINGS] Created new .env file: {env_file}")
         
         from astra_ai.ui.backend.research_provider_settings import write_environment
+        previous_research_key=research_model.key_provider() if research_model is not None and getattr(research_model,'provider','')=='gemini' else ''
         await asyncio.to_thread(write_environment,env_file,{key_name:key_value})
         
         # Reload environment variables
         load_dotenv(env_file, override=True)
         if key_name == "GEMINI_API_KEY":
-            previous_key=state.gemini_api_key
             state.gemini_api_key = key_value
             os.environ["GEMINI_API_KEY"] = key_value
             os.environ.pop("GOOGLE_API_KEY", None)
-            if research_model is not None and getattr(research_model,'provider','gemini')=='gemini':
-                await asyncio.to_thread(research_model.budget.provider_changed,previous_key,key_value)
-                from astra_ai.core.research_model import resume_research_budget_waits
-                artifacts,_=get_research_services()
-                await asyncio.to_thread(resume_research_budget_waits,action_jobs,artifacts,research_model.budget,provider_key=research_model.key_provider(),budget_scope=research_model.budget_scope)
+        if key_name in {'GEMINI_API_KEY','NOVA_RESEARCH_GEMINI_API_KEY'} and research_model is not None and getattr(research_model,'provider','')=='gemini':
+            await asyncio.to_thread(research_model.budget.provider_changed,previous_research_key,research_model.key_provider())
+            from astra_ai.core.research_model import resume_research_budget_waits
+            artifacts,_=get_research_services()
+            await asyncio.to_thread(resume_research_budget_waits,action_jobs,artifacts,research_model.budget,provider_key=research_model.key_provider(),budget_scope=research_model.budget_scope)
         
         logger.info(f"[SETTINGS] Saved {key_name} to .env")
         
@@ -8639,6 +8641,7 @@ async def research_restore(identifier:str,request:Request):
 async def research_images(identifier:str,request:Request):
     context=_learning_context(request);artifacts,_=get_research_services();found=await asyncio.to_thread(artifacts.get,identifier,context)
     if found['status']!='ok':return found
+    if found['artifact'].get('completeness')!='complete':return {'status':'waiting_for_retry','reason':'research_completion_pending','research_id':identifier}
     metadata=await asyncio.to_thread(artifacts.request_state,identifier,context)
     from astra_ai.core.research_illustrations import IMAGE_VERSION
     if metadata.get('images_prepared') and metadata.get('image_enrichment_version')==IMAGE_VERSION:return {'status':'completed','research_id':identifier}

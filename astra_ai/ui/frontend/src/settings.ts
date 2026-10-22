@@ -41,7 +41,7 @@ interface ResearchWriterStatus {
   provider: ResearchProvider | "none";
   switching: boolean;
   voice_model: string;
-  providers: Array<{id: ResearchProvider; configured: boolean; active: boolean; model: string; effective_model: string;
+  providers: Array<{id: ResearchProvider; configured: boolean; active: boolean; model: string; effective_model: string; credential_source?: string;
     requests_used: number; request_limit: number; tokens_used: number; token_limit: number; local_limit_reached: boolean}>;
 }
 
@@ -125,6 +125,12 @@ function buildPanelHTML(): string {
             <button type="button" class="settings-btn" id="btn-deactivate-research-provider" disabled>Deactivate writing</button>
           </div>
           <p id="research-provider-result" role="status" aria-live="polite"></p>
+          <div class="settings-field">
+            <label for="input-gemini-research-key">Gemini research API key</label>
+            <input type="password" id="input-gemini-research-key" autocomplete="off" spellcheck="false" placeholder="Separate key for research writing" />
+            <button type="button" class="settings-btn" id="btn-save-gemini-research-key">Save research key</button>
+            <small id="gemini-research-key-state">Checking research credential…</small>
+          </div>
           <p id="research-live-provider-note">Chat and voice continue using Gemini Live. Switching writers preserves your research, drafts, and usage counters.</p>
         </section>
 
@@ -365,9 +371,11 @@ function renderResearchWriter(status: ResearchWriterStatus) {
   (document.getElementById("btn-deactivate-research-provider") as HTMLButtonElement).disabled = view.deactivateDisabled;
   model.disabled = changingResearchProvider || status.switching;
   const list = document.getElementById("research-model-suggestions")!;
-  const suggestions = selectedResearchProvider === "gemini" ? ["gemini-3.5-flash", "gemini-3.8-flash", "gemini-flash-latest"] : ["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini"];
+  const suggestions = selectedResearchProvider === "gemini" ? ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-flash-latest"] : ["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini"];
   list.replaceChildren(...suggestions.map(value => { const option = document.createElement("option"); option.value = value; return option; }));
   document.getElementById("research-live-provider-note")!.textContent = `Chat and voice stay on Gemini Live · ${status.voice_model}. Inactive research writers receive no new requests. Your reports, drafts, and keys stay saved.`;
+  const gemini = status.providers.find(row => row.id === "gemini");
+  document.getElementById("gemini-research-key-state")!.textContent = gemini?.credential_source === "research" ? "Separate research key saved. Chat and voice use their existing key." : "Using the shared Gemini key until a separate research key is saved.";
 }
 
 async function changeResearchWriter(deactivate: boolean) {
@@ -478,6 +486,20 @@ function wireEvents() {
   document.getElementById("input-research-model")?.addEventListener("input", () => { if (researchWriterStatus) renderResearchWriter(researchWriterStatus); });
   document.getElementById("btn-activate-research-provider")?.addEventListener("click", () => { void changeResearchWriter(false); });
   document.getElementById("btn-deactivate-research-provider")?.addEventListener("click", () => { void changeResearchWriter(true); });
+  document.getElementById("btn-save-gemini-research-key")?.addEventListener("click", async () => {
+    const input = document.getElementById("input-gemini-research-key") as HTMLInputElement;
+    const button = document.getElementById("btn-save-gemini-research-key") as HTMLButtonElement;
+    const result = document.getElementById("research-provider-result")!;
+    if (!input.value.trim() || button.disabled) return;
+    button.disabled = true;
+    try {
+      await apiPost("/api/settings/keys", {key_name:"NOVA_RESEARCH_GEMINI_API_KEY",key_value:input.value.trim()});
+      input.value = "";
+      renderResearchWriter(await apiGet<ResearchWriterStatus>("/api/settings/research-provider"));
+      result.textContent = "Gemini research key saved.";
+    } catch (error) { result.textContent = error instanceof Error ? error.message : "The research key could not be saved."; }
+    finally { button.disabled = false; }
+  });
   const soundHost=document.getElementById("settings-sound-controls");
   if(soundHost) mountSoundSettings(soundHost);
   document.getElementById("btn-notification-history")?.addEventListener("click", showNotificationHistory);

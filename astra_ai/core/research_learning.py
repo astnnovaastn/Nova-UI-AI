@@ -742,7 +742,7 @@ class ResearchArtifacts:
         document.update(display_title=metadata.get('display_title') or display_title(item['query']),thread_id=metadata.get('thread_id','research-'+identifier),phase=metadata.get('phase','complete'),processing_seconds=metadata.get('processing_seconds'),active_since=metadata.get('active_since'),next_attempt=metadata.get('next_attempt'),waiting_reason=metadata.get('waiting_reason'),image_items=[{k:v for k,v in image.items() if k!='url'} for image in self.images(identifier,context) if not image.get('source_only')])
         # Presentation only: old image IDs remain available to existing drafts.
         composed=item['report']+'\n\n'+'\n\n'.join(entry['report'] for entry in extensions)
-        document['image_items']=(place_images(document['image_items'],composed) if composed.strip() else document['image_items'][:report_image_limit(composed)])
+        document['image_items']=(place_images(document['image_items'],composed,item['query']) if composed.strip() else document['image_items'][:report_image_limit(composed,item['query'])])
         from .research_documents import DocumentFiles
         document.update(DocumentFiles(self).presentation(identifier,context))
         if bounded:
@@ -1114,6 +1114,16 @@ class ResearchSearch:
         self.synthesize=synthesize;self.illustrate=illustrate;self.complete=complete;self.read_evidence=read_evidence;self.prepare_media=prepare_media
         self.network=asyncio.Semaphore(4);self.operation_locks={};self.provider_states={}
 
+    async def extension_writer_failure(self,exc,identifier,context,operation_id,view='reader'):
+        from .research_model import ResearchModelUnavailable
+        if not isinstance(exc,ResearchModelUnavailable):return None
+        activity=await asyncio.to_thread(self.artifacts.extension_operation,identifier,context,operation_id)
+        attempts=activity.get('writer_service_attempts',0)+1
+        retry=attempts<3;until=time.time()+30
+        reason='openai_service_unavailable' if getattr(exc,'provider','gemini')=='openai' else 'gemini_service_unavailable'
+        await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='waiting_for_quota' if retry else 'failed',view=view,operation_id=operation_id,reason=reason,next_attempt=until if retry else None,writer_service_attempts=attempts)
+        return {'status':'waiting_for_retry' if retry else 'failed','reason':reason,'next_attempt':until,'research_id':identifier}
+
     async def read_collected_evidence(self,identifier,context,sources):
         found=await asyncio.to_thread(self.artifacts.get,identifier,context)
         if found.get('status')!='ok':return sources
@@ -1286,7 +1296,9 @@ class ResearchSearch:
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='preparing_report' if checkpointed or pacing else 'waiting_for_quota',view=view,operation_id=operation_id,reason='' if checkpointed else exc.reason,next_attempt=exc.until)
                 return {'status':'waiting_for_retry' if checkpointed or pacing else 'waiting_for_quota','next_attempt':max(time.time()+1,exc.until),'reason':exc.reason,'research_id':identifier,
                         **({'summary':'The saved addition is waiting briefly for the writing slot or pacing interval, not a daily allowance. It will resume automatically; do not claim a provider quota was reached.'} if pacing else {})}
-            except Exception:
+            except Exception as exc:
+                failure=await self.extension_writer_failure(exc,identifier,context,operation_id,view)
+                if failure:return failure
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed',reason='extension_unavailable')
                 return {'status':'failed','reason':'extension_unavailable','research_id':identifier}
             if not report:return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
@@ -1375,7 +1387,9 @@ class ResearchSearch:
                 return {'status':'waiting_for_retry' if pacing else 'waiting_for_quota','reason':exc.reason,'next_attempt':exc.until,'research_id':identifier,'results':await asyncio.to_thread(self.artifacts.followup_evidence,identifier,context,operation_id),
                         'summary':'Follow-up evidence is saved. Answer from the supplied evidence and cite it. Report writing will resume from its checkpoint after a short writing-slot or pacing wait; no daily quota was reached.' if pacing else 'Follow-up evidence is saved. Answer the question conversationally from the supplied excerpts and cite them. Report writing is paused for the reported allowance or provider limit; do not claim active research.'}
             except asyncio.CancelledError:raise
-            except Exception:
+            except Exception as exc:
+                failure=await self.extension_writer_failure(exc,identifier,context,operation_id)
+                if failure:return failure
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed',view='reader',reason='synthesis_unavailable')
                 return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
             result=await asyncio.to_thread(self.artifacts.append_extension,identifier,context,item['revision'],operation_id,report,sources,query)
@@ -1433,6 +1447,7 @@ class ResearchSearch:
         if arguments.get('action')=='images':
             identifier=str(arguments.get('research_id',''));found=await asyncio.to_thread(self.artifacts.get,identifier,context)
             if found['status']!='ok':return found
+            if found['artifact'].get('completeness')!='complete':return {'status':'waiting_for_retry','reason':'research_completion_pending','research_id':identifier,'next_attempt':time.time()+15}
             from .research_illustrations import prepare_images,place_images
             async with self.operation_locks.setdefault(stable('illustrate',scope(context),identifier),asyncio.Lock()):
                 rows=await prepare_images(self,identifier,context,self.artifacts.source_catalog(found['artifact']),display_title(found['artifact']['query']))
@@ -1540,7 +1555,7 @@ class ResearchSearch:
                 if not report:return {'status':'failed','reason':'synthesis_unavailable','research_id':identifier}
             else:
                 report='# '+display_title(query)+'\n\n'+('These are source excerpts, not a completed synthesis.\n\n' if mode=='detailed' else '')+'\n\n'.join('### '+r['title']+'\n\n'+reader_text(r.get('content',''))[:(500000 if mode=='detailed' else 1200)]+' [S'+str(i+1)+']' for i,r in enumerate(sources))+'\n\n## Limitations\nSearch excerpts may be incomplete; consult the supporting sources.'
-            await asyncio.to_thread(self.artifacts.request_state,identifier,context,selected_images=place_images(illustrations,report))
+            await asyncio.to_thread(self.artifacts.request_state,identifier,context,selected_images=place_images(illustrations,report,query))
             title=display_title(re.search(r'^# (.+)',report,re.M).group(1)) if re.search(r'^# (.+)',report,re.M) else display_title(query)
             await asyncio.to_thread(checkpoint,display_title=title)
             await asyncio.to_thread(checkpoint,phase='preparing_layout',publication_state='preparing')

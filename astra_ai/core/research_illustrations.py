@@ -10,8 +10,14 @@ IMAGE_VERSION=5
 MAX_IMAGES=6
 TARGET_IMAGES=4
 
-def report_image_limit(report):
+def report_image_limit(report,query=''):
     """A few illustrations, with a small allowance for substantial long reports."""
+    numbers={'one':1,'two':2,'three':3,'four':4,'five':5,'six':6}
+    number=r'(?:[1-6]|one|two|three|four|five|six)'
+    requested=re.search(r'\b('+number+r')(?:\s*(?:to|or|[-\u2013])\s*('+number+r'))?\s+(?:(?:relevant|technical|supporting)\s+){0,3}images?\b',query,re.I)
+    if requested:
+        value=(requested[2] or requested[1]).lower()
+        return numbers[value] if value in numbers else int(value)
     return 6 if len(report)>18000 else 4
 
 def image_fingerprint(body):
@@ -90,11 +96,13 @@ def relevant_candidate(row,query):
 async def prepare_images(search, identifier, context, sources, query):
     artifacts=search.artifacts
     metadata=await asyncio.to_thread(artifacts.request_state,identifier,context)
+    evidence_key=hashlib.sha256(repr([(source.get('url'),source.get('images',[])) for source in sources]).encode()).hexdigest()
     if metadata.get('images_prepared') and metadata.get('image_enrichment_version')==IMAGE_VERSION:
         verified=[r for r in (metadata.get('validated_images') or metadata.get('selected_images',[])) if useful_image(r) and relevant_candidate(r,query)]
         if verified:
             return verified
-        return []
+        # An empty result prepared before collection must not hide later evidence.
+        if metadata.get('image_evidence_key')==evidence_key:return []
     candidates=list(metadata.get("image_candidates",[]));seen={r["url"] for r in candidates};wanted=terms(query)
     for index,source in enumerate(sources):
         for image in source.get('images',[])[:30]:
@@ -189,11 +197,11 @@ async def prepare_images(search, identifier, context, sources, query):
     current_ids={row['id'] for row in selected}
     for row in metadata.get('validated_images',[]) or metadata.get('selected_images',[]):
         if row['id'] not in current_ids:retained[row['id']]={**row,'source_only':True}
-    await asyncio.to_thread(artifacts.request_state,identifier,context,selected_images=selected,validated_images=selected,image_archive=list(retained.values()),images_prepared=True,image_enrichment_version=IMAGE_VERSION,image_candidates=[])
+    await asyncio.to_thread(artifacts.request_state,identifier,context,selected_images=selected,validated_images=selected,image_archive=list(retained.values()),images_prepared=True,image_enrichment_version=IMAGE_VERSION,image_evidence_key=evidence_key,image_candidates=[])
     return selected
 
 
-def place_images(images, report):
+def place_images(images, report, query=''):
     """Choose an evidence-adjacent passage; never scatter images arbitrarily."""
     from markdown_it import MarkdownIt
     from bs4 import BeautifulSoup
@@ -216,7 +224,7 @@ def place_images(images, report):
     headline=document.find('h1')
     subjects=products(headline.get_text(' ',strip=True)) if headline else set()
     for image in images:
-        if len(result)>=report_image_limit(report):break
+        if len(result)>=report_image_limit(report,query):break
         if not useful_image(image):continue
         if re.search(r'\b(?:book cover|inside preview)\b',image['caption'],re.I) and not re.search(r'\b(?:books?|publishing)\b',report,re.I):continue
         if any(same_picture(image,old) or image['id']==old['id'] for old in result):continue
