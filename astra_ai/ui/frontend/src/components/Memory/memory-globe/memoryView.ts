@@ -1,5 +1,5 @@
 export interface MemoryCamera { yaw: number; pitch: number; zoom: number; rotationPaused?:boolean }
-function storage(): Storage | undefined { try { return typeof localStorage === 'undefined' ? undefined : localStorage; } catch { return undefined; } }
+function storage(): Storage | undefined { try { return typeof sessionStorage !== 'undefined' ? sessionStorage : typeof localStorage !== 'undefined' ? localStorage : undefined; } catch { return undefined; } }
 export function memoryIsOpen(): boolean { try { return storage()?.getItem('nova-current-workspace') === 'memory'; } catch { return false; } }
 export function rememberMemoryOpen(open: boolean): void { try { if(open||storage()?.getItem('nova-current-workspace')==='memory')storage()?.setItem('nova-current-workspace',open?'memory':'dashboard'); } catch {} }
 export function readMemoryCamera(): MemoryCamera | null {

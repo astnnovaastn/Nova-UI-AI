@@ -96,7 +96,7 @@ def authored_preview(files,identifier,context,markdown,expected_revision,operati
     html=str(soup)
     if len(html)>1_000_000:raise ValueError('document_too_large')
     folder=files.root/identifier/'authored';folder.mkdir(parents=True,exist_ok=True)
-    proposal={'id':operation_id,'html':html,'expected_revision':expected_revision,'source_revision':current['research_revision']}
+    proposal={'id':operation_id,'base_html':(current.get('draft') or {}).get('html',''),'html':html,'expected_revision':expected_revision,'source_revision':current['research_revision']}
     atomic(folder/(operation_id+'.json'),proposal)
     metadata=files.artifacts.request_state(identifier,context)
     revisions=metadata.get('document_revisions',[])
@@ -108,6 +108,8 @@ def authored_apply(files,identifier,context,edit_id):
     if not re.fullmatch(r'[a-zA-Z0-9_-]{1,100}',edit_id):raise ValueError('invalid_edit_id')
     proposal=read(files.root/identifier/'authored'/(edit_id+'.json'),{})
     if not proposal:raise ValueError('document_preview_unavailable')
+    collaboration=getattr(files.artifacts,'collaboration',None)
+    if collaboration and collaboration.exists(identifier):return {'status':'waiting_for_ui','collaborative':True,'proposal':proposal,'reason':'Apply this proposal as one transaction in the requesting editor; it is not applied yet.'}
     result=files.artifacts.save_draft(identifier,context,proposal['source_revision'],proposal['expected_revision'],proposal['html'])
     if result['status']=='completed':
         metadata=files.artifacts.request_state(identifier,context)

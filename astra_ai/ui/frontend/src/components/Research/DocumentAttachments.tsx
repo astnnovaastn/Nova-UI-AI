@@ -1,3 +1,4 @@
+import {usePdfCollaboration} from './pdfCollaboration';
 import React, { useEffect, useRef, useState } from "react";
 import * as pdfjs from "pdfjs-dist";
 import { marked } from "marked";
@@ -225,6 +226,24 @@ export function AttachmentReader({
       ? destination.revision || file.revision
       : file.pdf_revision || file.revision,
     revision = preview && !comparison ? preview.revision : currentRevision;
+  const sharedPdf=usePdfCollaboration(id,file.id,currentRevision,file.mime === 'application/pdf' && !destination.readonly);
+  const sharedObjects=data?.objects?.map((object:any)=>{
+    const prefix=page+':'+object.id+':';
+    return {...object,...Object.fromEntries(Object.entries(sharedPdf.values).filter(([key])=>key.startsWith(prefix)).map(([key,value])=>[key.slice(prefix.length),value]))};
+  })||[];
+  const previousSharedObject=useRef<{key:string;rect:string;text:string;fontSize:number}|null>(null);
+  useEffect(()=>{
+    const key=page+':'+(selected?.id||'');
+    if(selected?.id){
+      const previous=previousSharedObject.current,geometry=JSON.stringify(rect);
+      if(previous?.key===key){
+        if(previous.rect!==geometry)sharedPdf.change(key,'rect',rect);
+        if(previous.text!==editText)sharedPdf.change(key,'text',editText);
+        if(previous.fontSize!==fontSize)sharedPdf.change(key,'font_size',fontSize);
+      }
+      previousSharedObject.current={key,rect:geometry,text:editText,fontSize};
+    }else previousSharedObject.current=null;
+  },[page,selected?.id,rect,editText,fontSize]);
   useEffect(() => {
     updateUiContext({
       attachment_id: file.id,
@@ -437,6 +456,10 @@ export function AttachmentReader({
       setBusy(false);
     }
   }
+  useEffect(()=>{
+    const changed=(event:Event)=>{const detail=(event as CustomEvent).detail;if(detail?.research_id===id)void reloadFile().catch(()=>{});};
+    window.addEventListener('nova-research-refresh',changed);return()=>window.removeEventListener('nova-research-refresh',changed);
+  },[id,file.id]);
   async function reloadFile() {
     const d = await documentApi("/" + id + "/attachments");
     const next = d.attachments.find((f: Attachment) => f.id === file.id);
@@ -499,6 +522,9 @@ export function AttachmentReader({
     };
   }, [job, id, file.id]);
   async function prepare() {
+    if(selected){const prefix=page+':'+selected.id+':';
+      if(sharedPdf.values[prefix+'text']!==undefined&&sharedPdf.values[prefix+'text']!==editText){setError('This object changed in another window. Select it again before preparing the PDF.');return;}}
+
     setBusy(true);
     setError("");
     try {
@@ -628,7 +654,7 @@ export function AttachmentReader({
       label: f.name + " · " + image.caption,
     })),
   );
-  const highlight = (data?.objects || []).filter(
+  const highlight = sharedObjects.filter(
     (o: any) =>
       o.rect &&
       destination.excerpt &&
@@ -758,6 +784,9 @@ export function AttachmentReader({
       </details>
       {file.mime === "application/pdf" && !destination.readonly && (
         <div className="pdf-layout-toolbar">
+          <span role="status">{sharedPdf.status}</span>
+          <button type="button" onClick={sharedPdf.undo}>Undo my overlay edits</button>
+          <button type="button" onClick={sharedPdf.redo}>Redo my overlay edits</button>
           <button
             aria-pressed={editing}
             disabled={busy || !!preview}
@@ -1029,7 +1058,7 @@ export function AttachmentReader({
             {editing &&
               !preview &&
               pageReady &&
-              (data?.objects || [])
+              sharedObjects
                 .filter(
                   (o: any) => o.rect && ["text", "image"].includes(o.type),
                 )

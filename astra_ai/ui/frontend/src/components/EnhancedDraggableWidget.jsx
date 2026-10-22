@@ -39,7 +39,7 @@ const EnhancedDraggableWidget = ({
 
     // Load saved position from localStorage on mount
     useEffect(() => {
-        const savedConfig = localStorage.getItem(`widget_${id}_config`);
+        const savedConfig = (sessionStorage.getItem(`widget_${id}_config`) || localStorage.getItem(`widget_${id}_config`));
         if (savedConfig) {
             try {
                 const config = JSON.parse(savedConfig);
@@ -54,7 +54,7 @@ const EnhancedDraggableWidget = ({
     // Save config when it changes
     useEffect(() => {
         if (!isDragging && !isResizing) {
-            localStorage.setItem(`widget_${id}_config`, JSON.stringify({ position, size }));
+            sessionStorage.setItem(`widget_${id}_config`, JSON.stringify({ position, size }));
         }
     }, [position, size, id, isDragging, isResizing]);
 

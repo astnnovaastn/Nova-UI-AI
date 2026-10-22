@@ -1,3 +1,12 @@
+import * as Y from 'yjs';
+import {WebsocketProvider} from 'y-websocket';
+import {IndexeddbPersistence} from 'y-indexeddb';
+import Collaboration from '@tiptap/extension-collaboration';
+import CollaborationCaret from '@tiptap/extension-collaboration-caret';
+import {generateJSON,getSchema} from '@tiptap/core';
+import {prosemirrorJSONToYDoc} from '@tiptap/y-tiptap';
+import {windowId} from '../../workspaceSync';
+import {SelectionPill,PassageCard,type Passage} from './SelectionContext';
 import React, {
   useEffect,
   useLayoutEffect,
@@ -641,16 +650,40 @@ function DocumentPaperPreview({
     </div>
   );
 }
-function DraftEditor({
+const paperExtensions=[StarterKit.configure({undoRedo:false}),TableKit,ScopedImage,IllustrationGroup,IllustratedBlock,IllustratedCopy,Citation,PageBreak,DocumentVideo];
+const encodeBytes=(bytes:Uint8Array)=>btoa(Array.from(bytes,b=>String.fromCharCode(b)).join(''));
+const decodeBytes=(text:string)=>Uint8Array.from(atob(text),c=>c.charCodeAt(0));
+type SharedPaper={document:Y.Doc;provider:WebsocketProvider;cache:IndexeddbPersistence;epoch:string};
+function DraftEditor(props:{report:Report;onSaved:(draft:any)=>void}){
+ const [shared,setShared]=useState<SharedPaper|null>(null),[error,setError]=useState('');
+ useEffect(()=>{let gone=false,connection:SharedPaper|null=null;
+  void(async()=>{
+   const seed=prosemirrorJSONToYDoc(getSchema(paperExtensions),generateJSON(props.report.draft?.html||initialDraft(props.report),paperExtensions),'default');
+   try{const result=await api('/'+props.report.research_id+'/collaboration',{method:'POST',body:JSON.stringify({schema:'aegis-paper-v1',seed:encodeBytes(Y.encodeStateAsUpdate(seed))})});
+    if(gone)return;
+    const document=new Y.Doc();Y.applyUpdate(document,decodeBytes(result.update));
+    const cache=new IndexeddbPersistence('aegis-paper:'+props.report.research_id+':'+result.epoch,document);
+    const provider=new WebsocketProvider((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/collaboration',props.report.research_id,document,{connect:false,params:{client:conversationSnapshot().clientId,epoch:result.epoch,schema:'aegis-paper-v1'}});
+    provider.awareness.setLocalStateField('user',{name:'Window '+windowId.slice(0,4),color:'#b78a70'});
+    connection={document,cache,provider,epoch:result.epoch};provider.connect();setShared(connection);
+   }catch(e:any){if(!gone)setError(e.message);}finally{seed.destroy();}
+  })();return()=>{gone=true;connection?.provider.destroy();void connection?.cache.destroy();connection?.document.destroy();};
+ },[props.report.research_id]);
+ useEffect(()=>{if(shared){shared.provider.params.client=conversationSnapshot().clientId;shared.provider.disconnect();shared.provider.connect();}},[props.report.research_id,conversationSnapshot().clientId]);
+ return shared?<SharedDraftEditor {...props} shared={shared}/>:<div role="status">{error||'Connecting shared document…'}</div>;
+}
+function SharedDraftEditor({
   report,
   onSaved,
+  shared,
 }: {
   report: Report;
   onSaved: (draft: any) => void;
+  shared:SharedPaper;
 }) {
   const key =
     "nova-research-draft:" +
-    conversationSnapshot().clientId +
+    windowId +
     ":" +
     report.research_id;
   const revision = useRef(report.draft?.revision || ""),
@@ -661,17 +694,7 @@ function DraftEditor({
     [state, setState] = useState("Saved"),
     [conflict, setConflict] = useState(false);
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      TableKit,
-      ScopedImage,
-      IllustrationGroup,
-      IllustratedBlock,
-      IllustratedCopy,
-      Citation,
-      PageBreak,
-      DocumentVideo,
-    ],
+    extensions: [...paperExtensions,Collaboration.configure({document:shared.document}),CollaborationCaret.configure({provider:shared.provider,user:{name:'Window '+windowId.slice(0,4),color:'#b78a70'}})],
     onSelectionUpdate: ({ editor }) =>
       updateUiContext({
         editor_selection: editor.state.doc
@@ -686,7 +709,6 @@ function DraftEditor({
     editorProps: {
       attributes: { "aria-label": "Research draft", role: "textbox" },
     },
-    content: report.draft?.html || initialDraft(report),
     onUpdate: ({ editor }) => {
       dirty.current = true;
       try {
@@ -714,22 +736,37 @@ function DraftEditor({
       else editor.commands.setContent({ type: "doc", content: [node] });
     });
   }, [editor]);
+  useEffect(()=>{
+    if(!editor)return;
+    const apply=(event:Event)=>{
+      const {page,proposal}=(event as CustomEvent).detail||{};if(page!==report.research_id)return;
+      try{
+        const base=generateJSON(proposal.base_html||'<p></p>',paperExtensions).content||[],next=generateJSON(proposal.html,paperExtensions).content||[];
+        let left=0,right=0;const equal=(a:any,b:any)=>JSON.stringify(a)===JSON.stringify(b);
+        while(left<base.length&&left<next.length&&equal(base[left],next[left]))left++;
+        while(right<base.length-left&&right<next.length-left&&equal(base[base.length-1-right],next[next.length-1-right]))right++;
+        const old=base.slice(left,base.length-right),replacement=next.slice(left,next.length-right),nodes:any[]=[],positions:number[]=[];
+        editor.state.doc.forEach((node,offset)=>{nodes.push(node.toJSON());positions.push(offset);});positions.push(editor.state.doc.content.size);
+        const candidates:number[]=[];
+        for(let i=0;i<=nodes.length-old.length;i++){
+          if(old.length?old.every((node:any,j:number)=>equal(node,nodes[i+j])):(!left||equal(base[left-1],nodes[i-1]))&&(!right||equal(base[left],nodes[i])))candidates.push(i);
+        }
+        if(candidates.length!==1)throw Error('The target passage changed. Request a refreshed proposal; your current edits are preserved.');
+        const start=candidates[0];editor.chain().focus().insertContentAt({from:positions[start],to:positions[start+old.length]},replacement).run();
+        setState('AI proposal applied · you can undo this change');
+      }catch(e:any){setState(e.message);}
+    };
+    window.addEventListener('nova-collaborative-apply',apply);return()=>window.removeEventListener('nova-collaborative-apply',apply);
+  },[editor,report.research_id]);
   async function save() {
     if (!editor || pending.current || !dirty.current || conflict) return;
     pending.current = true;
     dirty.current = false;
-    const html = clean(editor.getHTML());
-    setState("Saving…");
+    setState(shared.provider.wsconnected?"Saving on server…":"Saved locally · reconnecting");
     let saved = false;
     try {
-      const d = await api("/" + report.research_id + "/draft", {
-        method: "PUT",
-        body: JSON.stringify({
-          html,
-          source_revision: report.research_revision,
-          expected_revision: revision.current,
-        }),
-      });
+      if(!shared.provider.wsconnected)throw Error('Saved locally · reconnecting');
+      const d=await api('/'+report.research_id+'/collaboration/snapshot',{method:'POST',body:JSON.stringify({epoch:shared.epoch,vector:encodeBytes(Y.encodeStateVector(shared.document))})});
       saved = true;
       revision.current = d.draft.revision;
       onSaved(d.draft);
@@ -748,37 +785,26 @@ function DraftEditor({
     } catch (e: any) {
       dirty.current = true;
       if (mounted.current) {
-        setConflict(e.data?.status === "conflict");
+        setConflict(false);
         setState(
           e.data?.status === "conflict"
             ? "Another version was saved. Your local draft is preserved."
-            : "Save failed. Your local draft is preserved.",
+            : shared.provider.wsconnected?"Waiting for server acknowledgement…":"Saved locally · reconnecting",
         );
       }
     } finally {
       pending.current = false;
-      if (saved && dirty.current && mounted.current)
+      if (dirty.current && mounted.current)
         saveTimer.current = window.setTimeout(() => void save(), 900);
     }
   }
   useEffect(() => {
     mounted.current = true;
-    try {
-      const local = JSON.parse(sessionStorage.getItem(key) || "null");
-      if (local && local.revision === revision.current) {
-        editor?.commands.setContent(local.html);
-        dirty.current = true;
-        setState("Recovered local changes");
-        saveTimer.current = window.setTimeout(() => void save(), 900);
-      } else if (local) {
-        setConflict(true);
-        setState(
-          "A different saved version exists. Your local draft is preserved.",
-        );
-      }
-    } catch {}
+    const schedule=()=>{dirty.current=true;clearTimeout(saveTimer.current);saveTimer.current=window.setTimeout(()=>void save(),700);};
+    shared.provider.on('sync',schedule);
     return () => {
       mounted.current = false;
+      shared.provider.off('sync',schedule);
       clearTimeout(saveTimer.current);
     };
   }, [editor]);
@@ -959,12 +985,12 @@ function DraftEditor({
           </button>
         )}
         <button
-          title="Undo"
+          title="Undo my edits"
           disabled={!editor.can().undo()}
           onClick={() => editor.chain().focus().undo().run()}
         >
           <Icon name="undo" />
-          <span className="research-sr-only">Undo</span>
+          <span className="research-sr-only">Undo my edits</span>
         </button>
         <button
           title="Redo"
@@ -1529,7 +1555,7 @@ function JumpToBottom({ target, active, identity, clearance = 52 }: {
     if (!active || !root) { setPosition(null); return; }
     const update = () => {
       const rect = root.getBoundingClientRect();
-      const composer = root.closest(".research-document")?.querySelector(".research-query")?.getBoundingClientRect();
+      const composer = root.closest(".research-document")?.querySelector(".research-central-composer")?.getBoundingClientRect();
       const bottom = Math.min(rect.bottom, innerHeight, composer?.top ?? Infinity);
       setPosition(rect.width && root.scrollHeight - root.scrollTop - root.clientHeight > 320
         ? {left: rect.left + rect.width / 2, top: Math.max(rect.top + 24, bottom - clearance)} : null);
@@ -1539,7 +1565,7 @@ function JumpToBottom({ target, active, identity, clearance = 52 }: {
     window.addEventListener("resize", update);
     const observer = new ResizeObserver(update);
     observer.observe(root);
-    const composer = root.closest(".research-document")?.querySelector(".research-query");
+    const composer = root.closest(".research-document")?.querySelector(".research-central-composer");
     if (composer) observer.observe(composer);
     for (const child of Array.from(root.children)) observer.observe(child);
     return () => { root.removeEventListener("scroll", update); window.removeEventListener("resize", update); observer.disconnect(); };
@@ -1944,7 +1970,7 @@ function DocumentPreview({
     };
   }, [page, pages]);
   return (
-    <section ref={sourceReader} className="research-source-preview" aria-label={current.title}>
+    <section ref={sourceReader} data-source-id={current.id} className="research-source-preview research-source-article" aria-label={current.title}>
       <JumpToBottom target={sourceReader} active identity={current.id + html} clearance={34} />
       <header>
         <div>
@@ -2533,7 +2559,7 @@ function ContinuationStatus({
 }
 function Workspace() {
   const [open, setOpen] = useState(
-      () => localStorage.getItem("nova-current-workspace") === "research",
+      () => sessionStorage.getItem("nova-current-workspace") === "research",
     ),
     [items, setItems] = useState<any[]>([]),
     [offset, setOffset] = useState(0),
@@ -2544,7 +2570,7 @@ function Workspace() {
     [query, setQuery] = useState(
       () =>
         sessionStorage.getItem(
-          "nova-research-query:" + conversationSnapshot().clientId,
+          "nova-research-query:" + windowId,
         ) || "",
     ),
     [mode, setMode] = useState("detailed"),
@@ -2559,6 +2585,8 @@ function Workspace() {
     [editOpened, setEditOpened] = useState(false),
     [expandedVideo, setExpandedVideo] = useState(""),
     [extraMedia, setExtraMedia] = useState<Source[]>([]);
+  const [activePassage,setActivePassage]=useState<Passage|null>(null);
+  useEffect(()=>{setActivePassage(null);updateUiContext({active_selection_id:""});},[report?.research_id]);
   const scopeRef = useRef("");
   const [exportDestination, setExportDestination] = useState<{
     id: string;
@@ -2609,9 +2637,9 @@ function Workspace() {
     if (
       chat.clientId &&
       !chat.guest &&
-      scopeRef.current === chat.clientId + ":" + chat.guest
+      scopeRef.current === windowId + ":" + chat.guest
     )
-      sessionStorage.setItem("nova-research-query:" + chat.clientId, query);
+      sessionStorage.setItem("nova-research-query:" + windowId, query);
   }, [query, chat.clientId, chat.guest]);
   const pendingMessage = useRef<{
     id: string;
@@ -2625,7 +2653,7 @@ function Workspace() {
         return;
       const key =
         "nova-research-view:" +
-        conversationSnapshot().clientId +
+        windowId +
         ":" +
         item.reportId;
       try {
@@ -2714,27 +2742,8 @@ function Workspace() {
     },
     [exportPreview],
   );
-  const illustrationRequests = useRef(new Set<string>());
-  useEffect(() => {
-    if (
-      !report ||
-      report.kind !== "research" ||
-      report.images_prepared
-    )
-      return;
-    const key = chat.clientId + ":" + report.research_id;
-    if (illustrationRequests.current.has(key)) return;
-    illustrationRequests.current.add(key);
-    void api("/" + report.research_id + "/images/enrich", {
-      method: "POST",
-      body: "{}",
-    }).catch(() => {});
-  }, [
-    report?.research_id,
-    report?.images_prepared,
-    report?.completeness,
-    chat.clientId,
-  ]);
+  // Media preparation belongs to the accepted research operation. Opening or
+  // reconciling a window must never start an image search or provider call.
   const [conversationSession, setConversationSession] = useState("");
   const tabRef = useRef(tab);tabRef.current=tab;
   const pageViews = useRef(new Map<string,{tab:string;scroll:number}>());
@@ -2945,7 +2954,8 @@ function Workspace() {
         updateUiContext({research_id:"",research_revision:"",selected_id:"",title:""});
       }
       const id = detail.research_id;
-      if (id) void reloadReport(id).catch(() => {});
+      if (id && reportRef.current?.research_id===id) void reloadReport(id).catch(() => {});
+      else if(id)reportCache.current.delete(chat.clientId+":"+id);
       void refresh();
     };
     window.addEventListener("nova-research-refresh", refreshEvent);
@@ -3125,8 +3135,8 @@ function Workspace() {
     setFailedSelection("");
     if (report)
       sessionStorage.setItem(
-        "nova-research-view:" + client + ":" + report.research_id,
-        JSON.stringify({ scroll: reader.current?.scrollTop || 0, message }),
+        "nova-research-view:" + windowId + ":" + report.research_id,
+        JSON.stringify({ scroll: reader.current?.scrollTop || 0, message, tab:tabRef.current }),
       );
     lastSelection.current = id;
     setPreview(null);
@@ -3182,10 +3192,10 @@ function Workspace() {
             );
         });
       const saved = JSON.parse(
-        sessionStorage.getItem("nova-research-view:" + client + ":" + id) ||
+        sessionStorage.getItem("nova-research-view:" + windowId + ":" + id) ||
           "{}",
       );
-      if (!withinSession) setMessage(saved.message || "");
+      if (!withinSession) {setMessage(saved.message || "");if(["reader","edit","sources","media"].includes(saved.tab))setTab(saved.tab);if(saved.tab==="edit")setEditOpened(true);}
       requestAnimationFrame(() => {
         if (reader.current) reader.current.scrollTop = pageViews.current.get(id)?.scroll ?? saved.scroll ?? 0;
       });
@@ -3193,7 +3203,7 @@ function Workspace() {
       setSourceLimit(10);
       setMediaLimit(3);
       setOriginal(false);
-      setEditOpened(withinSession && pageViews.current.get(id)?.tab === "edit");
+      setEditOpened(saved.tab === "edit" || withinSession && pageViews.current.get(id)?.tab === "edit");
       setExpandedVideo("");
       setExtraMedia([]);
       setPreview(null);
@@ -3203,6 +3213,7 @@ function Workspace() {
         view: "research",
         research_id: id,
         research_revision: d.research_revision,
+        thread_id:d.thread_id||"research-"+session,
         title: d.display_title || d.query,
         selected_id: id,
         selected_kind: "research",
@@ -3224,12 +3235,13 @@ function Workspace() {
     }
   }
   useEffect(() => {
-    const key = chat.clientId + ":" + chat.guest;
+    if(!chat.clientId)return;
+    const key = windowId + ":" + chat.guest;
     if (scopeRef.current !== key) {
       setQuery(
         chat.guest
           ? ""
-          : sessionStorage.getItem("nova-research-query:" + chat.clientId) ||
+          : sessionStorage.getItem("nova-research-query:" + windowId) ||
               "",
       );
       setMessage("");
@@ -3264,7 +3276,7 @@ function Workspace() {
       setOpen(true);
       document.body.classList.add("research-workspace-open");
       document.body.classList.remove("memory-workspace-open");
-      localStorage.setItem("nova-current-workspace", "research");
+      sessionStorage.setItem("nova-current-workspace", "research");
       updateUiContext({
         view: "research",
         category: "",
@@ -3326,10 +3338,10 @@ function Workspace() {
   useEffect(() => {
     if (report)
       sessionStorage.setItem(
-        "nova-research-view:" + chat.clientId + ":" + report.research_id,
-        JSON.stringify({ message, scroll: reader.current?.scrollTop || 0 }),
+        "nova-research-view:" + windowId + ":" + report.research_id,
+        JSON.stringify({ message, scroll: reader.current?.scrollTop || 0, tab:tabRef.current }),
       );
-  }, [message, report?.research_id]);
+  }, [message, report?.research_id, tab]);
   const hasResearchWork=chat.textBusy || chat.jobs.some(job=>["running","queued","retrying"].includes(job.state));
   useEffect(() => {
     if (!open || !report || chat.guest) return;
@@ -3453,39 +3465,6 @@ function Workspace() {
   useEffect(() => {
     pausePlayers();
   }, [tab, open, preview]);
-  useEffect(() => {
-    if (
-      !open ||
-      tab !== "media" ||
-      !report ||
-      (report.media_status && report.media_status !== "idle")
-    )
-      return;
-    const id = report.research_id,
-      key = chat.clientId + ":" + id;
-    if (mediaRequested.current.has(key)) return;
-    mediaRequested.current.add(key);
-    setReport((r) =>
-      r?.research_id === id ? { ...r, media_status: "pending" } : r,
-    );
-    void api("/" + id + "/media", {
-      method: "POST",
-      body: JSON.stringify({ research_revision: report.research_revision }),
-    })
-      .then((d) => {
-        if (d.media_status)
-          setReport((r) => (r?.research_id === id ? { ...r, ...d } : r));
-        else if (
-          !["accepted", "queued", "duplicate", "completed"].includes(d.status)
-        )
-          throw Error(d.reason || "Video discovery unavailable");
-      })
-      .catch(() =>
-        setReport((r) =>
-          r?.research_id === id ? { ...r, media_status: "unavailable" } : r,
-        ),
-      );
-  }, [open, tab, report?.research_id, report?.media_status, chat.clientId]);
   const media = mergeMedia([
     ...(report?.sources || []),
     ...(report?.media || []),
@@ -3650,11 +3629,12 @@ function Workspace() {
     sourceId = "",
   ) {
     window.dispatchEvent(new Event("nova-composer-reset"));
+    setConversationSession("");setActivePassage(null);
     if(kind === "chat") setMessage("");
     if (report)
       sessionStorage.setItem(
-        "nova-research-view:" + chat.clientId + ":" + report.research_id,
-        JSON.stringify({ message, scroll: reader.current?.scrollTop || 0 }),
+        "nova-research-view:" + windowId + ":" + report.research_id,
+        JSON.stringify({ message, scroll: reader.current?.scrollTop || 0, tab:tabRef.current }),
       );
     queryDrafts.current[entryKind] = query;
     setQuery(queryDrafts.current[kind] || "");
@@ -3828,6 +3808,10 @@ function Workspace() {
           "/apply",
         { method: "POST", body: "{}" },
       );
+      if(d.collaborative){
+        setTab('edit');setEditOpened(true);setDocumentEdit(null);
+        window.setTimeout(()=>window.dispatchEvent(new CustomEvent('nova-collaborative-apply',{detail:{page:report.research_id,proposal:d.proposal}})),300);return;
+      }
       setReport((old) => (old ? { ...old, draft: d.draft } : old));
       setDocumentEdit(null);
       setEditorGeneration((n) => n + 1);
@@ -3872,7 +3856,7 @@ function Workspace() {
           report.research_id +
           "/export?revision=" +
           report.research_revision +
-          "&format=" +
+          "&draft_revision=" + encodeURIComponent(report.draft?.revision||"") + "&format=" +
           format +
           "&draft=" +
           (tab === "edit" ||
@@ -4152,7 +4136,8 @@ function Workspace() {
                     (m) => (
                       <article key={m.id} data-speaker={m.role}>
                         <small>{m.role === "user" ? "You" : "Aegis"}</small>
-                        <p>{m.text}</p>
+                        {m.context_cards?.map((card:any)=><PassageCard key={card.id} card={card}/>)}
+                <p>{m.text}</p>
                       </article>
                     ),
                   )}
@@ -4175,7 +4160,7 @@ function Workspace() {
                     ))}
                   </div>
                 )}
-                <ChatComposer key={chat.clientId+":"+report.research_id} value={message} onChange={setMessage} onSubmit={sendFollowup} onNewChat={()=>newEntry("chat")} actions={entryMenu()} status={chat.status} disabled={!chat.connected||chat.textBusy}/>
+
 
               </section>
             ) : (
@@ -4201,7 +4186,7 @@ function Workspace() {
                     if (report)
                       sessionStorage.setItem(
                         "nova-research-view:" +
-                          chat.clientId +
+                          windowId +
                           ":" +
                           report.research_id,
                         JSON.stringify({
@@ -4609,83 +4594,17 @@ function Workspace() {
             accept=".pdf,.docx,.txt,.md,.markdown,.png,.jpg,.jpeg,.webp"
             onChange={(e) => void uploadFiles(e.target.files)}
           />
-          <form
-            className="research-query"
-            hidden={report?.kind === "chat"}
-            onSubmit={start}
-          >
-            <span id="research-brief-limit" className="research-sr-only">
-              Research brief: up to 12,000 characters.
-            </span>
-            <textarea
-              aria-label="Research topic"
-              placeholder={
-                entryKind === "documentary"
-                  ? "What should this document explain?"
-                  : "What would you like to research?"
-              }
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-describedby="research-brief-limit"
-              rows={1}
-              onKeyDown={(e) => {
-                if (
-                  e.key === "Enter" &&
-                  !e.shiftKey &&
-                  !e.nativeEvent.isComposing
-                ) {
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
-                }
-              }}
-            />
-            <div className="research-query-actions">
-              {entryMenu()}
-              {entryKind === "documentary" && (
-                <span className="document-mode-label">Documentary</span>
-              )}
-              <details hidden={entryKind === "documentary"}>
-                <summary aria-label="Research depth">
-                  {mode === "detailed" ? "Detailed" : "Quick"}
-                  <Icon name="depth" />
-                </summary>
-                <div role="group" aria-label="Research depth options">
-                  {["quick", "detailed"].map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      aria-pressed={mode === v}
-                      onClick={(e) => {
-                        setMode(v);
-                        e.currentTarget
-                          .closest("details")
-                          ?.removeAttribute("open");
-                      }}
-                    >
-                      {v === "quick" ? "Quick search" : "Detailed research"}
-                    </button>
-                  ))}
-                </div>
-              </details>
-              <button
-                className="research-submit"
-                aria-label={
-                  entryKind === "documentary"
-                    ? busy
-                      ? "Preparing document"
-                      : "Write document"
-                    : busy
-                      ? "Starting research"
-                      : "Start research"
-                }
-                disabled={
-                  busy || !chat.connected || chat.guest || !query.trim()
-                }
-              >
-                {busy ? "…" : <Icon name="arrow" />}
-              </button>
-            </div>
-          </form>
+          <div className="research-central-composer">
+            {report&&<SelectionPill page={report.research_id} revision={report.research_revision} onAttach={setActivePassage}/>}
+            <ChatComposer value={report?message:query} onChange={report?setMessage:setQuery}
+              onSubmit={()=>report?sendFollowup():void start({preventDefault(){}} as React.FormEvent)}
+              onNewChat={()=>newEntry("research")} actions={entryMenu()}
+              label={report?"Ask Aegis":"Research topic"} placeholder={report?"Ask Aegis":"What would you like to research?"}
+              onMicrophone={requestMicrophone} muted={chat.muted} busy={chat.textBusy} onStop={()=>window.dispatchEvent(new Event('nova-chat-cancel'))}
+              disabled={busy||!chat.connected||chat.guest||chat.textBusy}
+              context={activePassage?<PassageCard card={activePassage} onRemove={()=>{setActivePassage(null);updateUiContext({active_selection_id:""});}}/>:undefined}
+              trailing={!report&&entryKind!=="documentary"?<select aria-label="Research depth" value={mode} onChange={e=>setMode(e.target.value)}><option value="quick">Quick</option><option value="detailed">Detailed</option></select>:undefined}/>
+          </div>
         </main>
         <aside className="research-assistant" id="research-conversation-panel" aria-label="Research conversation" hidden={report?.kind === "chat"}>
           <button className="research-panel-close" aria-label="Close research conversation" onClick={() => setNarrowPanel("")}><Icon name="close" /></button>
@@ -4710,6 +4629,7 @@ function Workspace() {
             ).map((m) => (
               <article key={m.id} data-speaker={m.role}>
                 <small>{m.role === "user" ? "You" : "Aegis"}</small>
+                {m.context_cards?.map((card:any)=><PassageCard key={card.id} card={card}/>)}
                 <p>{m.text}</p>
               </article>
             ))}
@@ -4739,39 +4659,7 @@ function Workspace() {
               </article>
             ))}
           </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              sendFollowup();
-            }}
-          >
-            <textarea
-              aria-label="Message Aegis about research"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Ask a follow-up…"
-            />
-            <div>
-              <button
-                className="research-mic"
-                type="button"
-                aria-label={
-                  chat.muted ? "Unmute microphone" : "Mute microphone"
-                }
-                onClick={requestMicrophone}
-              >
-                {chat.muted ? "Mic off" : "Mic on"}
-              </button>
-              <button
-                aria-label="Send message to Aegis"
-                disabled={
-                  !chat.connected || !report || chat.textBusy || !message.trim()
-                }
-              >
-                <Icon name="arrow" />
-              </button>
-            </div>
-          </form>
+
           <small>{chat.status || chat.state}</small>
         </aside>
       </div>
@@ -4795,7 +4683,7 @@ export default function initResearchWorkspace() {
   document.body.append(nav);
   for (const view of ["dashboard", "memory", "research"])
     window.addEventListener("nova-open-" + view, () => {
-      localStorage.setItem("nova-current-workspace", view);
+      sessionStorage.setItem("nova-current-workspace", view);
       updateUiContext({ view });
       Array.from(nav.children).forEach((b, i) =>
         b.setAttribute(

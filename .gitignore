@@ -235,3 +235,7 @@ astra_ai/nova-memory-server/src/storage/backups
 
 # Scoped research evidence, checkpoints and pre-migration backups are private runtime data.
 astra_ai/memory/research_artifacts/
+
+# Private live workspace journal, pairing credentials, and collaborative document state.
+**/workspace-sync.sqlite3*
+**/collaboration.sqlite3*

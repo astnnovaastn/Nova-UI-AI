@@ -1,3 +1,4 @@
+import {startWorkspaceSync,ownsVoice,acquireVoice,releaseVoice,voiceOwner} from './workspaceSync';
 import {applicationControl} from './aegisWidgetProtocol';
 import {notify,noticeScope,cue,confirmOwner} from './notifications';
 import {notificationSoundEnabled,notificationTarget,newNoticeIds} from './conversation';
@@ -31,7 +32,7 @@ const statusEl = document.getElementById("status-text")!;
 const errorEl = document.getElementById("error-text")!;
 const badgeEl = document.getElementById("connection-badge") as HTMLDivElement | null;
 const badgeLabelEl = badgeEl?.querySelector("#connection-label") as HTMLSpanElement | null;
-const API_HOST = (import.meta.env.VITE_API_URL || "http://localhost:8340").replace(/\/$/, "");
+const API_HOST = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 // ---------------------------------------------------------------------------
 // State machine & Audio Control
@@ -174,8 +175,9 @@ function setOrbMood(mood: OrbMood) {
 
 // Connect to backend on port 8340, not to the Vite dev server
 const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
-const WS_URL = `${wsProto}//localhost:8340/ws/voice`;
+const WS_URL = `${wsProto}//${location.host}/ws/voice`;
 const socket = createSocket(WS_URL);
+startWorkspaceSync(socket);
 
 const audioPlayer = createAudioPlayer();
 orb.setAnalyser(audioPlayer.getAnalyser());
@@ -294,8 +296,9 @@ function setupLiveVoiceInput() {
   voiceInput = createLiveVoiceInput(
     (pcm) => {
       // Keep capture alive while Aegis speaks so Gemini Live can detect barge-in.
-      if (!isMuted && activeVoiceProvider === "gemini_live") {
-        socket.sendBinary(pcm);
+      if (!isMuted && ownsVoice() && activeVoiceProvider === "gemini_live") {
+        const framed=new Uint8Array(pcm.byteLength+8);framed.set([78,86,65,49]);new DataView(framed.buffer).setUint32(4,voiceOwner().generation,true);framed.set(new Uint8Array(pcm),8);
+        socket.sendBinary(framed.buffer);
       }
     },
     (message) => showError(message),
@@ -354,8 +357,10 @@ function showWorkNotices(items:any[]){
 window.addEventListener('nova-conversation',()=>{const s=conversationSnapshot();noticeScope(s.sessionId+':'+s.guest);});
 let noticePlaying='',noticeComplete='';
 function acknowledgeNotice(){if(noticePlaying&&noticePlaying===noticeComplete&&!isAudioPlaying){socket.send({type:'notice_delivered',notice_id:noticePlaying});noticePlaying=noticeComplete='';}}
-socket.onBinary((pcm) => {
-  if (activeVoiceProvider !== "gemini_live" || audioGeneration && audioGeneration===canceledGeneration) return;
+socket.onBinary((frame) => {
+  if(frame.byteLength<8||new DataView(frame).getUint32(0)!==0x4e564131||new DataView(frame).getUint32(4,true)!==voiceOwner()?.generation)return;
+  const pcm=frame.slice(8);
+  if (!ownsVoice() || activeVoiceProvider !== "gemini_live" || audioGeneration && audioGeneration===canceledGeneration) return;
   if (!isAudioPlaying) {
     isAudioPlaying = true;
     transition("speaking");
@@ -367,7 +372,7 @@ socket.onOpen(() => {
   voiceSession.reset();
   setConnected(true);
   conversationState({connected:true,status:""});socket.send({type:"ui_context",snapshot:uiSnapshot()});
-  if (voiceInteractionStarted) startPreferredVoiceSession(!isMuted);
+  if (voiceInteractionStarted && ownsVoice()) startPreferredVoiceSession(!isMuted);
   else { transition("idle"); updateStatus("idle"); }
 });
 
@@ -448,7 +453,7 @@ socket.onMessage((msg) => {
     userTranscript=String(msg.full_text||((userTranscript?userTranscript+' ':'')+String(msg.text||'')));
     userMessageId=String(msg.request_id||('user:'+String(msg.turn_id||'active')));
     if(userTranscript.trim())cue('voice','user:'+userMessageId);
-    conversationMessage('user',userTranscript,msg.final?'completed':'streaming',userMessageId,String(msg.research_id||''));
+    conversationMessage('user',userTranscript,msg.final?'completed':'streaming',userMessageId,String(msg.research_id||''),msg.context_cards as any[]);
   }
   else if (type === 'live_output_transcript') {
     assistantTranscript=String(msg.full_text||((assistantTranscript?assistantTranscript+' ':'')+String(msg.text||'')));
@@ -457,7 +462,7 @@ socket.onMessage((msg) => {
   }
   else if (type === 'live_generation_complete') {
     const turn=String(msg.turn_id||'active');
-    if(msg.input_text)conversationMessage('user',String(msg.input_text),'completed',String(msg.request_id||'user:'+turn),String(msg.research_id||''));
+    if(msg.input_text)conversationMessage('user',String(msg.input_text),'completed',String(msg.request_id||'user:'+turn),String(msg.research_id||''),msg.context_cards as any[]);
     if(msg.output_text)conversationMessage('assistant',String(msg.output_text),'completed','reply:'+turn,String(msg.research_id||''));
     if(!msg.reconciled&&(!msg.generation||String(msg.generation)===audioGeneration))audioPlayer.finishPcmTurn();
     userTranscript=assistantTranscript=userMessageId=assistantMessageId='';
@@ -900,9 +905,11 @@ const btnMenu = document.getElementById("btn-menu")!;
 const menuDropdown = document.getElementById("menu-dropdown")!;
 const btnRestart = document.getElementById("btn-restart")!;
 
-btnMute.addEventListener("click", (e) => {
+btnMute.addEventListener("click", async (e) => {
   e.stopPropagation();
+  if(isMuted && !await acquireVoice(socket)){showError("Voice active in "+(voiceOwner()?.label||"another window")+". Stop it there before starting here.");return;}
   isMuted = !isMuted;
+  if(isMuted)releaseVoice(socket);
   btnMute.title = isMuted ? "Start voice chat" : "Mute microphone";
   btnMute.setAttribute("aria-label", btnMute.title);
   localStorage.setItem(MIC_MUTE_KEY, isMuted ? "true" : "false");
@@ -993,6 +1000,7 @@ function recoverTransient(message: string) {
   void recoverRuntime();
 }
 socket.onClose(() => {
+  isMuted=true;conversationState({muted:true});
   voiceSession.reset();
   voiceInput?.stop();
   setConnected(false); conversationState({sessionSwitching:false,connected:false,status:"Reconnecting…"});canceledGeneration=audioGeneration;heldGeneration=pendingInterruptionGeneration='';window.dispatchEvent(new CustomEvent("nova-memory-activity",{detail:{phase:"clear"}})); audioPlayer.stop(); isAudioPlaying = false;
@@ -1086,9 +1094,13 @@ window.addEventListener('nova-chat-send',async(event:Event)=>{
  conversationState({state:'thinking',status:'',textBusy:true,sources:[]});
  conversationMessage('user',text,'sending',d.request_id);
  socket.send({type:'ui_context',snapshot:uiSnapshot()});
- socket.send({type:'live_text',text,request_id:d.request_id,session_id:conversationSnapshot().sessionId,source:'typed_input',research_id:d.research_id||'',selection_revision:revision});
+ socket.send({type:'live_text',text,request_id:d.request_id,session_id:conversationSnapshot().sessionId,source:'typed_input',research_id:d.research_id||'',selection_revision:revision,active_selection_id:d.active_selection_id||''});
 });
 
 window.addEventListener('nova-conversation-switch',((e:CustomEvent)=>{if(conversationSnapshot().textBusy||conversationSnapshot().sessionSwitching||!conversationSnapshot().connected)return;conversationState({sessionSwitching:true,status:'Opening conversation…'});conversationInterrupt();audioPlayer.stop();heldGeneration=pendingInterruptionGeneration='';isAudioPlaying=false;voiceInput?.pause();userTranscript=assistantTranscript=userMessageId=assistantMessageId='';socket.send({type:'conversation_switch',session_id:e.detail.session_id});}) as EventListener);
 
 window.addEventListener('nova-voice-enrollment',((e:CustomEvent)=>{if(e.detail.active){canceledGeneration=audioGeneration;audioPlayer.stop();voiceInput?.pause();socket.send({type:'live_text_suspend'});}else if(!isMuted){socket.send({type:'live_text_resume'});voiceInput?.resume();}}) as EventListener);
+
+window.addEventListener('nova-voice-lease-lost',()=>{isMuted=true;voiceInput?.stop();audioPlayer.stop();isAudioPlaying=false;voiceSession.reset();conversationState({muted:true});btnMute.classList.add('muted');btnMute.title='Start voice chat';btnMute.setAttribute('aria-label',btnMute.title);soundWave.setMuted(true);});
+
+if(import.meta.hot)import.meta.hot.dispose(()=>socket.close());

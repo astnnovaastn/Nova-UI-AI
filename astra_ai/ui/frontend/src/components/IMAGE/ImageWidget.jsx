@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './ImageWidget.css';
 
-const API_HOST = (import.meta.env.VITE_API_URL || 'http://localhost:8340').replace(/\/$/, '');
+const API_HOST = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 const IMAGE_API_ENDPOINT = `${API_HOST}/api/generate-image`;
 const IMAGE_GALLERY_ENDPOINT = `${API_HOST}/api/images/backup/index`;
 const IMAGE_WIDGET_STORAGE_KEY = 'astra-image-widget-geometry-v1';
@@ -10,7 +10,7 @@ const DEFAULT_IMAGE_SIZE = { width: 440, height: 640 };
 const readGeometry = () => {
   if (typeof window === 'undefined') return { pos: { x: 52, y: 120 }, size: DEFAULT_IMAGE_SIZE };
   try {
-    const saved = JSON.parse(window.localStorage.getItem(IMAGE_WIDGET_STORAGE_KEY) || 'null');
+    const saved = JSON.parse((window.sessionStorage.getItem(IMAGE_WIDGET_STORAGE_KEY) || window.localStorage.getItem(IMAGE_WIDGET_STORAGE_KEY)) || 'null');
     if (saved?.size?.width && saved?.size?.height && saved?.pos) return saved;
   } catch { /* ignore malformed persisted geometry */ }
   return {
@@ -109,7 +109,7 @@ const ImageWidget = ({ onClose, isVisible = true, aiCommand = null, onCommandRes
   const handledCommandIdsRef = useRef(new Set());
 
   useEffect(() => {
-    try { window.localStorage.setItem(IMAGE_WIDGET_STORAGE_KEY, JSON.stringify(geometry)); } catch { /* storage may be unavailable */ }
+    try { window.sessionStorage.setItem(IMAGE_WIDGET_STORAGE_KEY, JSON.stringify(geometry)); } catch { /* storage may be unavailable */ }
   }, [geometry]);
 
   // Keep the AI's context synchronized with the actual image workspace.  The

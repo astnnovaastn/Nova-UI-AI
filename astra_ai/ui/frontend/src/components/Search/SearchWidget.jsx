@@ -27,7 +27,7 @@ const clampWindow = (candidate) => {
 
 const initialWindow = () => {
   try {
-    return clampWindow({ ...DEFAULT_WINDOW, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') });
+    return clampWindow({ ...DEFAULT_WINDOW, ...JSON.parse((sessionStorage.getItem(STORAGE_KEY) || localStorage.getItem(STORAGE_KEY)) || '{}') });
   } catch {
     return clampWindow(DEFAULT_WINDOW);
   }
@@ -151,7 +151,7 @@ const SearchWidget = ({ onClose, isVisible = true, aiConnected = false, aiComman
   }, [activeTab, answer, error, history.length, inputValue, loading, query, results.length, searchType, stateSnapshot?.request_id]);
 
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(windowState)); } catch { /* storage is optional */ }
+    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(windowState)); } catch { /* storage is optional */ }
   }, [windowState]);
 
   useEffect(() => {

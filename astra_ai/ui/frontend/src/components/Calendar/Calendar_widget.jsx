@@ -224,7 +224,7 @@ function Settings({ calendars, preferences, syncStatus, onClose, onCreate, onUpd
 }
 
 export default function CalendarWidget({ onClose, onMinimize, command, onCommandResult }) {
-  const initial = JSON.parse(localStorage.getItem('astra-calendar-state') || '{}');
+  const initial = JSON.parse((sessionStorage.getItem('astra-calendar-state') || localStorage.getItem('astra-calendar-state')) || '{}');
   const [view, setView] = useState(VIEWS.includes(initial.view) ? initial.view : 'month');
   const [focus, setFocus] = useState(initial.focus ? new Date(initial.focus) : new Date());
   const [selected, setSelected] = useState(new Date());
@@ -364,7 +364,7 @@ export default function CalendarWidget({ onClose, onMinimize, command, onCommand
       }, updated_at: new Date().toISOString(),
     }}));
   }, [view, focus, selected, editor, quickReview, settingsOpen, filterOpen, query, activeSmartFilter, visibleCalendars.join('|'), bulkMode, selectedIds.join('|'), status, syncStatus, selectedEvents, filteredEvents, preferences.week_starts_on, agendaDays]);
-  useEffect(() => { localStorage.setItem('astra-calendar-state', JSON.stringify({ geometry_version: CALENDAR_GEOMETRY_VERSION, view, focus: focus.toISOString(), inspectorHeight, windowOffset, windowSize })); }, [view, focus, inspectorHeight, windowOffset, windowSize]);
+  useEffect(() => { sessionStorage.setItem('astra-calendar-state', JSON.stringify({ geometry_version: CALENDAR_GEOMETRY_VERSION, view, focus: focus.toISOString(), inspectorHeight, windowOffset, windowSize })); }, [view, focus, inspectorHeight, windowOffset, windowSize]);
   useEffect(() => {
     const online = async () => { setStatus('ready'); const result = await calendarApi.flushOfflineOutbox(); setSyncStatus((current) => ({ ...current, queued: result.queued })); await load(); };
     const offline = () => setStatus('offline');

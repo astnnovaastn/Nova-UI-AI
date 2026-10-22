@@ -26,11 +26,14 @@
   },
   "dependencies": {
     "@tiptap/core": "^3.32.0",
+    "@tiptap/extension-collaboration": "3.32.0",
+    "@tiptap/extension-collaboration-caret": "3.32.0",
     "@tiptap/extension-image": "^3.32.0",
     "@tiptap/extension-table": "^3.32.0",
     "@tiptap/pm": "^3.32.0",
     "@tiptap/react": "^3.32.0",
     "@tiptap/starter-kit": "^3.32.0",
+    "@tiptap/y-tiptap": "^3.0.10",
     "@types/three": "^0.183.1",
     "dompurify": "^3.4.17",
     "leaflet": "^1.9.4",
@@ -39,6 +42,10 @@
     "pdfjs-dist": "^6.4.299",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "three": "^0.183.2"
+    "three": "^0.183.2",
+    "y-indexeddb": "^9.0.12",
+    "y-protocols": "^1.0.7",
+    "y-websocket": "^3.1.0",
+    "yjs": "^13.6.33"
   }
 }

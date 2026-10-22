@@ -55,7 +55,8 @@ test('canonical research hydration deduplicates optimistic turn IDs without assi
  const h=harness();h.api.conversationMessage('user','Question','completed','turn','report');
  h.api.conversationResearch('report',[{id:'canonical-hash',turn_id:'turn',role:'user',content:'Question'}]);
  assert.equal(h.api.conversationResearch('report').length,1);
- h.api.conversationState({clientId:'new-owner'});assert.equal(h.api.conversationResearch('report').length,0);
+ h.api.conversationState({clientId:'reconnected-transport'});assert.equal(h.api.conversationResearch('report').length,1);
+ h.api.conversationState({guest:true});assert.equal(h.api.conversationResearch('report').length,0);
 });
 test('research pages share one conversation and late answers cannot enter a different session',()=>{
  const h=harness();

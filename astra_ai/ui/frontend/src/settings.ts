@@ -1,3 +1,4 @@
+import {mountConnectedWindows} from './workspaceSettings';
 import { mountSoundSettings, showNotificationHistory } from "./notifications";
 import {initVoiceEnrollment} from './voiceEnrollment';
 import {conversationSnapshot} from './conversation';
@@ -206,6 +207,7 @@ function buildPanelHTML(): string {
           </div>
         </section>
 
+        <section class="settings-section"><h3>Connected windows and devices</h3><div id="workspace-connections"></div></section>
         <!-- User Preferences -->
         <section class="settings-section" id="section-preferences">
           <h3>User Preferences</h3>
@@ -694,6 +696,7 @@ export async function openSettings() {
   }
 
   initVoiceEnrollment();
+  mountConnectedWindows();
   panelEl.style.display = "block";
 
   // Trigger animation
@@ -749,3 +752,5 @@ export async function checkFirstTimeSetup(): Promise<boolean> {
   }
   return false;
 }
+
+window.addEventListener('nova-preferences-changed',()=>{if(isOpen&&!document.querySelector('#section-preferences input:focus'))void loadPreferences();});

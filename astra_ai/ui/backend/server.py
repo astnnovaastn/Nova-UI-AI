@@ -3313,6 +3313,9 @@ class WebSocketManager:
     def disconnect(self, websocket: WebSocket):
         """Remove WebSocket connection"""
         client_id = self.client_ids.pop(websocket, None)
+        service=globals().get('workspace_service')
+        if client_id and service and service.hub:
+            service.hub.remove(client_id);service.end_audio_lock(client_id)
         self.send_locks.pop(websocket, None)
         if client_id:
             getattr(self,'globe_revisions',{}).pop(client_id,None)
@@ -3360,7 +3363,11 @@ class WebSocketManager:
         try:
             lock = self.send_locks.setdefault(websocket, asyncio.Lock())
             async with lock:
+                service=globals().get('workspace_service')
+                if service:message=service.cards(self.client_id(websocket),message)
                 await websocket.send_json(message)
+            service=globals().get('workspace_service')
+            if service:await service.mirror(self.client_id(websocket),message)
         except Exception as e:
             logger.error(f"Failed to send message to client: {e}")
 
@@ -3368,6 +3375,11 @@ class WebSocketManager:
         """Send one binary audio frame without interleaving JSON frames."""
         if websocket not in self.connections:
             return
+        service=globals().get('workspace_service')
+        if service:
+            live=state.live_sessions.get(websocket);generation=getattr(live,'_voice_lease_generation',None)
+            if not service.store().owns_voice(self.client_id(websocket),generation) or generation is None:return
+            payload=b'NVA1'+int(generation).to_bytes(4,'little')+payload
         try:
             lock = self.send_locks.setdefault(websocket, asyncio.Lock())
             async with lock:
@@ -5350,7 +5362,10 @@ async def lifespan(app: FastAPI):
     logger.info("[TASK] Server ready to accept connections")
     logger.info("="*70)
     
+    await workspace_service.start()
     yield
+    await collaboration_service.stop()
+    await workspace_service.stop()
     
     # Shutdown
     await asyncio.to_thread(state.live_memory.clock().observe,'runtime_stop')
@@ -5418,6 +5433,10 @@ app.include_router(task_router)
 app.include_router(task_webhook_router)
 
 theme_store = ThemeStore(Path(__file__).resolve().parent / "theme_widget_data")
+from astra_ai.ui.backend.workspace_api import WorkspaceService
+workspace_service=WorkspaceService(app,ws_manager,state,UI_CONTEXTS,CHAT_SESSIONS,get_research_services,lambda request:_learning_context(request),theme_store)
+from astra_ai.ui.backend.collaboration import CollaborationService
+collaboration_service=CollaborationService(app,workspace_service)
 
 
 def theme_response(data: Any = None, error: Optional[str] = None) -> Dict[str, Any]:
@@ -5687,6 +5706,9 @@ async def _confirm_destructive(name,arguments,context):
 
 async def _dispatch_aegis_tool(name,arguments,context,operation_id):
     from astra_ai.core.aegis_ai import CURRENT_OPERATION
+    window=workspace_service.store().windows.get(context.get('client_id',''),{})
+    if window.get('device_id','local')!='local' and name not in {'search_web','research_artifact_action','research_action','recall_memory','recall_conversations','save_memory','save_memory_event','memory_action','time_action','transcript_action'}:
+        return {'status':'rejected','reason':'host_only_operation'}
     token=CURRENT_OPERATION.set({**context,'operation_id':operation_id})
     try:return await _dispatch_scoped_aegis_tool(name,arguments,context,operation_id)
     finally:CURRENT_OPERATION.reset(token)
@@ -6166,6 +6188,9 @@ async def websocket_endpoint(websocket: WebSocket):
     - Audio queuing system handles multiple segments seamlessly
     - Frequency data drives the visual Orb animation in orb.ts
     """
+    origin=websocket.headers.get('origin')
+    if origin and origin not in _allowed_origins:
+        await websocket.close(code=1008);return
     await ws_manager.connect(websocket)
     
     try:
@@ -6175,6 +6200,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 break
             binary = frame.get("bytes")
             if binary is not None:
+                if len(binary)<8 or binary[:4]!=b'NVA1' or not workspace_service.store().owns_voice(ws_manager.client_id(websocket),int.from_bytes(binary[4:8],'little')):continue
+                binary=binary[8:]
                 session = state.live_sessions.get(websocket)
                 if state.live_providers.get(websocket) == "gemini_live" and session:
                     # Raw PCM remains the only active Live media input. Vision
@@ -6197,6 +6224,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 msg_type = message.get("type", "unknown")
                 
                 logger.debug(f"📨 WebSocket message: {msg_type}")
+                client=ws_manager.client_id(websocket)
+                device=websocket.headers.get('x-nova-paired-device','local')
+                if await workspace_service.handle(client,message,device):continue
                 
                 # Route message based on type
                 if msg_type == "conversation_attach":
@@ -6215,15 +6245,21 @@ async def websocket_endpoint(websocket: WebSocket):
                         if state.live_sessions.get(websocket):await _start_gemini_voice(websocket,guest=speaker_recognition.status()["enabled"])
                     await ws_manager.send_to_client(websocket,{"type":"conversation_switched",**result})
                 elif msg_type == "live_speech_start":
+                    if not workspace_service.store().owns_voice(ws_manager.client_id(websocket)):continue
                     if speaker_recognition.status()["enabled"]:speaker_buffers[websocket]=bytearray()
                     else:
                         live=state.live_sessions.get(websocket)
-                        if live:await live.begin_audio(str(message.get('generation') or '')[:80],message.get('has_checkpoint') is True)
+                        if live and await workspace_service.begin_audio(ws_manager.client_id(websocket),live):
+                            live._voice_lease_generation=workspace_service.store().voice['generation']
+                            await live.begin_audio(str(message.get('generation') or '')[:80],message.get('has_checkpoint') is True)
+                            workspace_service.audio_locks[ws_manager.client_id(websocket)]['turn']=live._turn_id
                 elif msg_type == "live_speech_end":
+                    if not workspace_service.store().owns_voice(ws_manager.client_id(websocket)):continue
                     if websocket in speaker_buffers:await _finish_speaker_audio(websocket)
                     live=state.live_sessions.get(websocket)
                     if live:await live.end_audio(message.get('speech_ms'))
                 elif msg_type == "live_text_suspend":
+                    workspace_service.cancel_turns(ws_manager.client_id(websocket))
                     live=state.live_sessions.get(websocket)
                     if live:
                         live._cancel_recovery(clear=True)
@@ -6241,6 +6277,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             await live._session.send_client_content(turns=live_types.Content(role="user",parts=[live_types.Part(text="Updated applicable standing rules and memory for subsequent turns, not a new request:\n"+live._memory_profile)]),turn_complete=False)
                 elif msg_type == "ui_context":
                     changed=set_ui(ws_manager.client_id(websocket),message.get("snapshot",{}))
+                    workspace_service.store().touch(ws_manager.client_id(websocket),UI_CONTEXTS.get(ws_manager.client_id(websocket),{}))
                     live=state.live_sessions.get(websocket)
                     if not live or not live.guest:
                         snapshot=ui_context(ws_manager.client_id(websocket)).get('snapshot',{})
@@ -6250,16 +6287,23 @@ async def websocket_endpoint(websocket: WebSocket):
                     if changed and live and not live.guest and not live._audio_started and not live._input_parts:
                         if not live.guest:await live.refresh_ui(ui_context(ws_manager.client_id(websocket)))
                 elif msg_type == "live_start":
+                    if not message.get('muted',False) and not workspace_service.store().owns_voice(client):
+                        await ws_manager.send_to_client(websocket,{'type':'workspace_voice_result','granted':False,'owner':workspace_service.store().voice});continue
                     mic_states[ws_manager.client_id(websocket)]=bool(message.get("muted",False))
                     sid=str(message.get("session_id") or "")
                     if re.fullmatch(r"[a-zA-Z0-9_-]{1,128}",sid): CHAT_SESSIONS[ws_manager.client_id(websocket)]=sid
                     await _start_gemini_voice(websocket,guest=speaker_recognition.status()["enabled"])
                 elif msg_type == "mic_state":
                     client=ws_manager.client_id(websocket);mic_states[client]=bool(message.get('muted',True))
+                    if not mic_states[client] and not workspace_service.store().owns_voice(client):
+                        mic_states[client]=True
+                        await ws_manager.send_to_client(websocket,{'type':'workspace_voice_result','granted':False,'owner':workspace_service.store().voice})
+                    if mic_states[client]:workspace_service.store().release_voice(client)
                     live=state.live_sessions.get(websocket)
                     if live:
                         live.working.muted=mic_states[client]
-                        if mic_states[client]:await live.end_audio()
+                        if mic_states[client]:
+                            live._voice_lease_generation=None;workspace_service.end_audio_lock(client);await live.end_audio()
                 elif msg_type == "presence_frame":
                     asyncio.create_task(handle_presence_frame(websocket,message))
                 elif msg_type == "presence_status":
@@ -6273,6 +6317,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         await asyncio.to_thread(notice_store.acknowledge,str(message.get('notice_id','')),c)
                         await release_presence(client,websocket)
                 elif msg_type == "live_stop":
+                    workspace_service.store().release_voice(ws_manager.client_id(websocket));workspace_service.end_audio_lock(ws_manager.client_id(websocket))
                     await state.close_live_session(websocket)
                     await ws_manager.send_to_client(websocket, {
                         "type": "live_status", "provider": "none", "state": "idle"
@@ -6299,7 +6344,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         if str(message.get('research_id') or '') != current_id or ('selection_revision' in message and message['selection_revision']!=snapshot.get('selection_revision',0)):
                             await ws_manager.send_to_client(websocket,{'type':'live_error','message':'Research focus changed. Your message was not submitted; select the report and retry.'})
                             continue
-                        accepted=await session.send_text(text,request_id=rid)
+                        client=ws_manager.client_id(websocket)
+                        focus=await _live_research_focus(session,client,snapshot)
+                        workspace_service.submit(client,session,text,rid,focus)
+                        accepted={'status':'accepted'}
                         if source=='search_widget':await ws_manager.send_to_client(websocket,{'type':'typed_transcript_status','request_id':rid,'source':source,'status':'accepted' if accepted.get('status') in {'accepted','duplicate'} else 'failed'})
                 elif msg_type == "transcript":
                     await handle_transcript_message(websocket, message)
@@ -6812,6 +6860,8 @@ async def memory_graph_proposals(profile_id:str="",project_id:str=""):
 def globe_connection(request):
     client_id=request.headers.get("X-Nova-Client", "")
     socket=ws_manager.websocket_for(client_id)
+    paired=request.headers.get('x-nova-paired-device')
+    if paired and workspace_service.store().windows.get(client_id,{}).get('device_id')!=paired:raise HTTPException(403,'Connection belongs to another device')
     if socket is None:raise HTTPException(403,"A connected local user session is required")
     if "profile_id" in request.query_params or "project_id" in request.query_params:raise HTTPException(403,"Memory scope is resolved by the server")
     live=state.live_sessions.get(socket)
@@ -7679,7 +7729,11 @@ async def save_user_preferences(payload:Dict[str,Any]):
             if current["honorific"] not in {"sir","ma'am","none"}: raise ValueError("Invalid honorific")
             _atomic_json(_preferences_path,current)
             return {"status":"saved",**current}
-    try:return await asyncio.to_thread(save)
+    try:
+        result=await asyncio.to_thread(save)
+        scopes={row['scope']:workspace_service.context(client) for client,row in workspace_service.store().windows.items()}
+        for context in scopes.values():await workspace_service.emit(context,'preferences')
+        return result
     except ValueError as exc:raise HTTPException(400,str(exc))
     except Exception:raise HTTPException(503,"Preferences could not be saved. Your draft was preserved.")
 
@@ -8701,7 +8755,7 @@ async def _research_thread(identifier,context):
     followup_evidence=await asyncio.to_thread(artifacts.followup_evidence,identifier,context,activity.get('operation_id',''))
     progress={'completeness':item.get('completeness'),'phase':metadata.get('phase'),'waiting_reason':metadata.get('waiting_reason'),'next_attempt':metadata.get('next_attempt'),
               'followup':{key:activity.get(key) for key in ('phase','reason','job_id','collected_sources')}}
-    return {'status':'ok','progress':progress,'research_session_id':root,'research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'kind':item.get('kind','research'),'display_title':metadata.get('display_title') or item['query'][:90],'messages':rows,'draft_revision':draft.get('revision',''),'draft_excerpt':re.sub('<[^>]+>',' ',draft.get('html',''))[:5000],'research_cards':metadata.get('research_cards',[]),'attachments':[{k:f.get(k) for k in ('id','name','mime','page_count','status','revision','pdf_revision','needs_ocr')} for f in files],'summary':document.get('report','')[:4000] or item['summary'][:1600],'followup_question':followup.get('query',''),'followup_evidence':followup_evidence,'evidence':[{'id':'S'+str(i+1),'title':r['title'][:180],'url':r['url'],'excerpt':evidence_excerpt(r,400),'attachment_id':r.get('attachment_id'),'page':r.get('page')} for i,r in enumerate(sources[:6])]}
+    return {'status':'ok','progress':progress,'research_session_id':root,'research_id':identifier,'research_revision':item['revision'],'thread_id':thread_id,'kind':item.get('kind','research'),'display_title':metadata.get('display_title') or item['query'][:90],'messages':[dict(r,context_cards=(globals()['workspace_service'].store().turn(str(r.get('turn_id') or ''),context) or {}).get('cards',[]) if r.get('role')=='user' and globals().get('workspace_service') else []) for r in rows],'draft_revision':draft.get('revision',''),'draft_excerpt':re.sub('<[^>]+>',' ',draft.get('html',''))[:5000],'research_cards':metadata.get('research_cards',[]),'attachments':[{k:f.get(k) for k in ('id','name','mime','page_count','status','revision','pdf_revision','needs_ocr')} for f in files],'summary':document.get('report','')[:4000] or item['summary'][:1600],'followup_question':followup.get('query',''),'followup_evidence':followup_evidence,'evidence':[{'id':'S'+str(i+1),'title':r['title'][:180],'url':r['url'],'excerpt':evidence_excerpt(r,400),'attachment_id':r.get('attachment_id'),'page':r.get('page')} for i,r in enumerate(sources[:6])]}
 
 async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     snapshot=snapshot if snapshot is not None else ui_context(client_id).get('snapshot',{})
@@ -8718,11 +8772,17 @@ async def _live_research_focus(live,client_id,snapshot=None,hydrate=True):
     artifacts,_=get_research_services()
     found=await asyncio.to_thread(artifacts.get,identifier,context)
     if found.get('status')!='ok':return {}
-    item=found['artifact'];key=(identifier,item['revision'],artifacts._snapshot_key,context['profile_id'],context['project_id'],snapshot.get('selection_revision'),snapshot.get('reader_end'),snapshot.get('research_tab'),snapshot.get('attachment_id'),snapshot.get('attachment_page'),snapshot.get('attachment_revision'),snapshot.get('editor_selection'),snapshot.get('editor_draft_revision'))
+    item=found['artifact'];key=(identifier,item['revision'],artifacts._snapshot_key,context['profile_id'],context['project_id'],snapshot.get('selection_revision'),snapshot.get('reader_end'),snapshot.get('research_tab'),snapshot.get('attachment_id'),snapshot.get('attachment_page'),snapshot.get('attachment_revision'),snapshot.get('editor_selection'),snapshot.get('editor_draft_revision'),snapshot.get('active_selection_id'))
     cached=getattr(live,'_research_context_cache',None) if live else None
     if hydrate and cached and cached[0]==key and time.monotonic()-cached[1]<20:return cached[2]
     focus=await _research_thread(identifier,context) if hydrate else {'research_id':identifier,'research_revision':item['revision'],'thread_id':item.get('thread_id','research-'+identifier),'research_session_id':item.get('research_session_id',identifier)}
     if hydrate and focus.get('status')!='ok':return {}
+    if snapshot.get('active_selection_id'):
+        try:
+            card=workspace_service.store().selection(context,str(snapshot['active_selection_id']),identifier)
+            if card['revision']==item['revision']:
+                focus['selected_passage']=card;focus['context_cards']=[card]
+        except ValueError:pass
     focus.update({k:snapshot.get(k) for k in ('selection_revision','reader_cursor','reader_end','research_tab','source_visible_count','media_visible_count')})
     artifacts,_=get_research_services()
     if not hydrate:return focus
@@ -8778,12 +8838,16 @@ async def research_document(identifier:str,request:Request,revision:str=''):
 @app.put('/api/research/{identifier}/draft')
 async def research_draft(identifier:str,request:Request):
     context=_learning_context(request);body=await request.json();artifacts,_=get_research_services()
+    if collaboration_service.exists(identifier):raise HTTPException(409,'This document uses collaborative editing; reconnect the editor to save.')
     result=await asyncio.to_thread(artifacts.save_draft,identifier,context,str(body.get('source_revision','')),str(body.get('expected_revision','')),body.get('html',''))
     return JSONResponse(result,status_code=409 if result['status']=='conflict' else 400 if result['status']=='rejected' else 200)
 
 @app.get('/api/research/{identifier}/export')
-async def research_export(identifier:str,request:Request,revision:str,format:str='md',draft:bool=False):
+async def research_export(identifier:str,request:Request,revision:str,format:str='md',draft:bool=False,draft_revision:str=''):
     context=_learning_context(request);artifacts,_=get_research_services()
+    if draft and collaboration_service.exists(identifier):
+        current=artifacts.snapshot().get('drafts',{}).get(identifier,{})
+        if not draft_revision or current.get('revision')!=draft_revision:raise HTTPException(409,'The shared document changed. Save and preview the current version before exporting.')
     try:
         async with learning_service.cpu:body,mime=await asyncio.to_thread(artifacts.export,identifier,context,revision,format,draft)
     except ValueError as exc:raise HTTPException(400,str(exc))

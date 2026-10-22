@@ -5,6 +5,7 @@ export type ChatMessage = {
   text: string;
   status: string;
   research_id?: string;
+  context_cards?: any[];
 };
 const messages: ChatMessage[] = [];
 const researchMessages: Record<string, ChatMessage[]> = {};
@@ -30,6 +31,7 @@ export function conversationResearch(id: string, items?: any[], sessionId?: stri
       text: m.content || m.text,
       status: m.status || "completed",
       research_id: id,
+      context_cards: m.context_cards,
     }));
     const ids = new Set(loaded.map((m) => m.id));
     researchMessages[id] = [
@@ -91,8 +93,7 @@ function changed() {
 }
 export function conversationState(update: Partial<typeof connection>) {
   const scopeChanged =
-    (update.guest !== undefined && update.guest !== connection.guest) ||
-    (update.clientId !== undefined && update.clientId !== connection.clientId);
+    update.guest !== undefined && update.guest !== connection.guest;
   if (scopeChanged) {
     for (const key of Object.keys(researchMessages))
       delete researchMessages[key];
@@ -105,10 +106,11 @@ export function conversationState(update: Partial<typeof connection>) {
       recent_research_id: "",
     });
   }
+  const transportChanged=update.clientId!==undefined&&update.clientId!==connection.clientId;
   connection = {
     ...connection,
     ...update,
-    ...(scopeChanged ? { jobs: [], focusId: "", focusRevision: -1 } : {}),
+    ...(scopeChanged ? { jobs: [], focusId: "", focusRevision: -1 } : transportChanged ? {focusId:"",focusRevision:-1} : {}),
   };
   changed();
 }
@@ -118,6 +120,7 @@ export function conversationMessage(
   status = "completed",
   id: string = crypto.randomUUID(),
   researchId?: string,
+  contextCards?: any[],
 ) {
   const target =
     researchId === undefined
@@ -129,8 +132,8 @@ export function conversationMessage(
   const rows = thread ? (researchMessages[thread] ??= []) : messages;
   messageRevision++;
   const old = rows.find((m) => m.id === id);
-  if (old) Object.assign(old, { text, status });
-  else rows.push({ id, role, text, status, research_id: target });
+  if (old) Object.assign(old, { text, status, ...(contextCards ? {context_cards:contextCards} : {}) });
+  else rows.push({ id, role, text, status, research_id: target, context_cards:contextCards });
   if (rows.length > 200) rows.splice(0, rows.length - 200);
   changed();
   return id;
@@ -150,6 +153,7 @@ export function requestConversation(
         request_id: id,
         research_id,
         selection_revision: snapshot.selection_revision || 0,
+        active_selection_id: snapshot.active_selection_id || "",
       },
     }),
   );
@@ -175,6 +179,7 @@ export function updateUiContext(update: Record<string, unknown>) {
     update = {
       ...update,
       selection_revision: Number(snapshot.selection_revision || 0) + 1,
+      active_selection_id: "",
     };
   }
   if ((update.view ?? snapshot.view) === "research" && update.research_id)

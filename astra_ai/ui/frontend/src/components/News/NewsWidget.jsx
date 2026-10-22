@@ -15,7 +15,7 @@ const clampWindow = (value) => {
   const height = Math.min(Math.max(420, Number(value.height) || 560), Math.max(400, window.innerHeight - 20));
   return { width, height, x: Math.min(Math.max(MARGIN, Number(value.x) || 56), Math.max(MARGIN, window.innerWidth - width - MARGIN)), y: Math.min(Math.max(MARGIN, Number(value.y) || 76), Math.max(MARGIN, window.innerHeight - height - MARGIN)) };
 };
-const initialWindow = () => { try { return clampWindow({ ...DEFAULT_WINDOW, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') }); } catch { return clampWindow(DEFAULT_WINDOW); } };
+const initialWindow = () => { try { return clampWindow({ ...DEFAULT_WINDOW, ...JSON.parse((sessionStorage.getItem(STORAGE_KEY) || localStorage.getItem(STORAGE_KEY)) || '{}') }); } catch { return clampWindow(DEFAULT_WINDOW); } };
 const safeUrl = (value) => { try { const url = new URL(String(value || '')); return /^https?:$/.test(url.protocol) ? url.toString() : ''; } catch { return ''; } };
 const text = (...values) => String(values.find((value) => value !== undefined && value !== null && String(value).trim()) || '').trim();
 const formatDate = (value) => { if (!value) return ''; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date); };
@@ -95,7 +95,7 @@ export default function NewsWidget({ onClose, onMinimize, isVisible = true, aiCo
     }).catch(() => setFeedback('Using Default AEGIS layout'));
     return () => { cancelled = true; };
   }, []);
-  useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(windowState)); } catch {} }, [windowState]);
+  useEffect(() => { try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(windowState)); } catch {} }, [windowState]);
   useEffect(() => { const resize = () => setWindowState((value) => clampWindow(value)); window.addEventListener('resize', resize); return () => window.removeEventListener('resize', resize); }, []);
   useEffect(() => { const move = (event) => { const state = interactionRef.current; if (!state || event.pointerId !== state.pointerId) return; setWindowState((previous) => clampWindow(state.type === 'drag' ? { ...previous, x: event.clientX - state.offsetX, y: event.clientY - state.offsetY } : { ...previous, width: state.width + event.clientX - state.x, height: state.height + event.clientY - state.y })); }; const stop = () => { interactionRef.current = null; }; window.addEventListener('pointermove', move); window.addEventListener('pointerup', stop); window.addEventListener('pointercancel', stop); return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop); window.removeEventListener('pointercancel', stop); }; }, []);
   useEffect(() => { const listener = (event) => { const detail = event.detail || {}; if (detail.request_id !== activeRequestRef.current) return; if (detail.status === 'accepted') { setLoading(true); setError(''); } if (['busy', 'failed'].includes(detail.status)) { activeRequestRef.current = ''; setLoading(false); setResearchingMore(false); setError(text(detail.message, 'News request could not be started.')); } }; window.addEventListener('aegisTypedTranscriptStatus', listener); return () => window.removeEventListener('aegisTypedTranscriptStatus', listener); }, []);

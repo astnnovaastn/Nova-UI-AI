@@ -29,3 +29,8 @@
 .ai-composer-actions .research-new-menu>div{left:0;right:auto;bottom:42px;z-index:80;width:190px}
 .research-workspace .ai-composer-wrap .ai-composer-actions .research-new-menu>div>button{display:flex;height:auto;min-height:36px;width:100%;border-radius:8px;background:transparent;color:var(--r-fg);font-size:12px;white-space:nowrap;line-height:1.5}
 .research-workspace .ai-composer-wrap .ai-composer-actions .research-new-menu>div>button:hover{background:color-mix(in srgb,var(--r-fg) 8%,transparent)}
+.ai-composer-wrap{position:relative}
+.research-workspace .ai-composer-wrap form.ai-composer button:is(:hover,:active,:focus){transform:none}
+.ai-composer-wrap>.ai-composer-notice{position:absolute;bottom:calc(100% + 6px);left:10px;right:10px;margin:0;padding:5px 8px;border-radius:8px;background:var(--r-panel);z-index:2}
+.ai-composer-actions,.ai-composer-actions .research-new-menu,.ai-composer-actions .research-new-menu>summary{width:32px;min-width:32px;height:32px;box-sizing:border-box}
+.ai-composer-wave{height:var(--ai-editor-height,32px);display:flex;align-items:center}

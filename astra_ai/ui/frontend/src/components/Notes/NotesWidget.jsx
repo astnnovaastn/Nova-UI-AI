@@ -2,7 +2,7 @@ import {resolveSavedNote} from './resolveSavedNote.mjs';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './NotesWidget.css';
 
-const API_HOST = (import.meta.env.VITE_API_URL || 'http://localhost:8340').replace(/\/$/, '');
+const API_HOST = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 const Icon = ({ name, size = 16, strokeWidth = 1.8 }) => {
   const common = {
@@ -256,6 +256,12 @@ const NotesWidget = ({
     setDualPaneView(false);
     setSearchTerm('');
   };
+
+  useEffect(() => {
+    const sharedUpdate=async()=>{try{const payload=await apiJson('/api/notes/state');applyNotesPayload(payload,setNotes,setSummaries);}catch{/* Local draft stays available during a disconnection. */}};
+    window.addEventListener('nova-widget-data-changed',sharedUpdate);
+    return()=>window.removeEventListener('nova-widget-data-changed',sharedUpdate);
+  },[]);
 
   useEffect(() => {
     loadState();

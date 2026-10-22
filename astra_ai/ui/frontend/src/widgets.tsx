@@ -1075,7 +1075,9 @@ const WidgetContainer = () => {
       }
     };
     loadSearchState();
+    window.addEventListener('nova-widget-data-changed',loadSearchState);
     return () => {
+      window.removeEventListener('nova-widget-data-changed',loadSearchState);
       cancelled = true;
     };
   }, []);
@@ -1096,7 +1098,8 @@ const WidgetContainer = () => {
       }
     };
     loadNewsState();
-    return () => { cancelled = true; };
+    window.addEventListener('nova-widget-data-changed',loadNewsState);
+    return () => { cancelled = true;window.removeEventListener('nova-widget-data-changed',loadNewsState); };
   }, []);
 
   const toggleWidget = (widgetName: WidgetName) => {

@@ -47,3 +47,6 @@ beautifulsoup4==4.15.0
 markdown-it-py==4.2.0
 pypdfium2==5.14.0
 pypdf==6.21.1
+
+pycrdt-websocket==0.16.5
+pycrdt==0.14.10

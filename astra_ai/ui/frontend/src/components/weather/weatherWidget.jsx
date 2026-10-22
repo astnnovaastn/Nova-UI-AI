@@ -3,7 +3,7 @@ import { clampWeatherWindow, convertWeatherValue } from './weatherUtils';
 import './weatherWidget.css';
 const WeatherRadar = lazy(() => import('./WeatherRadar'));
 
-const API_HOST = (import.meta.env.VITE_API_URL || 'http://localhost:8340').replace(/\/$/, '');
+const API_HOST = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 const widgetSizes = ['small', 'normal', 'large', 'xlarge'];
 const DEFAULT_WIDGET_WIDTH = 640;
 const DEFAULT_WIDGET_HEIGHT = 500;
@@ -267,7 +267,7 @@ const getNextWidgetSize = (currentSize) => {
 
 function readWeatherWindow() {
   let saved = {};
-  try { saved = JSON.parse(localStorage.getItem('widget_weatherDisplay_position') || '{}'); } catch { /* Optional storage. */ }
+  try { saved = JSON.parse((sessionStorage.getItem('widget_weatherDisplay_position') || localStorage.getItem('widget_weatherDisplay_position')) || '{}'); } catch { /* Optional storage. */ }
   const size = widgetSizes.includes(saved.size) ? saved.size : 'normal';
   const defaults = getSizeDimensions(size);
   return { ...clampWeatherWindow({ x: parseInt(saved.left, 10), y: parseInt(saved.top, 10), width: parseInt(saved.width, 10) || defaults.width, height: parseInt(saved.height, 10) || defaults.height }, window.innerWidth, window.innerHeight), size };
@@ -654,7 +654,7 @@ const WeatherWidget = ({
   }, [onCommandResult]);
 
   const persistWidgetState = useCallback((nextPosition = position, nextDimensions = dimensions, nextSize = size, nextShrinkLevel = shrinkLevel) => {
-    try { localStorage.setItem('widget_weatherDisplay_position', JSON.stringify({
+    try { sessionStorage.setItem('widget_weatherDisplay_position', JSON.stringify({
       left: `${nextPosition.x}px`,
       top: `${nextPosition.y}px`,
       width: nextDimensions.width ? `${nextDimensions.width}px` : '',

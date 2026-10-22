@@ -80,10 +80,16 @@ const pref = (name: string, fallback: number) => {
     return fallback;
   }
 };
+let soundArbiter:(key:string)=>Promise<boolean>=async()=>true;
+export function setSoundArbiter(value:(key:string)=>Promise<boolean>){soundArbiter=value;}
 export function cue(kind: "notification" | "voice", key: string) {
   if (cued.has(key) || !pref(kind, 1) || !audio || audio.state !== "running")
     return;
   cued.add(key);
+  void soundArbiter(key).then(allowed=>{if(allowed)playCue(kind,key);});
+}
+function playCue(kind:'notification'|'voice',key:string){
+  if(!audio||audio.state!=='running')return;
   if (cued.size > 500) cued.delete(cued.values().next().value!);
   const t = audio.currentTime,
     volume = Math.max(0, Math.min(1, pref(kind + "-volume", 0.35)));
