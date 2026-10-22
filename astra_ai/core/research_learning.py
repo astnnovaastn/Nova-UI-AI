@@ -5,7 +5,7 @@ from datetime import datetime,timedelta,timezone
 from urllib.parse import urlsplit
 from astra_ai.memory.shared_memory import read,atomic,StorageLock,stable,normal,safe,now,SENSITIVE
 from astra_ai.memory.category_policy import matches_scope,lifecycle
-from .background_budget import BudgetPaused
+from .background_budget import BudgetPaused, WRITER_PACING_REASONS
 
 class ResearchLearning:
     def __init__(self,root,memory,jobs,search,summarize=None):
@@ -1133,7 +1133,7 @@ class ResearchSearch:
         by_url={row['url']:row for row in enriched}
         return [by_url.get(row['url'],row) for row in sources]
 
-    def _request(self, query, mode, count):
+    def _request(self, query, mode, count, retrieval_depth='advanced'):
         from .research_topics import search_key
         provider='tavily' if mode=='detailed' else 'serpapi'
         key=search_key(self.key_provider,mode)
@@ -1144,7 +1144,7 @@ class ResearchSearch:
             return [], {k:v for k,v in previous.items() if k not in {'key_hash','until'}}
         try:
             if mode=='detailed':
-                response=self.transport.post('https://api.tavily.com/search',headers={'Authorization':'Bearer '+key},json={'query':query,'search_depth':'advanced','max_results':count,'include_raw_content':'markdown','include_answer':True,'include_favicon':True,'include_images':True,'include_image_descriptions':True},timeout=30)
+                response=self.transport.post('https://api.tavily.com/search',headers={'Authorization':'Bearer '+key},json={'query':query,'search_depth':'basic' if retrieval_depth=='basic' else 'advanced','max_results':count,'chunks_per_source':3,'auto_parameters':False,'include_raw_content':'markdown','include_answer':False,'include_favicon':True,'include_images':True,'include_image_descriptions':True},timeout=30)
             else:
                 response=self.transport.get('https://serpapi.com/search.json',params={'api_key':key,'engine':'google','q':query,'num':count},timeout=20)
             if response.status_code!=200:
@@ -1253,17 +1253,20 @@ class ResearchSearch:
             sources=await asyncio.to_thread(self.artifacts.source_catalog,item);additional=[]
             # Only an explicit need for fresher or absent evidence spends another retrieval request.
             fresh=bool(re.search(r'\b(latest|today|current|recent|updated|new sources|fresh)\b',detail,re.I))
-            terms=set(re.findall(r'[a-z]{4,}',detail.casefold()))-{'more','details','information','please','about','sources','report','research','continue','expand','additional','give','provide','want','would','could'}
-            evidence=' '.join([item['query'],*[r.get('content','')[:4000] for r in sources]]).casefold()
+            terms=set(re.findall(r'[a-z]{4,}',detail.casefold()))-{'more','details','information','please','about','sources','report','research','continue','expand','additional','give','provide','want','would','could','explain','append','substantial','connected','explanation','citations','evidence','already','saved','same','page','first','search','only','important','detail','missing','using','with','this','that','what','have','them','their','these','those'}
+            # The reader and later source passages may already cover the question.
+            # Presentation instructions must not count as missing factual evidence.
+            evidence=' '.join([item['query'],item.get('report',''),*[e.get('report','') for e in entries],*[r.get('content','')[:12000] for r in sources]]).casefold()
             missing=len(terms)>=3 and sum(t not in evidence for t in terms)>len(terms)*.65
             checkpoint=activity.get('search_checkpoint') if activity.get('operation_id')==operation_id else None
             if checkpoint is not None:additional=checkpoint
             elif fresh or missing or view=='sources':
                 if activity.get('operation_id')==operation_id and activity.get('outbound_started'):return {'status':'unconfirmed','reason':'reconcile_extension_search_before_retry','research_id':identifier}
-                await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='collecting_sources',view=view,operation_id=operation_id,outbound_started=True,search_checkpoint=None)
+                depth='advanced' if view=='sources' or re.search(r'\b(comprehensive|extensive|in.depth|full report|exhaustive)\b',detail,re.I) else 'basic'
+                await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='collecting_sources',view=view,operation_id=operation_id,outbound_started=True,search_checkpoint=None,retrieval_depth=depth)
                 query=(display_title(item['query'])+' '+detail)[:600]
                 search_mode=arguments.get('mode') if arguments.get('mode') in {'quick','detailed'} else item.get('mode','detailed')
-                async with self.network:rows,error=await asyncio.to_thread(self._request,query,search_mode,8)
+                async with self.network:rows,error=await asyncio.to_thread(self._request,query,search_mode,8,depth)
                 if error:
                     retry=bool(error.get('retryable'));until=time.time()+error.get('retry_after_seconds',65)
                     await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='waiting_for_quota' if retry else 'failed',operation_id=operation_id,view=view,reason='search_'+error['reason'],outbound_started=False,next_attempt=until if retry else None)
@@ -1279,9 +1282,10 @@ class ResearchSearch:
             await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='preparing_report',view=view,operation_id=operation_id)
             try:report=await self.synthesize(('[DOCUMENTARY]\n' if item.get('kind')=='documentary' else '')+'Continue this same research with additional supported detail. Do not repeat the existing overview or already composed findings. Original subject: '+item['query']+'\nRequested detail: '+detail+'\nAlready composed: '+item['report'][:4000]+'\nPrior extensions: '+' '.join(e['report'][:1000] for e in entries[-3:]),sources)
             except BudgetPaused as exc:
-                checkpointed=exc.reason=='research_section_saved'
-                await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='preparing_report' if checkpointed else 'waiting_for_quota',view=view,operation_id=operation_id,reason='' if checkpointed else exc.reason,next_attempt=exc.until)
-                return {'status':'waiting_for_retry' if checkpointed else 'waiting_for_quota','next_attempt':max(time.time()+1,exc.until),'reason':exc.reason,'research_id':identifier}
+                checkpointed=exc.reason=='research_section_saved';pacing=exc.reason in WRITER_PACING_REASONS
+                await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='preparing_report' if checkpointed or pacing else 'waiting_for_quota',view=view,operation_id=operation_id,reason='' if checkpointed else exc.reason,next_attempt=exc.until)
+                return {'status':'waiting_for_retry' if checkpointed or pacing else 'waiting_for_quota','next_attempt':max(time.time()+1,exc.until),'reason':exc.reason,'research_id':identifier,
+                        **({'summary':'The saved addition is waiting briefly for the writing slot or pacing interval, not a daily allowance. It will resume automatically; do not claim a provider quota was reached.'} if pacing else {})}
             except Exception:
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed',reason='extension_unavailable')
                 return {'status':'failed','reason':'extension_unavailable','research_id':identifier}
@@ -1366,9 +1370,10 @@ class ResearchSearch:
             composition_mode=arguments.get('report_mode') or item.get('mode','quick')
             try:report=await self.synthesize(('[QUICK]\n' if composition_mode=='quick' else '')+'Original report subject: '+item['query']+'\nFollow-up question: '+query,catalog)
             except BudgetPaused as exc:
-                await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='waiting_for_quota',view='reader',reason=exc.reason,next_attempt=exc.until)
-                return {'status':'waiting_for_quota','reason':exc.reason,'next_attempt':exc.until,'research_id':identifier,'results':await asyncio.to_thread(self.artifacts.followup_evidence,identifier,context,operation_id),
-                        'summary':'Follow-up evidence is saved. Answer the question conversationally from the supplied excerpts and cite them. Report writing is paused for quota, not active research.'}
+                pacing=exc.reason in WRITER_PACING_REASONS or exc.reason=='research_section_saved'
+                await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='preparing_report' if pacing else 'waiting_for_quota',view='reader',reason=exc.reason,next_attempt=exc.until)
+                return {'status':'waiting_for_retry' if pacing else 'waiting_for_quota','reason':exc.reason,'next_attempt':exc.until,'research_id':identifier,'results':await asyncio.to_thread(self.artifacts.followup_evidence,identifier,context,operation_id),
+                        'summary':'Follow-up evidence is saved. Answer from the supplied evidence and cite it. Report writing will resume from its checkpoint after a short writing-slot or pacing wait; no daily quota was reached.' if pacing else 'Follow-up evidence is saved. Answer the question conversationally from the supplied excerpts and cite them. Report writing is paused for the reported allowance or provider limit; do not claim active research.'}
             except asyncio.CancelledError:raise
             except Exception:
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='failed',view='reader',reason='synthesis_unavailable')
@@ -1415,7 +1420,7 @@ class ResearchSearch:
                 if len(composition.get('parts',[]))==3 and not composition.get('coverage_checked'):
                     report=await self.synthesize(item['query'],item['sources'])
                 else:report=await self.complete(checkpoint.get('report') or item['report'],item['query'],sources) if self.complete else await self.synthesize(item['query']+'\nFinish every requested topic, including recommendations and limitations, within a concise complete report. End with a complete conclusion; do not leave any section or sentence unfinished.',sources)
-            except BudgetPaused as exc:return {'status':'waiting_for_retry' if exc.reason=='research_section_saved' else 'waiting_for_quota','next_attempt':max(time.time()+1,exc.until),'reason':exc.reason,'research_id':identifier}
+            except BudgetPaused as exc:return {'status':'waiting_for_retry' if exc.reason=='research_section_saved' or exc.reason in WRITER_PACING_REASONS else 'waiting_for_quota','next_attempt':max(time.time()+1,exc.until),'reason':exc.reason,'research_id':identifier}
             except Exception as exc:
                 from .research_model import IncompleteResearchAnswer
                 if not isinstance(exc,IncompleteResearchAnswer):raise
@@ -1470,7 +1475,7 @@ class ResearchSearch:
             sources=pending.get('sources',[]);failures=pending.get('failures',[])
             if not sources:
                 await asyncio.to_thread(checkpoint,phase='collecting_sources')
-                count=max(1,min(10,int(arguments.get('max_results') or (8 if mode=='detailed' else 5))))
+                count=max(1,min(20 if mode=='detailed' else 10,int(arguments.get('max_results') or (12 if mode=='detailed' else 5))))
                 # Long instructions remain in the brief. Provider queries are bounded subjects.
                 base=query if len(query)<=600 else display_title(query)
                 searches=list(dict.fromkeys([base,*questions]))
@@ -1503,9 +1508,9 @@ class ResearchSearch:
                 await asyncio.to_thread(checkpoint,phase='preparing_report')
                 try:report=await self.synthesize(('[QUICK]\n' if mode=='quick' else '')+query,sources)
                 except BudgetPaused as exc:
-                    ready=exc.reason=='research_section_saved';until=max(time.time()+(1 if ready else 5),exc.until)
-                    await asyncio.to_thread(checkpoint,phase='preparing_report' if ready else 'waiting_for_quota',next_attempt=until,waiting_reason='' if ready else exc.reason)
-                    return {'status':'waiting_for_retry' if ready else 'waiting_for_quota','reason':exc.reason,'next_attempt':until,'research_id':identifier,'research_revision':stable(identifier,'pending'),'query':query,'results':[]}
+                    ready=exc.reason=='research_section_saved';pacing=exc.reason in WRITER_PACING_REASONS;until=max(time.time()+(1 if ready else 5),exc.until)
+                    await asyncio.to_thread(checkpoint,phase='preparing_report' if ready or pacing else 'waiting_for_quota',next_attempt=until,waiting_reason='' if ready else exc.reason)
+                    return {'status':'waiting_for_retry' if ready or pacing else 'waiting_for_quota','reason':exc.reason,'next_attempt':until,'research_id':identifier,'research_revision':stable(identifier,'pending'),'query':query,'results':[]}
                 except asyncio.CancelledError:raise
                 except Exception as exc:
                     from .research_model import ResearchModelUnavailable

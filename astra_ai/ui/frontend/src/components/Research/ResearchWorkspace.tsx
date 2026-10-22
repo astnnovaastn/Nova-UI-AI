@@ -1252,7 +1252,7 @@ function researchProgress(
 }
 function researchWaitMessage(reason: string, provider?: string) {
   if (reason === "background_model_busy") return "Another writing request is finishing. This saved request will resume automatically.";
-  if (reason === "background_quota_paused") return "Waiting briefly between writing requests. Your saved work will resume automatically.";
+  if (["background_quota_paused", "background_request_interval"].includes(reason)) return "Waiting briefly between writing requests. Your saved work will resume automatically.";
   if (reason === "search_provider_quota") return "The search provider has reached its allowance. Your saved work is preserved.";
   if (reason === "search_provider_not_configured") return "A search API key is missing. Configure the key for this research depth in Settings.";
   if (reason === "search_provider_authentication_required") return "The search provider rejected its API key. Update that search key in Settings to continue.";
@@ -1305,7 +1305,7 @@ export function PendingResearch({
           }
           aria-hidden="true"
         />
-        <span role="status">{report.legacy_evidence || report.evidence_collection ? "Evidence collected" : status.label}</span>
+        <span role="status">{report.legacy_evidence || report.evidence_collection ? "Evidence collected" : report.waiting_reason === "background_model_busy" ? "Waiting for the writing slot" : ["background_request_interval", "background_quota_paused"].includes(report.waiting_reason || "") ? "Waiting between writing requests" : status.label}</span>
         {(status.active || typeof report.processing_seconds === "number") && (
           <span
             className="research-working-time"
@@ -2510,7 +2510,7 @@ function ContinuationStatus({
       aria-label="Research continuation"
     >
       <p role="status">
-        {active
+        {active && ["background_request_interval", "background_quota_paused", "background_model_busy"].includes(activity.reason || "") ? researchWaitMessage(activity.reason || "") : active
           ? ({queued:"Queued",collecting_sources:"Collecting supporting evidence…",preparing_report:"Composing additional findings…",preparing_images:"Preparing illustrations…",preparing_layout:"Arranging additional findings…"}[activity.phase || ""] || "Preparing additional findings…")
           : activity.phase === "waiting_for_report"
             ? activity.collected_sources

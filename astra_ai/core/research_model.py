@@ -296,7 +296,7 @@ class ComposedResearchModel(BackgroundModel):
         except BudgetPaused as exc:
             import time
             delay=exc.until-time.time()
-            if exc.reason!='background_quota_paused' or not 0<delay<=30:raise
+            if exc.reason not in {'background_quota_paused','background_request_interval'} or not 0<delay<=30:raise
             await asyncio.sleep(delay+.05)
             result=await asyncio.to_thread(self.structured,instruction,payload,schema,8000)
         continuation=str(result.get('report','')).strip()
@@ -319,7 +319,7 @@ class GeminiResearchModel(ComposedResearchModel):
             try:return self._structured_once(instruction,payload,schema,max_tokens,key,'gemini-flash-latest')
             except BudgetPaused as exc:
                 delay=exc.until-time.time()
-                if exc.reason!='background_quota_paused' or not 0<delay<=30:raise
+                if exc.reason not in {'background_quota_paused','background_request_interval'} or not 0<delay<=30:raise
                 # Local pacing only; Google quota waits always return to the durable queue.
                 time.sleep(delay+.05)
                 return self._structured_once(instruction,payload,schema,max_tokens,key,'gemini-flash-latest')
@@ -411,7 +411,7 @@ def resume_research_budget_waits(jobs,artifacts,budget,provider_key='',budget_sc
     from .research_learning import scope
     from .background_budget import scoped_requests_remaining,scoped_tokens_remaining
     snapshot=budget.snapshot(provider_key=provider_key);today=datetime.now(timezone.utc).date().isoformat()
-    reasons={'background_daily_budget','background_quota_paused','gemini_daily_quota','gemini_rate_limit','gemini_quota_unavailable','openai_rate_limit','openai_quota_unavailable','research_writer_disabled','research_provider_switching'}
+    reasons={'background_daily_budget','background_quota_paused','background_request_interval','gemini_daily_quota','gemini_rate_limit','gemini_quota_unavailable','openai_rate_limit','openai_quota_unavailable','research_writer_disabled','research_provider_switching'}
     with jobs.lock:
         data=jobs.load();changed=0
         for job in data.get('jobs',{}).values():

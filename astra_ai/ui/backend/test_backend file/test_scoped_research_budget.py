@@ -105,7 +105,7 @@ def test_allowance_does_not_bypass_tokens_pacing_or_model_slot(tmp_path):
     with budget.lease(10,'pixel'):
         with pytest.raises(BudgetPaused,match='background_model_busy'):
             with budget.lease(1,'pixel'):pass
-    with pytest.raises(BudgetPaused,match='background_quota_paused'):
+    with pytest.raises(BudgetPaused,match='background_request_interval'):
         with budget.lease(1,'pixel'):pass
     assert budget.snapshot()['research_allowances']['pixel']['used']==1
 
@@ -251,7 +251,7 @@ def test_provider_reason_survives_day_rollover_then_local_pacing_has_no_stale_re
         with budget.lease(1):pass
     data=read(budget.path,{});data['next_attempt']=0;atomic(budget.path,data)
     with budget.lease(1):pass
-    with pytest.raises(BudgetPaused,match='background_quota_paused'):
+    with pytest.raises(BudgetPaused,match='background_request_interval'):
         with budget.lease(1):pass
 
 

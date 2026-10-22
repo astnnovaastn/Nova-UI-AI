@@ -7,6 +7,8 @@ from astra_ai.memory.shared_memory import read,atomic,StorageLock
 class BudgetPaused(Exception):
     def __init__(self,until,reason):self.until=until;self.reason=reason;super().__init__(reason)
 
+WRITER_PACING_REASONS=frozenset({'background_request_interval','background_quota_paused','background_model_busy'})
+
 def scoped_requests_remaining(data,scope_id,day):
     """A trusted, day-bound allowance never grants requests to another report."""
     allowances=data.get('research_allowances',{})
@@ -110,7 +112,7 @@ class BackgroundBudget:
                 other_provider=marker and data.get('provider_marker') and str(data.get('pause_reason','')).startswith(('gemini_','openai_')) and data.get('provider_marker')!=marker
                 if other_provider:
                     data.setdefault('provider_pauses',{}).setdefault(data['provider_marker'],{'until':data.get('next_attempt',0),'reason':data['pause_reason']})
-                if current<data.get('next_attempt',0) and not other_provider:raise BudgetPaused(data['next_attempt'],data.get('pause_reason') or 'background_quota_paused')
+                if current<data.get('next_attempt',0) and not other_provider:raise BudgetPaused(data['next_attempt'],data.get('pause_reason') or 'background_request_interval')
                 needs_extra=data.get('requests',0)>=self.daily_requests
                 extra_tokens=min(tokens,max(0,data.get('tokens',0)+tokens-self.daily_tokens))
                 grant=data.get('research_token_allowances',{}).get(scope_id,{})

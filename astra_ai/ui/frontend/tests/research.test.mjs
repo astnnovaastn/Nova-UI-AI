@@ -393,3 +393,8 @@ test("short pacing and occupied writer waits never claim the daily allowance is 
  assert.match(context.researchWaitMessage('background_quota_paused'),/briefly between writing/);
  assert.doesNotMatch(context.researchWaitMessage('background_quota_paused'),/daily|quota|allowance/);
 });
+
+test("local request pacing has its own message and never claims a daily provider quota",()=>{
+ assert.match(context.researchWaitMessage('background_request_interval'),/briefly between writing requests/);
+ assert.doesNotMatch(context.researchWaitMessage('background_request_interval'),/daily|quota|allowance/);
+});
