@@ -80,6 +80,8 @@ class ResearchProviderSettings:
                     if time.monotonic()>=deadline:raise TimeoutError('The current research write is still finishing. Try switching again shortly.')
                     await asyncio.sleep(.05)
                 acquired=True
+                if old and old.provider=='gemini':
+                    await asyncio.to_thread(old.budget.scope_legacy_provider_pause,old.key_provider(),old.model_provider())
                 updates={'NOVA_RESEARCH_PROVIDER':provider}
                 if provider!='none':updates['NOVA_RESEARCH_GEMINI_MODEL' if provider=='gemini' else 'NOVA_RESEARCH_OPENAI_MODEL']=chosen
                 settings=lambda name:updates.get(name,self.settings(name))

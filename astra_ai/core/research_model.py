@@ -74,6 +74,8 @@ def requested_research_budget(path,slot,settings):
         daily_tokens=limit('NOVA_RESEARCH_DAILY_TOKENS',400000,10000,2000000),
         min_interval=limit('NOVA_RESEARCH_REQUEST_INTERVAL',15,1,300))
     budget.slot=slot
+    provider=(settings('NOVA_RESEARCH_PROVIDER') or 'gemini').strip().lower()
+    budget.provider_model=(settings('NOVA_RESEARCH_GEMINI_MODEL') or settings('GEMINI_TEXT_MODEL') or '') if provider=='gemini' else ''
     return budget
 
 
@@ -334,12 +336,13 @@ class GeminiResearchModel(ComposedResearchModel):
         from google.genai import types
         import httpx
         factory = self.client_factory or genai.Client
-        quick=payload.get('mode')=='quick' or str(payload.get('query','')).startswith('[QUICK]\n')
-        if max_tokens==6000 and not quick:max_tokens=12000
+        # Only the legacy whole-report adapter requests its historical 6k
+        # default. Checkpointed repairs set their own deliberate output bound.
+        if max_tokens==6000 and payload.get('mode')=='detailed':max_tokens=12000
         estimate=min(40000,max_tokens+len(json.dumps(payload))//3+500)
         from .aegis_ai import CURRENT_OPERATION
         context=CURRENT_OPERATION.get() or {}
-        with self.budget.lease(tokens=estimate,scope_id=self.budget_scope(context),provider_key=key) as reservation:
+        with self.budget.lease(tokens=estimate,scope_id=self.budget_scope(context),provider_key=key,provider_model=model) as reservation:
             client = factory(api_key=key, http_options=types.HttpOptions(timeout=180000,retry_options=types.HttpRetryOptions(attempts=1)))
             try:
                 response = client.models.generate_content(
@@ -365,10 +368,10 @@ class GeminiResearchModel(ComposedResearchModel):
             except Exception as exc:
                 code=getattr(exc,'code',None) or getattr(exc,'status_code',None)
                 # Explicit rejection produced no model output. Network timeouts remain reserved.
-                if code in {400,401,403,404,429} and reservation is not None:reservation.settle(0)
+                if code in {400,401,403,404,429,500,502,503} and reservation is not None:reservation.settle(0)
                 if code == 429:
                     paused=gemini_quota_pause(exc)
-                    self.budget.provider_pause(paused.until,paused.reason,provider_key=key)
+                    self.budget.provider_pause(paused.until,paused.reason,provider_key=key,provider_model=model)
                     raise paused from None
                 if code in {404,408,500,502,503,504} or isinstance(exc,(TimeoutError,httpx.TimeoutException)):
                     if model!='gemini-flash-latest':self.budget.defer_model(model,key,time.time()+(600 if code==404 else 30))

@@ -15,7 +15,8 @@ def model(tmp_path,replies):
     class Model(GeminiResearchModel):
         def structured(self,instruction,payload,schema,max_tokens=1600):
             self.calls.append(payload)
-            assert max_tokens==12000 and len(payload['evidence'])==12
+            assert 5000<=max_tokens<=12000 and len(payload['evidence'])==12
+            self.output_tokens=max_tokens
             assert sum(len(row['content']) for row in payload['evidence'])<=36000
             value=replies[min(len(self.calls)-1,len(replies)-1)]
             if isinstance(value,Exception):raise value
@@ -32,6 +33,18 @@ def test_full_depth_is_written_once_then_checkpoint_resume_uses_no_provider(tmp_
     assert len(text)>=12000 and len(item.calls)==1 and text.count('\n## ')==3
 
 
+def test_near_budget_compacts_evidence_without_shortening_the_report(tmp_path):
+    from datetime import datetime,timezone
+    from astra_ai.memory.shared_memory import atomic
+    item=model(tmp_path,[result()]);item.budget.daily_tokens=600000
+    atomic(item.budget.path,{'day':datetime.now(timezone.utc).date().isoformat(),'requests':10,'tokens':579000})
+    async def checkpoint(value):pass
+    text=asyncio.run(item.report('Detailed comparison with recommendations',SOURCES,checkpoint=checkpoint))
+    assert len(text)>=12000 and len(item.calls)==1
+    assert sum(len(row['content']) for row in item.calls[0]['evidence'])<=12000
+    assert item.calls[0]['minimum_report_characters']==12000
+
+
 def test_short_candidate_is_not_published_and_one_repair_restores_full_depth(tmp_path):
     item=model(tmp_path,[result(True),result()]);saved=[]
     async def checkpoint(value):saved.append(value);raise BudgetPaused(9999999999,'research_section_saved')
@@ -40,6 +53,20 @@ def test_short_candidate_is_not_published_and_one_repair_restores_full_depth(tmp
     assert not saved[0].get('coverage_checked') and 'candidate' in saved[0]
     text=asyncio.run(item.report('Full depth comparison',SOURCES,state=saved[-1],checkpoint=checkpoint))
     assert len(text)>=12000 and len(item.calls)==2
+
+
+@pytest.mark.parametrize('used',[585102,588157])
+def test_near_budget_repair_keeps_full_depth_with_bounded_input_and_output(tmp_path,used):
+    from datetime import datetime,timezone
+    from astra_ai.memory.shared_memory import atomic
+    item=model(tmp_path,[result()]);item.budget.daily_tokens=600000
+    atomic(item.budget.path,{'day':datetime.now(timezone.utc).date().isoformat(),'requests':53,'tokens':used})
+    state={'signature':composition_signature('Detailed research',SOURCES),'batch_attempts':1,'composition_version':2,'candidate':result(True)}
+    async def checkpoint(value):pass
+    text=asyncio.run(item.report('Detailed research',SOURCES,state=state,checkpoint=checkpoint))
+    assert len(text)>=12000 and 5000<=item.output_tokens<=6000
+    assert item.calls[0]['minimum_report_characters']==12000
+    assert sum(len(row['content']) for row in item.calls[0]['evidence'])<=6000
 
 
 @pytest.mark.parametrize('bad',[{'title':'Bad','sections':None},result(True)])

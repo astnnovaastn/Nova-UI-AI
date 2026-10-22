@@ -360,6 +360,9 @@ class ResearchArtifacts:
                 self.backup_metadata()
                 active={'collecting_sources','comparing_evidence','preparing_report','preparing_images','preparing_layout'}
                 next_phase=updates.get('phase',item.get('phase'))
+                if updates.get('phase') in active:
+                    updates.setdefault('waiting_reason','')
+                    updates.setdefault('next_attempt',None)
                 if next_phase!=item.get('phase'):
                     stamp=time.time();started=item.get('active_since')
                     if item.get('phase') in active and isinstance(started,(int,float)):
@@ -1144,7 +1147,7 @@ class ResearchSearch:
         return [by_url.get(row['url'],row) for row in sources]
 
     def _request(self, query, mode, count, retrieval_depth='advanced'):
-        from .research_topics import search_key
+        from .research_topics import search_key,search_subject
         provider='tavily' if mode=='detailed' else 'serpapi'
         key=search_key(self.key_provider,mode)
         if not key:return [], {'provider':provider,'reason':'provider_not_configured'}
@@ -1156,7 +1159,7 @@ class ResearchSearch:
             if mode=='detailed':
                 response=self.transport.post('https://api.tavily.com/search',headers={'Authorization':'Bearer '+key},json={'query':query,'search_depth':'basic' if retrieval_depth=='basic' else 'advanced','max_results':count,'chunks_per_source':3,'auto_parameters':False,'include_raw_content':'markdown','include_answer':False,'include_favicon':True,'include_images':True,'include_image_descriptions':True},timeout=30)
             else:
-                response=self.transport.get('https://serpapi.com/search.json',params={'api_key':key,'engine':'google','q':query,'num':count},timeout=20)
+                response=self.transport.get('https://serpapi.com/search.json',params={'api_key':key,'engine':'google','q':search_subject(query),'num':count},timeout=20)
             if response.status_code!=200:
                 failure={'provider':provider,'reason':'provider_authentication_required' if response.status_code in {401,403} else 'provider_quota' if response.status_code in {402,429,432,433} else 'provider_http_error','http_status':response.status_code,'retryable':response.status_code in {429,500,502,503,504}}
                 try:failure['retry_after_seconds']=max(1,min(3600,float(response.headers.get('Retry-After','65'))))
@@ -1266,7 +1269,9 @@ class ResearchSearch:
             terms=set(re.findall(r'[a-z]{4,}',detail.casefold()))-{'more','details','information','please','about','sources','report','research','continue','expand','additional','give','provide','want','would','could','explain','append','substantial','connected','explanation','citations','evidence','already','saved','same','page','first','search','only','important','detail','missing','using','with','this','that','what','have','them','their','these','those'}
             # The reader and later source passages may already cover the question.
             # Presentation instructions must not count as missing factual evidence.
-            evidence=' '.join([item['query'],item.get('report',''),*[e.get('report','') for e in entries],*[r.get('content','')[:12000] for r in sources]]).casefold()
+            # A question or generated explanation is not proof that supporting
+            # evidence was collected. Check the actual saved source passages.
+            evidence=' '.join(r.get('content','')[:12000] for r in sources).casefold()
             missing=len(terms)>=3 and sum(t not in evidence for t in terms)>len(terms)*.65
             checkpoint=activity.get('search_checkpoint') if activity.get('operation_id')==operation_id else None
             if checkpoint is not None:additional=checkpoint

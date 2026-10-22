@@ -52,14 +52,35 @@ class TokenReservation:
 class BackgroundBudget:
     def __init__(self,path,daily_requests=40,daily_tokens=80000,min_interval=65):
         self.path=Path(path);self.lock=StorageLock(self.path.with_suffix('.lock'));self.slot=threading.Lock();self.daily_requests=daily_requests;self.daily_tokens=daily_tokens;self.min_interval=min_interval;self.suspension_reason=''
-    def snapshot(self,provider_key=''):
+    def snapshot(self,provider_key='',provider_model=None):
         with self.lock:data=read(self.path,{'day':'','requests':0,'tokens':0,'next_attempt':0})
+        model=getattr(self,'provider_model','') if provider_model is None else provider_model
         if provider_key:
             marker=hashlib.sha256(provider_key.encode()).hexdigest()
-            if str(data.get('pause_reason','')).startswith(('gemini_','openai_')) and data.get('provider_marker') and data.get('provider_marker')!=marker:data.update(next_attempt=0,pause_reason='')
-            wait=data.get('provider_pauses',{}).get(marker,{})
-            if wait.get('until',0)>data.get('next_attempt',0):data.update(next_attempt=wait['until'],pause_reason=wait['reason'])
+            other_key=data.get('provider_marker') and data['provider_marker']!=marker
+            other_model=model and data.get('pause_model') and data['pause_model']!=model
+            if str(data.get('pause_reason','')).startswith(('gemini_','openai_')) and (other_key or other_model):data.update(next_attempt=0,pause_reason='')
+            for identity in (marker,marker+':'+model if model else marker):
+                wait=data.get('provider_pauses',{}).get(identity,{})
+                if wait.get('until',0)>data.get('next_attempt',0):data.update(next_attempt=wait['until'],pause_reason=wait['reason'])
+        if data.get('pacing_until',0)>data.get('next_attempt',0):data.update(next_attempt=data['pacing_until'],pause_reason='background_request_interval')
         return data
+
+    def scope_legacy_provider_pause(self,provider_key,model):
+        """Bind an older Gemini pause to the model selected when it was recorded."""
+        if not provider_key or not model:return False
+        with self.lock:
+            data=read(self.path,{})
+            marker=hashlib.sha256(provider_key.encode()).hexdigest()
+            if not str(data.get('pause_reason','')).startswith('gemini_') or data.get('pause_model') or data.get('provider_marker',marker)!=marker:return False
+            import shutil
+            backup=self.path.with_suffix('.before-model-quota.bak')
+            if self.path.exists() and not backup.exists():shutil.copy2(self.path,backup)
+            wait=data.setdefault('provider_pauses',{}).pop(marker,{})
+            data['provider_pauses'][marker+':'+model]={'until':max(wait.get('until',0),data.get('next_attempt',0)),'reason':data['pause_reason']}
+            data['pause_model']=model
+            atomic(self.path,data)
+            return True
     def defer_model(self,model,provider_key,until):
         with self.lock:
             data=read(self.path,{})
@@ -83,7 +104,7 @@ class BackgroundBudget:
             data['provider_marker']=hashlib.sha256(new_key.encode()).hexdigest()
             atomic(self.path,data)
         return True
-    def provider_pause(self,until,reason,provider_key=None):
+    def provider_pause(self,until,reason,provider_key=None,provider_model=''):
         with self.lock:
             data=read(self.path,{})
             if provider_key:
@@ -93,26 +114,34 @@ class BackgroundBudget:
                     atomic(self.path,data);return
                 if data.get('provider_marker',marker)!=marker:return
                 data['provider_marker']=marker
-                data.setdefault('provider_pauses',{})[marker]={'until':until,'reason':reason}
+                data.setdefault('provider_pauses',{})[marker+(':'+provider_model if provider_model else '')]={'until':until,'reason':reason}
+                if provider_model:
+                    data.update(next_attempt=until,pause_reason=reason,pause_model=provider_model)
+                    atomic(self.path,data);return
             data.update(next_attempt=max(data.get('next_attempt',0),until),pause_reason=reason)
             atomic(self.path,data)
     @contextlib.contextmanager
-    def lease(self,tokens=4000,scope_id='',provider_key=''):
+    def lease(self,tokens=4000,scope_id='',provider_key='',provider_model=None):
         if self.suspension_reason:raise BudgetPaused(time.time()+5,self.suspension_reason)
         if not self.slot.acquire(False):raise BudgetPaused(time.time()+5,'background_model_busy')
         try:
             with self.lock:
                 if self.suspension_reason:raise BudgetPaused(time.time()+5,self.suspension_reason)
                 data=read(self.path,{});day=datetime.now(timezone.utc).date().isoformat()
-                if data.get('day')!=day:data={'day':day,'requests':0,'tokens':0,**{k:data[k] for k in ('next_attempt','pause_reason','provider_marker','provider_pause_history','model_backoffs','provider_pauses') if k in data}}
+                if data.get('day')!=day:data={'day':day,'requests':0,'tokens':0,**{k:data[k] for k in ('next_attempt','pause_reason','pause_model','pacing_until','provider_marker','provider_pause_history','model_backoffs','provider_pauses') if k in data}}
                 current=time.time()
+                model=getattr(self,'provider_model','') if provider_model is None else provider_model
                 marker=hashlib.sha256(provider_key.encode()).hexdigest() if provider_key else ''
-                wait=data.get('provider_pauses',{}).get(marker,{})
-                if marker and current<wait.get('until',0):raise BudgetPaused(wait['until'],wait['reason'])
+                for identity in (marker,marker+':'+model if model else marker):
+                    wait=data.get('provider_pauses',{}).get(identity,{})
+                    if marker and current<wait.get('until',0):raise BudgetPaused(wait['until'],wait['reason'])
+                if current<data.get('pacing_until',0):raise BudgetPaused(data['pacing_until'],'background_request_interval')
                 other_provider=marker and data.get('provider_marker') and str(data.get('pause_reason','')).startswith(('gemini_','openai_')) and data.get('provider_marker')!=marker
                 if other_provider:
-                    data.setdefault('provider_pauses',{}).setdefault(data['provider_marker'],{'until':data.get('next_attempt',0),'reason':data['pause_reason']})
-                if current<data.get('next_attempt',0) and not other_provider:raise BudgetPaused(data['next_attempt'],data.get('pause_reason') or 'background_request_interval')
+                    identity=data['provider_marker']+(':'+data['pause_model'] if data.get('pause_model') else '')
+                    data.setdefault('provider_pauses',{}).setdefault(identity,{'until':data.get('next_attempt',0),'reason':data['pause_reason']})
+                other_model=model and data.get('pause_model') and data['pause_model']!=model and str(data.get('pause_reason','')).startswith('gemini_')
+                if current<data.get('next_attempt',0) and not other_provider and not other_model:raise BudgetPaused(data['next_attempt'],data.get('pause_reason') or 'background_request_interval')
                 needs_extra=data.get('requests',0)>=self.daily_requests
                 extra_tokens=min(tokens,max(0,data.get('tokens',0)+tokens-self.daily_tokens))
                 grant=data.get('research_token_allowances',{}).get(scope_id,{})
@@ -122,7 +151,7 @@ class BackgroundBudget:
                 if needs_extra:data['research_allowances'][scope_id]['used']+=1
                 if extra_tokens:data['research_token_allowances'][scope_id]['used']+=extra_tokens
                 if capped:grant['requests_used']+=1
-                data.update(requests=data.get('requests',0)+1,tokens=data.get('tokens',0)+tokens,next_attempt=current+self.min_interval,pause_reason='');atomic(self.path,data)
+                data.update(requests=data.get('requests',0)+1,tokens=data.get('tokens',0)+tokens,next_attempt=current+self.min_interval,pacing_until=current+self.min_interval,pause_reason='',pause_model='');atomic(self.path,data)
             yield TokenReservation(self,day,tokens,scope_id,extra_tokens)
         finally:self.slot.release()
     def response(self,response):

@@ -7,6 +7,14 @@ def search_key(provider, mode):
     names=('DEEP_RESEARCH_API_KEY','TAVILY_API_KEY') if mode=='detailed' else ('QUICK_SEARCH_API_KEY','SERPAPI_KEY')
     return provider(names[0]) or provider(names[1])
 
+
+def search_subject(brief):
+    """Send the subject to keyword search, keeping writing instructions in the brief."""
+    text=' '.join(str(brief).split())
+    text=re.split(r'(?<=[.!?])\s+(?=[A-Z])',text,maxsplit=1)[0]
+    text=re.sub(r'^(?:(?:please\s+)?(?:can|could|would) you\s+|please\s+|(?:research|search|investigate|find)\s+(?:for\s+|about\s+|information\s+(?:on|about)\s+)*)+','',text,flags=re.I)
+    return text[:300].rstrip(' .!?') or str(brief).strip()[:300]
+
 def new_research_request(text):
     return bool(re.search(r'\b(new research|new topic|different topic|start over|instead research)\b',str(text),re.I))
 

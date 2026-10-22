@@ -11,6 +11,14 @@ from astra_ai.ui.backend.document_api import authored_preview, authored_apply
 
 CTX={'profile_id':'owner','project_id':'project','session_id':'main'}
 
+
+def test_colour_overlap_cannot_make_unrelated_prism_illustrations_relevant():
+    from astra_ai.core.research_illustrations import relevant_candidate
+    query='Why a prism separates white light into colours'
+    for caption in ['Colours Nail Spa','Food colours','Colours European University Alliance']:
+        assert not relevant_candidate({'caption':caption,'source_url':'https://unrelated.example'},query)
+    assert relevant_candidate({'caption':'White light dispersion through a triangular prism','source_url':'https://physics.example'},query)
+
 def test_article_topic_cannot_make_unrelated_recommendation_images_relevant():
     from astra_ai.core.research_illustrations import relevant_candidate
     query='OpenAI as a company and its latest AI models in 2026. Include history, founders and CEO. Make it impressive with images, videos and charts.'

@@ -6,7 +6,7 @@ from PIL import Image,ImageStat,ImageOps
 from urllib3.exceptions import HTTPError
 from astra_ai.memory.shared_memory import stable, safe
 
-IMAGE_VERSION=5
+IMAGE_VERSION=6
 MAX_IMAGES=6
 TARGET_IMAGES=4
 
@@ -90,7 +90,12 @@ def relevant_candidate(row,query):
     wanted={t for t in terms(query) if not t.isdigit()}-{'ai','company','model','latest','current','available','capable','comparison','compare','detail','detailed','report','as','its','in','on','at','to','of','an','by','be','is','are','it','or','not','more','other'}
     if re.search(r'\bcover\b',row.get('caption',''),re.I) and not wanted & terms(row.get('caption','')):return False
     host=urlsplit(row.get('source_url','')).hostname or ''
-    return not wanted or bool(wanted & (terms(row.get('caption','')) | terms(host.replace('.',' '))))
+    shared=wanted & (terms(row.get('caption','')) | terms(host.replace('.',' ')))
+    visual={'colour','color','white','black','blue','red','green','light','picture','photo'}
+    # A shared colour alone does not identify a subject: a nail salon or a food
+    # colouring page cannot illustrate a report about optical prism dispersion.
+    informative=wanted-visual-{'why','how','into','explain','reliable','source','diagram','few'}
+    return not wanted or bool(shared and (not informative or shared-visual))
 
 
 async def prepare_images(search, identifier, context, sources, query):

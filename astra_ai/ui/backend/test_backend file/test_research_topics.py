@@ -9,6 +9,28 @@ from astra_ai.core.background_budget import BudgetPaused
 CTX={'profile_id':'owner','project_id':'work','session_id':'conversation','turn_id':'one'}
 SOURCE={'url':'https://example.com/evidence','title':'Evidence','content':'Verified football evidence.','retrieved_at':'2026-10-20'}
 
+
+def test_keyword_search_uses_the_subject_not_report_writing_instructions(tmp_path):
+    calls=[]
+    def get(url,**kwargs):
+        calls.append(kwargs['params'])
+        return SimpleNamespace(status_code=200,json=lambda:{'organic_results':[{'link':'https://physics.example/prism','title':'Prism dispersion','snippet':'Optical dispersion of white light.'}]})
+    search=ResearchSearch(ResearchArtifacts(tmp_path/'reports.json'),lambda name:'key',SimpleNamespace(get=get))
+    brief='Research why a prism separates white light into colours. Explain dispersion and wavelength, include reliable physics sources and a few relevant diagrams.'
+    sources,error=search._request(brief,'quick',5)
+    assert error is None and len(sources)==1
+    assert calls[0]['q']=='why a prism separates white light into colours'
+    assert calls[0]['num']==5
+
+
+def test_resuming_composition_clears_stale_daily_quota_metadata(tmp_path):
+    store=ResearchArtifacts(tmp_path/'reports.json');row=store.reserve('Prism physics','detailed',CTX,'quota-test')
+    store.request_state(row['id'],CTX,phase='waiting_for_quota',waiting_reason='gemini_daily_quota',next_attempt=4000000000)
+    active=store.request_state(row['id'],CTX,phase='preparing_report')
+    assert active['waiting_reason']=='' and active['next_attempt'] is None
+    pacing=store.request_state(row['id'],CTX,phase='preparing_report',waiting_reason='background_request_interval',next_attempt=1234)
+    assert pacing['waiting_reason']=='background_request_interval' and pacing['next_attempt']==1234
+
 def test_provider_keys_are_separate_and_never_cross_fallbacks():
     values={'QUICK_SEARCH_API_KEY':'quick','DEEP_RESEARCH_API_KEY':'deep','SERPAPI_KEY':'old-quick','TAVILY_API_KEY':'old-deep'}
     assert search_key(values.get,'quick')=='quick' and search_key(values.get,'detailed')=='deep'

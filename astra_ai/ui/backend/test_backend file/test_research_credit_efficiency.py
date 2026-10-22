@@ -26,6 +26,17 @@ def test_saved_report_and_later_evidence_prevent_unnecessary_tavily_search(tmp_p
     assert again['status']=='completed' and len(calls)==1
 
 
+def test_question_and_uncited_report_text_do_not_count_as_collected_evidence(tmp_path):
+    store=ResearchArtifacts(tmp_path/'reports.json');detail='prism optical dispersion refractive wavelength violet recombination'
+    row=store.save(detail,'quick',detail,[{'url':'https://unrelated.example','title':'Colours business','content':'A colour palette shop.','retrieved_at':'2026-10-22'}],[],CTX,'initial')
+    calls=[]
+    async def compose(query,sources):return '## Physics\n\nSupported prism optics [S2].'
+    service=ResearchSearch(store,lambda name:'key',synthesize=compose)
+    service._request=lambda *args:(calls.append(args) or ([{'url':'https://physics.example/prism','title':'Prism optics','content':detail,'retrieved_at':'2026-10-22'}],None))
+    outcome=asyncio.run(service.expand_report({'research_id':row['id'],'research_revision':row['revision'],'detail':detail},CTX,'gap'))
+    assert outcome['status']=='completed' and len(calls)==1
+
+
 def test_narrow_missing_evidence_uses_basic_search_and_retries_reuse_receipt(tmp_path):
     outbound=[];writes=[]
     class Transport:
