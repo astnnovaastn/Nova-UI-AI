@@ -45,7 +45,7 @@ class ActionJobs:
         return results[-8:]
     def operation(self,operation_id,context):
         with self.lock:
-            return next((copy.deepcopy(j) for j in self.load()['jobs'].values() if j.get('operation_id')==operation_id and (j['context'].get('profile_id',''),j['context'].get('project_id',''),bool(j['context'].get('guest')))==(context.get('profile_id',''),context.get('project_id',''),bool(context.get('guest')))),None)
+            return next((copy.deepcopy(j) for j in self.load()['jobs'].values() if (j.get('operation_id')==operation_id or j['context'].get('research_origin_operation_id')==operation_id) and (j['context'].get('profile_id',''),j['context'].get('project_id',''),bool(j['context'].get('guest')))==(context.get('profile_id',''),context.get('project_id',''),bool(context.get('guest')))),None)
     def write(self,data):atomic(self.path,data)
     async def start(self):
         def recover():

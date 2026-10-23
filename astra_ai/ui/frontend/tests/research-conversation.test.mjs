@@ -97,3 +97,22 @@ test("changing owner connection clears selected and recent research context", ()
   assert.equal(api.conversationResearch("private").length, 0);
   assert.equal(api.conversationSnapshot().focusRevision, -1);
 });
+
+test('finished typed answers return to idle without waiting for muted audio', () => {
+  const {api}=setup();
+  api.conversationState({muted:true,state:'thinking',textBusy:true,activeRequestId:'question'});
+  assert.equal(api.conversationFinished('question'),true);
+  assert.equal(api.conversationSnapshot().state,'idle');
+  assert.equal(api.conversationSnapshot().textBusy,false);
+  api.conversationState({muted:false,activeRequestId:'voice'});
+  api.conversationFinished('voice',true);
+  assert.equal(api.conversationSnapshot().state,'speaking');
+});
+
+test('late completion cannot clear a newer question', () => {
+  const {api}=setup();
+  api.conversationState({state:'thinking',textBusy:true,activeRequestId:'new'});
+  assert.equal(api.conversationFinished('old'),false);
+  assert.equal(api.conversationSnapshot().activeRequestId,'new');
+  assert.equal(api.conversationSnapshot().textBusy,true);
+});

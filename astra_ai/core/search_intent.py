@@ -4,7 +4,7 @@ import re
 from typing import Dict, Tuple
 
 
-SEARCH_VERBS = r"(?:search(?:\s+the\s+web)?(?:\s+for)?|web\s+search(?:\s+for)?|look\s+up|look\s+for|browse(?:\s+the\s+web)?(?:\s+for)?|google|find\s+(?:information|details|results|sources)\s+(?:on|about|for))"
+SEARCH_VERBS = r"(?:research|investigate|search(?:\s+the\s+web)?(?:\s+for)?|web\s+search(?:\s+for)?|look\s+up|look\s+for|browse(?:\s+the\s+web)?(?:\s+for)?|find\s+(?:information|details|results|sources)\s+(?:on|about|for))"
 
 _CONNECTED_WIDGET_CONTEXT_RE = re.compile(
     r"\s*\[CONNECTED_WIDGET_CONTEXT\].*?\[/CONNECTED_WIDGET_CONTEXT\]\s*",
@@ -19,7 +19,15 @@ def user_utterance_only(text: str) -> str:
 
 def is_explicit_search_request(text: str) -> bool:
     message = user_utterance_only(text)
-    return bool(re.search(rf"\b{SEARCH_VERBS}\b", message, re.IGNORECASE))
+    # A company name, quoted command, capability question or negation is not
+    # permission to spend a search/writing request. Accept an actual imperative
+    # (including polite requests), not an arbitrary occurrence of "research".
+    message = re.sub(r'"[^"\n]*"|“[^”\n]*”|`[^`\n]*`', ' ', message)
+    if re.search(r"\b(?:do not|don't|dont|never|stop|without|no need to)\s+(?:\w+\s+){0,2}(?:search|research|browse|investigate|look up)\b", message, re.I):
+        return False
+    prefix = r"(?:please\s+|(?:can|could|would|will)\s+you\s+(?:please\s+)?|(?:i\s+)?(?:want|need|would like)\s+(?:you\s+)?to\s+|(?:okay|ok|yes|now|then|also)[, ]+)*"
+    match = re.search(rf"(?:^|[.!?;]\s*|\band\s+){prefix}{SEARCH_VERBS}\b", message, re.I)
+    return bool(match and message[match.end():].strip(' .,!?:;'))
 
 
 def extract_search_query(text: str) -> str:

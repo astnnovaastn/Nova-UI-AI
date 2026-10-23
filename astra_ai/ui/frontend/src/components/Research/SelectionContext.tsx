@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { conversationSnapshot, updateUiContext } from '../../conversation';
 import './SelectionContext.css';
@@ -19,13 +19,19 @@ export function SelectionPill({ page, revision, onAttach }: {
     revision: string;
     onAttach: (card: Passage) => void;
 }) {
+    const current = useRef({ page, revision });
+    current.current = { page, revision };
     const [pick, setPick] = useState<{
         text: string;
         x: number;
         y: number;
         source: string;
+        page: string;
+        revision: string;
     } | null>(null), [error, setError] = useState('');
     useEffect(() => {
+        setPick(null);
+        setError('');
         const capture = () => {
             const selection = window.getSelection();
             if (!selection || selection.isCollapsed || selection.rangeCount !== 1) {
@@ -39,9 +45,10 @@ export function SelectionPill({ page, revision, onAttach }: {
                 return;
             }
             const copy = range.cloneContents();
-            copy.querySelectorAll('button,a,[data-citation],.research-citation,.research-citation-chip,figcaption,img,video,iframe,svg').forEach(n => n.remove());
-            copy.querySelectorAll('p,h1,h2,h3,h4,li,tr').forEach(n => n.append(document.createTextNode('\n')));
-            const text = (copy.textContent || '').trim();
+            copy.querySelectorAll('button,[data-citation],.research-citation,.research-citation-chip,figcaption,img,video,iframe,svg').forEach(n => n.remove());
+            copy.querySelectorAll('a').forEach(n => n.replaceWith(document.createTextNode(n.textContent || '')));
+            copy.querySelectorAll('p,h1,h2,h3,h4,h5,h6,li,tr,td,th').forEach(n => n.append(document.createTextNode('\n')));
+            const text = (copy.textContent || '').replace(/https?:\/\/[^\s<>()]+/g, '').trim();
             if (!text) {
                 setPick(null);
                 return;
@@ -53,7 +60,7 @@ export function SelectionPill({ page, revision, onAttach }: {
             }
             const rect = range.getBoundingClientRect();
             setError('');
-            setPick({ text, x: Math.max(8, Math.min(innerWidth - 128, rect.left)), y: Math.max(8, Math.min(innerHeight - 50, rect.top - 42)), source: surface.getAttribute('data-source-id') || '' });
+            setPick({ text, page, revision, x: Math.max(8, Math.min(innerWidth - 128, rect.left)), y: Math.max(8, Math.min(innerHeight - 50, rect.top - 42)), source: surface.getAttribute('data-source-id') || '' });
         };
         const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') {
             setPick(null);
@@ -64,12 +71,14 @@ export function SelectionPill({ page, revision, onAttach }: {
         document.addEventListener('keydown', escape);
         return () => { document.removeEventListener('mouseup', capture); document.removeEventListener('keyup', capture); document.removeEventListener('keydown', escape); };
     }, [page, revision]);
-    async function attach() { if (!pick)
+    async function attach() { if (!pick || pick.page !== page || pick.revision !== revision)
         return; try {
-        const response = await fetch('/api/research/' + page + '/selections', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Nova-Client': conversationSnapshot().clientId }, body: JSON.stringify({ revision, text: pick.text, origin: pick.source ? { source_id: pick.source } : {} }) });
+        const response = await fetch('/api/research/' + pick.page + '/selections', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Nova-Client': conversationSnapshot().clientId }, body: JSON.stringify({ revision: pick.revision, text: pick.text, origin: pick.source ? { source_id: pick.source } : {} }) });
         const data = await response.json();
         if (!response.ok)
             throw Error(data.detail || 'Could not attach this passage.');
+        if (current.current.page !== pick.page || current.current.revision !== pick.revision)
+            return;
         onAttach(data);
         updateUiContext({ active_selection_id: data.id });
         setPick(null);

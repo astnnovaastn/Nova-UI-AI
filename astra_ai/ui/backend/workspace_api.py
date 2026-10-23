@@ -340,6 +340,16 @@ class WorkspaceService:
         kind = message.get("type")
         hub = self.hub
         rid = str(message.get("request_id") or message.get("turn_id") or "")
+        if kind in {'live_input_transcript','live_generation_complete'}:
+            from astra_ai.core.research_intent import observe_search_offer
+            live=self.state.live_sessions.get(self.manager.websocket_for(client))
+            if live:
+                frozen={**self.context(client),'session_id':live.session_id,'research_id':message.get('research_id',''),'turn_id':rid}
+                text=str(message.get('input_text') or message.get('full_text') or message.get('text') or '')
+                reply=str(message.get('output_text') or '') if kind=='live_generation_complete' else ''
+                if text:
+                    artifacts,_=self.artifacts()
+                    await asyncio.to_thread(observe_search_offer,artifacts,frozen,text,reply)
         if (
             kind == "live_generation_complete"
             and client in self.audio_locks
@@ -557,26 +567,11 @@ class WorkspaceService:
                 except (ValueError, OSError, KeyError):
                     if not source:
                         raise HTTPException(404, "Source unavailable")
-            visible = BeautifulSoup(
-                MarkdownIt().enable("table").render(evidence), "html.parser"
-            ).get_text(" ", strip=True)
-            compact = lambda value: " ".join(str(value).split())
-            # Citations are deliberately absent from a selection; match its words in order.
-            import re
-
-            visible = re.sub(r"\[S\d+(?:\s*[,;]\s*S\d+)*\]", "", visible)
+            from astra_ai.core.selection_text import matches_selection
             if not isinstance(text, str) or not text.strip() or len(text) > 64000:
                 raise HTTPException(422, "Select between 1 and 64,000 characters.")
-            visible = compact(visible)
-            words = compact(text).split()
-            cursor = 0
-            for word in words:
-                position = visible.find(word, cursor)
-                if position < 0:
-                    raise HTTPException(
-                        422, "The selection does not match this saved passage."
-                    )
-                cursor = position + len(word)
+            if not matches_selection(text, evidence):
+                raise HTTPException(422, "The selection does not match this saved passage. Select the passage again in the current page.")
             return self.store().select(
                 context, identifier, found["artifact"]["revision"], text, origin
             )

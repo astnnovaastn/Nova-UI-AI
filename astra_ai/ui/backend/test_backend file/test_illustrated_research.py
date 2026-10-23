@@ -411,7 +411,7 @@ def test_gemini_refuses_output_limit_and_reserves_room_for_complete_detailed_rep
             calls.append(kwargs);return SimpleNamespace(text='{"report":"unfinished"}',usage_metadata=SimpleNamespace(total_token_count=100),candidates=[SimpleNamespace(finish_reason='MAX_TOKENS')])
         def close(self):pass
     model=GeminiResearchModel(lambda:'test',BackgroundBudget(tmp_path/'budget.json',min_interval=0),lambda:'configured-gemini',Client)
-    with pytest.raises(ModelUnavailable,match='output limit'):model.structured('Report',{'query':'A detailed topic'},{'type':'object'},6000)
+    with pytest.raises(ModelUnavailable,match='output limit'):model.structured('Report',{'query':'A detailed topic','mode':'detailed'},{'type':'object'},6000)
     assert calls[0]['config'].max_output_tokens==12000
 
 

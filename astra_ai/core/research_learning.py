@@ -198,7 +198,8 @@ def reader_text(text):
             wrapped=json.loads(text)
             if isinstance(wrapped,dict) and isinstance(wrapped.get('report'),str):text=wrapped['report']
         except (ValueError,TypeError):pass
-    return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]','',text)
+    from .text_presentation import without_decorative_emoji
+    return without_decorative_emoji(re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]','',text))
 
 def evidence_excerpt(source, limit=1800):
     text=reader_text(source.get('content',''))
@@ -309,13 +310,23 @@ class ResearchArtifacts:
         identifier=stable('research-artifact',scope(context),operation_id)
         with self.lock:
             data=read(self.path,{'artifacts':{},'imports':{}});requests=data.setdefault('requests',{})
+            if kind=='research' and context.get('dedupe_research_turn') and context.get('turn_id') and context.get('session_id'):
+                # Admission and allocation may race across tool invocations.
+                # Recheck under the authoritative store lock before creating a row.
+                prior=next((r for key,r in requests.items() if key not in data.get('removed',{}) and scope(r)==scope(context) and r.get('kind','research')=='research' and r.get('origin_turn_id')==context['turn_id'] and r.get('origin_session_id')==context['session_id']),None)
+                if prior:return {'status':'ok',**copy.deepcopy(prior)}
             old=requests.get(identifier)
             if old and (old['query'],old['mode'],old.get('kind','research'),old.get('source_research_id',''))!=(query,mode,kind,source_research_id):return {'status':'conflict','reason':'operation_id_reused'}
             if not old and kind=='research':
+                from .research_intent import subject_terms, fresh_request
                 for existing in sorted({**requests,**data.get('artifacts',{})}.values(),key=lambda row:row.get('created_epoch',0),reverse=True):
                     age=time.time()-existing.get('created_epoch',0)
                     if existing['id'] in data.get('removed',{}) or scope(existing)!=scope(context) or existing.get('session_id','')!=context.get('session_id',''):continue
-                    if (normal(existing['query']),existing['mode'],existing.get('kind','research'))!=(normal(query),mode,kind):continue
+                    equivalent=normal(existing['query'])==normal(query)
+                    if not equivalent and not fresh_request(query) and not fresh_request(existing['query']):
+                        wanted=subject_terms(query)
+                        equivalent=len(wanted)>=2 and wanted==subject_terms(existing['query'])
+                    if not equivalent or (existing['mode'],existing.get('kind','research'))!=(mode,kind):continue
                     if (existing.get('research_session_id') or existing['id'])!=(context.get('research_session_id') or existing['id']):continue
                     metadata=requests.get(existing['id'],{})
                     if metadata.get('canonical_research_id'):continue
@@ -453,7 +464,10 @@ class ResearchArtifacts:
     def find_history(self, query, context):
         with self.lock:
             data=self.snapshot();rows={**data.get('requests',{}),**data.get('artifacts',{})}
-            matches=[self.brief(self.get(identifier,context)['artifact']) for identifier,row in rows.items() if scope(row)==scope(context) and identifier not in data.get('removed',{}) and not data.get('requests',{}).get(identifier,{}).get('canonical_research_id') and normal(query) in normal(row.get('display_title','')+' '+row['query'])]
+            from .research_intent import saved_findings
+            saved=saved_findings(self,query,context)
+            identifiers={r['research_id'] for r in saved['items']}
+            matches=[self.brief(self.get(identifier,context)['artifact']) for identifier,row in rows.items() if scope(row)==scope(context) and identifier not in data.get('removed',{}) and not data.get('requests',{}).get(identifier,{}).get('canonical_research_id') and (identifier in identifiers or normal(query) in normal(row.get('display_title','')+' '+row['query']))]
             return {'status':'ok','items':sorted(matches,key=lambda row:row['retrieved_at'],reverse=True)[:30],'total':len(matches)}
 
     def restore(self, identifier, context, token):
@@ -483,13 +497,18 @@ class ResearchArtifacts:
         return len(wanted)>=2 and len(shared)>=2 and len(shared)/len(wanted)>=.6
 
     def related_evidence(self, query, context):
+        from .research_intent import subject_terms
+        from .research_topics import search_subject
+        wanted=subject_terms(search_subject(query))
         with self.lock:items=list(self.snapshot()['artifacts'].values())
         candidates=[]
         for item in items:
             if scope(item)!=scope(context) or item['id'] in self.snapshot().get('removed',{}):continue
-            if not self.related_subject(query,item['query']):continue
-            for row in item['sources'][:8]:
-                if row.get('origin_query') and not self.related_subject(query,row['origin_query']):continue
+            rows=self.source_catalog(item)
+            covered=bool(wanted) and wanted<=subject_terms(' '.join(r.get('title','')+' '+r.get('content','') for r in rows))
+            if not self.related_subject(query,item['query']) and not covered:continue
+            for row in rows[:12]:
+                if row.get('origin_query') and not self.related_subject(query,row['origin_query']) and not wanted & subject_terms(row.get('content','')):continue
                 # Historical evidence retains its dates and origin; it is never promoted to a fresh claim.
                 candidates.append({**row,'origin_research_id':row.get('origin_research_id') or item['id'],'origin_query':row.get('origin_query') or item['query'],'historical':bool(row.get('historical')) or time.time()-item['created_epoch']>86400})
         return candidates[:16]
@@ -1275,7 +1294,7 @@ class ResearchSearch:
             missing=len(terms)>=3 and sum(t not in evidence for t in terms)>len(terms)*.65
             checkpoint=activity.get('search_checkpoint') if activity.get('operation_id')==operation_id else None
             if checkpoint is not None:additional=checkpoint
-            elif fresh or missing or view=='sources':
+            elif (fresh or missing or view=='sources') and not context.get('research_saved_only'):
                 if activity.get('operation_id')==operation_id and activity.get('outbound_started'):return {'status':'unconfirmed','reason':'reconcile_extension_search_before_retry','research_id':identifier}
                 depth='advanced' if view=='sources' or re.search(r'\b(comprehensive|extensive|in.depth|full report|exhaustive)\b',detail,re.I) else 'basic'
                 await asyncio.to_thread(self.artifacts.extension_state,identifier,context,phase='collecting_sources',view=view,operation_id=operation_id,outbound_started=True,search_checkpoint=None,retrieval_depth=depth)
@@ -1504,8 +1523,13 @@ class ResearchSearch:
                 reused=await asyncio.to_thread(self.artifacts.related_evidence,query,context)
                 # Always refresh time-sensitive requests; unchanged fresh evidence can satisfy an identical subject.
                 fresh=[r for r in reused if not r['historical']]
-                exact=any(normal(r.get('origin_query',''))==normal(query) for r in fresh) and not re.search(r'\b(latest|today|current|now|recent|price|release|news)\b',query,re.I)
-                results=[] if exact and fresh else await asyncio.gather(*(fetch(q) for q in searches));urls=set();sources=[];failures=[]
+                from .research_intent import subject_terms, fresh_request
+                from .research_topics import search_subject
+                wanted=subject_terms(search_subject(query))
+                coverage=bool(wanted) and wanted<=subject_terms(' '.join(r.get('title','')+' '+r.get('content','') for r in reused))
+                exact=any(normal(r.get('origin_query',''))==normal(query) for r in fresh)
+                reuse_only=not questions and not fresh_request(query) and (coverage or exact and fresh)
+                results=[] if reuse_only else await asyncio.gather(*(fetch(q) for q in searches));urls=set();sources=[];failures=[]
                 for row in reused:
                     if row['url'] not in urls:urls.add(row['url']);sources.append(row)
                 for question,(rows,error) in results:

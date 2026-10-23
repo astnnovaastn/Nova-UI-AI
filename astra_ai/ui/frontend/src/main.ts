@@ -5,7 +5,7 @@ import {notificationSoundEnabled,notificationTarget,newNoticeIds} from './conver
 import {VoiceSessionState} from './voiceSession.mjs';
 import {PresenceCapture} from './presenceCapture';
 import {requestedResearchReady} from './taskNotices';
-import {conversationInterrupt,conversationState,conversationMessage,conversationSnapshot,conversationLoad,conversationReplace,updateUiContext,uiSnapshot} from "./conversation";
+import {conversationInterrupt,conversationState,conversationMessage,conversationSnapshot,conversationLoad,conversationReplace,conversationFinished,updateUiContext,uiSnapshot} from "./conversation";
 import initMemoryWorkspace from './components/Memory/MemoryWorkspace.jsx';
 /**
  * AEGIS — Main entry point.
@@ -465,8 +465,7 @@ socket.onMessage((msg) => {
     if(msg.input_text)conversationMessage('user',String(msg.input_text),'completed',String(msg.request_id||'user:'+turn),String(msg.research_id||''),msg.context_cards as any[]);
     if(msg.output_text)conversationMessage('assistant',String(msg.output_text),'completed','reply:'+turn,String(msg.research_id||''));
     if(!msg.reconciled&&(!msg.generation||String(msg.generation)===audioGeneration))audioPlayer.finishPcmTurn();
-    userTranscript=assistantTranscript=userMessageId=assistantMessageId='';
-    conversationState({textBusy:false});
+    if(conversationFinished(String(msg.request_id||turn),isAudioPlaying))userTranscript=assistantTranscript=userMessageId=assistantMessageId='';
   }
   else if (type === 'live_turn_complete') {
     // Storage acknowledgement belongs to its frozen turn, never the next input.
@@ -1091,7 +1090,7 @@ window.addEventListener('nova-chat-send',async(event:Event)=>{
  const focused=()=>conversationSnapshot().focusId===selected&&conversationSnapshot().focusRevision===revision;
  if(!focused())await new Promise<void>(resolve=>{const check=()=>{if(focused())done();};const done=()=>{clearTimeout(timer);window.removeEventListener('nova-research-focus-ack',check);resolve();};const timer=setTimeout(done,7000);window.addEventListener('nova-research-focus-ack',check);check();});
  if(!focused()||String(uiSnapshot().view==='research'?uiSnapshot().research_id||'':'')!==selected){memoryChatBusy=false;conversationState({status:'The selected conversation is still opening. Your message draft is preserved.'});return;}
- conversationState({state:'thinking',status:'',textBusy:true,sources:[]});
+ conversationState({state:'thinking',status:'',textBusy:true,activeRequestId:String(d.request_id),sources:[]});
  conversationMessage('user',text,'sending',d.request_id);
  socket.send({type:'ui_context',snapshot:uiSnapshot()});
  socket.send({type:'live_text',text,request_id:d.request_id,session_id:conversationSnapshot().sessionId,source:'typed_input',research_id:d.research_id||'',selection_revision:revision,active_selection_id:d.active_selection_id||''});

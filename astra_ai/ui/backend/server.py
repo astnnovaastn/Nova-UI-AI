@@ -5717,6 +5717,40 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
     client_id=context.get("client_id","");sid=context.get("session_id","")
     names={d["name"] for d in ALL_AEGIS_TOOLS}
     if name not in names:return {"status":"rejected","reason":"unregistered_tool"}
+    from astra_ai.core.research_intent import admission, collection_action
+    from astra_ai.core.search_intent import is_explicit_search_request
+    research_actions=arguments.get('actions',[]) if name=='run_action_batch' else [{'name':name,'arguments':arguments}]
+    collections=[a for a in research_actions if isinstance(a,dict) and collection_action(a.get('name'),a.get('arguments',{}))]
+    if name=='run_action_batch' and any(a.get('name')=='run_action_batch' for a in research_actions if isinstance(a,dict)):
+        return {'status':'rejected','reason':'nested_action_batches_not_supported'}
+    if len(collections)>1:
+        return {'status':'rejected','reason':'combine_research_subjects_in_one_request','summary':'Use one research operation for this user request; do not submit parallel paraphrases.'}
+    if collections:
+        jobs=globals().get('action_jobs')
+        previous=await asyncio.to_thread(jobs.operation,operation_id,context) if jobs and not context.get('job_id') else None
+        if previous:
+            steps=previous.get('actions',[])
+            outcome=(steps[-1].get('result') or {}) if steps else {}
+            return {**(outcome if previous.get('state') in {'completed','failed','canceled'} else {'status':previous.get('state','queued')}),'job_id':previous['id'],'duplicate':True}
+        artifacts,_=get_research_services()
+        candidate=collections[0]
+        decision=await asyncio.to_thread(admission,artifacts,candidate['name'],candidate.get('arguments',{}),context)
+        if decision and decision.get('status')=='saved_extension_authorized':
+            context={**context,'requested_research':True,'research_saved_only':True}
+        elif decision and decision.get('status')=='authorized_once':
+            approved=decision['confirmed_query']
+            context={**context,'requested_research':True,'authorization_quote':context.get('user_text',''),'user_text':approved,'research_user_text':approved}
+            if name=='run_action_batch':
+                arguments={**arguments,'actions':[{**a,'arguments':{**a.get('arguments',{}),'query':approved,'detail':approved}} if a is candidate else a for a in research_actions]}
+            else:arguments={**arguments,'query':approved,'detail':approved}
+        elif decision:return decision
+        if not context.get('job_id'):context={**context,'dedupe_research_turn':True}
+        if not context.get('job_id') and is_explicit_search_request(context.get('user_text','')):
+            # Keep every requested subject and freshness requirement. Model
+            # keyword suggestions must not replace the user's actual brief.
+            brief=context['user_text']
+            if name=='run_action_batch':arguments={**arguments,'actions':[{**a,'arguments':{**a.get('arguments',{}),'query':brief,'detail':brief}} if a is candidate else a for a in research_actions]}
+            else:arguments={**arguments,'query':brief,'detail':brief}
     if name=='search_web' and not arguments.get('action') or name=='search_widget_action' and arguments.get('action')=='run':
         from astra_ai.core.research_topics import conversational_mode
         arguments={**arguments,'mode':conversational_mode(arguments,context)}
@@ -5753,7 +5787,7 @@ async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
         if name=='search_web' and arguments.get('save_to_notes') is True:
             actions.append({'name':'notes_action','arguments':{'action':'import_research'},'depends_on':[0],
                             'result_refs':{'research_id':{'action_index':0,'result_path':'/research_id'},'research_revision':{'action_index':0,'result_path':'/research_revision'}}})
-        submitted=await asyncio.to_thread(action_jobs.submit,actions,context,queue_operation_id,str(arguments.get('query') or arguments.get('action') or name)[:180])
+        submitted=await asyncio.to_thread(action_jobs.submit,actions,{**context,'research_origin_operation_id':operation_id},queue_operation_id,str(arguments.get('query') or arguments.get('action') or name)[:180])
         if submitted.get('status') not in {'queued','duplicate'}:return submitted
         jid=submitted['job_id']
         if reserved:await asyncio.to_thread(artifacts.request_state,reserved['id'],context,job_id=jid)
@@ -6120,7 +6154,8 @@ async def _start_gemini_voice(websocket: WebSocket, *, reset_retry: bool = True,
     session._speaker_context=("Confirmed enrolled additional speaker; separate memories, no owner context." if speaker_profile else "Unconfirmed guest; no access to owner memories.") if guest else "Main account user context, connected to the existing owner memories and standing rules. Main user is a role, not the person’s name; identity details come from saved memory."
     if guest:session.profile_id=("speaker-"+speaker_profile) if speaker_profile else "guest-"+client_id
     session.session_id=("guest-" if guest else "")+CHAT_SESSIONS.get(client_id,session.session_id)
-    if previous and (previous.guest,previous.profile_id,previous.project_id,previous.session_id)==(session.guest,session.profile_id,session.project_id,session.session_id):
+    target_channel=(getattr(session,'research_focus',{}) or {}).get('thread_id') or session.session_id
+    if previous and previous._resumption_channel()==target_channel and (previous.guest,previous.profile_id,previous.project_id,previous.session_id)==(session.guest,session.profile_id,session.project_id,session.session_id):
         session._resume_handle=previous._resume_handle
         session._resume_model=previous._resume_model
         session.model=previous.model
@@ -6249,6 +6284,12 @@ async def websocket_endpoint(websocket: WebSocket):
                     if speaker_recognition.status()["enabled"]:speaker_buffers[websocket]=bytearray()
                     else:
                         live=state.live_sessions.get(websocket)
+                        if live:
+                            client=ws_manager.client_id(websocket)
+                            focus=await _live_research_focus(live,client,hydrate=False)
+                            if live._resumption_channel()!=(focus.get('thread_id') or live.session_id):
+                                await _start_gemini_voice(websocket,guest=bool(live.guest))
+                                live=state.live_sessions.get(websocket)
                         if live and await workspace_service.begin_audio(ws_manager.client_id(websocket),live):
                             live._voice_lease_generation=workspace_service.store().voice['generation']
                             await live.begin_audio(str(message.get('generation') or '')[:80],message.get('has_checkpoint') is True)
@@ -6346,6 +6387,12 @@ async def websocket_endpoint(websocket: WebSocket):
                             continue
                         client=ws_manager.client_id(websocket)
                         focus=await _live_research_focus(session,client,snapshot)
+                        target_channel=focus.get('thread_id') or session.session_id
+                        if session._resumption_channel()!=target_channel:
+                            await _start_gemini_voice(websocket,guest=bool(session.guest))
+                            session=state.live_sessions.get(websocket)
+                            if not session:continue
+                            focus=await _live_research_focus(session,client,snapshot)
                         workspace_service.submit(client,session,text,rid,focus)
                         accepted={'status':'accepted'}
                         if source=='search_widget':await ws_manager.send_to_client(websocket,{'type':'typed_transcript_status','request_id':rid,'source':source,'status':'accepted' if accepted.get('status') in {'accepted','duplicate'} else 'failed'})
@@ -8590,6 +8637,10 @@ async def continue_research(identifier,context,operation_id,view='',detail='',pa
     if initial_pending and reveal_saved:return {'status':'waiting_for_retry','research_id':identifier,'reason':'The original report is still being prepared. Collected findings remain visible.'}
     key=(context.get('profile_id',''),context.get('project_id',''),identifier)
     async with _research_continuation_locks.setdefault(key,asyncio.Lock()):
+        if context.get('dedupe_research_turn'):
+            from astra_ai.core.research_intent import existing_turn
+            prior=await asyncio.to_thread(existing_turn,artifacts,context)
+            if prior:return prior
         # Only the same question can reuse a pending continuation. A new question
         # still belongs to this report and needs its own durable collection step.
         from astra_ai.memory.shared_memory import normal
@@ -8609,7 +8660,7 @@ async def continue_research(identifier,context,operation_id,view='',detail='',pa
         args={'action':'more_media' if view=='media' else 'expand','research_id':identifier,'research_revision':item['revision'],'view':view,'detail':detail[:2000],
               'mode':item.get('mode','detailed')}
         if initial_pending:args={'action':'topic_followup','research_id':identifier,'query':detail[:2000],'mode':args['mode'],'report_mode':item.get('mode','detailed')}
-        await asyncio.to_thread(artifacts.extension_state,identifier,context,phase='waiting_for_report' if initial_pending else 'queued',view=view,operation_id=operation_id,detail=detail[:2000],outbound_started=False,search_checkpoint=None,collected_sources=0,reason='initial_report_pending' if initial_pending else '')
+        await asyncio.to_thread(artifacts.extension_state,identifier,context,phase='waiting_for_report' if initial_pending else 'queued',view=view,operation_id=operation_id,detail=detail[:2000],outbound_started=False,search_checkpoint=None,collected_sources=0,reason='initial_report_pending' if initial_pending else '',origin_turn_id=context.get('turn_id',''),origin_session_id=context.get('session_id',''))
         result=action_jobs.submit([{'name':'search_web','arguments':args}],{**context,'research_id':identifier,'requested_research':True},operation_id,goal='Continue '+(item.get('display_title') or item['query'][:90]))
         if result.get('status') in {'accepted','queued','duplicate','completed'}:
             await asyncio.to_thread(artifacts.extension_state,identifier,context,job_id=result.get('job_id',''))

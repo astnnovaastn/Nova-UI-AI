@@ -252,7 +252,7 @@ def test_removed_document_route_distinguishes_recoverable_deletion_from_wrong_sc
 @pytest.mark.parametrize('tool,arguments',[('search_web',{'query':'Camera question'}),
     ('search_widget_action',{'action':'run','query':'Camera question'}),
     ('research_action',{'action':'request','query':'Camera question'})])
-def test_direct_tool_variants_continue_selected_report(tool,arguments,user_text):
+def test_explicit_tool_variants_continue_selected_report(tool,arguments,user_text,tmp_path):
     import ast
     from pathlib import Path
     path=Path(__file__).parents[1]/'server.py'
@@ -261,12 +261,13 @@ def test_direct_tool_variants_continue_selected_report(tool,arguments,user_text)
     calls=[]
     async def continuation(identifier,context,operation_id,**kwargs):
         calls.append((identifier,operation_id,kwargs));return {'status':'accepted','research_id':identifier}
-    artifacts=SimpleNamespace(get=lambda *args:{'artifact':{'kind':'research'}})
-    namespace={'ALL_AEGIS_TOOLS':[{'name':tool}], 'get_research_services':lambda:(artifacts,None),
+    artifacts=ResearchArtifacts(tmp_path/'reports.json')
+    parent=artifacts.save('Pixel versus iPhone','detailed','# Comparison\n\nSaved evidence [S1].',[SOURCE],[],{**CTX,'turn_id':'original'},'initial')
+    namespace={'asyncio':asyncio,'ALL_AEGIS_TOOLS':[{'name':tool}], 'get_research_services':lambda:(artifacts,None),
         'research_followup':lambda text:True,'continue_research':continuation}
     exec(compile(ast.Module(body=[handler],type_ignores=[]),str(path),'exec'),namespace)
-    result=asyncio.run(namespace[handler.name](tool,arguments,{**CTX,'client_id':'connected','research_id':'pixel','user_text':user_text},'turn-camera'))
-    assert result['research_id']=='pixel' and calls==[('pixel','turn-camera',{'detail':user_text or 'Camera question'})]
+    result=asyncio.run(namespace[handler.name](tool,arguments,{**CTX,'client_id':'connected','research_id':parent['id'],'user_text':user_text,'requested_research':True},'turn-camera'))
+    assert result['research_id']==parent['id'] and calls==[(parent['id'],'turn-camera',{'detail':user_text or 'Camera question'})]
 
 
 @pytest.mark.parametrize('fail',[False,True])

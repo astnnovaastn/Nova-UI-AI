@@ -456,6 +456,25 @@ def test_research_reply_pins_thread_before_report_switch(tmp_path):
     asyncio.run(scenario())
 
 
+def test_research_connection_excludes_main_history_and_uses_its_own_resumption(tmp_path):
+    async def scenario():
+        session=make_session(tmp_path,[])
+        session.session_id='main'
+        session.memory_manager.append_turn('La Liga standings','Old football task','main','football')
+        session.memory_manager.append_turn('Explain Google robotics','Robots generalize to new tasks','research-robots','robot-question')
+        session.research_focus={'research_id':'robots','thread_id':'research-robots','summary':'Google Gemini Robotics generalizes to unfamiliar objects.'}
+        await session._load_connection_context()
+        assert session.session_id=='main' and session._resumption_channel()=='research-robots'
+        assert [m['content'] for m in session._recent_messages]==['Explain Google robotics','Robots generalize to new tasks']
+        instruction=str(session._config().system_instruction)
+        assert 'Google Gemini Robotics' in instruction and 'La Liga' not in instruction and 'football task' not in instruction
+        session.research_focus={}
+        await session._load_connection_context()
+        assert session._resumption_channel()=='main'
+        assert session._recent_messages[0]['content']=='La Liga standings'
+    asyncio.run(scenario())
+
+
 def test_shared_ui_context_preserves_research_focus_without_inventing_views():
     from astra_ai.core.aegis_live_context import sanitize_ui
     snapshot=sanitize_ui({'view':'research','research_id':'report','research_revision':'revision','thread_id':'research-report','revision':5})

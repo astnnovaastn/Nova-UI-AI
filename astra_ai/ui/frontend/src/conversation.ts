@@ -64,6 +64,7 @@ let connection = {
   })(),
   status: "",
   textBusy: false,
+  activeRequestId: '',
   focusId: "",
   focusRevision: -1,
   sessionSwitching: false,
@@ -85,6 +86,12 @@ export function conversationSnapshot() {
     researchMessages: { ...researchMessages },
     ...connection,
   };
+}
+
+export function conversationFinished(requestId: string, playing = false) {
+  if (connection.activeRequestId && connection.activeRequestId !== requestId) return false;
+  conversationState({activeRequestId:'',textBusy:false,status:'',state:playing?'speaking':connection.muted?'idle':'listening'});
+  return true;
 }
 function changed() {
   window.dispatchEvent(
