@@ -42,6 +42,7 @@ interface ResearchWriterStatus {
   provider: ResearchProvider | "none";
   switching: boolean;
   voice_model: string;
+  fallback?: {enabled:boolean;configured:boolean;models?:string[];effective_provider?:string;cooperative_enabled?:boolean};
   providers: Array<{id: ResearchProvider; configured: boolean; active: boolean; model: string; effective_model: string; credential_source?: string;
     requests_used: number; request_limit: number; tokens_used: number; token_limit: number; local_limit_reached: boolean}>;
 }
@@ -131,6 +132,17 @@ function buildPanelHTML(): string {
             <input type="password" id="input-gemini-research-key" autocomplete="off" spellcheck="false" placeholder="Separate key for research writing" />
             <button type="button" class="settings-btn" id="btn-save-gemini-research-key">Save research key</button>
             <small id="gemini-research-key-state">Checking research credential…</small>
+          </div>
+          <div class="settings-field">
+            <label><input type="checkbox" id="input-groq-fallback-enabled" /> Automatic Groq backup for research writing</label>
+            <label><input type="checkbox" id="input-groq-cooperative" /> Advanced cooperative research (extra writing stages)</label>
+            <label for="input-groq-preferred-model">Preferred Groq backup</label>
+            <select id="input-groq-preferred-model"><option value="openai/gpt-oss-120b">GPT-OSS 120B</option><option value="openai/gpt-oss-20b">GPT-OSS 20B</option></select>
+            <small id="groq-research-state">Checking fallback configuration…</small>
+            <label for="input-groq-research-key">Groq research API key</label>
+            <input type="password" id="input-groq-research-key" autocomplete="off" spellcheck="false" placeholder="Optional separate research credential" />
+            <div class="settings-actions"><button type="button" class="settings-btn" id="btn-save-groq-research-key">Save Groq key</button><button type="button" class="settings-btn" id="btn-check-groq-models">Check available models</button><button type="button" class="settings-btn" id="btn-test-groq-writing">Test backup writing</button></div>
+            <small id="groq-research-feedback" role="status"></small>
           </div>
           <p id="research-live-provider-note">Chat and voice continue using Gemini Live. Switching writers preserves your research, drafts, and usage counters.</p>
         </section>
@@ -376,6 +388,13 @@ function renderResearchWriter(status: ResearchWriterStatus) {
   const suggestions = selectedResearchProvider === "gemini" ? ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-flash-latest"] : ["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini"];
   list.replaceChildren(...suggestions.map(value => { const option = document.createElement("option"); option.value = value; return option; }));
   document.getElementById("research-live-provider-note")!.textContent = `Chat and voice stay on Gemini Live · ${status.voice_model}. Inactive research writers receive no new requests. Your reports, drafts, and keys stay saved.`;
+  const fallback=status.fallback;
+  const enabled=document.getElementById('input-groq-fallback-enabled') as HTMLInputElement|null;
+  if(enabled)enabled.checked=!!fallback?.enabled;
+  const cooperative=document.getElementById('input-groq-cooperative') as HTMLInputElement|null;if(cooperative)cooperative.checked=!!fallback?.cooperative_enabled;
+  const preferred=document.getElementById('input-groq-preferred-model') as HTMLSelectElement|null;if(preferred&&fallback?.models?.[0])preferred.value=fallback.models[0];
+  const fallbackState=document.getElementById('groq-research-state');
+  if(fallbackState)fallbackState.textContent=fallback?.configured?`Gemini stays primary. Groq ${fallback.enabled?'is available as backup':'is disabled'}. Chat and voice stay on Gemini.`:'Save a Groq credential to enable research backup.';
   const gemini = status.providers.find(row => row.id === "gemini");
   document.getElementById("gemini-research-key-state")!.textContent = gemini?.credential_source === "research" ? "Separate research key saved. Chat and voice use their existing key." : "Using the shared Gemini key until a separate research key is saved.";
 }
@@ -501,6 +520,37 @@ function wireEvents() {
       result.textContent = "Gemini research key saved.";
     } catch (error) { result.textContent = error instanceof Error ? error.message : "The research key could not be saved."; }
     finally { button.disabled = false; }
+  });
+  document.getElementById('input-groq-fallback-enabled')?.addEventListener('change',async event=>{
+    const control=event.target as HTMLInputElement;control.disabled=true;
+    try{await apiPost('/api/settings/research-fallback',{enabled:control.checked});renderResearchWriter(await apiGet<ResearchWriterStatus>('/api/settings/research-provider'));}
+    catch(e){control.checked=!control.checked;document.getElementById('groq-research-feedback')!.textContent=e instanceof Error?e.message:'Could not change fallback.';}finally{control.disabled=false;}
+  });
+  document.getElementById('input-groq-preferred-model')?.addEventListener('change',async event=>{
+    const control=event.target as HTMLSelectElement;control.disabled=true;
+    try{await apiPost('/api/settings/research-fallback',{enabled:!!researchWriterStatus?.fallback?.enabled,models:[control.value,control.value==='openai/gpt-oss-120b'?'openai/gpt-oss-20b':'openai/gpt-oss-120b']});renderResearchWriter(await apiGet<ResearchWriterStatus>('/api/settings/research-provider'));}
+    catch(e){document.getElementById('groq-research-feedback')!.textContent=e instanceof Error?e.message:'Could not change model preference.';}finally{control.disabled=false;}
+  });
+  document.getElementById('input-groq-cooperative')?.addEventListener('change',async event=>{
+    const control=event.target as HTMLInputElement;control.disabled=true;
+    try{await apiPost('/api/settings/research-fallback',{enabled:!!researchWriterStatus?.fallback?.enabled,cooperative:control.checked});renderResearchWriter(await apiGet<ResearchWriterStatus>('/api/settings/research-provider'));}
+    catch(e){control.checked=!control.checked;document.getElementById('groq-research-feedback')!.textContent=e instanceof Error?e.message:'Could not change research mode.';}finally{control.disabled=false;}
+  });
+  document.getElementById('btn-save-groq-research-key')?.addEventListener('click',async()=>{
+    const input=document.getElementById('input-groq-research-key') as HTMLInputElement;
+    const button=document.getElementById('btn-save-groq-research-key') as HTMLButtonElement;
+    if(!input.value.trim())return;button.disabled=true;
+    try{await apiPost('/api/settings/keys',{key_name:'NOVA_RESEARCH_GROQ_API_KEY',key_value:input.value.trim()});input.value='';await apiPost('/api/settings/research-fallback',{enabled:true});renderResearchWriter(await apiGet<ResearchWriterStatus>('/api/settings/research-provider'));document.getElementById('groq-research-feedback')!.textContent='Research credential saved. Private evidence still requires permission.';}
+    catch(e){document.getElementById('groq-research-feedback')!.textContent=e instanceof Error?e.message:'Could not save credential.';}finally{button.disabled=false;}
+  });
+  document.getElementById('btn-test-groq-writing')?.addEventListener('click',async()=>{
+    const button=document.getElementById('btn-test-groq-writing') as HTMLButtonElement;const feedback=document.getElementById('groq-research-feedback')!;button.disabled=true;feedback.textContent='Testing real backup writing within the current research allowance…';
+    try{const result=await apiPost<{status:string;model?:string;characters?:number;reason?:string}>('/api/settings/research-fallback/test',{operation_id:crypto.randomUUID()});feedback.textContent=result.status==='completed'?`Verified ${result.model}: ${result.characters} characters generated. This was a diagnostic, not a full report.`:`Backup writing ${result.status}: ${result.reason||'unavailable'}.`;renderResearchWriter(await apiGet<ResearchWriterStatus>('/api/settings/research-provider'));}
+    catch(e){feedback.textContent=e instanceof Error?e.message:'Backup writing test failed.';}finally{button.disabled=false;}
+  });
+  document.getElementById('btn-check-groq-models')?.addEventListener('click',async()=>{
+    const feedback=document.getElementById('groq-research-feedback')!;feedback.textContent='Checking model access…';
+    try{const result=await apiGet<{models:Record<string,unknown>}>('/api/settings/research-models?refresh=true');feedback.textContent='Available: '+Object.keys(result.models).join(', ')+'. Discovery does not verify report generation.';}catch(e){feedback.textContent=e instanceof Error?e.message:'Model discovery unavailable.';}
   });
   const soundHost=document.getElementById("settings-sound-controls");
   if(soundHost) mountSoundSettings(soundHost);

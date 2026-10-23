@@ -4,7 +4,7 @@ from pathlib import Path
 
 def cases_for(repo,target,function):
     repo=Path(repo).resolve();target=Path(target).resolve();module='.'.join(target.relative_to(repo).with_suffix('').parts);cases=[]
-    for directory in (repo/'tests',repo/'astra_ai'/'tests',repo/'astra_ai'/'ui'/'backend'/'test_backend file'):
+    for directory in (repo/'tests',repo/'astra_ai'/'tests',repo/'astra_ai'/'ui'/'backend'/'tests'):
         if not directory.exists():continue
         for path in directory.rglob('test_*.py'):
             if path.stat().st_size>512000:continue

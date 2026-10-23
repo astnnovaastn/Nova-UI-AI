@@ -4,6 +4,7 @@ import asyncio, contextlib, hashlib, json, time, uuid, os
 from pathlib import Path
 from fastapi import HTTPException, Request
 from .workspace_sync import WorkspaceHub, scope_key
+from .runtime_paths import runtime_paths
 
 CHAT_EVENTS = {
     "live_input_transcript",
@@ -47,7 +48,7 @@ class WorkspaceService:
     def store(self):
         if self.hub is None:
             self.hub = WorkspaceHub(
-                self.state.live_memory.memory_path.parent / "workspace-sync.sqlite3"
+                runtime_paths.system / "workspace-sync.sqlite3"
             )
         return self.hub
 
@@ -266,6 +267,11 @@ class WorkspaceService:
             message = {**message, "context_cards": turn["cards"]}
         return message
 
+    def bind_playback(self,client,session):
+        hub=self.store();lease=hub.voice
+        session._voice_lease_generation=lease['generation'] if lease and hub.owns_voice(client) else None
+        return session._voice_lease_generation
+
     def submit(self, client, session, text, rid, focus):
         context = self.context(client)
         channel = focus.get("thread_id") or self.sessions.get(client, "")
@@ -290,6 +296,7 @@ class WorkspaceService:
                     return focus
 
                 try:
+                    self.bind_playback(client,session)
                     session.research_focus_provider = frozen
                     self.store().turn(rid, context, state="running")
                     result = await session.send_text(text, request_id=rid)

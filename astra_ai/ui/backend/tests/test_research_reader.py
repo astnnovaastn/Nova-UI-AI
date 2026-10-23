@@ -318,3 +318,17 @@ def test_continuation_reveals_saved_content_before_queueing_same_report(tmp_path
         assert submitted[0][0]['arguments']['mode']=='detailed'
         activity=store.extension_state(item['id'],CTX)
         assert activity['phase']=='collecting_sources' and activity['search_checkpoint']==[source()]
+
+
+def test_published_reader_preserves_comparison_title_after_abbreviation(tmp_path):
+    from astra_ai.core.research_learning import display_title
+    assert display_title('Air vs. Ground Heat Pumps. Explain the costs.')=='Air vs. Ground Heat Pumps'
+    store=ResearchArtifacts(tmp_path/'reports.json');context={'profile_id':'owner'}
+    row=store.save('Heat pump comparison','detailed','# Air vs. Ground Heat Pumps\n\nA comparison [S1].',[source()],[],context,'comparison')
+    store.request_state(row['id'],context,display_title='Air vs')
+    assert store.document(row['id'],context)['display_title']=='Air vs. Ground Heat Pumps'
+    bounded=store.document(row['id'],context,bounded=True)
+    assert bounded['display_title']=='Air vs. Ground Heat Pumps'
+    assert bounded['report'].startswith('# Air vs. Ground Heat Pumps\n')
+    store.request_state(row['id'],context,display_title='My comparison')
+    assert store.document(row['id'],context,bounded=True)['display_title']=='My comparison'

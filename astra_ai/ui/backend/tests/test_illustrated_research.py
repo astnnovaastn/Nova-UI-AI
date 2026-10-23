@@ -588,3 +588,44 @@ def test_phone_comparison_does_not_illustrate_incidental_other_models():
     rows=[{'id':'main','source_id':'S1','caption':'Samsung Galaxy S26 Ultra'}, {'id':'incidental','source_id':'S1','caption':'OnePlus 15'}]
     report='# Apple iPhone 17 and Samsung Galaxy S26 Ultra\n\n## Samsung Galaxy S26 Ultra\n\nThe camera comparison also briefly mentions the OnePlus 15 [S1].'
     assert [row['id'] for row in place_images(rows,report)]==['main']
+
+
+def test_saved_markdown_images_are_reused_without_paid_discovery(tmp_path,monkeypatch):
+    store=ResearchArtifacts(tmp_path/'reports.json');entry=store.reserve('Heat pump comparison','detailed',CTX,'images')
+    source={'title':'Heat pump comparison','url':'https://example.com/article','content':'![Heat pump ground loop diagram](/diagram.png)'}
+    out=io.BytesIO();Image.new('RGB',(640,360),'navy').save(out,format='PNG');body=out.getvalue()
+    monkeypatch.setattr(store,'_fetch_public_source',lambda url,image=False:(body,'image/png',url) if image else (b'', 'text/plain',url))
+    search=ResearchSearch(store,lambda k:'')
+    rows=asyncio.run(prepare_images(search,entry['id'],CTX,[source],'Heat pump comparison'))
+    assert len(rows)==1 and rows[0]['url']=='https://example.com/diagram.png'
+    assert rows[0]['source_id']=='S1' and rows[0]['source_url']==source['url']
+
+
+def test_public_https_transport_uses_a_verified_ca_bundle(monkeypatch):
+    import socket,urllib3,certifi
+    recorded={}
+    monkeypatch.setattr(socket,'getaddrinfo',lambda *a,**k:[(socket.AF_INET,socket.SOCK_STREAM,6,'',('8.8.8.8',443))])
+    class Response:
+        status=200;headers={'Content-Type':'image/png'}
+        def __enter__(self):return self
+        def __exit__(self,*args):pass
+        def stream(self,size):yield b'fixture'
+    class Pool:
+        def __init__(self,*args,**kwargs):recorded.update(kwargs)
+        def request(self,*args,**kwargs):return Response()
+        def close(self):pass
+    monkeypatch.setattr(urllib3,'HTTPSConnectionPool',Pool)
+    assert ResearchArtifacts._fetch_public_source('https://example.com/diagram.png',True)[0]==b'fixture'
+    assert recorded['ca_certs']==certifi.where() and recorded['cert_reqs']=='CERT_REQUIRED'
+    assert recorded['assert_hostname']=='example.com' and recorded['server_hostname']=='example.com'
+
+
+def test_prepared_illustrations_honor_explicit_query_limit_when_reopened(tmp_path):
+    store=ResearchArtifacts(tmp_path/'reports.json')
+    source={'title':'Heat pump','url':'https://example.com/heat','content':'Evidence.'}
+    item=store.save('Heat pumps with three or four relevant technical images','detailed','# Heat pumps\n\nEvidence [S1].',[source],[],CTX,'limited')
+    rows=[{'id':'I'+str(i),'url':'https://example.com/'+str(i)+'.png','caption':'Heat pump diagram','source_url':source['url']} for i in range(6)]
+    store.request_state(item['id'],CTX,images_prepared=True,selected_images=rows)
+    images=store.images(item['id'],CTX)
+    assert len([row for row in images if not row.get('source_only')])==4
+    assert len(images)==6  # Extra attributed assets remain addressable internally.

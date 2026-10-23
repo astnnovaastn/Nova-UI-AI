@@ -70,7 +70,8 @@ calendar_router = APIRouter(
     tags=["calendar"],
     dependencies=[Depends(require_calendar_owner)],
 )
-calendar_store = CalendarStore(Path(__file__).resolve().parent.parent / "calendar_widget_data")
+from astra_ai.ui.backend.runtime_paths import runtime_paths
+calendar_store = CalendarStore(runtime_paths.widget("calendar"))
 _import_previews: dict[str, dict[str, Any]] = {}
 _caldav_credentials: dict[str, str] = {}
 _create_idempotency: OrderedDict[str, dict[str, Any]] = OrderedDict()

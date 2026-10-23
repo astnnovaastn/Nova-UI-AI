@@ -239,3 +239,6 @@ astra_ai/memory/research_artifacts/
 # Private live workspace journal, pairing credentials, and collaborative document state.
 **/workspace-sync.sqlite3*
 **/collaboration.sqlite3*
+
+# Managed private application state, including media, backups and device credentials.
+/state/

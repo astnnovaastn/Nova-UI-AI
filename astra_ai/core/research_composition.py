@@ -5,6 +5,10 @@ from .background_budget import BudgetPaused
 from astra_ai.memory.shared_memory import safe
 
 
+class ResearchCompositionInvalid(ModelUnavailable):
+    """A generated draft failed deterministic report validation after its repair."""
+
+
 def evidence_rows(query,sources,cap=36000):
     terms=set(re.findall(r'[a-z0-9]{3,}',query.casefold()))-{'the','and','for','research','about','with','report','information'}
     rows=[];limit=cap//max(1,min(20,len(sources)))
@@ -76,7 +80,9 @@ async def compose_full_report(model,query,sources,state,checkpoint):
         validate_composition({'title':state['plan']['title'],'sections':[{**section,'report':part} for section,part in zip(state['plan']['sections'],state['parts'])]},min(20,len(sources)),minimum)
         return '# '+state['plan']['title']+'\n\n'+'\n\n'.join(state['parts'])
     attempts=state.get('batch_attempts',0)
-    if type(attempts) is not int or not 0<=attempts<2:raise ModelUnavailable('Full research needs review after bounded composition attempts')
+    if type(attempts) is not int or not 0<=attempts<2:
+        error=ResearchCompositionInvalid if state.get('candidate') else ModelUnavailable
+        raise error('Full research needs review after bounded composition attempts')
     section_schema={'type':'object','additionalProperties':False,'required':['heading','focus','report'],'properties':{key:{'type':'string'} for key in ('heading','focus','report')}}
     schema={'type':'object','additionalProperties':False,'required':['title','sections'],'properties':{'title':{'type':'string','maxLength':52},'sections':{'type':'array','minItems':3,'maxItems':3,'items':section_schema}}}
     instruction=('Repair the saved draft in one complete response. Correct the failed validation, preserve supported specifics, and complete missing coverage. ' if attempts else '')+(

@@ -37,7 +37,8 @@ class ImageBackupManager:
         """
         if backup_root is None:
             # Default to backend/ai_generated_images/
-            backup_root = Path(__file__).parent / "ai_generated_images"
+            from astra_ai.ui.backend.runtime_paths import runtime_paths
+            backup_root = runtime_paths.generated
         
         self.backup_root = Path(backup_root)
         self.index_file = self.backup_root / "index.json"

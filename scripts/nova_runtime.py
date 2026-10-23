@@ -12,6 +12,7 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import uvicorn
+from dotenv import dotenv_values
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / 'astra_ai/ui/backend/server.py'
@@ -59,23 +60,24 @@ async def stop_child():
 
 async def launch():
     global child
-    (ROOT / 'logs').mkdir(exist_ok=True)
+    log_root=Path(os.environ.get('NOVA_STATE_DIR') or dotenv_values(ROOT/'.env').get('NOVA_STATE_DIR') or ROOT/'state')/'logs'
+    log_root.mkdir(parents=True,exist_ok=True)
     for handle in handles:
         handle.close()
     handles.clear()
-    out = open(ROOT / 'logs/backend-console.log', 'ab', buffering=0)
-    err = open(ROOT / 'logs/backend-errors.log', 'ab', buffering=0)
+    out = open(log_root / 'backend-console.log', 'ab', buffering=0)
+    err = open(log_root / 'backend-errors.log', 'ab', buffering=0)
     handles.extend([out, err])
     env = {**os.environ, 'NOVA_RUNTIME_TOKEN': TOKEN, 'PYTHONUNBUFFERED': '1'}
     child = subprocess.Popen([sys.executable, str(BACKEND)], cwd=BACKEND.parent, env=env, stdout=out, stderr=err)
-    deadline = time.monotonic() + 45
+    deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
         if child.poll() is not None:
             raise RuntimeError('Backend exited during startup. Check the backend logs.')
         if await healthy():
             return
         await asyncio.sleep(.25)
-    raise RuntimeError('Backend did not become ready within 45 seconds.')
+    raise RuntimeError('Backend did not become ready within 120 seconds. Check migration and backend logs.')
 
 async def restart():
     async with lock:

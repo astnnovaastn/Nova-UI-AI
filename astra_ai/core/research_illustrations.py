@@ -6,7 +6,7 @@ from PIL import Image,ImageStat,ImageOps
 from urllib3.exceptions import HTTPError
 from astra_ai.memory.shared_memory import stable, safe
 
-IMAGE_VERSION=6
+IMAGE_VERSION=7
 MAX_IMAGES=6
 TARGET_IMAGES=4
 
@@ -119,6 +119,21 @@ async def prepare_images(search, identifier, context, sources, query):
             if not score:continue
             candidates.append({'id':'I'+stable(identifier,url)[:24],'url':url,'caption':caption,'source_id':'S'+str(index+1),'publication':urlsplit(source['url']).hostname,'source_url':source['url'],'score':score})
 
+    # Retrieved Markdown already contains source-attributed article illustrations.
+    # Reuse those URLs before spending a separate image-search request.
+    def saved_article_images():
+        from markdown_it import MarkdownIt
+        result=[]
+        for index,source in enumerate(sources[:20]):
+            content=str(source.get('content',''))[:120000]
+            if '![' not in content:continue
+            html=MarkdownIt('commonmark',{'html':False}).render(content)
+            for row,_ in page_candidates(html,source['url'],source,identifier,'S'+str(index+1)):
+                if row['url'] in seen or not relevant_candidate(row,query):continue
+                score=len(wanted & terms(row['caption']+' '+source['title']))
+                if score:seen.add(row['url']);result.append({**row,'score':score})
+        return result
+    candidates.extend(await asyncio.to_thread(saved_article_images))
     candidates=[row for row in candidates if relevant_candidate(row,query)]
     candidates.extend(row for row in metadata.get('validated_images',[]) if row.get('url') not in seen and useful_image(row) and relevant_candidate(row,query))
     attempted=set();selected=[];hashes=set()
@@ -167,7 +182,10 @@ async def prepare_images(search, identifier, context, sources, query):
             if not source.get('url','').startswith(('https://','http://')):return []
             try:
                 async with search.network:body,mime,final=await asyncio.to_thread(artifacts._fetch_public_source,source['url'])
-                if mime!='text/html':return []
+                if mime=='text/markdown':
+                    from markdown_it import MarkdownIt
+                    body=MarkdownIt('commonmark',{'html':False}).render(body.decode('utf-8',errors='replace'))
+                elif mime!='text/html':return []
                 result=[]
                 for row,_ in page_candidates(body,final,source,identifier,'S'+str(index+1)):
                     score=len(wanted & terms(row['caption']+' '+source['title']))

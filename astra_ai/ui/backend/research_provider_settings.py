@@ -61,9 +61,12 @@ class ResearchProviderSettings:
                 'local_limit_reached':requests>=budget.daily_requests or tokens>=budget.daily_tokens,
                 'next_attempt':snapshot.get('next_attempt',0),'pause_reason':snapshot.get('pause_reason','')})
         return {'provider':getattr(active,'provider','none'),'default_provider':'gemini','switching':self.switching,
-            'providers':rows,'chat_provider':'gemini_live','voice_model':self.live_model}
+            'providers':rows,'chat_provider':'gemini_live','voice_model':self.live_model,
+            'fallback':active.status() if hasattr(active,'status') else {'enabled':False,'configured':False}}
 
-    async def activate(self,provider,model=None):
+    async def activate(self,provider,model=None,extra=None):
+        extra=extra or {}
+        if set(extra)-{'NOVA_RESEARCH_GROQ_FALLBACK','NOVA_RESEARCH_GROQ_COOPERATIVE','NOVA_RESEARCH_GROQ_MODELS'}:raise ValueError('Invalid research configuration')
         if provider not in DEFAULT_MODELS:raise ValueError('Choose Gemini, OpenAI, or deactivate research writing.')
         chosen=(model if model is not None else self.model(provider)) if provider!='none' else ''
         if provider!='none' and (not isinstance(chosen,str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{1,100}',chosen)):raise ValueError('Enter a valid model ID.')
@@ -82,7 +85,7 @@ class ResearchProviderSettings:
                 acquired=True
                 if old and old.provider=='gemini':
                     await asyncio.to_thread(old.budget.scope_legacy_provider_pause,old.key_provider(),old.model_provider())
-                updates={'NOVA_RESEARCH_PROVIDER':provider}
+                updates={'NOVA_RESEARCH_PROVIDER':provider,**extra}
                 if provider!='none':updates['NOVA_RESEARCH_GEMINI_MODEL' if provider=='gemini' else 'NOVA_RESEARCH_OPENAI_MODEL']=chosen
                 settings=lambda name:updates.get(name,self.settings(name))
                 budget=requested_research_budget(research_budget_path(self.memory_dir,settings),self.slot,settings)

@@ -80,3 +80,13 @@ def test_real_provider_and_local_caps_remain_quota_waits(tmp_path,reason):
     assert store.extension_state(item['id'],CTX)['phase']=='waiting_for_quota'
 
 
+
+
+def test_shared_writing_instructions_do_not_reuse_an_unrelated_subject(tmp_path):
+    from astra_ai.core.research_learning import ResearchArtifacts
+    store=ResearchArtifacts(tmp_path/'reports.json');ctx={'profile_id':'owner'}
+    common=' Explain performance and evidence limitations. Include substantial connected analysis, a comparison table and three or four relevant technical images from reliable sources.'
+    source={'title':'Grid storage: pumped hydro versus batteries','url':'https://example.com/storage','content':'Pumped hydro stores water. Lithium batteries store electricity.','retrieved_at':'2026-10-23'}
+    store.save('Research grid storage: pumped hydro versus lithium batteries.'+common,'detailed','# Grid storage\n\nStored energy [S1].',[source],[],ctx,'storage')
+    assert store.related_evidence('Research air-source versus ground-source heat pumps in detail.'+common,ctx)==[]
+    assert store.related_evidence('Research grid storage: pumped hydro versus lithium batteries.'+common,ctx)

@@ -238,9 +238,9 @@ def test_removed_document_route_distinguishes_recoverable_deletion_from_wrong_sc
     from fastapi import HTTPException
     store=ResearchArtifacts(tmp_path/'reports.json');row=store.reserve('Removed topic','quick',CTX,'remove')
     preview=store.deletion_preview(row['id'],CTX);store.remove(row['id'],CTX,preview['revision'],'delete')
-    path=Path(__file__).parents[1]/'server.py';tree=ast.parse(path.read_text(encoding='utf-8'))
-    handler=next(node for node in tree.body if isinstance(node,ast.AsyncFunctionDef) and node.name=='research_document');handler.decorator_list=[]
-    namespace={'asyncio':asyncio,'Request':object,'HTTPException':HTTPException,'_learning_context':lambda request:request,'get_research_services':lambda:(store,None),'action_jobs':SimpleNamespace(list=lambda *a:{})}
+    path=Path(__file__).parents[1]/'api'/'research.py';tree=ast.parse(path.read_text(encoding='utf-8'))
+    handler=next(node for node in ast.walk(tree) if isinstance(node,ast.AsyncFunctionDef) and node.name=='research_document');handler.decorator_list=[]
+    namespace={'asyncio':asyncio,'Request':object,'HTTPException':HTTPException,'context_for':lambda request:request,'artifacts_for':lambda:(store,None),'jobs':SimpleNamespace(list=lambda *a:{})}
     exec(compile(ast.Module(body=[handler],type_ignores=[]),str(path),'exec'),namespace)
     with pytest.raises(HTTPException) as removed:asyncio.run(namespace['research_document'](row['id'],CTX))
     assert removed.value.status_code==410
@@ -454,10 +454,10 @@ def test_research_context_includes_real_quota_and_followup_status(tmp_path):
     store=ResearchArtifacts(tmp_path/'r.json');parent=store.reserve('Pixel comparison','detailed',CTX,'parent')
     store.request_state(parent['id'],CTX,phase='waiting_for_quota',waiting_reason='gemini_daily_quota',next_attempt=1234)
     store.extension_state(parent['id'],CTX,phase='waiting_for_report',reason='initial_report_pending',job_id='camera-job')
-    path=Path(__file__).parents[1]/'server.py';tree=ast.parse(path.read_text(encoding='utf-8'))
-    handler=next(n for n in tree.body if isinstance(n,ast.AsyncFunctionDef) and n.name=='_research_thread')
+    path=Path(__file__).parents[1]/'api'/'research.py';tree=ast.parse(path.read_text(encoding='utf-8'))
+    handler=next(n for n in ast.walk(tree) if isinstance(n,ast.AsyncFunctionDef) and n.name=='_research_thread')
     memory=SimpleNamespace(_lock=threading.RLock(),_messages=lambda:[])
-    env={'asyncio':asyncio,'re':re,'get_research_services':lambda:(store,None),'state':SimpleNamespace(live_memory=memory)}
+    env={'asyncio':asyncio,'re':re,'artifacts_for':lambda:(store,None),'workspace':None,'state':SimpleNamespace(live_memory=memory)}
     exec(compile(ast.Module(body=[handler],type_ignores=[]),str(path),'exec'),env)
     result=asyncio.run(env[handler.name](parent['id'],CTX))
     assert result['research_id']==parent['id'] and result['progress']=={'completeness':'pending','phase':'waiting_for_quota','waiting_reason':'gemini_daily_quota','next_attempt':1234,'followup':{'phase':'waiting_for_report','reason':'initial_report_pending','job_id':'camera-job','collected_sources':None}}

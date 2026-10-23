@@ -22,7 +22,8 @@ class WeatherRuntimeService:
         self.logger = logger
         self.fallback_location = fallback_location
         self.ipinfo_url = ipinfo_url
-        self.state_dir = self.backend_dir / "weather_widget_data"
+        from astra_ai.ui.backend.runtime_paths import runtime_paths
+        self.state_dir = runtime_paths.widget("weather")
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.location_snapshot_file = self.state_dir / "location_snapshot.json"
         self.weather_history_file = self.state_dir / "weather_history.json"

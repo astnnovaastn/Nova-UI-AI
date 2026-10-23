@@ -236,6 +236,9 @@ class ComposedResearchModel(BackgroundModel):
             state.pop('pending_section_repair',None)
             parts.append(part);state['parts']=parts
             await checkpoint(copy.deepcopy(state))
+        local_review=getattr(self,'prepare_local_coverage',None)
+        if not state.get('coverage_checked') and local_review and local_review(query,sources,state):
+            await checkpoint(copy.deepcopy(state))
         if not state.get('coverage_checked'):
             repair=state.get('pending_coverage_repair',{})
             if repair.get('attempted'):raise ModelUnavailable('Research coverage review is unverifiable')
@@ -358,6 +361,11 @@ class GeminiResearchModel(ComposedResearchModel):
                 if usage is not None and reservation is not None:
                     reservation.settle(getattr(usage,'total_token_count',None))
                 candidates=getattr(response,'candidates',None) or []
+                feedback=getattr(response,'prompt_feedback',None)
+                blocked=str(getattr(feedback,'block_reason','') or '').split('.')[-1]
+                finish=str(getattr(candidates[0],'finish_reason','')).split('.')[-1] if candidates else ''
+                if blocked not in {'','0','BLOCK_REASON_UNSPECIFIED','BLOCKED_REASON_UNSPECIFIED'} or finish in {'SAFETY','PROHIBITED_CONTENT','BLOCKLIST','SPII','RECITATION'}:
+                    raise ModelUnavailable('Research writing was refused')
                 if candidates and str(getattr(candidates[0],'finish_reason','')).split('.')[-1]=='MAX_TOKENS':
                     raise ModelUnavailable('Gemini answer reached its output limit before completion')
                 result = json.loads(response.text or '')
@@ -373,7 +381,7 @@ class GeminiResearchModel(ComposedResearchModel):
                     paused=gemini_quota_pause(exc)
                     self.budget.provider_pause(paused.until,paused.reason,provider_key=key,provider_model=model)
                     raise paused from None
-                if code in {404,408,500,502,503,504} or isinstance(exc,(TimeoutError,httpx.TimeoutException)):
+                if code in {404,408,500,502,503,504} or isinstance(exc,(TimeoutError,ConnectionError,httpx.TransportError)):
                     if model!='gemini-flash-latest':self.budget.defer_model(model,key,time.time()+(600 if code==404 else 30))
                     failure=ResearchModelUnavailable('Gemini research model or service is unavailable')
                     failure.failure_kind='http_'+str(code) if code in {404,408,500,502,503,504} else 'timeout'
@@ -412,7 +420,7 @@ def resume_published_research(jobs,artifacts):
     return changed
 
 
-def resume_research_budget_waits(jobs,artifacts,budget,provider_key='',budget_scope=None):
+def resume_research_budget_waits(jobs,artifacts,budget,provider_key='',budget_scope=None,allow_fallback=False):
     """Resume saved evidence only when both local and provider limits permit it."""
     import time
     from datetime import datetime,timezone
@@ -435,13 +443,14 @@ def resume_research_budget_waits(jobs,artifacts,budget,provider_key='',budget_sc
                 if not metadata.get('sources') or scope(metadata)!=scope(context) or metadata.get('waiting_reason')!=reason:continue
                 ready=composition_ready(metadata)
                 if not ready:
-                    if snapshot.get('next_attempt',0)>time.time():continue
+                    alternative=allow_fallback and reason.startswith('gemini_')
+                    if snapshot.get('next_attempt',0)>time.time() and not alternative:continue
                     scope_id=budget_scope({**context,'model_research_id':identifier}) if budget_scope else identifier
                     # The next checkpoint may be a small outline or review. Its actual
                     # reservation is enforced by lease(); a fixed 20k preflight can
                     # strand an affordable stage under a stale provider-quota label.
                     if snapshot.get('day')==today and (snapshot.get('tokens',0)>=budget.daily_tokens and not scoped_tokens_remaining(snapshot,scope_id,today) or snapshot.get('requests',0)>=budget.daily_requests and not scoped_requests_remaining(snapshot,scope_id,today)):continue
-                action.update(state='queued',next_attempt=time.time() if ready else max(time.time(),snapshot.get('next_attempt',0)))
+                action.update(state='queued',next_attempt=time.time() if ready else max(time.time(),0 if allow_fallback and reason.startswith('gemini_') else snapshot.get('next_attempt',0)))
                 job['state']='queued';changed+=1
         if changed:jobs.write(data)
         return changed

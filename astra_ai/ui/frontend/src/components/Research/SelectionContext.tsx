@@ -10,10 +10,16 @@ export type Passage = {
     origin: Record<string, string>;
     kind: string;
 };
-export function PassageCard({ card, onRemove }: {
-    card: Passage;
-    onRemove?: () => void;
-}) { return <aside className="aegis-passage-card" aria-label="Selected passage"><details><summary><small>Selected passage</small><span>{card.text.slice(0, 130)}{card.text.length > 130 ? '…' : ''}</span></summary><blockquote>{card.text}</blockquote></details>{onRemove && <button type="button" aria-label="Remove selected passage" onClick={onRemove}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m6 6 12 12M18 6 6 18"/></svg></button>}</aside>; }
+export function PassageCard({ card, onRemove }: {card: Passage; onRemove?: () => void}) {
+    const dialog=useRef<HTMLDialogElement>(null);
+    return <aside className="aegis-passage-card" aria-label="Selected passage">
+      <button type="button" className="aegis-passage-preview" onClick={()=>dialog.current?.showModal()} aria-label="Inspect selected passage">
+        <span>{card.text}</span><small><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4M8 8h8v8H8z"/></svg>Selection</small>
+      </button>
+      {onRemove&&<button type="button" className="aegis-passage-remove" aria-label="Remove selected passage" onClick={onRemove}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m6 6 12 12M18 6 6 18"/></svg></button>}
+      <dialog ref={dialog} className="aegis-passage-dialog" aria-label="Full selected passage"><header><strong>Selected passage</strong><button type="button" aria-label="Close selected passage" onClick={()=>dialog.current?.close()}>Close</button></header><blockquote>{card.text}</blockquote></dialog>
+    </aside>;
+}
 export function SelectionPill({ page, revision, onAttach }: {
     page: string;
     revision: string;
@@ -66,10 +72,12 @@ export function SelectionPill({ page, revision, onAttach }: {
             setPick(null);
             setError('');
         } };
+        const dismiss=()=>setPick(null);
+        document.addEventListener('scroll',dismiss,true);window.addEventListener('resize',dismiss);
         document.addEventListener('mouseup', capture);
         document.addEventListener('keyup', capture);
         document.addEventListener('keydown', escape);
-        return () => { document.removeEventListener('mouseup', capture); document.removeEventListener('keyup', capture); document.removeEventListener('keydown', escape); };
+        return () => { document.removeEventListener('scroll',dismiss,true);window.removeEventListener('resize',dismiss);document.removeEventListener('mouseup', capture); document.removeEventListener('keyup', capture); document.removeEventListener('keydown', escape); };
     }, [page, revision]);
     async function attach() { if (!pick || pick.page !== page || pick.revision !== revision)
         return; try {

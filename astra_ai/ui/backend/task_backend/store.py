@@ -711,4 +711,5 @@ def next_schedule_fire(schedule: str | None, timezone_name: str | None = configu
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-task_store = TaskStore(Path(__file__).resolve().parent.parent / "task_widget_data")
+from astra_ai.ui.backend.runtime_paths import runtime_paths
+task_store = TaskStore(runtime_paths.widget("task"))

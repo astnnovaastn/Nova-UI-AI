@@ -238,11 +238,8 @@ export const themeReady = (async () => {
     try { localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(cache)); } catch {}
   } catch {
     applyCachedTheme();
-    const notice = document.createElement('div');
-    notice.textContent = 'Offline appearance: using the last saved default.';
-    notice.setAttribute('role', 'status');
-    notice.style.cssText = 'position:fixed;bottom:8px;left:8px;z-index:9999;background:var(--panel);color:var(--panel-text);padding:8px;border-radius:8px;font-size:12px';
-    document.body.append(notice);
+    // A slow startup read is not evidence of an offline connection.
+    // Workspace bootstrap reconciles the saved theme when the socket connects.
   } finally {
     clearTimeout(timer);
     document.documentElement.removeAttribute('data-theme-loading');

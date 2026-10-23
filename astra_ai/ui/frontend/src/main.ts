@@ -1081,10 +1081,13 @@ window.addEventListener('nova-job-cancel',async(event:Event)=>{const id=String((
 window.addEventListener('nova-chat-send',async(event:Event)=>{
  const d=(event as CustomEvent).detail||{},text=String(d.text||'').trim();
  if(!text||memoryChatBusy||conversationSnapshot().sessionSwitching)return;
+ const playbackReady=audioPlayer.unlock().catch(()=>{conversationState({status:'Audio playback is blocked. Enable audio in this browser to hear the reply.'});});
  if(!socket.isConnected()){conversationState({status:'Aegis is offline. Your draft is preserved.'});return;}
  canceledGeneration=audioGeneration;heldGeneration=pendingInterruptionGeneration='';audioPlayer.stop();isAudioPlaying=false;
- if(voiceSession.needsStart())startPreferredVoiceSession(!isMuted);
  memoryChatBusy=true;
+ await playbackReady;
+ if(!ownsVoice())await acquireVoice(socket);
+ if(voiceSession.needsStart())startPreferredVoiceSession(false);
  const selected=String(d.research_id||''),revision=Number(d.selection_revision||0);
  socket.send({type:'ui_context',snapshot:uiSnapshot()});
  const focused=()=>conversationSnapshot().focusId===selected&&conversationSnapshot().focusRevision===revision;

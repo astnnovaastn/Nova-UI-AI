@@ -288,6 +288,7 @@ type Report = {
   active_since?: number | null;
   waiting_reason?: string;
   writing_provider?: string;
+  private_fallback_allowed?: boolean;
   image_items?: ResearchImage[];
   images_prepared?: boolean;
   image_sources?: Source[];
@@ -1277,6 +1278,12 @@ function researchProgress(
   };
 }
 function researchWaitMessage(reason: string, provider?: string) {
+  if(reason==="groq_private_consent_required")return "Gemini is unavailable. Permission is needed before Groq can write using private evidence.";
+  if(reason==="groq_private_consent_denied")return "Private evidence remains with Gemini. Research will resume when Gemini is available.";
+  if(reason==="groq_service_unavailable")return "The Groq backup writing service is temporarily unavailable. Saved evidence and sections will be retried.";
+  if(reason==="research_cost_limit")return "Writing reached the configured estimated cost ceiling for this operation. Saved evidence is preserved.";
+  if(reason==="research_cost_estimate_unavailable")return "The configured cost ceiling requires verified provider pricing. Saved evidence is preserved.";
+  if(reason.startsWith("groq_"))return "Groq research writing is waiting for its provider allowance. Saved evidence and sections are preserved.";
   if (reason === "background_model_busy") return "Another writing request is finishing. This saved request will resume automatically.";
   if (["background_quota_paused", "background_request_interval"].includes(reason)) return "Waiting briefly between writing requests. Your saved work will resume automatically.";
   if (reason === "search_provider_quota") return "The search provider has reached its allowance. Your saved work is preserved.";
@@ -1297,11 +1304,13 @@ function researchWaitMessage(reason: string, provider?: string) {
 }
 export function PendingResearch({
   report,
+  onRetry,
   onBrowse,
   view = "reader",
 }: {
   report: Report;
   onBrowse: () => void;
+  onRetry?: () => void;
   onImage: (image: ResearchImage) => void;
   view?: string;
 }) {
@@ -1352,7 +1361,8 @@ export function PendingResearch({
       )}
       {(status.active || report.phase === "queued") && <ResearchSkeleton variant={view} />}
       {report.phase === "failed" && <p role="status">{report.waiting_reason?.startsWith("search_") ? researchWaitMessage(report.waiting_reason) : "Research could not finish. Your saved work is preserved."}</p>}
-        </section>
+      {report.phase === "failed" && onRetry && <button type="button" onClick={onRetry}>Retry saved research</button>}
+    </section>
   );
 }
 function ResearchSkeleton({ variant = "reader" }: {variant?: string}) {
@@ -2645,6 +2655,7 @@ function Workspace() {
     id: string;
     reportId: string;
     text: string;
+    selectionId?: string;
   } | null>(null);
   useEffect(() => {
     const accepted = (event: Event) => {
@@ -2666,6 +2677,7 @@ function Workspace() {
       } catch {}
       if (lastSelection.current === item.reportId)
         setMessage((old) => (old === item.text ? "" : old));
+      setActivePassage(old=>{if(old?.id===item.selectionId){updateUiContext({active_selection_id:""});return null;}return old;});
       pendingMessage.current = null;
     };
     window.addEventListener("nova-chat-accepted", accepted);
@@ -3101,6 +3113,11 @@ function Workspace() {
     sourceLimit,
     mediaLimit,
   ]);
+  async function retrySavedResearch() {
+    const id=reportRef.current?.research_id;if(!id)return;
+    try{await api('/'+id+'/retry',{method:'POST'});await select(id);void refresh();}
+    catch(e:any){setError(e.message);}
+  }
   async function refresh() {
     const client = conversationSnapshot().clientId;
     if (!client || conversationSnapshot().guest) return;
@@ -3116,10 +3133,11 @@ function Workspace() {
       setRemoved(d.removed || []);
       setTotal(d.total);
     } catch (e: any) {
-      setError(e.message);
+      if (conversationSnapshot().clientId === client) setError(e.message);
     }
   }
   async function select(id: string, withinSession = false) {
+    if (!conversationSnapshot().clientId) return;
     const previous = reportRef.current;
     if (previous) pageViews.current.set(previous.research_id,{tab:tabRef.current,scroll:reader.current?.scrollTop || 0});
     revealStop.current();
@@ -3220,7 +3238,7 @@ function Workspace() {
         category: "",
       });
     } catch (e: any) {
-      if (epoch === loadEpoch.current) {
+      if (epoch === loadEpoch.current && client === conversationSnapshot().clientId) {
         if (e.status === 410) {
           lastSelection.current=""; setReport(null); setPreview(null); setError(""); setFailedSelection("");
           sessionStorage.removeItem("nova-selected-research");
@@ -3260,6 +3278,12 @@ function Workspace() {
           sessionStorage.getItem("nova-selected-research");
         if (id) void select(id);
       }
+    } else if (open && !chat.guest) {
+      // A transport reconnect retains this window's scope and report. The
+      // previous connection's in-flight history response is correctly rejected,
+      // so reconcile it using the newly registered client instead.
+      void refresh();
+      if (!reportRef.current && lastSelection.current) void select(lastSelection.current,true);
     }
   }, [chat.clientId, chat.guest]);
   useEffect(() => {
@@ -3768,6 +3792,8 @@ function Workspace() {
               Turn into document
             </button>
           )}
+          {report?.kind === 'research' && report.completeness === 'complete' && <button type="button" disabled={busy} onClick={()=>void api('/'+report.research_id+'/images/enrich',{method:'POST'}).catch(e=>setError(e.message))}>Refresh source illustrations</button>}
+          {report?.private_fallback_allowed&&<button type="button" onClick={()=>void api('/'+report.research_id+'/fallback-consent',{method:'POST',body:JSON.stringify({allow:false})}).then(()=>{reportCache.current.delete(conversationSnapshot().clientId+':'+report.research_id);void select(report.research_id);}).catch(e=>setError(e.message))}>Revoke private Groq access</button>}
           <button
             type="button"
             disabled={uploading}
@@ -3790,6 +3816,7 @@ function Workspace() {
       id,
       reportId: report.research_id,
       text: message,
+      selectionId: activePassage?.id,
     };
     requestConversation(message, id, report.research_id);
   }
@@ -4121,7 +4148,7 @@ function Workspace() {
                   ))}
               </div>
             ) : publicationPending(report) ? (
-              <div className="research-reader research-pending-page" onWheel={()=>{revealFollow.current=false;}}><PendingResearch report={report} view={tab} onBrowse={()=>{}} onImage={()=>{}} /></div>
+              <div className="research-reader research-pending-page" onWheel={()=>{revealFollow.current=false;}}><PendingResearch report={report} onRetry={retrySavedResearch} view={tab} onBrowse={()=>{}} onImage={()=>{}} /></div>
             ) : report.kind === "chat" ? (
               <section
                 className="research-central-chat"
@@ -4242,6 +4269,7 @@ function Workspace() {
                     report.completeness === "pending" || report.evidence_collection || report.legacy_evidence ? (
                     <PendingResearch
                       report={report}
+                      onRetry={retrySavedResearch}
                       onBrowse={() => selectTab("sources")}
                       onImage={setImageView}
                     />
@@ -4594,6 +4622,7 @@ function Workspace() {
             accept=".pdf,.docx,.txt,.md,.markdown,.png,.jpg,.jpeg,.webp"
             onChange={(e) => void uploadFiles(e.target.files)}
           />
+          {report?.waiting_reason==="groq_private_consent_required"&&<section className="research-fallback-consent" aria-label="Private evidence permission"><p>Allow Groq to process this conversation’s private evidence for research writing?</p><button type="button" onClick={()=>void api('/'+report.research_id+'/fallback-consent',{method:'POST',body:JSON.stringify({allow:true})}).then(()=>select(report.research_id)).catch(e=>setError(e.message))}>Allow for this conversation</button><button type="button" onClick={()=>void api('/'+report.research_id+'/fallback-consent',{method:'POST',body:JSON.stringify({allow:false})}).then(()=>select(report.research_id)).catch(e=>setError(e.message))}>Wait for Gemini</button></section>}
           <div className="research-central-composer">
             {report&&<SelectionPill page={report.research_id} revision={report.research_revision} onAttach={setActivePassage}/>}
             <ChatComposer value={report?message:query} onChange={report?setMessage:setQuery}

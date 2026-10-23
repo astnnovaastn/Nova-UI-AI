@@ -23,17 +23,19 @@ def update(store,identifier,context,title=None,archived=None):
         if title is not None:
             title=' '.join(str(title).split())
             if not title or len(title)>80:return {'status':'rejected','reason':'Use a title between 1 and 80 characters.'}
-        path=metadata_path(store);data=read(path,{})
+        path=metadata_path(store);data=store.read({}).get('history_metadata',{}) if store.repository else read(path,{})
         entry=data.setdefault(identifier,{})
         if title is not None:entry['title']=title
         if archived is not None:entry['archived']=bool(archived)
-        atomic(path,data)
+        if store.repository:
+            state=store.read({});state['history_metadata']=data;store.write(state)
+        else:atomic(path,data)
         return {'status':'completed','research_id':identifier}
 
 def listing(store,context,offset=0,limit=30,archived=False):
     with store.lock:
         first=store.listing(context,0,50);rows=list(first['items'])
         for cursor in range(50,first['total'],50):rows.extend(store.listing(context,cursor,50)['items'])
-        preferences=read(metadata_path(store),{})
+        preferences=store.read({}).get('history_metadata',{}) if store.repository else read(metadata_path(store),{})
         rows=[{**row,'history_title':preferences.get(row['research_id'],{}).get('title') or title_for(row.get('display_title') or row.get('query')),'archived':archived} for row in rows if bool(preferences.get(row['research_id'],{}).get('archived'))==archived]
         return {**first,'total':len(rows),'items':rows[max(0,offset):max(0,offset)+max(1,min(50,limit))]}

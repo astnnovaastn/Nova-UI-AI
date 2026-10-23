@@ -123,6 +123,7 @@ class DocumentFiles:
 
     def folder(self, identifier, file_id):
         if not re.fullmatch(r'[0-9a-f]{32}',identifier) or not re.fullmatch(r'[0-9a-f]{32}',file_id):raise ValueError('invalid_attachment_id')
+        if self.artifacts.repository:return self.artifacts.repository.asset_folder(identifier,file_id)
         target=(self.root/identifier/file_id).resolve()
         if not target.is_relative_to(self.root.resolve()):raise ValueError('invalid_attachment_path')
         return target
@@ -134,10 +135,10 @@ class DocumentFiles:
     def update(self, identifier, context, file_id, **changes):
         self.require(identifier,context)
         with self.artifacts.lock:
-            data=read(self.artifacts.path,{})
+            data=self.artifacts.read({})
             row=next((r for r in data.get('attachments',{}).get(identifier,[]) if r['id']==file_id),None)
             if not row:raise ValueError('attachment_unavailable')
-            row.update(changes,updated=now());atomic(self.artifacts.path,data)
+            row.update(changes,updated=now());self.artifacts.write(data)
             return copy.deepcopy(row)
 
     def get(self, identifier, context, file_id):
@@ -170,14 +171,14 @@ class DocumentFiles:
         name=re.split(r'[/\\]',str(name))[-1][:120] or 'Document'
         mime=self.identify(name,body);digest=hashlib.sha256(body).hexdigest();file_id=stable(digest)
         with self.artifacts.lock:
-            data=read(self.artifacts.path,{});rows=data.setdefault('attachments',{}).setdefault(identifier,[])
+            data=self.artifacts.read({});rows=data.setdefault('attachments',{}).setdefault(identifier,[])
             existing=next((r for r in rows if r['id']==file_id),None)
             if existing:return {**copy.deepcopy(existing),'duplicate':True}
             if len(rows)>=5:raise ValueError('maximum_five_attachments_per_entry')
             folder=self.folder(identifier,file_id);folder.mkdir(parents=True,exist_ok=True)
             (folder/'original').write_bytes(body)
             row={'id':file_id,'name':name,'mime':mime,'size':len(body),'revision':digest,'status':'queued','created':now(),'page_count':0,'images':[]}
-            rows.append(row);self.artifacts.backup_metadata();atomic(self.artifacts.path,data)
+            rows.append(row);self.artifacts.backup_metadata();self.artifacts.write(data)
             return copy.deepcopy(row)
 
     def original(self, identifier, context, file_id, revision=''):

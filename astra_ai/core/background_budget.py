@@ -37,7 +37,7 @@ class TokenReservation:
         if type(actual_tokens) is not int or actual_tokens<0:return
         with self.budget.lock:
             if self.settled:return
-            self.settled=True;data=read(self.budget.path,{})
+            self.settled=True;self.actual_tokens=actual_tokens;data=read(self.budget.path,{})
             if data.get('day')!=self.day:return
             baseline=max(0,data.get('tokens',0)-self.tokens)
             data['tokens']=baseline+actual_tokens
@@ -59,7 +59,7 @@ class BackgroundBudget:
             marker=hashlib.sha256(provider_key.encode()).hexdigest()
             other_key=data.get('provider_marker') and data['provider_marker']!=marker
             other_model=model and data.get('pause_model') and data['pause_model']!=model
-            if str(data.get('pause_reason','')).startswith(('gemini_','openai_')) and (other_key or other_model):data.update(next_attempt=0,pause_reason='')
+            if str(data.get('pause_reason','')).startswith(('gemini_','openai_','groq_')) and (other_key or other_model):data.update(next_attempt=0,pause_reason='')
             for identity in (marker,marker+':'+model if model else marker):
                 wait=data.get('provider_pauses',{}).get(identity,{})
                 if wait.get('until',0)>data.get('next_attempt',0):data.update(next_attempt=wait['until'],pause_reason=wait['reason'])
@@ -109,7 +109,7 @@ class BackgroundBudget:
             data=read(self.path,{})
             if provider_key:
                 marker=hashlib.sha256(provider_key.encode()).hexdigest()
-                if reason.startswith('openai_'):
+                if reason.startswith(('openai_','groq_')):
                     data.setdefault('provider_pauses',{})[marker]={'until':until,'reason':reason}
                     atomic(self.path,data);return
                 if data.get('provider_marker',marker)!=marker:return
@@ -136,7 +136,7 @@ class BackgroundBudget:
                     wait=data.get('provider_pauses',{}).get(identity,{})
                     if marker and current<wait.get('until',0):raise BudgetPaused(wait['until'],wait['reason'])
                 if current<data.get('pacing_until',0):raise BudgetPaused(data['pacing_until'],'background_request_interval')
-                other_provider=marker and data.get('provider_marker') and str(data.get('pause_reason','')).startswith(('gemini_','openai_')) and data.get('provider_marker')!=marker
+                other_provider=marker and data.get('provider_marker') and str(data.get('pause_reason','')).startswith(('gemini_','openai_','groq_')) and data.get('provider_marker')!=marker
                 if other_provider:
                     identity=data['provider_marker']+(':'+data['pause_model'] if data.get('pause_model') else '')
                     data.setdefault('provider_pauses',{}).setdefault(identity,{'until':data.get('next_attempt',0),'reason':data['pause_reason']})

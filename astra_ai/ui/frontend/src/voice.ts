@@ -845,6 +845,7 @@ function createLegacyGroqVoiceInput(
 // ---------------------------------------------------------------------------
 
 export interface AudioPlayer {
+  unlock(): Promise<void>;
   isPlaybackEcho(pcm:Int16Array,end:number):boolean;
   enqueue(base64: string): Promise<void>;
   enqueuePcm(data: ArrayBuffer, sampleRate?: number): Promise<void>;
@@ -1364,6 +1365,7 @@ export function createAudioPlayer(): AudioPlayer {
   }
 
   return {
+    async unlock(){if(audioCtx.state==="suspended")await audioCtx.resume();},
     async enqueue(base64: string) {
       const epoch=playbackEpoch;
       // Resume audio context (browser autoplay policy)

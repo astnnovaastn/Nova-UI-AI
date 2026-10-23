@@ -75,4 +75,7 @@ def configured_research_model(settings,gemini_key,budget,status,preferred):
     writer=GeminiResearchModel(lambda:settings('NOVA_RESEARCH_GEMINI_API_KEY') or gemini_key(),budget,lambda:settings('NOVA_RESEARCH_GEMINI_MODEL') or settings('GEMINI_TEXT_MODEL') or 'gemini-3.5-flash')
     writer.batch_detailed=str(settings('NOVA_RESEARCH_BATCH_DETAILED') or '1').lower() not in {'0','false','off'}
     writer.allow_model_fallback=str(settings('NOVA_RESEARCH_GEMINI_MODEL_FALLBACK') or '1').lower() not in {'0','false','off'}
+    if (settings('NOVA_RESEARCH_GROQ_API_KEY') or settings('GROQ_API_KEY')) and str(settings('NOVA_RESEARCH_GROQ_FALLBACK') or '1').lower() not in {'0','false','off'}:
+        from .research.providers import ResearchRouter
+        return ResearchRouter(writer,settings)
     return writer
