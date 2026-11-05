@@ -34,3 +34,20 @@
 .ai-composer-wrap>.ai-composer-notice{position:absolute;bottom:calc(100% + 6px);left:10px;right:10px;margin:0;padding:5px 8px;border-radius:8px;background:var(--r-panel);z-index:2}
 .ai-composer-actions,.ai-composer-actions .research-new-menu,.ai-composer-actions .research-new-menu>summary{width:32px;min-width:32px;height:32px;box-sizing:border-box}
 .ai-composer-wave{height:var(--ai-editor-height,32px);display:flex;align-items:center}
+
+/* Match the measured textarea inset so one-line prompts align with the controls. */
+.research-workspace .research-central-composer .ai-composer textarea{box-sizing:border-box;padding:10px 3px;font-size:14px}
+.research-workspace .research-central-composer .ai-composer textarea::placeholder{color:color-mix(in srgb,var(--r-fg) 72%,transparent);opacity:1}
+/* Give the question its full line on phones; keep depth and voice choices below it. */
+@media(max-width:600px){
+ .research-workspace .research-central-composer form.ai-composer[data-depth]{position:relative;flex-wrap:wrap;row-gap:0;border-radius:22px}
+ .research-workspace .research-central-composer form.ai-composer[data-depth]>textarea{order:0;flex:1 0 100%;width:100%;padding:10px 5px}
+ .research-workspace .research-central-composer form.ai-composer[data-depth]>.ai-composer-actions{order:1}
+ .research-workspace .research-central-composer form.ai-composer[data-depth]>.ai-composer-depth{order:2;margin-left:auto}
+ .research-workspace .research-central-composer form.ai-composer[data-depth]>:is(.ai-composer-mic,.ai-composer-stop){order:3}
+ .research-workspace .research-central-composer form.ai-composer[data-depth]>.ai-composer-send{order:4}
+ .research-workspace .research-central-composer form.ai-composer[data-depth]>.ai-composer-wave{order:0;flex:1 0 100%}
+ .research-workspace .research-central-composer form.ai-composer[data-depth]>.ai-composer-back{order:1}
+ .research-workspace .research-central-composer form.ai-composer[data-depth] .aegis-depth-menu{position:static}
+ .research-workspace .research-central-composer form.ai-composer[data-depth] .aegis-depth-popover{right:8px;bottom:calc(100% + 8px)}
+}

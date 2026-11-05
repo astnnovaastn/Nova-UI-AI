@@ -40,6 +40,7 @@ import {
 import "./ResearchWorkspace.css";
 import {acceptPublication, mergePublication, publicationPending, publicationWorking, revealDuration} from "./researchPublication";
 import {ChatComposer} from "./ChatComposer";
+import {ResearchDepthMenu} from "./ResearchDepthMenu";
 import {ResearchHistoryItem} from "./ResearchHistoryItem";
 import {RecentlyRemovedResearch} from "./RecentlyRemovedResearch";
 import {
@@ -392,6 +393,10 @@ function Icon({ name }: { name: string }) {
     redo: "m15 4 6 6-6 6m6-6H10a6 6 0 0 0-6 6",
     save: "M4 3h13l4 4v14H3V3Zm3 0v6h10V3M7 21v-8h10v8",
     check: "M4 12l5 5L20 6",
+    select: "M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
+    clear: "M8 12h8M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z",
+    archive: "M3 3h18v5H3zM5 8v12h14V8M10 12h4",
+    back: "M19 12H5m6-6-6 6 6 6",
     previous: "m14 5-7 7 7 7",
     next: "m10 5 7 7-7 7",
   };
@@ -3961,12 +3966,12 @@ function Workspace() {
       <div className="research-layout">
         <aside className="research-outline" id="research-history-panel" aria-label="Research history">
           <button className="research-panel-close" aria-label="Close research history" onClick={() => setNarrowPanel("")}><Icon name="close" /></button>
-          <div className="research-history-heading"><h2>Your research</h2><button className="research-history-select" aria-pressed={selectingHistory} disabled={!!deleting} onClick={() => {setSelectingHistory(!selectingHistory); setSelectedHistory(new Set());}}><Icon name={selectingHistory ? "check" : "list"} />{selectingHistory ? "Done" : "Select"}</button></div>
+          <div className="research-history-heading"><h2>Your research</h2><button className="research-history-select" aria-pressed={selectingHistory} disabled={!!deleting} onClick={() => {setSelectingHistory(!selectingHistory); setSelectedHistory(new Set());}}><Icon name={selectingHistory ? "check" : "select"} />{selectingHistory ? "Done" : "Select"}</button></div>
           {selectingHistory && <div className="research-history-selection" aria-label="History selection controls">
             <span role="status">{selectedHistory.size} selected</span>
-            <div><button disabled={!!deleting} onClick={() => setSelectedHistory(items.every(item => selectedHistory.has(item.research_id)) ? new Set() : new Set(items.map(item => item.research_id)))}>{items.length && items.every(item => selectedHistory.has(item.research_id)) ? "Clear selection" : "Select page"}</button><button className="research-history-remove" disabled={!selectedHistory.size || !!deleting} onClick={() => void removeSelectedHistory()}><Icon name="trash" />{deleting ? "Removing…" : "Remove"}</button></div>
+            <div><button disabled={!!deleting} aria-label={items.length && items.every(item => selectedHistory.has(item.research_id)) ? "Clear selection" : "Select page"} title={items.length && items.every(item => selectedHistory.has(item.research_id)) ? "Clear selection" : "Select page"} onClick={() => setSelectedHistory(items.every(item => selectedHistory.has(item.research_id)) ? new Set() : new Set(items.map(item => item.research_id)))}><Icon name={items.length && items.every(item => selectedHistory.has(item.research_id)) ? "clear" : "select"} /></button><button className="research-history-remove" aria-label={deleting ? "Removing selected research" : "Remove selected research"} title={deleting ? "Removing…" : "Remove selected research"} aria-busy={!!deleting} disabled={!selectedHistory.size || !!deleting} onClick={() => void removeSelectedHistory()}>{deleting ? <span className="rh-spinner" aria-hidden="true"/> : <Icon name="trash" />}</button></div>
           </div>}
-          <button className="rh-archive-view" aria-pressed={archivedHistory} onClick={()=>{setArchivedHistory(!archivedHistory);setOffset(0);setSelectedHistory(new Set());setSelectingHistory(false);}}>{archivedHistory ? "← Back to recent research" : "View archived research"}</button>
+          <button className="rh-archive-view" aria-label={archivedHistory ? "Back to recent research" : "View archived research"} aria-pressed={archivedHistory} onClick={()=>{setArchivedHistory(!archivedHistory);setOffset(0);setSelectedHistory(new Set());setSelectingHistory(false);}}><Icon name={archivedHistory ? "back" : "archive"}/><span>{archivedHistory ? "Recent research" : "Archived research"}</span></button>
           {!items.length && <p>{archivedHistory ? "No archived research." : "No saved research yet."}</p>}
           {items.map(item => <ResearchHistoryItem key={item.research_id} item={item} active={(report?.research_session_id || selectionLoading || report?.research_id)===item.research_id} selecting={selectingHistory} checked={selectedHistory.has(item.research_id)} disabled={!!deleting}
             onPick={()=>void select(item.research_id)} onWarm={()=>void loadReport(item.research_id).catch(()=>{})}
@@ -3977,7 +3982,7 @@ function Workspace() {
             <button aria-label="Previous history page" title="Previous page" disabled={!offset} onClick={() => setOffset((v) => v - 30)}>
               <Icon name="previous" />
             </button>
-            <span>{Math.floor(offset / 30) + 1} / {Math.max(1,Math.ceil(total / 30))}</span>
+            <span aria-label={`Page ${Math.floor(offset / 30) + 1} of ${Math.max(1,Math.ceil(total / 30))}`}>{Math.floor(offset / 30) + 1}<span aria-hidden="true"> / </span>{Math.max(1,Math.ceil(total / 30))}</span>
             <button
               disabled={offset + 30 >= total}
               aria-label="Next history page" title="Next page"
@@ -4628,11 +4633,11 @@ function Workspace() {
             <ChatComposer value={report?message:query} onChange={report?setMessage:setQuery}
               onSubmit={()=>report?sendFollowup():void start({preventDefault(){}} as React.FormEvent)}
               onNewChat={()=>newEntry("research")} actions={entryMenu()}
-              label={report?"Ask Aegis":"Research topic"} placeholder={report?"Ask Aegis":"What would you like to research?"}
+              label={report?"Ask Aegis":"Research topic"} placeholder={report?"Ask Aegis":"Ask a research question…"}
               onMicrophone={requestMicrophone} muted={chat.muted} busy={chat.textBusy} onStop={()=>window.dispatchEvent(new Event('nova-chat-cancel'))}
               disabled={busy||!chat.connected||chat.guest||chat.textBusy}
               context={activePassage?<PassageCard card={activePassage} onRemove={()=>{setActivePassage(null);updateUiContext({active_selection_id:""});}}/>:undefined}
-              trailing={!report&&entryKind!=="documentary"?<select aria-label="Research depth" value={mode} onChange={e=>setMode(e.target.value)}><option value="quick">Quick</option><option value="detailed">Detailed</option></select>:undefined}/>
+              trailing={!report&&entryKind!=="documentary"?<ResearchDepthMenu value={mode} onChange={setMode}/>:undefined}/>
           </div>
         </main>
         <aside className="research-assistant" id="research-conversation-panel" aria-label="Research conversation" hidden={report?.kind === "chat"}>
