@@ -8,7 +8,7 @@ export function historyActivity(item:any){
  const pending=!waiting && !['failed','complete','completed','draft','cancelled'].includes(phase) && (['queued','collecting_sources','comparing_evidence','preparing_report','running'].includes(phase)||item.completeness==='pending');
  return {pending,waiting,stateLabel:waiting?'Waiting to continue':pending?'Research in progress':''};
 }
-export function ResearchHistoryItem({item,active,selecting,checked,disabled,onPick,onWarm,onToggle,onUpdate,onDelete}:any) {
+export function ResearchHistoryItem({item,meta,active,selecting,checked,disabled,onPick,onWarm,onToggle,onUpdate,onDelete}:any) {
  const title=item.history_title || String(item.display_title || item.query || 'Research findings').split(/\s+/).slice(0,7).join(' ');
  const row=useRef<HTMLDivElement>(null), menu=useRef<HTMLDivElement>(null), trigger=useRef<HTMLButtonElement>(null);
  const [position,setPosition]=useState<{top:number;left:number}|null>(null),[editing,setEditing]=useState(false),[draft,setDraft]=useState(title),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -29,7 +29,7 @@ export function ResearchHistoryItem({item,active,selecting,checked,disabled,onPi
  return <div className="rh-item" ref={row} data-open={!!position || undefined}>
   {editing ? <form className="rh-rename" onSubmit={e=>{e.preventDefault();void update({title:draft});}}><input autoFocus aria-label="Research title" maxLength={80} value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setEditing(false);}}/><div><button disabled={busy||!draft.trim()} type="submit">{busy?'Saving…':'Save'}</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>Cancel</button></div></form> : <>
   {selecting&&<label className="rh-check-control"><input className="rh-check" aria-label={'Select '+title} type="checkbox" checked={checked} disabled={disabled} onChange={onToggle}/><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3.5 8 3 3 6-6"/></svg></label>}
-  <button className="rh-row" data-selecting={selecting||undefined} aria-current={active?'true':undefined} aria-pressed={selecting?checked:undefined} title={title} disabled={disabled} onPointerEnter={warm} onFocus={warm} onClick={selecting?onToggle:onPick}><span className="rh-title"><span>{title}</span></span></button>
+  <button className="rh-row" data-selecting={selecting||undefined} aria-current={active?'true':undefined} aria-pressed={selecting?checked:undefined} title={title} disabled={disabled} onPointerEnter={warm} onFocus={warm} onClick={selecting?onToggle:onPick}><span className="rh-title"><span>{title}</span></span>{meta&&<small className="rh-meta">{meta}</small>}</button>
   {!selecting&&<button className="rh-dots" ref={trigger} aria-label={'Options for '+title} aria-haspopup="menu" aria-expanded={!!position} disabled={disabled||busy} onClick={()=>{if(position){setPosition(null);return;}const rect=trigger.current!.getBoundingClientRect();setPosition({top:Math.min(rect.bottom+5,window.innerHeight-160),left:Math.min(rect.left,window.innerWidth-190)});}}><Glyph name="more"/></button>}
   </>}
   {error&&<p className="rh-error" role="alert">{error}</p>}

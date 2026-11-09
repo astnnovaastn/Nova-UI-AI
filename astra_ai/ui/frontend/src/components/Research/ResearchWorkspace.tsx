@@ -40,9 +40,11 @@ import {
 import "./ResearchWorkspace.css";
 import {acceptPublication, mergePublication, publicationPending, publicationWorking, revealDuration} from "./researchPublication";
 import {ChatComposer} from "./ChatComposer";
+import {WorkCanvasHost,researchSurface,saveResearchSurface,type ResearchSurface} from "./WorkCanvasHost";
 import {ResearchDepthMenu} from "./ResearchDepthMenu";
 import {ResearchHistoryItem} from "./ResearchHistoryItem";
 import {RecentlyRemovedResearch} from "./RecentlyRemovedResearch";
+import {ResearchLibrary} from "./ResearchLibrary";
 import {
   AttachmentAssets,
   AttachmentReader,
@@ -239,6 +241,15 @@ async function api(path: string, options: RequestInit = {}) {
     );
   return d;
 }
+async function workApi(path: string, options: RequestInit = {}) {
+  const r = await fetch("/api/work" + path, {
+    ...options,
+    headers: { ...headers(), ...options.headers },
+  });
+  const d = await r.json();
+  if (!r.ok) throw Object.assign(new Error(d.reason || d.detail || "This task is unavailable."), { data: d, status: r.status });
+  return d;
+}
 type Source = {
   attachment_id?: string;
   attachment_revision?: string;
@@ -315,6 +326,16 @@ type Report = {
   draft?: { html: string; revision: string; source_revision: string };
   sections: { id: string; title: string }[];
 };
+const NO_ROWS: any[] = [];
+/** A question about canvas cards carries their details for AEGIS; the bubble shows the question and names the cards. */
+function canvasQuestion(text: string): {question: string; about: string[]} {
+  const at = text.indexOf("\n\n[About these canvas items");
+  if (at < 0) return {question: text, about: []};
+  const about = [...text.slice(at).matchAll(/^- \S+ "(.+?)" \(canvas node/gm)].map(row => row[1]!);
+  return {question: text.slice(0, at), about};
+}
+const NO_VIEW = {chosen: [] as string[], hidden: [] as string[]};
+let listRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 let touched = performance.now();
 let dragging = false;
 document.addEventListener(
@@ -1571,7 +1592,8 @@ function JumpToBottom({ target, active, identity, clearance = 52 }: {
     const update = () => {
       const rect = root.getBoundingClientRect();
       const composer = root.closest(".research-document")?.querySelector(".research-central-composer")?.getBoundingClientRect();
-      const bottom = Math.min(rect.bottom, innerHeight, composer?.top ?? Infinity);
+      // On the canvas this composer box is usually empty, so it marks nothing.
+      const bottom = Math.min(rect.bottom, innerHeight, composer?.height ? composer.top : Infinity);
       setPosition(rect.width && root.scrollHeight - root.scrollTop - root.clientHeight > 320
         ? {left: rect.left + rect.width / 2, top: Math.max(rect.top + 24, bottom - clearance)} : null);
     };
@@ -1717,6 +1739,46 @@ function ImageViewer({
     </div>,
     document.body,
   );
+}
+/** An Aegis reply on the canvas: Markdown through the Reader's sanitizer, with citations that open their source. */
+function ConversationText({text, sources, onOpen}: {text: string; sources: Source[]; onOpen: (source: Source) => void}) {
+  const html = useMemo(() => {
+    const doc = new DOMParser().parseFromString(markdown(text), "text/html");
+    for (const image of Array.from(doc.querySelectorAll("img"))) image.remove();
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    const texts: Text[] = [];
+    while (walker.nextNode()) {
+      const node = walker.currentNode as Text;
+      if (!node.parentElement?.closest("pre, code, a") && /\[S\d/.test(node.data)) texts.push(node);
+    }
+    for (const node of texts) {
+      const fragment = doc.createDocumentFragment();
+      let at = 0;
+      for (const match of node.data.matchAll(/\[(S\d+(?:\s*[,;]\s*S\d+)*)\]/g)) {
+        const named = match[1].split(/\s*[,;]\s*/).map(id => sources.find(source => source.id === id)).filter(Boolean) as Source[];
+        if (!named.length) continue;
+        fragment.append(node.data.slice(at, match.index));
+        at = match.index! + match[0].length;
+        for (const source of named) {
+          const chip = doc.createElement("button");
+          chip.type = "button";
+          chip.className = "research-chat-cite";
+          chip.dataset.sourceId = source.id;
+          chip.title = source.title;
+          chip.textContent = source.id;
+          fragment.append(chip);
+        }
+      }
+      fragment.append(node.data.slice(at));
+      node.replaceWith(fragment);
+    }
+    return doc.body.innerHTML;
+  }, [text, sources]);
+  return <div className="research-chat-text" dangerouslySetInnerHTML={{__html: html}} onClick={(e) => {
+    const chip = (e.target as Element).closest<HTMLElement>("[data-source-id]");
+    const source = chip && sources.find(entry => entry.id === chip.dataset.sourceId);
+    if (source) onOpen(source);
+  }} />;
 }
 export function ReportContent({
   text,
@@ -1997,6 +2059,14 @@ function DocumentPreview({
             {current.title}
           </h2>
         </div>
+        {/^https?:\/\//i.test(current.url) && document.body.classList.contains("research-canvas-open") && (
+          <button
+            className="research-source-workspace"
+            onClick={() => window.dispatchEvent(new CustomEvent("aegis-open-source-window", {detail: {url: current.url, title: current.title}}))}
+          >
+            Open in workspace
+          </button>
+        )}
         <button
           onClick={onClose}
           aria-label="Close source preview"
@@ -2602,6 +2672,37 @@ function Workspace() {
     [extraMedia, setExtraMedia] = useState<Source[]>([]);
   const [activePassage,setActivePassage]=useState<Passage|null>(null);
   useEffect(()=>{setActivePassage(null);updateUiContext({active_selection_id:""});},[report?.research_id]);
+  // The canvas surface. "classic" keeps the original three-column screen as a rollback.
+  const [surface, setSurfaceState] = useState<ResearchSurface>(researchSurface);
+  const [canvasPanel, setCanvasPanel] = useState<""|"document"|"history"|"conversation">("");
+  const [researchJobs, setResearchJobs] = useState<Record<string,string>>({});
+  const [listRevision, setListRevision] = useState(0);
+  const [trace, setTrace] = useState<{research: string; events: any[]; workSources: any[]; run?: unknown; view?: {chosen: string[]; hidden: string[]}}>({research: "", events: [], workSources: []});
+  const onCanvas = surface === "canvas";
+  function setSurface(next: ResearchSurface) {
+    saveResearchSurface(next);
+    setCanvasPanel("");
+    setSurfaceState(next);
+  }
+  useEffect(() => {
+    const active = open && onCanvas;
+    document.body.classList.toggle("research-canvas-open", active);
+    document.body.classList.toggle("research-canvas-panel-open", active && !!canvasPanel);
+    return () => document.body.classList.remove("research-canvas-open", "research-canvas-panel-open");
+  }, [open, onCanvas, canvasPanel]);
+  useEffect(() => {
+    if (!onCanvas || !canvasPanel) return;
+    const close = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      setCanvasPanel("");
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [onCanvas, canvasPanel]);
+  // Chats and documents are read and written in the panel; they have no run to lay out.
+  useEffect(() => {
+    if (onCanvas && (report?.kind === "chat" || report?.kind === "documentary")) setCanvasPanel("document");
+  }, [onCanvas, report?.research_id, report?.kind]);
   const scopeRef = useRef("");
   const [exportDestination, setExportDestination] = useState<{
     id: string;
@@ -2973,7 +3074,9 @@ function Workspace() {
       const id = detail.research_id;
       if (id && reportRef.current?.research_id===id) void reloadReport(id).catch(() => {});
       else if(id)reportCache.current.delete(chat.clientId+":"+id);
-      void refresh();
+      // A new window replays hundreds of past events; they need only one list refresh.
+      clearTimeout(listRefreshTimer);
+      listRefreshTimer=setTimeout(()=>void refresh(),250);
     };
     window.addEventListener("nova-research-refresh", refreshEvent);
     return () =>
@@ -3120,7 +3223,7 @@ function Workspace() {
   ]);
   async function retrySavedResearch() {
     const id=reportRef.current?.research_id;if(!id)return;
-    try{await api('/'+id+'/retry',{method:'POST'});await select(id);void refresh();}
+    try{const d=await api('/'+id+'/retry',{method:'POST'});if(d.job_id)setResearchJobs(old=>({...old,[id]:d.job_id}));await select(id);void refresh();}
     catch(e:any){setError(e.message);}
   }
   async function refresh() {
@@ -3137,12 +3240,14 @@ function Workspace() {
       setItems(d.items);
       setRemoved(d.removed || []);
       setTotal(d.total);
+      setListRevision(n => n + 1);
     } catch (e: any) {
       if (conversationSnapshot().clientId === client) setError(e.message);
     }
   }
   async function select(id: string, withinSession = false) {
     if (!conversationSnapshot().clientId) return;
+    if (!withinSession) setCanvasPanel(old => old === "history" && innerWidth >= 1100 ? old : "");
     const previous = reportRef.current;
     if (previous) pageViews.current.set(previous.research_id,{tab:tabRef.current,scroll:reader.current?.scrollTop || 0});
     revealStop.current();
@@ -3470,6 +3575,7 @@ function Workspace() {
     closePreview(false);
     setImageView(null);
     setTab(value);
+    setCanvasPanel("document");
   }
   useEffect(() => {
     const done = (e: KeyboardEvent) => {
@@ -3544,6 +3650,7 @@ function Workspace() {
     return ()=>{stop();surface.removeEventListener("wheel",stopFollowing);surface.removeEventListener("touchstart",stopFollowing);surface.removeEventListener("keydown",stopFollowing);};
   },[open,report?.research_id,report?.publication_revision,report?.phase,report?.extension_activity?.phase,report?.completeness,tab]);
   function openSource(source: Source) {
+    setCanvasPanel("document");
     if (source.attachment_id && report) {
       const reportId = report.research_id,
         originId =
@@ -3589,8 +3696,10 @@ function Workspace() {
         url,
     );
   }
-  async function start(e: React.FormEvent) {
+  const typedQuery = query;
+  async function start(e: React.FormEvent, prompt?: string) {
     e.preventDefault();
+    const query = prompt ?? typedQuery;
     if (!query.trim() || busy) return;
     if (query.trim().length > 12000) {
       setError(
@@ -3643,6 +3752,7 @@ function Workspace() {
       lastSelection.current = "";
       cue("notification", "research-submitted:" + d.job_id);
       setQuery("");
+      if (d.research_id && d.job_id) setResearchJobs(old => ({...old,[d.research_id]:d.job_id}));
       if (d.research_id) {
         await select(d.research_id);
         void refresh();
@@ -3813,18 +3923,233 @@ function Workspace() {
       </details>
     );
   }
-  function sendFollowup() {
-    if (!report || !message.trim() || chat.textBusy) return;
+  function sendFollowup(prompt?: string) {
+    const text = prompt ?? message;
+    if (!report || !text.trim() || chat.textBusy) return;
     updateUiContext({view:"research",research_id:report.research_id,research_revision:report.research_revision,selected_id:report.research_id,selected_kind:"research"});
     const id = crypto.randomUUID();
     pendingMessage.current = {
       id,
       reportId: report.research_id,
-      text: message,
+      text,
       selectionId: activePassage?.id,
     };
-    requestConversation(message, id, report.research_id);
+    requestConversation(text, id, report.research_id);
   }
+  const reportJob = report ? researchJobs[report.research_id] || (report as {job_id?: string}).job_id || chat.jobs.find(j => ["running","queued","retrying","waiting_for_retry"].includes(j.state) && j.title === report.display_title)?.id || "" : "";
+  // The backend's record of the open research. The live connection only hints that there is more;
+  // reading by sequence number covers reconnects, repeats and out-of-order hints the same way.
+  const traceFor = onCanvas && report ? report.research_id : "";
+  const traceLive = !!report && (report.completeness === "pending" || ["queued", "collecting_sources", "comparing_evidence", "preparing_report", "preparing_images", "preparing_layout", "waiting_for_quota", "waiting_for_report", "waiting_for_retry"].includes(report.phase || ""));
+  useEffect(() => {
+    if (!traceFor) return;
+    let gone = false, last = 0, reading = false;
+    setTrace(old => old.research === traceFor ? old : {research: traceFor, events: [], workSources: []});
+    const read = async () => {
+      if (reading || gone) return;
+      reading = true;
+      try {
+        const [d, work] = await Promise.all([
+          api("/" + traceFor + "/trace?after=" + last),
+          // Older research has no run record, which is a normal answer, not a failure.
+          workApi("/runs/" + traceFor).catch(() => null),
+        ]);
+        if (gone) return;
+        const fresh: any[] = d.events || [];
+        last = fresh.reduce((high, event) => Math.max(high, event.seq), last);
+        setTrace(old => {
+          const known = old.research === traceFor ? old.events : [];
+          const added = fresh.filter(event => !known.some(row => row.seq === event.seq));
+          return {
+            research: traceFor,
+            events: added.length ? [...known, ...added].sort((a, b) => a.seq - b.seq) : known,
+            workSources: d.work_sources || [],
+            run: work?.run ?? null,
+            view: work?.view ?? old.view,
+          };
+        });
+        // The event only prompts a fresh look. The saved report decides what is finished.
+        if (fresh.some(event => event.kind === "phase" && ["complete", "failed"].includes(event.phase))) {
+          reportCache.current.delete(conversationSnapshot().clientId + ":" + traceFor);
+          void reloadReport(traceFor).catch(() => {});
+        }
+      } catch {
+        // Unavailable for now; the next read tries again from the same place.
+      } finally {
+        reading = false;
+      }
+    };
+    void read();
+    const hinted = (e: Event) => {
+      if ((e as CustomEvent).detail?.research_id === traceFor) void read();
+    };
+    window.addEventListener("nova-research-trace", hinted);
+    const poll = traceLive ? setInterval(() => void read(), 3000) : 0;
+    // The run record is saved just after the report publishes; read it again once it has settled,
+    // so the canvas gets the run's last relations without a reload.
+    const settle = traceLive ? [] : [setTimeout(() => void read(), 1500), setTimeout(() => void read(), 5000)];
+    return () => {
+      gone = true;
+      window.removeEventListener("nova-research-trace", hinted);
+      if (poll) clearInterval(poll);
+      settle.forEach(clearTimeout);
+    };
+  }, [traceFor, traceLive]);
+  function startWorkRun(text: string, options: {workflow?: string; chosen?: unknown[]; fromResearch?: string} = {}) {
+    const query = text.trim();
+    if (!query || busy) return;
+    setBusy(true);
+    setError("");
+    void workApi("/runs", {
+      method: "POST",
+      body: JSON.stringify({
+        query,
+        workflow: options.workflow || "",
+        mode: options.workflow ? "" : mode === "quick" ? "quick" : "deep",
+        chosen: options.chosen || [],
+        from_research: options.fromResearch || "",
+        operation_id: crypto.randomUUID(),
+      }),
+    })
+      .then(async (d) => {
+        if (!["accepted", "queued", "duplicate", "completed"].includes(d.status)) throw Error(d.reason || "This task could not start.");
+        lastSelection.current = "";
+        cue("notification", "research-submitted:" + d.job_id);
+        setQuery("");
+        if (d.research_id && d.job_id) setResearchJobs(old => ({...old, [d.research_id]: d.job_id}));
+        if (d.research_id) {
+          try { sessionStorage.setItem("aegis-layout-initiator:" + d.research_id, "1"); } catch { /* Storage restrictions only disable automatic arrangement. */ }
+          await select(d.research_id);
+          void refresh();
+        }
+      })
+      .catch((e) => {
+        // With no lead model configured, the existing research path still works.
+        if (/no lead model/i.test(e.message)) void start({preventDefault() {}} as React.FormEvent, query);
+        else setError(e.message);
+      })
+      .finally(() => setBusy(false));
+  }
+  const canvasActions = {
+    startWork: startWorkRun,
+    async getCanvasLayout(page: string) {
+      return (await workApi('/runs/' + encodeURIComponent(page) + '/layout')).layout;
+    },
+    async saveCanvasLayout(page: string, payload: import('../../../work-canvas/src/designer/types').LayoutSave) {
+      return (await workApi('/runs/' + encodeURIComponent(page) + '/layout', {method: 'PUT', body: JSON.stringify(payload)})).layout;
+    },
+    askNodes(question: string, nodes: {id: string; kind: string; title: string; url?: string; summary: string}[], runId: string) {
+      // The question goes to the real conversation, so the reply appears there, with the
+      // card's stable identifiers and only the descriptive text the page already shows.
+      const about = nodes.map((node) =>
+        `- ${node.kind} "${node.title}" (canvas node ${node.id}${node.url ? ", " + node.url : ""})${node.summary ? ": " + node.summary.slice(0, 400) : ""}`,
+      ).join("\n");
+      sendFollowup(`${question}\n\n[About these canvas items of run ${runId}:\n${about}]`);
+      setCanvasPanel("conversation");
+    },
+    answerRun(text: string) {
+      const id = reportRef.current?.research_id;
+      if (!id) return;
+      void workApi("/runs/" + id + "/answer", {method: "POST", body: JSON.stringify({text})})
+        .then(() => {
+          reportCache.current.delete(conversationSnapshot().clientId + ":" + id);
+          return reloadReport(id);
+        })
+        .catch(e => setError(e.message));
+    },
+    saveCanvasView(view: {chosen: string[]; hidden: string[]}) {
+      const id = reportRef.current?.research_id;
+      if (!id) return;
+      // Shown at once; the backend's answer confirms it, and a failure puts it back.
+      const before = trace.view;
+      setTrace(old => old.research === id ? {...old, view} : old);
+      void workApi("/runs/" + id + "/view", {method: "PUT", body: JSON.stringify(view)}).catch(e => {
+        setTrace(old => old.research === id ? {...old, view: before} : old);
+        setError(e.message);
+      });
+    },
+    prompt(text: string) {
+      if (report) {
+        sendFollowup(text);
+        if (report.kind !== "chat") setCanvasPanel("conversation");
+      } else void start({preventDefault() {}} as React.FormEvent, text);
+    },
+    stopJob(jobId: string) {
+      void fetch("/api/jobs/" + encodeURIComponent(jobId) + "/cancel", {method: "POST", headers: headers()})
+        .then(r => {
+          if (!r.ok) throw Error("This task could not be stopped.");
+          const id = reportRef.current?.research_id;
+          if (id) {
+            reportCache.current.delete(conversationSnapshot().clientId + ":" + id);
+            void reloadReport(id);
+          }
+        })
+        .catch(e => setError(e.message));
+    },
+    retry() {
+      const id = reportRef.current?.research_id;
+      if (id) reportCache.current.delete(conversationSnapshot().clientId + ":" + id);
+      void retrySavedResearch();
+      // The backend caches a report for 30 seconds, so read it again once that has passed.
+      if (id) setTimeout(() => {
+        if (reportRef.current?.research_id !== id) return;
+        reportCache.current.delete(conversationSnapshot().clientId + ":" + id);
+        void reloadReport(id).catch(() => {});
+      }, 31000);
+    },
+    microphone: requestMicrophone,
+    openView(view: string) {
+      selectTab(view);
+      if (view === "edit") setEditOpened(true);
+    },
+    openSource(url: string) {
+      const found = report ? [...report.sources, ...(report.linked_sources || []), ...(report.image_sources || [])].find(s => s.url === url) : null;
+      if (found) openSource(found);
+      else if (/^https?:\/\//i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
+      else setError("That source is unavailable.");
+    },
+    openPanel(panel: "history" | "conversation") {
+      setCanvasPanel(old => old === panel ? "" : panel);
+    },
+    newEntry(kind: "research" | "chat" | "documentary") {
+      setCanvasPanel("");
+      void newEntry(kind);
+    },
+    attach() {
+      uploadInput.current?.click();
+    },
+    setDepth: setMode,
+    navigate(view: "dashboard" | "memory") {
+      window.dispatchEvent(new Event("nova-open-" + view));
+    },
+    settings() {
+      document.getElementById("btn-settings")?.click();
+    },
+    restart() {
+      document.getElementById("btn-restart")?.click();
+    },
+    repair() {
+      document.getElementById("btn-fix-self")?.click();
+    },
+    useClassic() {
+      setSurface("classic");
+    },
+    imageHeaders: () => ({"X-Nova-Client": conversationSnapshot().clientId}),
+    renderMarkdown: markdown,
+    checkFrame: (url: string) => api("/frame-check?url=" + encodeURIComponent(url)),
+    addWorkSource(url: string, title: string) {
+      const id = reportRef.current?.research_id;
+      if (!id) return;
+      void api("/" + id + "/work-sources", {method: "POST", body: JSON.stringify({url, title})})
+        .then((d) => {
+          setTrace(old => old.research === id ? {...old, workSources: d.work_sources || old.workSources} : old);
+          window.dispatchEvent(new CustomEvent("nova-research-trace", {detail: {research_id: id}}));
+          reportCache.current.delete(conversationSnapshot().clientId + ":" + id);
+          return reloadReport(id);
+        })
+        .catch(e => setError(e.message));
+    },
+  };
   async function applyDocumentEdit() {
     if (!report || !documentEdit) return;
     if (document.querySelector('[data-draft-dirty="true"]')) {
@@ -3927,8 +4252,35 @@ function Workspace() {
       data-aegis-widget="research"
       aria-label="Research workspace"
       data-panel={narrowPanel}
+      data-surface={surface}
+      data-canvas-panel={canvasPanel}
     >
-      <JumpToBottom target={reader} active={open && tab === "reader" && !preview && !attachment && !documentEdit} identity={(report?.research_id || "") + (report?.reader_end || "") + (report?.extensions?.reader_end || "")} />
+      <WorkCanvasHost
+        visible={open && onCanvas}
+        actions={canvasActions}
+        onFailed={(reason) => {setError(reason);setSurfaceState("classic");}}
+        state={{
+          report,
+          trace: trace.research === report?.research_id ? trace.events : NO_ROWS,
+          workSources: trace.research === report?.research_id ? trace.workSources : NO_ROWS,
+          // Undefined until the first read answers, so the canvas frames itself with the whole graph.
+          run: report && trace.research === report.research_id ? trace.run : undefined,
+          view: (trace.research === report?.research_id && trace.view) || NO_VIEW,
+          jobId: reportJob,
+          jobs: chat.jobs,
+          connected: chat.connected,
+          guest: chat.guest,
+          busy: busy || chat.textBusy,
+          muted: chat.muted,
+          voiceState: chat.state,
+          status: chat.status,
+          loading: !!selectionLoading,
+          depth: mode,
+          panel: canvasPanel,
+          error,
+        }}
+      />
+      <JumpToBottom target={reader} active={open && tab === "reader" && !preview && !attachment && !documentEdit && (!onCanvas || canvasPanel === "document")} identity={(report?.research_id || "") + (report?.reader_end || "") + (report?.extensions?.reader_end || "")} />
       {exportPreview && (
         <PDFExportPreview
           preview={exportPreview}
@@ -3964,8 +4316,35 @@ function Workspace() {
         />
       )}
       <div className="research-layout">
-        <aside className="research-outline" id="research-history-panel" aria-label="Research history">
-          <button className="research-panel-close" aria-label="Close research history" onClick={() => setNarrowPanel("")}><Icon name="close" /></button>
+        {onCanvas ? (canvasPanel === "history" && <ResearchLibrary
+          api={api}
+          activeId={report?.research_session_id || selectionLoading || report?.research_id || ""}
+          revision={listRevision}
+          deleting={deleting}
+          selecting={selectingHistory}
+          selected={selectedHistory}
+          setSelecting={setSelectingHistory}
+          setSelected={setSelectedHistory}
+          onRemoveSelected={() => void removeSelectedHistory()}
+          onPick={(id) => void select(id)}
+          onWarm={(id) => void loadReport(id).catch(() => {})}
+          onDelete={(row) => void removeReport(row)}
+          onClose={() => setCanvasPanel("")}
+        >
+          {report && report.kind !== "chat" && !!(readerSections.length || readerFollowups.length) && <details className="rl-outline" open>
+            <summary>On this page</summary>
+            {readerSections.map(section => <button key={section.id} title={section.title} onClick={() => {
+              selectTab("reader");
+              setTimeout(() => Array.from(reader.current?.querySelectorAll("h1,h2,h3") || []).find(heading => heading.textContent?.trim() === section.title.trim())?.scrollIntoView({block:"start"}), 60);
+            }}>{section.title}</button>)}
+            {!!readerFollowups.length && <h4>Follow-up topics</h4>}
+            {readerFollowups.map(section => <button key={section.id} title={section.title} onClick={() => {
+              selectTab("reader");
+              setTimeout(() => document.getElementById("research-followup-" + section.id)?.scrollIntoView({block:"start"}), 60);
+            }}>{section.title}</button>)}
+          </details>}
+        </ResearchLibrary>) : <aside className="research-outline" id="research-history-panel" aria-label="Research history">
+          <button className="research-panel-close" aria-label="Close research history" onClick={() => {setNarrowPanel("");setCanvasPanel("");}}><Icon name="close" /></button>
           <div className="research-history-heading"><h2>Your research</h2><button className="research-history-select" aria-pressed={selectingHistory} disabled={!!deleting} onClick={() => {setSelectingHistory(!selectingHistory); setSelectedHistory(new Set());}}><Icon name={selectingHistory ? "check" : "select"} />{selectingHistory ? "Done" : "Select"}</button></div>
           {selectingHistory && <div className="research-history-selection" aria-label="History selection controls">
             <span role="status">{selectedHistory.size} selected</span>
@@ -4037,7 +4416,7 @@ function Workspace() {
               </>}
             </>
           )}
-        </aside>
+        </aside>}
         <main className="research-document">
           <header className="research-document-tools">
             <div className="research-panel-toggles">
@@ -4116,6 +4495,9 @@ function Workspace() {
                   ))}
                 </details>
               )}
+            {onCanvas
+              ? <button className="research-canvas-close" title="Back to the canvas (Esc)" onClick={() => setCanvasPanel("")}><Icon name="back" /><span>Back to canvas</span></button>
+              : <button className="research-canvas-switch" title="Open the new canvas view" onClick={() => setSurface("canvas")}>Canvas view</button>}
           </header>
           <div className="research-stage" aria-busy={!!selectionLoading || publicationPending(report)}>
             {revealingPublication && <button className="research-reveal-skip" onClick={()=>revealStop.current()}>Show all now</button>}
@@ -4630,21 +5012,23 @@ function Workspace() {
           {report?.waiting_reason==="groq_private_consent_required"&&<section className="research-fallback-consent" aria-label="Private evidence permission"><p>Allow Groq to process this conversation’s private evidence for research writing?</p><button type="button" onClick={()=>void api('/'+report.research_id+'/fallback-consent',{method:'POST',body:JSON.stringify({allow:true})}).then(()=>select(report.research_id)).catch(e=>setError(e.message))}>Allow for this conversation</button><button type="button" onClick={()=>void api('/'+report.research_id+'/fallback-consent',{method:'POST',body:JSON.stringify({allow:false})}).then(()=>select(report.research_id)).catch(e=>setError(e.message))}>Wait for Gemini</button></section>}
           <div className="research-central-composer">
             {report&&<SelectionPill page={report.research_id} revision={report.research_revision} onAttach={setActivePassage}/>}
-            <ChatComposer value={report?message:query} onChange={report?setMessage:setQuery}
+            {onCanvas
+              ? activePassage&&<PassageCard card={activePassage} onRemove={()=>{setActivePassage(null);updateUiContext({active_selection_id:""});}}/>
+              : <ChatComposer value={report?message:query} onChange={report?setMessage:setQuery}
               onSubmit={()=>report?sendFollowup():void start({preventDefault(){}} as React.FormEvent)}
               onNewChat={()=>newEntry("research")} actions={entryMenu()}
               label={report?"Ask Aegis":"Research topic"} placeholder={report?"Ask Aegis":"Ask a research question…"}
               onMicrophone={requestMicrophone} muted={chat.muted} busy={chat.textBusy} onStop={()=>window.dispatchEvent(new Event('nova-chat-cancel'))}
               disabled={busy||!chat.connected||chat.guest||chat.textBusy}
               context={activePassage?<PassageCard card={activePassage} onRemove={()=>{setActivePassage(null);updateUiContext({active_selection_id:""});}}/>:undefined}
-              trailing={!report&&entryKind!=="documentary"?<ResearchDepthMenu value={mode} onChange={setMode}/>:undefined}/>
+              trailing={!report&&entryKind!=="documentary"?<ResearchDepthMenu value={mode} onChange={setMode}/>:undefined}/>}
           </div>
         </main>
         <aside className="research-assistant" id="research-conversation-panel" aria-label="Research conversation" hidden={report?.kind === "chat"}>
-          <button className="research-panel-close" aria-label="Close research conversation" onClick={() => setNarrowPanel("")}><Icon name="close" /></button>
+          <button className="research-panel-close" aria-label="Close research conversation" onClick={() => {setNarrowPanel("");setCanvasPanel("");}}><Icon name="close" /></button>
           <header>
-            <span className="research-eyebrow">AEGIS</span>
-            <span className="research-chat-label">Research conversation</span>
+            <span className="research-eyebrow">{onCanvas ? "Conversation" : "AEGIS"}</span>
+            <span className="research-chat-label" title={onCanvas ? report?.display_title : undefined}>{onCanvas ? (report?.display_title || "No research open") : "Research conversation"}</span>
           </header>
           <div
             className="research-chat"
@@ -4664,9 +5048,21 @@ function Workspace() {
               <article key={m.id} data-speaker={m.role}>
                 <small>{m.role === "user" ? "You" : "Aegis"}</small>
                 {m.context_cards?.map((card:any)=><PassageCard key={card.id} card={card}/>)}
-                <p>{m.text}</p>
+                {onCanvas && m.role !== "user"
+                  ? <ConversationText text={m.text} sources={readerSources} onOpen={openSource} />
+                  : (() => {
+                      const {question, about} = canvasQuestion(m.text);
+                      return <>
+                        <p>{question}</p>
+                        {about.length > 0 && <p className="research-chat-about">About {about.join(", ")}</p>}
+                      </>;
+                    })()}
               </article>
             ))}
+            {onCanvas && !(conversationSession && chat.researchMessages[conversationSession]?.length) && !chat.textBusy && (
+              <p className="research-chat-empty">{report ? "Ask about this research in the box below. Aegis answers here, and can add to the report." : "Open or start research to talk about it here."}</p>
+            )}
+            {onCanvas && chat.textBusy && <p className="research-chat-working" role="status"><span aria-hidden="true" />{chat.status || "Aegis is thinking…"}</p>}
             {report?.research_cards?.map((card) => (
               <article key={card.id} className="document-research-card">
                 <Icon name="citation" />
@@ -4694,7 +5090,7 @@ function Workspace() {
             ))}
           </div>
 
-          <small>{chat.status || chat.state}</small>
+          {!onCanvas && <small>{chat.status || chat.state}</small>}
         </aside>
       </div>
     </section>

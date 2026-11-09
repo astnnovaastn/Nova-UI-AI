@@ -42,6 +42,8 @@ function event(payload: any) {
     }
     if (payload.resource === 'research')
         window.dispatchEvent(new CustomEvent('nova-research-refresh', { detail: { ...payload.data, research_id: payload.entity_id } }));
+    if (payload.resource === 'canvas_layout')
+        window.dispatchEvent(new CustomEvent('aegis-canvas-layout', { detail: { ...payload.data, research_id: payload.entity_id } }));
     if (payload.resource === 'memory')
         window.dispatchEvent(new Event('nova-memory-changed'));
     if (payload.resource === 'preferences')

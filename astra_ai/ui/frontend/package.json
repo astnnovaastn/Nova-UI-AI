@@ -9,6 +9,8 @@
     "start": "node kill-port.js && node server.js",
     "clean-start": "node kill-port.js && node server.js",
     "build": "tsc && vite build",
+    "build:canvas": "cd work-canvas && npm run build",
+    "sync:canvas": "cd work-canvas && npm run sync",
     "test:calendar": "node --test src/components/Calendar/calendarUtils.test.mjs src/components/Calendar/calendarApi.test.mjs",
     "test:calendar:e2e": "playwright test tests/calendar-controls.spec.js",
     "preview": "vite preview",

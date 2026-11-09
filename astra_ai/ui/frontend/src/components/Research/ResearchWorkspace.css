@@ -2149,3 +2149,92 @@
 #research-conversation-panel>form.research-sidebar-composer[data-expanded=true]>textarea,
 .research-workspace .research-central-chat .ai-composer-wrap form.ai-composer[data-expanded=true]>textarea{padding-right:14px}
 .research-workspace .research-central-chat .ai-composer-wrap form.ai-composer>.ai-composer-wave{width:100%;height:var(--ai-editor-height,44px);min-height:44px;padding:0 166px 0 14px}
+
+/* ── Canvas surface ──────────────────────────────────────────────────────────
+   The Svelte canvas fills the window under this layer. Reader, Edit, Sources, Media,
+   history and conversation are the same components as the classic screen, shown as
+   panels over the canvas. data-surface="classic" leaves everything above untouched. */
+.aegis-work-root[hidden]{display:none!important}
+.aegis-work-stage{position:fixed;inset:0;z-index:31}
+.aegis-work-portal{position:fixed;inset:0;z-index:45;pointer-events:none;background:transparent!important}
+.aegis-work-portal>*{pointer-events:auto}
+body.research-canvas-open #app-brand,
+body.research-canvas-open #controls,
+body.research-canvas-open #menu-dropdown,
+body.research-canvas-open .nova-workspaces,
+body.research-canvas-open #status-text,
+body.research-canvas-open #sound-wave,
+body.research-canvas-open #error-text,
+body.research-canvas-open #transcription-dots{display:none!important}
+.research-workspace[data-surface=canvas]{background:transparent;padding:0;pointer-events:none}
+.research-workspace[data-surface=canvas]>:not(.research-layout){pointer-events:auto}
+.research-workspace[data-surface=canvas] .research-layout{display:block;position:static;height:0;min-height:0;overflow:visible}
+.research-workspace[data-surface=canvas] .research-outline,
+.research-workspace[data-surface=canvas] .research-assistant,
+.research-workspace[data-surface=canvas] .research-document{display:none}
+.research-workspace[data-surface=canvas] .research-panel-toggles{display:none}
+.research-workspace[data-surface=canvas][data-canvas-panel=document] .research-document{
+  display:flex;flex-direction:column;position:fixed;z-index:40;pointer-events:auto;
+  top:56px;bottom:84px;left:calc(64px + (100vw - 64px - min(1040px,100vw - 112px))/2);width:min(1040px,calc(100vw - 112px));
+  margin:0;border:1px solid var(--r-edge);border-radius:16px;background:var(--r-panel);
+  box-shadow:0 24px 70px rgb(0 0 0 / 45%);overflow:hidden}
+.research-workspace[data-surface=canvas][data-canvas-panel=conversation] .research-assistant:not([hidden]){
+  display:flex;flex-direction:column;position:fixed;z-index:40;pointer-events:auto;
+  top:8px;bottom:8px;right:8px;left:auto;width:380px;max-width:calc(100vw - 72px);margin:0;padding:0;overflow:hidden;box-sizing:border-box;
+  border:1px solid var(--r-edge);border-radius:14px;background:var(--r-panel);font-family:"Inter Variable",Inter,system-ui,sans-serif;font-size:14px;animation:rc-arrive .16s ease-out both}
+@keyframes rc-arrive{from{opacity:0;transform:translateX(6px)}}
+@media (prefers-reduced-motion:reduce){.research-workspace[data-surface=canvas] .research-assistant{animation:none!important}}
+.research-workspace[data-surface=canvas] .research-assistant>header{display:flex;flex-direction:column;gap:2px;flex:none;margin:0;padding:12px 48px 12px 16px;border-bottom:1px solid var(--r-edge)}
+.research-workspace[data-surface=canvas] .research-assistant .research-eyebrow{color:color-mix(in srgb,var(--r-fg) 58%,transparent);font-size:11.5px;font-weight:500;letter-spacing:0;text-transform:none}
+.research-workspace[data-surface=canvas] .research-assistant .research-chat-label{overflow:hidden;color:var(--r-fg);font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;text-overflow:ellipsis}
+.research-workspace[data-surface=canvas] .research-assistant .research-chat{flex:1;min-height:0;display:flex;flex-direction:column;gap:14px;margin:0;padding:16px;overflow-y:auto;scrollbar-width:thin}
+.research-workspace[data-surface=canvas] .research-assistant .research-chat article{display:flex;flex-direction:column;gap:4px;margin:0;padding:0;max-width:100%;border:0;background:transparent}
+.research-workspace[data-surface=canvas] .research-assistant .research-chat article>small{color:color-mix(in srgb,var(--r-fg) 56%,transparent);font-size:11.5px;font-weight:500}
+.research-workspace[data-surface=canvas] .research-assistant .research-chat article[data-speaker=user]{align-self:flex-end;align-items:flex-end;max-width:88%}
+.research-workspace[data-surface=canvas] .research-assistant .research-chat article[data-speaker=user]>p{margin:0;padding:8px 12px;border-radius:14px 14px 4px 14px;background:color-mix(in srgb,var(--r-fg) 11%,transparent);color:var(--r-fg);font-size:13.5px;line-height:1.45;overflow-wrap:anywhere}
+.research-workspace[data-surface=canvas] .research-chat-text{color:var(--r-fg);font-size:14px;line-height:1.55;overflow-wrap:anywhere}
+.research-workspace[data-surface=canvas] .research-chat-text>:first-child{margin-top:0}
+.research-workspace[data-surface=canvas] .research-chat-text>:last-child{margin-bottom:0}
+.research-workspace[data-surface=canvas] .research-chat-text p{margin:0 0 9px}
+.research-workspace[data-surface=canvas] .research-chat-text a{color:inherit;text-decoration:underline;text-underline-offset:3px}
+.research-workspace[data-surface=canvas] .research-chat-text ul,.research-workspace[data-surface=canvas] .research-chat-text ol{margin:0 0 9px;padding-left:20px}
+.research-workspace[data-surface=canvas] .research-chat-text h1,.research-workspace[data-surface=canvas] .research-chat-text h2,.research-workspace[data-surface=canvas] .research-chat-text h3{margin:12px 0 5px;font-size:14.5px;font-weight:600}
+.research-workspace[data-surface=canvas] .research-chat-cite{display:inline-block;margin-left:3px;padding:0 6px;border:0;border-radius:999px;background:color-mix(in srgb,var(--r-fg) 11%,transparent);color:color-mix(in srgb,var(--r-fg) 72%,transparent);font:inherit;font-size:11px;line-height:17px;cursor:pointer}
+.research-workspace[data-surface=canvas] .research-chat-cite:hover{background:color-mix(in srgb,var(--r-fg) 18%,transparent);color:var(--r-fg)}
+.research-workspace[data-surface=canvas] .research-chat-cite:focus-visible{outline:2px solid currentColor;outline-offset:1px}
+.research-workspace[data-surface=canvas] .research-chat-empty{margin:auto 12px;color:color-mix(in srgb,var(--r-fg) 60%,transparent);font-size:13px;line-height:1.5;text-align:center}
+.research-workspace[data-surface=canvas] .research-chat-working{display:flex;align-items:center;gap:8px;margin:0;color:color-mix(in srgb,var(--r-fg) 66%,transparent);font-size:13px}
+.research-workspace[data-surface=canvas] .research-chat-working span{width:7px;height:7px;border-radius:50%;background:currentColor;animation:rc-pulse 1.1s ease-in-out infinite}
+@keyframes rc-pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.research-workspace[data-surface=canvas] .research-chat-working span{animation:none}}
+.research-workspace[data-surface=canvas] .research-panel-close{display:grid;place-items:center;position:absolute;top:10px;right:10px;width:30px;height:30px;padding:0;z-index:2}
+.research-workspace[data-surface=canvas] .research-canvas-close{display:grid;place-items:center;flex:none;width:32px;height:32px;padding:0;margin-left:auto}
+.research-workspace[data-surface=canvas] .research-central-composer{position:static;margin:0;padding:0;width:auto;max-width:none;border:0;background:transparent}
+.research-workspace[data-surface=canvas] .research-central-composer:empty{display:none}
+.research-canvas-switch{flex:none;margin-left:8px}
+@media (max-width:760px){
+  .research-workspace[data-surface=canvas][data-canvas-panel=document] .research-document{left:56px;width:calc(100vw - 64px);top:52px;bottom:76px}
+  .research-workspace[data-surface=canvas][data-canvas-panel=conversation] .research-assistant:not([hidden]){left:56px;right:8px;width:auto;max-width:none}
+}
+/* Panels share the canvas's material rather than the app theme's navy. */
+body[data-research-canvas-theme=dark] .research-workspace[data-surface=canvas]{--r-bg:#1a1a1d;--r-panel:#1f1f22;--r-fg:#ececee;--panel:#1f1f22;--bg:#1a1a1d}
+body[data-research-canvas-theme=light] .research-workspace[data-surface=canvas]{--r-bg:#f1f1f3;--r-panel:#fbfbfc;--r-fg:#1b1b1f;--panel:#fbfbfc;--bg:#f1f1f3}
+.research-workspace[data-surface=canvas] .research-document-tools details{margin-left:auto}
+.research-workspace[data-surface=canvas] .research-canvas-close{order:10;margin-left:8px}
+.research-workspace[data-surface=canvas] .research-document-tools{position:relative;padding-right:56px}
+.research-workspace[data-surface=canvas] .research-canvas-close{position:absolute;right:12px;top:50%;transform:translateY(-50%);margin:0;display:inline-flex;align-items:center;gap:6px;width:auto;height:30px;padding:0 10px 0 8px;white-space:nowrap;font-size:12.5px}
+.research-workspace[data-surface=canvas] .research-canvas-close svg{width:15px;height:15px}
+.research-workspace[data-surface=canvas] .research-document-tools{padding-right:150px}
+.research-workspace[data-surface=canvas][data-canvas-panel=document] .research-document{animation:paper-open .18s ease-out both}
+@keyframes paper-open{from{opacity:0;transform:scale(.985)}}
+@media (prefers-reduced-motion:reduce){.research-workspace[data-surface=canvas][data-canvas-panel=document] .research-document{animation:none}}
+body.research-canvas-open [class^=aegis-enable]{bottom:76px!important}
+
+/* The source preview's way into the workspace browser. */
+.research-workspace[data-surface=canvas] .research-source-workspace{flex:none;width:auto;height:auto;margin-left:auto;padding:5px 12px;border:1px solid var(--r-edge);border-radius:999px;font-size:12.5px;white-space:nowrap}
+
+.research-chat-about {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.7;
+}

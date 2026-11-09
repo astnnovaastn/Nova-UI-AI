@@ -7,6 +7,14 @@ from fastapi.responses import JSONResponse
 def install(app, *, context_for, artifacts_for, writer, learning, jobs, collaboration,
             state, manager, ui_context, workspace, confirm_destructive,
             continue_research, start_research_page):
+    @app.get('/api/research/frame-check')
+    async def research_frame_check(request:Request,url:str=''):
+        # Only says whether a public page allows framing; the page itself is never relayed.
+        context=context_for(request)
+        if context.get('guest'):raise HTTPException(403,'Owner research required')
+        from astra_ai.core.research.frame_policy import check_frame
+        return await asyncio.to_thread(check_frame,url)
+
     @app.get('/api/research')
     async def research_listing(request:Request,offset:int=0,limit:int=30,archived:bool=False):
         context=context_for(request);artifacts,_=artifacts_for()
@@ -92,13 +100,22 @@ def install(app, *, context_for, artifacts_for, writer, learning, jobs, collabor
             with jobs.lock:
                 data=jobs.load();job=data.get('jobs',{}).get(metadata.get('job_id',''))
                 if not job or scope(job.get('context',{}))!=scope(context):return False
-                actions=[a for a in job.get('actions',[]) if a.get('name')=='search_web' and a.get('arguments',{}).get('research_id')==identifier and a.get('state')=='failed']
+                actions=[a for a in job.get('actions',[]) if a.get('name') in {'search_web','work_run'} and a.get('arguments',{}).get('research_id')==identifier and a.get('state')=='failed']
                 if not actions:return False
                 for action in actions:action.update(state='queued',next_attempt=0)
                 job['state']='queued';jobs.write(data);return True
-        if not await asyncio.to_thread(resume):raise HTTPException(409,'This saved operation cannot be retried.')
-        await asyncio.to_thread(artifacts.request_state,identifier,context,phase='queued',waiting_reason='',next_attempt=None)
-        return {'status':'accepted','research_id':identifier}
+        def resubmit_work():
+            # A stopped job stays stopped. A work run continues from its checkpoints under a new job.
+            with jobs.lock:
+                job=jobs.load().get('jobs',{}).get(metadata.get('job_id',''))
+            if not job or scope(job.get('context',{}))!=scope(context) or job.get('state')!='canceled' or not any(a.get('name')=='work_run' and a.get('arguments',{}).get('research_id')==identifier for a in job.get('actions',[])):return ''
+            return jobs.submit([{'name':'work_run','arguments':{'research_id':identifier}}],{**context,'requested_research':True},uuid.uuid4().hex,goal=job.get('title','')).get('job_id','')
+        job_id=''
+        if not await asyncio.to_thread(resume):
+            job_id=await asyncio.to_thread(resubmit_work)
+            if not job_id:raise HTTPException(409,'This saved operation cannot be retried.')
+        await asyncio.to_thread(artifacts.request_state,identifier,context,phase='queued',waiting_reason='',next_attempt=None,**({'job_id':job_id} if job_id else {}))
+        return {'status':'accepted','research_id':identifier,**({'job_id':job_id} if job_id else {})}
 
     @app.post('/api/research/{identifier}/images/enrich')
     async def research_images(identifier:str,request:Request):
@@ -115,6 +132,26 @@ def install(app, *, context_for, artifacts_for, writer, learning, jobs, collabor
     async def research_reader(identifier:str,request:Request,revision:str='',cursor:int=0,stream:str='all'):
         if stream not in {'all','base','extensions'}:raise HTTPException(400,'Invalid reader stream')
         artifacts,_=artifacts_for();return await asyncio.to_thread(artifacts.reader,identifier,context_for(request),revision,cursor,20000,stream)
+
+    @app.get('/api/research/{identifier}/trace')
+    async def research_trace(identifier:str,request:Request,after:int=0):
+        context=context_for(request);artifacts,_=artifacts_for()
+        metadata=await asyncio.to_thread(artifacts.request_state,identifier,context)
+        if metadata.get('status')=='not_found':raise HTTPException(404,'Research unavailable')
+        events=await asyncio.to_thread(artifacts.trace.read,identifier,after)
+        return {'status':'ok','research_id':identifier,'events':events,'work_sources':metadata.get('work_sources',[])}
+
+    @app.post('/api/research/{identifier}/work-sources')
+    async def research_add_work_source(identifier:str,request:Request):
+        context=context_for(request);artifacts,_=artifacts_for()
+        if context.get('guest'):raise HTTPException(403,'Owner research required')
+        body=await request.json();url=str(body.get('url',''));title=str(body.get('title',''))
+        from astra_ai.core.research.frame_policy import public_address
+        try:await asyncio.to_thread(public_address,url)
+        except (ValueError,OSError):raise HTTPException(400,'Only public web addresses can be added.')
+        result=await asyncio.to_thread(artifacts.add_work_source,identifier,context,url,title)
+        if result.get('status')=='not_found':raise HTTPException(404,'Research unavailable')
+        return result
 
     @app.get('/api/research/{identifier}/conversation')
     async def research_conversation(identifier:str,request:Request):

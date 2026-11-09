@@ -1,0 +1,1953 @@
+{
+ "upstream": "https://github.com/zephium-browser/Zephium",
+ "commit": "7ccc28ff1cb102aba69ef4415fee266b8239fa0d",
+ "license": "MPL-2.0",
+ "messages": {
+  "file": "frame/messages/en.json",
+  "change": "Zephium replaced with Aegis in user-facing text"
+ },
+ "patches": [
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Expose real geometry to the provider-free AEGIS designer without synthesizing pointer events."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Return the controlled geometry API to the host."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Suppress persisted view callbacks during provisional animation."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Do not let lane projections interrupt an active arrangement."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Let manual interaction cancel designer movement before the drag."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Typed cancellation hook for AEGIS."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "User resize wins over arrangement."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "User camera remains independent of designer Follow."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Cancel automation when the user takes a card."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Avoid double CSS interpolation while requestAnimationFrame owns positions."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "The actual node follows the designer scheduler exactly."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Accessible pin and size-lock actions for actual AEGIS canvas cards."
+  },
+  {
+   "file": "features/work/lib/canvas-model.ts",
+   "why": "Carry designer constraints through the actual node model."
+  },
+  {
+   "file": "features/work/lib/canvas-model.ts",
+   "why": "Refresh node protection when the saved layout changes."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Expose safe real resizing on designer-enabled cards while respecting locks."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Show the actual protection state in node actions."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Show the actual size-lock state."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Designer Follow preserves zoom and pans gently only when its target leaves the available canvas."
+  },
+  {
+   "file": "features/work/components/WorkEdge.svelte",
+   "why": "Use live handle coordinates after layout moves or resizes so connectors stay attached."
+  },
+  {
+   "file": "features/work/components/cards/SourcesCard.svelte",
+   "why": "Expand source rows inside their existing measured card."
+  },
+  {
+   "file": "features/work/components/cards/SourcesCard.svelte",
+   "why": "Show the full saved list inline."
+  },
+  {
+   "file": "features/work/components/cards/SourcesCard.svelte",
+   "why": "Report expansion height through the existing measurement hook."
+  },
+  {
+   "file": "features/work/components/cards/SourcesCard.svelte",
+   "why": "Provide accessible inline collapse."
+  },
+  {
+   "file": "features/work/components/cards/SourcesCard.svelte",
+   "why": "Keep auxiliary source lists inline too."
+  },
+  {
+   "file": "features/work/components/cards/SourcesCard.svelte",
+   "why": "Remove popup geometry and close handlers."
+  },
+  {
+   "file": "features/work/components/cards/SourcesCard.svelte",
+   "why": "Name inline source details."
+  },
+  {
+   "file": "features/work/components/cards/SourcesCard.svelte",
+   "why": "End inline source details."
+  },
+  {
+   "file": "features/work/components/cards/SourcesCard.svelte",
+   "why": "Subtle bounded stagger for newly revealed rows."
+  },
+  {
+   "file": "features/work/components/cards/SourcesCard.svelte",
+   "why": "Avoid nested scrolling in expanded sources."
+  },
+  {
+   "file": "features/work/components/cards/SourcesCard.svelte",
+   "why": "Respect reduced motion for source reveals."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Reconcile arrivals deferred during motion once the coordinator releases geometry."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Track animation state outside untrack so arriving nodes cannot become stranded."
+  },
+  {
+   "file": "features/work/lib/canvas-model.ts",
+   "why": "Sources update even when row count and measured height remain unchanged."
+  },
+  {
+   "file": "features/work/components/cards/SourcesCard.svelte",
+   "why": "Remeasure expansion and collapse even if outer dimensions were cached."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Explicit Focus on Active Work uses the current zoom and existing camera glide."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Use existing typed rich-object kinds for content-aware packing without inventing integrations."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Keep the Svelte Flow attribution visible; hiding it is meant for Pro subscribers."
+  },
+  {
+   "file": "features/work/components/run/PageFace.svelte",
+   "why": "Add the AEGIS preview provider: saved favicon and excerpt beside the title."
+  },
+  {
+   "file": "features/work/components/run/PageFace.svelte",
+   "why": "Look up the preview for this page."
+  },
+  {
+   "file": "features/work/components/run/PageFace.svelte",
+   "why": "Show the saved excerpt over the saved image."
+  },
+  {
+   "file": "features/work/components/run/PageFace.svelte",
+   "why": "Show the saved excerpt when a page has no image, so no card is blank."
+  },
+  {
+   "file": "features/work/components/run/PageFace.svelte",
+   "why": "Show the saved favicon in the card's bar."
+  },
+  {
+   "file": "features/work/components/run/PageFace.svelte",
+   "why": "Styles for the preview additions."
+  },
+  {
+   "file": "features/work/components/AgentLine.svelte",
+   "why": "A paused run says the real reason AEGIS recorded."
+  },
+  {
+   "file": "features/work/components/AgentLine.svelte",
+   "why": "Import the recorded reason."
+  },
+  {
+   "file": "features/work/components/bar/WorkBar.svelte",
+   "why": "Let the host own the microphone, so AEGIS can use its Gemini Live voice instead of native dictation."
+  },
+  {
+   "file": "features/work/components/bar/WorkBar.svelte",
+   "why": "Types for the microphone props."
+  },
+  {
+   "file": "features/work/components/bar/WorkBar.svelte",
+   "why": "Route the mic to the host."
+  },
+  {
+   "file": "features/work/components/bar/WorkBar.svelte",
+   "why": "Say whether the microphone is on."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Finished research is drawn as a paper: import AEGIS's paper card."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "A paper offers Open, without the ask, choose and remove orders meant for the person's own objects."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Draw the paper card."
+  },
+  {
+   "file": "features/work/components/start/WorkStart.svelte",
+   "why": "A narrow window scrolls the role tabs, so their names stay readable. Opens the scrolling wrapper."
+  },
+  {
+   "file": "features/work/components/start/WorkStart.svelte",
+   "why": "Closes the scrolling wrapper."
+  },
+  {
+   "file": "features/work/components/start/WorkStart.svelte",
+   "why": "Styles for the scrolling wrapper."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Zephium's pane is transparent over a native webview; here the page sits inside it, so showing it depends only on the phase."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Props for the iframe slot, stacking, minimizing and where a further window opens."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Types for those props."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "A further window opens stepped from the first, so it does not hide it."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Stays inside a canvas narrower than the pane's normal minimum."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "With several windows, Escape closes only the one in use, and not while another panel holds the focus."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Stacking, hiding when minimized, and raising when touched."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "A minimize control, beside close."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Import the minimize icon."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "The page itself goes where Zephium's native view would be painted."
+  },
+  {
+   "file": "features/work/lib/run/parts.ts",
+   "why": "AEGIS reports exact step states, so a lane is working only while one of its run's steps is running, not whenever the run is live."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "explain code: AEGIS Research reads the web and what is pasted, not local folders or connected accounts, so it asks for the input and names no app it cannot read."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "map a project: AEGIS Research reads the web and what is pasted, not local folders or connected accounts, so it asks for the input and names no app it cannot read."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "review a change: AEGIS Research reads the web and what is pasted, not local folders or connected accounts, so it asks for the input and names no app it cannot read."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "fix a test: AEGIS Research reads the web and what is pasted, not local folders or connected accounts, so it asks for the input and names no app it cannot read."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "moodboard: AEGIS Research reads the web and what is pasted, not local folders or connected accounts, so it asks for the input and names no app it cannot read."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "plan my day: AEGIS Research reads the web and what is pasted, not local folders or connected accounts, so it asks for the input and names no app it cannot read."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "plan my day ask: AEGIS Research reads the web and what is pasted, not local folders or connected accounts, so it asks for the input and names no app it cannot read."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "weekly status: AEGIS Research reads the web and what is pasted, not local folders or connected accounts, so it asks for the input and names no app it cannot read."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "weekly status ask: AEGIS Research reads the web and what is pasted, not local folders or connected accounts, so it asks for the input and names no app it cannot read."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "inbox triage: AEGIS Research reads the web and what is pasted, not local folders or connected accounts, so it asks for the input and names no app it cannot read."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "inbox triage ask: AEGIS Research reads the web and what is pasted, not local folders or connected accounts, so it asks for the input and names no app it cannot read."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "meeting prep: AEGIS Research reads the web and what is pasted, not local folders or connected accounts, so it asks for the input and names no app it cannot read."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "meeting prep ask: AEGIS Research reads the web and what is pasted, not local folders or connected accounts, so it asks for the input and names no app it cannot read."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "Research is the eighth category."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "Research's tab stands next to Founder."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "Each Research card is drawn from its own shape."
+  },
+  {
+   "file": "features/work/lib/start/workflows.ts",
+   "why": "The three Research workflows."
+  },
+  {
+   "file": "features/work/components/start/Vignette.svelte",
+   "why": "Artwork for the three Research cards: a focused answer, a converging search, and a connected map."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "AEGIS's agent, blueprint and map group cards."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "A card AEGIS marks with `orders` takes Ask, Choose and Remove even though the run drew it; those act on the canvas view, never on saved research."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "A lane, marked with `orders`, has the toolbar too; a map group's own cards carry it instead."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Draw AEGIS's agent, blueprint and map group cards."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Selection actions: Choose as well as Ask and Remove, with removal offered for run-drawn cards."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Offer Choose for a selection."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "A card AEGIS marks with orders counts as removable from this view."
+  },
+  {
+   "file": "features/work/components/SelectionBar.svelte",
+   "why": "Accept the Choose action."
+  },
+  {
+   "file": "features/work/components/SelectionBar.svelte",
+   "why": "Type the Choose action."
+  },
+  {
+   "file": "features/work/components/SelectionBar.svelte",
+   "why": "AEGIS has no areas, so its button becomes Choose, which selects the group for the next instruction."
+  },
+  {
+   "file": "features/work/lib/canvas-context.ts",
+   "why": "Share the explicitly activated toolbar node."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Show actions only for the activated selected card."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Keep toolbar actions outside canvas gestures."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Read toolbar activation from the canvas."
+  },
+  {
+   "file": "features/work/components/AreaNode.svelte",
+   "why": "Use the same explicit activation for area actions."
+  },
+  {
+   "file": "features/work/components/AreaNode.svelte",
+   "why": "Read area toolbar activation."
+  },
+  {
+   "file": "features/work/components/AreaNode.svelte",
+   "why": "Only show the selected area toolbar after activation."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Track an explicit single-node toolbar activation independently of drag selection."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Share toolbar activation with node components."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Activate the toolbar when a node is clicked."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Dismiss node actions when the pane is clicked."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Dismiss node actions during drag selection and node dragging."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Dismiss node actions when moving cards."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Support Enter and Space activation and Escape dismissal."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Set the rendered camera and gesture transform through the same flow API."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Publish the explicit center camera after setting it."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Frame once after the flow is ready and only before a canvas gesture."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Drop the timer for repeated initial framing."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Apply an explicitly restored camera to the gesture engine."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Use the flow API for programmatic camera updates."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Cancel pending initial framing as soon as the canvas receives a pointer press."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Use one initial framing path instead of a second queued fit."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Wait for the camera engine before applying initial framing."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Keep manual follow motion and pan state synchronized."
+  },
+  {
+   "file": "features/work/lib/canvas-model.ts",
+   "why": "A link may carry the backend relations it stands for (AEGIS src/relations.ts)."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Register the AEGIS strand edge."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Strands are an edge type of their own."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "A strand link draws as a strand and keeps its relations."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "A strand can be selected to inspect what it means."
+  }
+ ],
+ "files": [
+  {
+   "path": "frame/src/domain/connections/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/connections/connections.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/connections/marks.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/favicons/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/favicons/favicons.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/keymap/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/keymap/keymap.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/layout/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/layout/layout.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/notes/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/notes/notes.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/notes/outline.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/notes/registry.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/notes/transport.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/resources/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/resources/media.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/resources/owned-objects.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/resources/resource-model.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/resources/tasks.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/resources/transport.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/ui-commands/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/ui-commands/ui-commands.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/voice/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/voice/settings.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/voice/take.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/work-context/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/work-context/memory.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/work-context/sites.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/work-context/skills.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/work-human/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/work-human/human.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/work/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/work/work-activity.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/work/work-model.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/work/work-operations.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/work/work.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/components/NoteHost.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/components/NoteList.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/components/NoteNotice.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/components/NoteView.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/components/Notes.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/components/NotesPage.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/components/editor/BlockMenu.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/components/editor/FormatBar.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/components/editor/NoteEditor.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/components/editor/Suggestions.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/components/editor/editor.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/editor/behaviour.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/editor/blocks.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/editor/highlight.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/editor/marks.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/editor/placement.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/editor/portal.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/editor/views.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/enter.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/format.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/glide.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/markdown/document.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/markdown/entities.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/markdown/lexer.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/markdown/parse.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/markdown/schema.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/markdown/serialize.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/platform.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/notes/lib/sections.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/AgentLine.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/components/AgentMark.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/AreaNode.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/components/CanvasControls.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/CanvasFlowHandle.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/CanvasNode.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/components/Lift.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/LiftHeader.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/SelectionBar.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/components/WorkCanvas.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/components/WorkEdge.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/AddressCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/AskCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/AskReceipt.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/AskShell.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/ConfirmCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/ConnectionCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/ContextCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/EntryCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/FolderCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/QuestionCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/Remembered.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/RunAsks.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/SignInCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/actions.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/asks.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/asks/icons.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/bar/BarTool.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/bar/VoiceView.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/bar/VoiceWave.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/bar/WorkBar.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/components/board/BlockHost.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/BoardHead.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Callout.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Chart.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Checklist.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Chips.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Code.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Comparison.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Diagram.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Document.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/EntityCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Gallery.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/MakeTasks.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Popover.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Prose.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Stat.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Table.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Timeline.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/board/Trail.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/AccountBadge.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/AnswerCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/CardFrame.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/CodeCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/CompareCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/FolderCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/HostGlyph.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/MediaCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/NoteCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/ObjectiveCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/PageCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/RequestText.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/ResultCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/SourcesCard.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/SubjectCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/SubjectPicture.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/TabCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/cards/TableCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/compare/Compare.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/lift/LiftRow.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/lift/LiftSection.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/lift/RequestLift.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Checklist.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Code.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Diagram.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Diff.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Document.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Dots.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Draft.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/File.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/FlightCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Folder.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Inline.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/List.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Mark.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Media.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Note.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/ObjectView.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Page.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/PickCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Picks.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Plan.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/PlanCalendar.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/PlayMark.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Plot.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Project.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Reply.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Sheet.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Star.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Stars.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Subject.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/TableBlock.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/Title.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/YesNo.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/ZephiumMark.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/centre.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/icons.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/inline.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/markdown.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/near.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/path.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/project.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/sheet.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/objects/size-text.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/pane/BrowserPane.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/components/presence/PartAgent.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/presence/PartMark.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/run/InputMark.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/run/NeedsYou.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/run/ObjectHost.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/run/PageFace.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/components/run/PartRow.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/run/RunMark.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/run/slots.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/start/Vignette.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/components/start/WorkStart.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/lib/agent-steps.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/arrange.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/arrival.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/adapter.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/entities.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/layout.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/object-size.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/objects.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/plan-calendar.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/plan-ics.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/rating.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/size.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/tabular.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/text.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/trail.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/types.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/board/versus.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/camera-follow.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/canvas-context.ts",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/lib/canvas-model.ts",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/lib/card-size.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/compare.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/composer-hole.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/daily-reset.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/diagram-icons.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/diagram-labels.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/diagram-layout.worker.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/diagram-metrics.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/diagram-route.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/diagram-rows.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/diagram-text.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/diagram-worker.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/diagram.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/frame-thumbs.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/free-space.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/icons.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/link-media.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/note-hue.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/object-kind.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/organize.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/pane-geometry.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/parts/computer.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/pointer-tool.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/project-environment-board.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/project-environment-stage.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/project-environment-thread.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/project-environment.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/project-work.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/run-timeline.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/run/columns.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/run/found.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/run/layout.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/run/lines.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/run/need.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/run/needs.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/run/part-size.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/run/parts.ts",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/lib/run/provenance.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/run/result-label.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/run/site.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/run/sources.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/selection.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/start/workflows.ts",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/work/lib/subjects.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/ulid-time.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/vendors.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/voice-problem.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/work-files.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/work-human.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/work-tasks.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/lib/workspace/layers.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ipc/bindings.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ipc/native-events.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ipc/work-constants.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/lib/accelerator.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/lib/close.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/lib/lag.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/lib/lifecycle.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/lib/motion.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/lib/observe.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/lib/still.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/lib/virtual-window.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/platform.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Button/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Button/Button.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Button/control.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/FavIcon/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/FavIcon/FavIcon.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Icon/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/IconButton/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/IconButton/IconButton.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Icon/Icon.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Icon/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/KeyHint/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/KeyHint/KeyHint.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/LazyView/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/LazyView/LazyView.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Menu/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Menu/Mark.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Menu/Menu.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Menu/anchor.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Menu/material.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Menu/popover.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Menu/surface.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/RenderBoundary/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/RenderBoundary/RenderBoundary.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/SearchField/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/SearchField/SearchField.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/SegmentedControl/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/SegmentedControl/SegmentedControl.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Shine/shine.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/ZephiumTile/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/ZephiumTile/ZephiumTile.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/AnswerView.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/Artifact.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/DocumentView.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/EvidenceChips.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/Findings.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/HostGlyph.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/Matrix.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/Sources.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/Table.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/WorkChart.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/artifact.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/site-marks.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/table.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Artifact/work-chart.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/Cartesian.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/Chart.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/ChartLegend.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/Heat.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/Radar.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/Readout.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/Round.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/Spark.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/Tip.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/chart.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/geometry.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/hover.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Chart/plan.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Code/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Code/CodeBlock.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Code/code.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Code/tokenize.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/DataTable/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/DataTable/DataTable.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/DataTable/table.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/presence/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/presence/Character.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/presence/Orb.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/presence/Shimmer.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/presence/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/presence/orb.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/presence/shapes.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/axes/bootstrap.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/axes/contrast.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/axes/density.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/axes/material.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/axes/motion.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/axes/palette.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/axes/tint.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/axes/type.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/controls.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/favicon.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/tokens.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/tokens/avatar.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/tokens/primitive.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/styles/tokens/sky.css",
+   "status": "unchanged"
+  }
+ ]
+}

@@ -231,6 +231,8 @@ class FolderResearchStore:
             catalog = read(self.path, {})
             for meta in catalog.get('pages', {}).values():
                 for collection in meta['collections']:
+                    # A collection from another version has no known file; it must not block saving.
+                    if collection not in PAGE_FILES:continue
                     relative = meta['folder'] + '/' + PAGE_FILES[collection]
                     result[relative] = self._target(relative)
                 if meta.get('evidence_hash'):

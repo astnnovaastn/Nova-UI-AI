@@ -14,6 +14,7 @@ COOKIE = "nova_paired_device"
 # Explicit application data routes. Administration, keys, runtime and OS actions stay local.
 ALLOWED = (
     "/api/research",
+    "/api/work",
     "/api/memory",
     "/api/conversations",
     "/api/sync",

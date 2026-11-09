@@ -242,3 +242,6 @@ astra_ai/memory/research_artifacts/
 
 # Managed private application state, including media, backups and device credentials.
 /state/
+
+# Local checkout used to refresh the vendored Work canvas
+astra_ai/ui/zephium-source/

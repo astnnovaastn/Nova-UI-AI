@@ -391,6 +391,7 @@ socket.onMessage((msg) => {
   if(type==='research_page_created'){window.dispatchEvent(new CustomEvent('nova-research-page-created',{detail:msg}));return;}
   if(type==='research_continue'){window.dispatchEvent(new CustomEvent('nova-research-continue',{detail:msg}));return;}
   if(type==='research_refresh'){window.dispatchEvent(new CustomEvent('nova-research-refresh',{detail:msg}));return;}
+  if(type==='research_trace'){window.dispatchEvent(new CustomEvent('nova-research-trace',{detail:msg}));return;}
   if(type==='research_ready'){window.dispatchEvent(new CustomEvent('nova-research-ready',{detail:msg}));return;}
   if(type==='memory_view_action'){window.dispatchEvent(new CustomEvent('nova-memory-view-action',{detail:msg}));return;}
   if(type==='jobs_snapshot'){conversationState({jobs:Array.isArray(msg.jobs)?msg.jobs as any:[]});return;}

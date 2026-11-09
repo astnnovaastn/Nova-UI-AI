@@ -25,6 +25,18 @@ def test_roundtrip_changed_page_and_unknown_fields(tmp_path):
     assert not list(store.root.rglob('*.bak'))
 
 
+def test_collection_from_another_version_does_not_block_saving(tmp_path):
+    store=FolderResearchStore(tmp_path/'research'); data=sample();store.write(data)
+    catalog=read(store.path,{});page=next(iter(catalog['pages'].values()))
+    page['collections'].append('canvas');atomic(store.path,catalog)
+    leftover=store.root/page['folder']/'canvas.json';atomic(leftover,{'schema_version':1,'value':{'x':1}})
+    fresh=FolderResearchStore(store.root);loaded=fresh.load();assert loaded==data
+    loaded['drafts']['a']['html']='<p>Typed</p>';fresh.write(loaded)
+    assert FolderResearchStore(store.root).load()==loaded
+    assert all('canvas' not in meta['collections'] for meta in read(store.path,{})['pages'].values())
+    assert read(leftover,{})=={'schema_version':1,'value':{'x':1}}
+
+
 def test_migration_idempotent_history_assets_rollback(tmp_path):
     legacy=tmp_path/'old'/'reports.json';data=sample();atomic(legacy,data)
     atomic(legacy.with_name('reports.history.json'),{'a':{'title':'My title'}})

@@ -1,0 +1,53 @@
+/*
+ * The canvas's stylesheet. Same imports as Zephium's global.css, minus browser.css and its
+ * document-level rules. scope-css.mjs then confines every rule to .aegis-work-root.
+ */
+@import "@fontsource-variable/inter/index.css";
+@import "../upstream/src/styles/axes/bootstrap.css";
+@import "tailwindcss" source("../upstream/src");
+@import "../upstream/src/styles/tokens/primitive.css";
+@import "../upstream/src/styles/tokens/avatar.css";
+@import "../upstream/src/styles/tokens/sky.css";
+@import "../upstream/src/styles/tokens.css";
+@import "../upstream/src/styles/axes/palette.css";
+@import "../upstream/src/styles/axes/tint.css";
+@import "../upstream/src/styles/axes/density.css";
+@import "../upstream/src/styles/axes/contrast.css";
+@import "../upstream/src/styles/axes/material.css";
+@import "../upstream/src/styles/axes/motion.css";
+@import "../upstream/src/styles/axes/type.css";
+@import "../upstream/src/styles/controls.css";
+@import "../upstream/src/styles/favicon.css";
+@source not "../upstream/src/**/*.test.ts";
+@source not "../upstream/src/features/work";
+@source not "../upstream/src/features/notes";
+@source not "../upstream/src/features/tasks";
+@source not "../upstream/src/domain/resources";
+@source not inline("blur");
+
+:root {
+  /* The AEGIS shell around the canvas: muted slate, as in the reference. */
+  --aegis-shell: #24262b;
+  --aegis-shell-raised: #2f3238;
+  --aegis-rail-width: 64px;
+  color-scheme: dark;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  font-synthesis: none;
+  font-kerning: normal;
+  text-rendering: optimizelegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-theme="light"] {
+  --aegis-shell: #d9dbe0;
+  --aegis-shell-raised: #e7e8ec;
+  color-scheme: light;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}

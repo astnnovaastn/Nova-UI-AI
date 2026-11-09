@@ -100,6 +100,8 @@ class ResearchArtifacts:
         self._snapshot_key=None;self._snapshot=None;self._document_cache={};self._link_cache={}
         import threading
         self.image_worker=threading.BoundedSemaphore(1)
+        from .trace import ResearchTrace
+        self.trace=ResearchTrace(self.path.parent)
 
     def read(self, default=None):
         return self.repository.load() if self.repository else read(self.path, default or {'artifacts':{},'imports':{}})
@@ -241,6 +243,7 @@ class ResearchArtifacts:
                     if item.get('phase') in active and isinstance(started,(int,float)):
                         item['processing_seconds']=item.get('processing_seconds',0)+max(0,stamp-started)
                     item['active_since']=stamp if next_phase in active else None
+                self.trace.request_changes(identifier,context,item,updates)
                 item.update(updates);item['update_sequence']=item.get('update_sequence',0)+1;self.write(data)
             return {'status':'ok',**copy.deepcopy(item)}
 
@@ -620,7 +623,7 @@ class ResearchArtifacts:
         sections=[{'id':'section-'+str(i),'title':line.lstrip('# ').strip()} for i,line in enumerate(item['report'].splitlines()) if re.match(r'^#{1,3} ',line)]
         with self.lock:
             draft=self.snapshot().get('drafts',{}).get(identifier)
-        document={**self.brief(item),'status':'ok','report':item['report'],'sources':sources,'linked_sources':self.report_links(item,context),'sections':sections,'draft':copy.deepcopy(draft),**self.media(identifier,context),'legacy_evidence':'Sourced research excerpts.' in item['report'] or 'not a completed synthesis.' in item['report'],'evidence_collection':'Sourced research excerpts.' in item['report'] or 'not a completed synthesis.' in item['report']}
+        document={**self.brief(item),'status':'ok','report':item['report'],'sources':sources,'linked_sources':self.report_links(item,context)+self.work_sources(identifier,context),'sections':sections,'draft':copy.deepcopy(draft),**self.media(identifier,context),'legacy_evidence':'Sourced research excerpts.' in item['report'] or 'not a completed synthesis.' in item['report'],'evidence_collection':'Sourced research excerpts.' in item['report'] or 'not a completed synthesis.' in item['report']}
         extensions=self.snapshot().get('extensions',{}).get(identifier,[])
         if any(entry['report'].strip() for entry in extensions):document['evidence_collection']=False
         metadata=self.request_state(identifier,context)
@@ -666,6 +669,7 @@ class ResearchArtifacts:
             metadata.update(publication_state='published',phase='complete',next_attempt=None,waiting_reason='',update_sequence=metadata.get('update_sequence',0)+1)
             data['artifacts'][identifier]['phase']='complete'
             self.write(data)
+            self.trace.record(identifier,'phase','complete','done',context)
             return self.brief(data['artifacts'][identifier])
 
 
@@ -788,6 +792,24 @@ class ResearchArtifacts:
         for source in result['sources']:story.append(Paragraph('['+source['id']+'] <link href="'+html_module.escape(source['url'],quote=True)+'">'+html_module.escape(source['title'])+'</link>',styles['BodyText']))
         SimpleDocTemplate(output,title=title).build(story)
         return output.getvalue(),'application/pdf'
+
+    def work_sources(self, identifier, context):
+        """Pages the person added to this research from the workspace browser."""
+        return copy.deepcopy(self.request_state(identifier,context).get('work_sources',[]))
+
+    def add_work_source(self, identifier, context, url, title=''):
+        """A reference only, the address and title: no page content is captured."""
+        with self.lock:
+            metadata=self.request_state(identifier,context)
+            if metadata.get('status')=='not_found':return {'status':'not_found'}
+            rows=list(metadata.get('work_sources',[]))
+            found=next((row for row in rows if row['url']==url),None)
+            if found:return {'status':'completed','source':copy.deepcopy(found),'work_sources':rows}
+            row={'id':'W'+hashlib.sha256(url.encode()).hexdigest()[:24],'url':url,'title':safe(str(title or urlsplit(url).hostname))[:300],'retrieved_at':now(),'reference_kind':'work_source'}
+            rows.append(row)
+            self.request_state(identifier,context,work_sources=rows)
+        self.trace.record(identifier,'source_added','', 'done',context,url=url,title=row['title'])
+        return {'status':'completed','source':copy.deepcopy(row),'work_sources':rows}
 
     def report_links(self, item, context):
         """Only offer follow-on URLs that occur in the preserved source evidence."""

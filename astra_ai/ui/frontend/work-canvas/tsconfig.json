@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": false,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "$app/*": ["./upstream/src/app/*"],
+      "$features/*": ["./upstream/src/features/*"],
+      "$session/*": ["./upstream/src/session/*"],
+      "$domain/*": ["./upstream/src/domain/*"],
+      "$shared/*": ["./upstream/src/shared/*"],
+      "$styles/*": ["./upstream/src/styles/*"]
+    }
+  },
+  "include": ["src"]
+}

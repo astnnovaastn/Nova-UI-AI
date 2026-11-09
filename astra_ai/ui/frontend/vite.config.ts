@@ -11,7 +11,8 @@ export default defineConfig({
       // including Vite's ?import query, rather than transforming public files.
       server.middlewares.use((req, res, next) => {
         const path=(req.url||"").split("?")[0];
-        if (!/^\/speech\/ort\/ort-wasm-simd-threaded(?:\.asyncify|\.jsep)?\.mjs$/.test(path)) return next();
+        // The Research canvas is its own prebuilt bundle; serve its modules as-is too.
+        if (!/^\/speech\/ort\/ort-wasm-simd-threaded(?:\.asyncify|\.jsep)?\.mjs$/.test(path) && !/^\/work-canvas\/[\w.-]+\.js$/.test(path)) return next();
         try {res.setHeader("Content-Type","application/javascript");res.end(readFileSync(fileURLToPath(new URL("./public"+path,import.meta.url))));}
         catch {next();}
       });

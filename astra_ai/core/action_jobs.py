@@ -3,7 +3,7 @@ import asyncio, copy, json, uuid, time, hashlib, re
 from pathlib import Path
 from astra_ai.memory.shared_memory import atomic, read, StorageLock, now, safe
 
-READS={"memory_context_action","time_action","transcript_action_read","read_ui_context","read_standing_rules","recall_memory","recall_conversations","get_system_status","read_notes_context","read_search_context","read_calendar_context","read_image_context","recall_search_memory","list_tracked_files","read_file","file_status","search_web"}
+READS={"memory_context_action","time_action","transcript_action_read","read_ui_context","read_standing_rules","recall_memory","recall_conversations","get_system_status","read_notes_context","read_search_context","read_calendar_context","read_image_context","recall_search_memory","list_tracked_files","read_file","file_status","search_web","work_run"}
 def readonly(action):
     return action['name']=='research_action' and action.get('arguments',{}).get('action') in {'run','get','list','read'} or action['name']=='category_action' and action.get('arguments',{}).get('action') in {'list','resolve'} or action['name']=='capability_action' and action.get('arguments',{}).get('action') in {'list','get','status'} or action["name"]=="transcript_action" and action.get("arguments",{}).get("action") in {"sessions","list","get","history"} or action["name"] in READS or action["name"]=="memory_action" and action.get("arguments",{}).get("action") in {"list","get","history","search","list_forgotten","search_forgotten"}
 
@@ -233,7 +233,7 @@ class ActionJobs:
         try:
             # One checkpointed writing stage may use two bounded 180-second model attempts.
             # Ordinary operations retain their existing responsive deadline.
-            timeout=600 if action["name"]=='search_web' and context.get('requested_research') else 60
+            timeout=600 if action["name"] in {'search_web','work_run'} and context.get('requested_research') else 60
             result=await asyncio.wait_for(self.executor(action["name"],action.get("arguments",{}),context,action["operation_id"]),timeout=timeout)
         except asyncio.CancelledError:raise
         except Exception as exc:result={"status":"failed","reason":type(exc).__name__,"retryable":isinstance(exc,(TimeoutError,ConnectionError))}

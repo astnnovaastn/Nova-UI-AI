@@ -2338,13 +2338,26 @@ async def _complete_research(report,query,sources):
 
 
 def get_research_services():
+    global _research_trace_loop
+    try:_research_trace_loop=asyncio.get_running_loop()
+    except RuntimeError:pass
     from astra_ai.core.research_learning import ResearchArtifacts, ResearchSearch
     path=runtime_paths.research
     key=str(path.resolve())
     if key not in _research_services:
         artifacts=ResearchArtifacts(path,legacy_path=state.live_memory.memory_path.parent/'research_artifacts'/'reports.json')
+        artifacts.trace.listener=_research_trace_hint
         _research_services[key]=(artifacts,ResearchSearch(artifacts,_get_env_value,synthesize=_synthesize_research,illustrate=True,complete=_complete_research,read_evidence=True,prepare_media=True))
     return _research_services[key]
+
+_research_trace_loop = None
+
+def _research_trace_hint(context, identifier, event):
+    """Tells the page a new event exists; it reads events from the trace route, which also covers reconnects."""
+    loop, client = _research_trace_loop, context.get('client_id')
+    if loop and client and not loop.is_closed():
+        message = {'type': 'research_trace', 'research_id': identifier, 'seq': event['seq']}
+        loop.call_soon_threadsafe(lambda: asyncio.ensure_future(ws_manager.send_to_client_id(client, message)))
 
 async def _aegis_search_web(arguments):
     from astra_ai.core.aegis_ai import CURRENT_OPERATION
@@ -5727,7 +5740,12 @@ async def _dispatch_aegis_tool(name,arguments,context,operation_id):
     if window.get('device_id','local')!='local' and name not in {'search_web','research_artifact_action','research_action','recall_memory','recall_conversations','save_memory','save_memory_event','memory_action','time_action','transcript_action'}:
         return {'status':'rejected','reason':'host_only_operation'}
     token=CURRENT_OPERATION.set({**context,'operation_id':operation_id})
-    try:return await _dispatch_scoped_aegis_tool(name,arguments,context,operation_id)
+    try:
+        # Only the durable queue starts a work run; it is not a tool offered to the live model.
+        if name=='work_run':
+            if context.get('guest') or not context.get('job_id'):return {'status':'rejected','reason':'owner_job_required'}
+            return await get_work_orchestrator().run(str(arguments.get('research_id','')),context)
+        return await _dispatch_scoped_aegis_tool(name,arguments,context,operation_id)
     finally:CURRENT_OPERATION.reset(token)
 
 async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
@@ -6005,7 +6023,7 @@ async def _notify_job_progress(client_id,event):
     if scope.get('session_id')!=(getattr(live,'session_id',None) or CHAT_SESSIONS.get(client_id,'')):event.pop('notification',None);event.pop('research_id',None)
     await ws_manager.send_to_client_id(client_id,event)
 
-action_jobs=ActionJobs(runtime_paths.system/"action_jobs.json",_dispatch_aegis_tool,_notify_job_progress,lambda client_id:ws_manager.websocket_for(client_id) is not None,[d["name"] for d in ALL_AEGIS_TOOLS],reconcile=_reconcile_job_action)
+action_jobs=ActionJobs(runtime_paths.system/"action_jobs.json",_dispatch_aegis_tool,_notify_job_progress,lambda client_id:ws_manager.websocket_for(client_id) is not None,[d["name"] for d in ALL_AEGIS_TOOLS]+["work_run"],reconcile=_reconcile_job_action)
 
 async def _connected_live_reply(message):
     if not state.gemini_api_key:raise HTTPException(503,'Configure GEMINI_API_KEY in Settings.')
@@ -8825,6 +8843,21 @@ async def inspect_camera(request:Request,payload:dict):
     if payload.get('cloud_consent') is not True:raise HTTPException(403,'Cloud image consent required')
     return await camera_access.inspect(payload.get('jpeg'))
 
+_work_orchestrator=None
+def get_work_orchestrator():
+    global _work_orchestrator
+    if _work_orchestrator is None:
+        from astra_ai.core.work.orchestrator import WorkOrchestrator
+        from astra_ai.core.work.providers import ModelRouter
+        from astra_ai.core.work.store import WorkStore
+        _work_orchestrator=WorkOrchestrator(WorkStore(runtime_paths.root),ModelRouter(lambda name:_get_env_value(name)),get_research_services,action_jobs,lambda name:_get_env_value(name))
+    return _work_orchestrator
+from astra_ai.ui.backend.api.work import install as install_work_routes
+def _work_owner_only(request):
+    context=_learning_context(request)
+    if context.get('guest') or request.headers.get('x-nova-paired-device'):raise HTTPException(403,'Model settings are available on the host only.')
+    return context
+install_work_routes(app,context_for=_learning_context,artifacts_for=get_research_services,jobs=action_jobs,orchestrator=get_work_orchestrator,owner_only=_work_owner_only,emit=workspace_service.emit)
 from astra_ai.ui.backend.research_api import register_research_api
 register_research_api(app,lambda:research_model,lambda:research_provider_settings,get_research_services,_learning_context,action_jobs,runtime_paths)
 

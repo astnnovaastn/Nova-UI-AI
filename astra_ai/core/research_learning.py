@@ -197,14 +197,17 @@ class ResearchSearch:
         if found.get('status')!='ok':return sources
         catalog=await asyncio.to_thread(self.artifacts.source_catalog,found['artifact'])
         ids={row['url']:'S'+str(i+1) for i,row in enumerate(catalog)}
+        trace=self.artifacts.trace
         async def read_page(row):
+            trace.record(identifier,'read','comparing_evidence','running',context,url=row['url'],title=row.get('title',''))
             try:
                 async with self.network:
                     body,mime=await asyncio.to_thread(self.artifacts.source_bytes,identifier,context,ids[row['url']],False)
+                trace.record(identifier,'read','comparing_evidence','done',context,url=row['url'],title=row.get('title',''))
                 if mime.startswith('text/plain'):
                     text=reader_text(safe(body.decode('utf-8',errors='replace')))[:12000]
                     if len(text)>len(row.get('content',''))+100:return {**row,'search_excerpt':row.get('content',''),'content':text}
-            except Exception:pass
+            except Exception:trace.record(identifier,'read','comparing_evidence','failed',context,url=row['url'],title=row.get('title',''))
             return row
         candidates=[row for row in sources if not self.artifacts.video_id(row['url']) and len(row.get('content',''))<12000][:3]
         enriched=await asyncio.gather(*(read_page(row) for row in candidates))
@@ -570,8 +573,18 @@ class ResearchSearch:
                 # Long instructions remain in the brief. Provider queries are bounded subjects.
                 base=query if len(query)<=600 else display_title(query)
                 searches=list(dict.fromkeys([base,*questions]))
+                trace=self.artifacts.trace
+                def traced_source(row,**extra):
+                    trace.record(identifier,'source','collecting_sources','done',context,url=row.get('url',''),title=row.get('title',''),excerpt=row.get('content','')[:600],retrieved_at=row.get('retrieved_at',''),**extra)
                 async def fetch(question):
-                    async with self.network:return question,await asyncio.to_thread(self._request,question,mode,count)
+                    trace.record(identifier,'search','collecting_sources','running',context,query=question)
+                    async with self.network:found=await asyncio.to_thread(self._request,question,mode,count)
+                    rows,error=found
+                    if error:trace.record(identifier,'search','collecting_sources','failed',context,query=question,reason=error.get('reason',''))
+                    else:trace.record(identifier,'search','collecting_sources','done',context,query=question,count=len(rows))
+                    # Reported as each search returns, so sources appear while others are still running.
+                    for row in rows:traced_source(row,query=question)
+                    return question,found
                 reused=await asyncio.to_thread(self.artifacts.related_evidence,query,context)
                 # Always refresh time-sensitive requests; unchanged fresh evidence can satisfy an identical subject.
                 fresh=[r for r in reused if not r['historical']]
@@ -581,6 +594,8 @@ class ResearchSearch:
                 coverage=bool(wanted) and wanted<=subject_terms(' '.join(r.get('title','')+' '+r.get('content','') for r in reused))
                 exact=any(normal(r.get('origin_query',''))==normal(query) for r in fresh)
                 reuse_only=not questions and not fresh_request(query) and (coverage or exact and fresh)
+                if reuse_only:trace.record(identifier,'search','collecting_sources','done',context,query=base,reused=len(reused))
+                for row in reused:traced_source(row,reused=True)
                 results=[] if reuse_only else await asyncio.gather(*(fetch(q) for q in searches));urls=set();sources=[];failures=[]
                 for row in reused:
                     if row['url'] not in urls:urls.add(row['url']);sources.append(row)
@@ -599,7 +614,9 @@ class ResearchSearch:
                 sources=await self.read_collected_evidence(identifier,context,sources)
                 await asyncio.to_thread(checkpoint,sources=sources,source_pages_checked=True)
             from .research_illustrations import prepare_images,place_images
+            if self.illustrate:self.artifacts.trace.record(identifier,'images','comparing_evidence','running',context)
             illustrations=await prepare_images(self,identifier,context,sources,display_title(query)) if self.illustrate else []
+            if self.illustrate:self.artifacts.trace.record(identifier,'images','comparing_evidence','done',context,count=len(illustrations))
             if self.synthesize:
                 await asyncio.to_thread(checkpoint,phase='preparing_report')
                 try:report=await self.synthesize(('[QUICK]\n' if mode=='quick' else '')+query,sources)
