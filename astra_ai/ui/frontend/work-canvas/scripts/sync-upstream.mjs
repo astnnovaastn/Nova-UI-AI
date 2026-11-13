@@ -455,7 +455,7 @@ const patches = [...designerPatches,
     file: "features/work/components/CanvasNode.svelte",
     why: "AEGIS's agent, blueprint and map group cards.",
     find: '  import PaperCard from "../../../../../src/PaperCard.svelte";\n',
-    replace: '  import PaperCard from "../../../../../src/PaperCard.svelte";\n  import AgentCard from "../../../../../src/AgentCard.svelte";\n  import BlueprintCard from "../../../../../src/BlueprintCard.svelte";\n  import MapGroupCard from "../../../../../src/MapGroupCard.svelte";\n',
+    replace: '  import PaperCard from "../../../../../src/PaperCard.svelte";\n  import AgentCard from "../../../../../src/AgentCard.svelte";\n  import BlueprintCard from "../../../../../src/BlueprintCard.svelte";\n  import MapGroupCard from "../../../../../src/MapGroupCard.svelte";\n  import CollectionCard from "../../../../../src/CollectionCard.svelte";\n  import PlanCard from "../../../../../src/PlanCard.svelte";\n  import StageCard from "../../../../../src/StageCard.svelte";\n',
   },
   {
     file: "features/work/components/CanvasNode.svelte",
@@ -473,7 +473,7 @@ const patches = [...designerPatches,
     file: "features/work/components/CanvasNode.svelte",
     why: "Draw AEGIS's agent, blueprint and map group cards.",
     find: '    {#if type === "paper"}<PaperCard {id} item={data} {selected} />\n',
-    replace: '    {#if type === "paper"}<PaperCard {id} item={data} {selected} />\n    {:else if type === "agentcard"}<AgentCard {id} item={data} {selected} />\n    {:else if type === "blueprint"}<BlueprintCard {id} item={data} {selected} />\n    {:else if type === "mapgroup"}<MapGroupCard item={data} />\n',
+    replace: '    {#if type === "paper"}<PaperCard {id} item={data} {selected} />\n    {:else if type === "agentcard"}<AgentCard {id} item={data} {selected} />\n    {:else if type === "blueprint"}<BlueprintCard {id} item={data} {selected} />\n    {:else if type === "mapgroup"}<MapGroupCard item={data} />\n    {:else if type === "collection"}<CollectionCard {id} item={data} {selected} />\n    {:else if type === "plancard"}<PlanCard {id} item={data} {selected} />\n    {:else if type === "stagecard"}<StageCard {id} item={data} {selected} />\n',
   },
   {
     file: "features/work/components/WorkCanvas.svelte",
@@ -802,9 +802,104 @@ patches.push(
     find: "          deletable: false,\n          selectable: false,\n",
     replace: "          deletable: false,\n          selectable: !!link.strand,\n",
   },
+  {
+    file: "features/work/lib/canvas-model.ts",
+    why: "AEGIS groups a site's pages into a stack the person can open into one card per page. Presentation only: every page keeps its own id, URL and citations.",
+    find: "  /** The rows are one web search's results, not the sites research cited. */\n  search?: boolean;\n",
+    replace: "  /** The rows are one web search's results, not the sites research cited. */\n  search?: boolean;\n  /** AEGIS: this card is a stack of `count` pages (`open`: shown as one card per page). */\n  stack?: { id: string; count: number; open: boolean; index?: number };\n",
+  },
+  {
+    file: "features/work/components/run/PartRow.svelte",
+    why: "A stack's caption carries the control that opens it into one card per page, and stacks it again.",
+    find: "      <strong>{part.title}</strong>\n    </button>\n",
+    replace: "      <strong>{part.title}</strong>\n    </button>\n    {#if part.stack && (!part.stack.open || !part.stack.index)}<button\n        type=\"button\"\n        class=\"stack-toggle nodrag nopan\"\n        aria-expanded={part.stack.open}\n        aria-label={part.stack.open ? `Stack the ${part.stack.count} pages again` : `Show all ${part.stack.count} pages from ${part.title}`}\n        onclick={(event) => {\n          event.stopPropagation();\n          globalThis.dispatchEvent(new CustomEvent(\"aegis-stack-toggle\", { detail: part.stack!.id }));\n        }}>{part.stack.open ? \"Stack pages\" : `${part.stack.count} pages`}</button\n      >{/if}\n",
+  },
+  {
+    file: "features/work/components/run/PartRow.svelte",
+    why: "A stack opens into its own cards, which the layout makes room for, instead of fanning over its neighbours on hover.",
+    find: "      class:fans={shown.length > 1}\n",
+    replace: "      class:fans={shown.length > 1 && !part.stack}\n",
+  },
+  {
+    file: "features/work/components/WorkCanvas.svelte",
+    why: "An AEGIS research run reads left to right from request to report: its first view holds the whole run, down to 29%, instead of cutting off the request at 50%.",
+    find: "    const zoom = Math.max(0.5, Math.min(1, room / Math.max(1, rect.width)));\n",
+    replace: "    const zoom = Math.max(0.29, Math.min(1, room / Math.max(1, rect.width)));\n",
+  },
+  {
+    file: "features/work/components/pane/BrowserPane.svelte",
+    why: "AEGIS V7: the pane's own Open Source is the primary action; leaving the workspace is offered only inside a pane that cannot show the page.",
+    find: "    onopenbrowse: () => void;",
+    replace: "    onopenbrowse?: () => void;",
+  },
+  {
+    file: "features/work/components/pane/BrowserPane.svelte",
+    why: "AEGIS V7: no default Open in browser button in the pane header.",
+    find: '      <Button size="compact" disabled={!tab} onclick={onopenbrowse}\n        ><Icon icon={ArrowUpRight01Icon} size={13} />{m.work_env_open_browse()}</Button\n      >\n',
+    replace: '      {#if onopenbrowse}<Button size="compact" disabled={!tab} onclick={onopenbrowse}\n        ><Icon icon={ArrowUpRight01Icon} size={13} />{m.work_env_open_browse()}</Button\n      >{/if}\n',
+  },
+  {
+    file: "features/work/lib/canvas-model.ts",
+    why: "AEGIS V7: a card AEGIS draws (its AI PLAN, Images and Videos sheets, agent cards) is drawn again when its own data changes, not only Zephium's fields, so a live run's plan card follows the run.",
+    find: "        JSON.stringify(node.data.size) === JSON.stringify(item.size);\n",
+    replace: "        JSON.stringify(node.data.size) === JSON.stringify(item.size) &&\n        [\"plan\", \"collection\", \"branch\", \"stages\"].every((key) => JSON.stringify((node.data as Record<string, unknown>)[key]) === JSON.stringify((item as Record<string, unknown>)[key]));\n",
+  },
 );
 
 const applied = [];
+patches.push(...[
+  {
+    "file": "features/work/components/pane/BrowserPane.svelte",
+    "find": "    added = false,",
+    "replace": "    added = false,\n    addDisabled = false,\n    favicon = \"\",",
+    "why": "Accept a web favicon and the AEGIS source-save state."
+  },
+  {
+    "file": "features/work/components/pane/BrowserPane.svelte",
+    "find": "    added?: boolean;",
+    "replace": "    added?: boolean;\n    addDisabled?: boolean;\n    favicon?: string;",
+    "why": "Type the optional web pane controls."
+  },
+  {
+    "file": "features/work/components/pane/BrowserPane.svelte",
+    "find": "  let address = $state<HTMLInputElement>();",
+    "replace": "  let address = $state<HTMLInputElement>();\n  let failedIcon = $state(\"\");",
+    "why": "Use the generic icon after an image fails."
+  },
+  {
+    "file": "features/work/components/pane/BrowserPane.svelte",
+    "find": "      <FavIcon\n        image={favicons.image(tab?.icon ?? null)}\n        tone={favicons.tone(tab?.icon ?? null)}\n        loading={tab?.loading ?? false}\n        size={16}\n        lit\n      />",
+    "replace": "      {#if favicon && failedIcon !== favicon && !tab?.loading}\n        <img class=\"site-icon\" src={favicon} alt=\"\" referrerpolicy=\"no-referrer\" onerror={() => (failedIcon = favicon)} />\n      {:else}\n        <FavIcon\n          image={favicons.image(tab?.icon ?? null)}\n          tone={favicons.tone(tab?.icon ?? null)}\n          loading={tab?.loading ?? false}\n          size={16}\n          lit\n        />\n      {/if}",
+    "why": "Use saved source favicons in the web host with no referrer."
+  },
+  {
+    "file": "features/work/components/pane/BrowserPane.svelte",
+    "find": "disabled={!tab || added}",
+    "replace": "disabled={!tab || added || addDisabled}",
+    "why": "Disable source saving during validation and duplicate requests."
+  },
+  {
+    "file": "features/work/components/pane/BrowserPane.svelte",
+    "find": "  .identity {",
+    "replace": "  .site-icon {\n    width: 16px;\n    height: 16px;\n    object-fit: contain;\n    border-radius: 3px;\n  }\n\n  .identity {",
+    "why": "Size the source favicon to match native tab icons."
+  }
+]);
+
+patches.push({
+  "file": "features/work/components/pane/BrowserPane.svelte",
+  "find": "    address?.select();",
+  "replace": "    if (address) {\n      address.value = draft;\n      address.select();\n    }",
+  "why": "Select the full editable address when focus moves into the toolbar."
+});
+
+patches.push({
+  "file": "features/work/components/run/PartRow.svelte",
+  "find": "  class:label-only={shape === \"label\"}",
+  "replace": "  class:label-only={shape === \"label\"}\n  class:stack-page={!!part.stack?.index && part.stack.open}",
+  "why": "Mark individual expanded previews for the AEGIS stack animation."
+});
+
 for (const patch of patches) {
   const target = path.join(dest, patch.file);
   const text = fs.readFileSync(target, "utf8").replace(/\r\n/g, "\n");

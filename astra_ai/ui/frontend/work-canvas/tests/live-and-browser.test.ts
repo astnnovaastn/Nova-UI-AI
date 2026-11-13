@@ -167,6 +167,8 @@ describe("the browser's address guard", () => {
     expect(normalizeAddress("https://aegis.example:8443/", "aegis.example:8443")).toBeNull();
   });
   it("refuses addresses carrying a login", () => {
+    expect(normalizeAddress("https://www.example.com:8080/")).toBeNull();
+    expect(normalizeAddress("https://host.local./")).toBeNull();
     expect(normalizeAddress("https://user:pass@example.com/")).toBeNull();
   });
   it("refuses text that is not an address", () => {

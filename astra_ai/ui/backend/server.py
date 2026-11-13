@@ -8851,6 +8851,14 @@ def get_work_orchestrator():
         from astra_ai.core.work.providers import ModelRouter
         from astra_ai.core.work.store import WorkStore
         _work_orchestrator=WorkOrchestrator(WorkStore(runtime_paths.root),ModelRouter(lambda name:_get_env_value(name)),get_research_services,action_jobs,lambda name:_get_env_value(name))
+        # Skills, Connections and the source browser's proxy (state under runtime_paths.root/work).
+        from astra_ai.core.work import connections as work_connections
+        from astra_ai.core.work.network import ProxySettings
+        from astra_ai.core.work.skills import SkillRegistry
+        _work_orchestrator.skills=SkillRegistry(runtime_paths.root)
+        _work_orchestrator.proxy=ProxySettings(runtime_paths.root)
+        _work_orchestrator.connections=work_connections.Connections(runtime_paths.root,lambda name:_get_env_value(name),_work_orchestrator.router,_work_orchestrator.proxy)
+        work_connections.ACTIVE=_work_orchestrator.connections
     return _work_orchestrator
 from astra_ai.ui.backend.api.work import install as install_work_routes
 def _work_owner_only(request):

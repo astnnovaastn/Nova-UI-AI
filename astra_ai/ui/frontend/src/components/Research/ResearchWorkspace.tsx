@@ -44,7 +44,7 @@ import {WorkCanvasHost,researchSurface,saveResearchSurface,type ResearchSurface}
 import {ResearchDepthMenu} from "./ResearchDepthMenu";
 import {ResearchHistoryItem} from "./ResearchHistoryItem";
 import {RecentlyRemovedResearch} from "./RecentlyRemovedResearch";
-import {ResearchLibrary} from "./ResearchLibrary";
+import { ResearchLibrary, type LibraryPage } from "./ResearchLibrary";
 import {
   AttachmentAssets,
   AttachmentReader,
@@ -1487,13 +1487,6 @@ function preparedImage(image:ResearchImage,reportId:string,client:string):Promis
   while(preparedImageBytes.size>12)preparedImageBytes.delete(preparedImageBytes.keys().next().value!);
   return pending;
 }
-async function prepareClientPublication(report:Report):Promise<Report> {
-  if(publicationPending(report) || report.kind==="documentary" || report.kind==="chat")return report;
-  const client=conversationSnapshot().clientId;
-  const rows=(report.image_items || []).slice(0,6);
-  const outcomes=await Promise.allSettled(rows.map(image=>preparedImage(image,report.research_id,client)));
-  return {...report,image_items:rows.filter((_,index)=>outcomes[index].status==="fulfilled")};
-}
 function EvidenceImage({
   image,
   reportId,
@@ -2677,6 +2670,7 @@ function Workspace() {
   const [canvasPanel, setCanvasPanel] = useState<""|"document"|"history"|"conversation">("");
   const [researchJobs, setResearchJobs] = useState<Record<string,string>>({});
   const [listRevision, setListRevision] = useState(0);
+  const [libraryPage, setLibraryPage] = useState<{ client: string; page: LibraryPage }>();
   const [trace, setTrace] = useState<{research: string; events: any[]; workSources: any[]; run?: unknown; view?: {chosen: string[]; hidden: string[]}}>({research: "", events: [], workSources: []});
   const onCanvas = surface === "canvas";
   function setSurface(next: ResearchSurface) {
@@ -2801,9 +2795,8 @@ function Workspace() {
     let pending = reportLoads.current.get(key);
     if (!pending) {
       const client = conversationSnapshot().clientId;
-      pending = api("/" + encodeURIComponent(id) + "/document")
-        .then(async (d) => {
-          d=await prepareClientPublication(d);
+      pending = api("/" + encodeURIComponent(id) + "/document", { signal: AbortSignal.timeout(10000) })
+        .then((d) => {
           if (
             conversationSnapshot().clientId === client &&
             !conversationSnapshot().guest
@@ -2816,7 +2809,9 @@ function Workspace() {
           }
           return d;
         })
-        .finally(() => reportLoads.current.delete(key));
+        .finally(() => {
+          if (reportLoads.current.get(key) === pending) reportLoads.current.delete(key);
+        });
       reportLoads.current.set(key, pending);
     }
     return pending;
@@ -2914,7 +2909,7 @@ function Workspace() {
         reader.current.clientHeight <
         90 &&
       !window.getSelection()?.toString();
-    const d = await prepareClientPublication(await api("/" + id + "/document"));
+    const d = await api("/" + id + "/document", { signal: AbortSignal.timeout(10000) });
     if (owner !== conversationSnapshot().clientId || epoch !== loadEpoch.current || !acceptPublication(reportRef.current,d)) return;
     if (!publicationPending(old)) revealFollow.current=follow;
     if (
@@ -3240,6 +3235,7 @@ function Workspace() {
       setItems(d.items);
       setRemoved(d.removed || []);
       setTotal(d.total);
+      if (!offset && !archivedHistory) setLibraryPage({ client, page: d });
       setListRevision(n => n + 1);
     } catch (e: any) {
       if (conversationSnapshot().clientId === client) setError(e.message);
@@ -3288,6 +3284,7 @@ function Workspace() {
     try {
       const threadLoad = api(
         "/" + encodeURIComponent(id) + "/conversation",
+        { signal: AbortSignal.timeout(10000) },
       ).catch(() => null);
       const d = await loadReport(id);
       if (
@@ -3307,7 +3304,7 @@ function Workspace() {
       void threadLoad
         .then((thread) => {
           if (
-            thread &&
+            thread && epoch === loadEpoch.current &&
             client === conversationSnapshot().clientId &&
             !conversationSnapshot().guest
           )
@@ -3325,7 +3322,8 @@ function Workspace() {
       );
       if (!withinSession) {setMessage(saved.message || "");if(["reader","edit","sources","media"].includes(saved.tab))setTab(saved.tab);if(saved.tab==="edit")setEditOpened(true);}
       requestAnimationFrame(() => {
-        if (reader.current) reader.current.scrollTop = pageViews.current.get(id)?.scroll ?? saved.scroll ?? 0;
+        if (epoch === loadEpoch.current && reader.current)
+          reader.current.scrollTop = pageViews.current.get(id)?.scroll ?? saved.scroll ?? 0;
       });
       setReaderChars(20000);
       setSourceLimit(10);
@@ -3378,6 +3376,7 @@ function Workspace() {
       ++loadEpoch.current;
       setReport(null);
       setItems([]);
+      setLibraryPage(undefined);
       setConversationSession("");pageViews.current.clear();awaitingReveal.current.clear();
       setPreview(null);
       if (open && !chat.guest && chat.clientId) {
@@ -3399,7 +3398,7 @@ function Workspace() {
   useEffect(() => {
     if (open) {
       void refresh();
-      if (!report) {
+      if (!report && !lastSelection.current) {
         const id = sessionStorage.getItem("nova-selected-research");
         if (id) void select(id);
       }
@@ -3939,44 +3938,63 @@ function Workspace() {
   const reportJob = report ? researchJobs[report.research_id] || (report as {job_id?: string}).job_id || chat.jobs.find(j => ["running","queued","retrying","waiting_for_retry"].includes(j.state) && j.title === report.display_title)?.id || "" : "";
   // The backend's record of the open research. The live connection only hints that there is more;
   // reading by sequence number covers reconnects, repeats and out-of-order hints the same way.
-  const traceFor = onCanvas && report ? report.research_id : "";
-  const traceLive = !!report && (report.completeness === "pending" || ["queued", "collecting_sources", "comparing_evidence", "preparing_report", "preparing_images", "preparing_layout", "waiting_for_quota", "waiting_for_report", "waiting_for_retry"].includes(report.phase || ""));
+  const traceFor = open && onCanvas && chat.clientId && !chat.guest
+    ? selectionLoading || report?.research_id || ""
+    : "";
+  const traceLive = report?.research_id === traceFor && (report.completeness === "pending" || ["queued", "collecting_sources", "comparing_evidence", "preparing_report", "preparing_images", "preparing_layout", "waiting_for_quota", "waiting_for_report", "waiting_for_retry"].includes(report.phase || ""));
   useEffect(() => {
     if (!traceFor) return;
-    let gone = false, last = 0, reading = false;
+    const controller = new AbortController();
+    const active = () => !controller.signal.aborted && conversationSnapshot().clientId === chat.clientId &&
+      !conversationSnapshot().guest && lastSelection.current === traceFor;
+    let last = 0, reading = false, readAgain = false, followUps = 0;
+    let followUp: ReturnType<typeof setTimeout> | 0 = 0;
     setTrace(old => old.research === traceFor ? old : {research: traceFor, events: [], workSources: []});
     const read = async () => {
-      if (reading || gone) return;
+      if (!active()) return;
+      if (reading) { readAgain = true; return; }
       reading = true;
+      const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]);
+      const path = "/" + encodeURIComponent(traceFor);
       try {
-        const [d, work] = await Promise.all([
-          api("/" + traceFor + "/trace?after=" + last),
-          // Older research has no run record, which is a normal answer, not a failure.
-          workApi("/runs/" + traceFor).catch(() => null),
+        await Promise.allSettled([
+          api(path + "/trace?after=" + last, { signal }).then(d => {
+            if (!active()) return;
+            const fresh: any[] = d.events || [];
+            last = fresh.reduce((high, event) => Math.max(high, event.seq), last);
+            setTrace(old => {
+              if (old.research !== traceFor) return old;
+              const known = new Set(old.events.map(row => row.seq));
+              const added = fresh.filter(event => !known.has(event.seq));
+              return {
+                ...old,
+                events: added.length ? [...old.events, ...added].sort((a, b) => a.seq - b.seq) : old.events,
+                workSources: d.work_sources || [],
+              };
+            });
+            if (fresh.some(event => event.kind === "phase" && ["complete", "failed"].includes(event.phase))) {
+              reportCache.current.delete(chat.clientId + ":" + traceFor);
+              void reloadReport(traceFor).catch(() => {});
+            }
+          }),
+          workApi("/runs" + path, { signal }).then(work => {
+            if (!active()) return;
+            setTrace(old => old.research === traceFor
+              ? { ...old, run: work?.run ?? null, view: work?.view ?? old.view }
+              : old);
+            // A run can save its final relations after the report and last event have published.
+            if (["queued", "running", "waiting"].includes(work?.run?.state) && followUps < 40 && !followUp) {
+              followUps++;
+              followUp = setTimeout(() => { followUp = 0; void read(); }, 3000);
+            }
+          }).catch(() => {
+            // Use the report when the run is unavailable, keeping any context already loaded.
+            if (active()) setTrace(old => old.research === traceFor && old.run === undefined ? { ...old, run: null } : old);
+          }),
         ]);
-        if (gone) return;
-        const fresh: any[] = d.events || [];
-        last = fresh.reduce((high, event) => Math.max(high, event.seq), last);
-        setTrace(old => {
-          const known = old.research === traceFor ? old.events : [];
-          const added = fresh.filter(event => !known.some(row => row.seq === event.seq));
-          return {
-            research: traceFor,
-            events: added.length ? [...known, ...added].sort((a, b) => a.seq - b.seq) : known,
-            workSources: d.work_sources || [],
-            run: work?.run ?? null,
-            view: work?.view ?? old.view,
-          };
-        });
-        // The event only prompts a fresh look. The saved report decides what is finished.
-        if (fresh.some(event => event.kind === "phase" && ["complete", "failed"].includes(event.phase))) {
-          reportCache.current.delete(conversationSnapshot().clientId + ":" + traceFor);
-          void reloadReport(traceFor).catch(() => {});
-        }
-      } catch {
-        // Unavailable for now; the next read tries again from the same place.
       } finally {
         reading = false;
+        if (readAgain) { readAgain = false; void read(); }
       }
     };
     void read();
@@ -3989,12 +4007,13 @@ function Workspace() {
     // so the canvas gets the run's last relations without a reload.
     const settle = traceLive ? [] : [setTimeout(() => void read(), 1500), setTimeout(() => void read(), 5000)];
     return () => {
-      gone = true;
+      controller.abort();
       window.removeEventListener("nova-research-trace", hinted);
       if (poll) clearInterval(poll);
       settle.forEach(clearTimeout);
+      if (followUp) clearTimeout(followUp);
     };
-  }, [traceFor, traceLive]);
+  }, [traceFor, traceLive, chat.clientId]);
   function startWorkRun(text: string, options: {workflow?: string; chosen?: unknown[]; fromResearch?: string} = {}) {
     const query = text.trim();
     if (!query || busy) return;
@@ -4103,10 +4122,13 @@ function Workspace() {
       if (view === "edit") setEditOpened(true);
     },
     openSource(url: string) {
-      const found = report ? [...report.sources, ...(report.linked_sources || []), ...(report.image_sources || [])].find(s => s.url === url) : null;
+      const found = report ? [...report.sources, ...(report.linked_sources || []), ...(report.image_sources || []), ...(report.media || [])].find(s => s.url === url) : null;
       if (found) openSource(found);
       else if (/^https?:\/\//i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
       else setError("That source is unavailable.");
+    },
+    findVideos() {
+      void requestMore("media");
     },
     openPanel(panel: "history" | "conversation") {
       setCanvasPanel(old => old === panel ? "" : panel);
@@ -4136,11 +4158,11 @@ function Workspace() {
     },
     imageHeaders: () => ({"X-Nova-Client": conversationSnapshot().clientId}),
     renderMarkdown: markdown,
-    checkFrame: (url: string) => api("/frame-check?url=" + encodeURIComponent(url)),
-    addWorkSource(url: string, title: string) {
+    checkFrame: (url: string, signal?: AbortSignal) => api("/frame-check?url=" + encodeURIComponent(url), {signal}),
+    async addWorkSource(url: string, title: string) {
       const id = reportRef.current?.research_id;
       if (!id) return;
-      void api("/" + id + "/work-sources", {method: "POST", body: JSON.stringify({url, title})})
+      await api("/" + id + "/work-sources", {method: "POST", body: JSON.stringify({url, title})})
         .then((d) => {
           setTrace(old => old.research === id ? {...old, workSources: d.work_sources || old.workSources} : old);
           window.dispatchEvent(new CustomEvent("nova-research-trace", {detail: {research_id: id}}));
@@ -4293,7 +4315,8 @@ function Workspace() {
           <button
             onClick={() => {
               setError("");
-              void refresh();
+              if (failedSelection) void select(failedSelection);
+              else void refresh();
             }}
           >
             Retry
@@ -4316,8 +4339,11 @@ function Workspace() {
         />
       )}
       <div className="research-layout">
-        {onCanvas ? (canvasPanel === "history" && <ResearchLibrary
+        {onCanvas ? (!chat.guest && chat.clientId && <ResearchLibrary
+          key={chat.clientId}
           api={api}
+          visible={open && canvasPanel === "history"}
+          firstPage={libraryPage?.client === chat.clientId ? libraryPage.page : undefined}
           activeId={report?.research_session_id || selectionLoading || report?.research_id || ""}
           revision={listRevision}
           deleting={deleting}
@@ -4330,20 +4356,7 @@ function Workspace() {
           onWarm={(id) => void loadReport(id).catch(() => {})}
           onDelete={(row) => void removeReport(row)}
           onClose={() => setCanvasPanel("")}
-        >
-          {report && report.kind !== "chat" && !!(readerSections.length || readerFollowups.length) && <details className="rl-outline" open>
-            <summary>On this page</summary>
-            {readerSections.map(section => <button key={section.id} title={section.title} onClick={() => {
-              selectTab("reader");
-              setTimeout(() => Array.from(reader.current?.querySelectorAll("h1,h2,h3") || []).find(heading => heading.textContent?.trim() === section.title.trim())?.scrollIntoView({block:"start"}), 60);
-            }}>{section.title}</button>)}
-            {!!readerFollowups.length && <h4>Follow-up topics</h4>}
-            {readerFollowups.map(section => <button key={section.id} title={section.title} onClick={() => {
-              selectTab("reader");
-              setTimeout(() => document.getElementById("research-followup-" + section.id)?.scrollIntoView({block:"start"}), 60);
-            }}>{section.title}</button>)}
-          </details>}
-        </ResearchLibrary>) : <aside className="research-outline" id="research-history-panel" aria-label="Research history">
+        />) : <aside className="research-outline" id="research-history-panel" aria-label="Research history">
           <button className="research-panel-close" aria-label="Close research history" onClick={() => {setNarrowPanel("");setCanvasPanel("");}}><Icon name="close" /></button>
           <div className="research-history-heading"><h2>Your research</h2><button className="research-history-select" aria-pressed={selectingHistory} disabled={!!deleting} onClick={() => {setSelectingHistory(!selectingHistory); setSelectedHistory(new Set());}}><Icon name={selectingHistory ? "check" : "select"} />{selectingHistory ? "Done" : "Select"}</button></div>
           {selectingHistory && <div className="research-history-selection" aria-label="History selection controls">

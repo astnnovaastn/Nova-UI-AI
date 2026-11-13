@@ -51,7 +51,7 @@ def install(app, *, context_for, artifacts_for, jobs, orchestrator, owner_only, 
         service = orchestrator()
         if not await asyncio.to_thread(service.router.route, 'lead'):
             raise HTTPException(409, 'No lead model is configured for AEGIS Work.')
-        chosen_mode = mode or (WORKFLOWS[workflow].mode if workflow else '')
+        chosen_mode = WORKFLOWS[workflow].mode if workflow else mode
         storage_mode = 'quick' if chosen_mode in {'quick', 'direct'} else 'detailed'
         operation_id = str(body.get('operation_id') or uuid.uuid4().hex)
         artifacts, _ = artifacts_for()
@@ -155,3 +155,135 @@ def install(app, *, context_for, artifacts_for, jobs, orchestrator, owner_only, 
             **await asyncio.to_thread(service.status),
             **({'availability': await asyncio.to_thread(service.router.discover)} if check else {}),
         }
+
+    # Skills (V7 4): the person's skill library. Only the owner changes it; pages and models never do.
+
+    def _skills():
+        service = orchestrator()
+        registry = getattr(service, 'skills', None)
+        if registry is None:
+            raise HTTPException(503, 'Skills are unavailable')
+        return registry
+
+    def _skill_error(error):
+        words = {'name': 'Use 1-40 lowercase letters, digits or dashes for the name.', 'description': 'Give a one-line description of at most 200 characters.',
+                 'empty': 'The skill needs instructions.', 'too_large': 'The skill is larger than 16 KB.', 'no_frontmatter': 'The skill must start with a --- header.',
+                 'too_many': 'You have the maximum number of skills.', 'not_found': 'No such skill.'}
+        return HTTPException(422 if str(error) != 'not_found' else 404, words.get(str(error), 'Invalid skill'))
+
+    @app.get('/api/work/skills')
+    async def list_skills(request: Request):
+        context_for(request)
+        registry = _skills()
+        return {'status': 'ok', 'skills': [skill.public() for skill in (await asyncio.to_thread(registry.all)).values()]}
+
+    @app.get('/api/work/skills/{name}')
+    async def read_skill(name: str, request: Request):
+        context_for(request)
+        skill = await asyncio.to_thread(_skills().get, name)
+        if not skill:
+            raise HTTPException(404, 'No such skill')
+        from astra_ai.core.work.skills import render
+        return {'status': 'ok', 'skill': skill.public(with_body=True), 'text': render(skill)}
+
+    @app.put('/api/work/skills/{name}')
+    async def save_skill(name: str, request: Request):
+        owner(request)
+        from astra_ai.core.work.skills import SkillError, parse
+        body = await request.json()
+        text = str(body.get('text', ''))
+        try:
+            if parse(text, 'user').name != name:
+                raise HTTPException(422, 'The name in the header must match the skill being saved.')
+            skill = await asyncio.to_thread(_skills().save, text)
+        except SkillError as error:
+            raise _skill_error(error) from None
+        return {'status': 'ok', 'skill': skill.public(with_body=True)}
+
+    @app.post('/api/work/skills/{name}/duplicate')
+    async def duplicate_skill(name: str, request: Request):
+        owner(request)
+        from astra_ai.core.work.skills import SkillError
+        body = await request.json()
+        try:
+            skill = await asyncio.to_thread(_skills().duplicate, name, str(body.get('name', '')))
+        except SkillError as error:
+            raise _skill_error(error) from None
+        return {'status': 'ok', 'skill': skill.public()}
+
+    @app.post('/api/work/skills/{name}/enabled')
+    async def enable_skill(name: str, request: Request):
+        owner(request)
+        from astra_ai.core.work.skills import SkillError
+        body = await request.json()
+        try:
+            await asyncio.to_thread(_skills().set_enabled, name, bool(body.get('enabled')))
+        except SkillError as error:
+            raise _skill_error(error) from None
+        return {'status': 'ok', 'skill': (await asyncio.to_thread(_skills().get, name)).public()}
+
+    @app.delete('/api/work/skills/{name}')
+    async def delete_skill(name: str, request: Request):
+        owner(request)
+        from astra_ai.core.work.skills import SkillError
+        try:
+            await asyncio.to_thread(_skills().delete, name)
+        except SkillError as error:
+            raise _skill_error(error) from None
+        return {'status': 'ok'}
+
+    # Connections (V7 5): real status from the server's configuration; keys never leave it.
+
+    @app.get('/api/work/connections')
+    async def list_connections(request: Request):
+        context_for(request)
+        service = orchestrator()
+        return {'status': 'ok', 'connections': await asyncio.to_thread(service.connections.list)}
+
+    @app.post('/api/work/connections/{name}/enabled')
+    async def enable_connection(name: str, request: Request):
+        owner(request)
+        body = await request.json()
+        try:
+            row = await asyncio.to_thread(orchestrator().connections.set_enabled, name, bool(body.get('enabled')))
+        except ValueError:
+            raise HTTPException(422, 'This connection cannot be turned on or off here.') from None
+        return {'status': 'ok', 'connection': row}
+
+    # The source browser's network (V7 6.5) and its Source Reader (V7 6.2 B).
+
+    @app.get('/api/work/network')
+    async def read_network(request: Request):
+        context_for(request)
+        return {'status': 'ok', 'proxy': await asyncio.to_thread(orchestrator().proxy.public)}
+
+    @app.put('/api/work/network')
+    async def save_network(request: Request):
+        owner_only(request)
+        from astra_ai.core.work.network import NetworkError
+        body = await request.json()
+        try:
+            proxy = await asyncio.to_thread(orchestrator().proxy.save, body if isinstance(body, dict) else {})
+        except NetworkError as error:
+            raise HTTPException(422, {'mode': 'Choose off, HTTP, HTTPS or SOCKS5.', 'host': 'Enter the proxy host name or IP address.', 'port': 'Enter a port from 1 to 65535.',
+                                      'username': 'The user name cannot contain : @ or /.'}.get(str(error), 'Invalid proxy settings')) from None
+        return {'status': 'ok', 'proxy': proxy}
+
+    @app.post('/api/work/network/test')
+    async def test_network(request: Request):
+        owner_only(request)
+        from astra_ai.core.work.network import test_proxy
+        return {'status': 'ok', 'result': await asyncio.to_thread(test_proxy, orchestrator().proxy)}
+
+    @app.get('/api/work/reader')
+    async def source_reader(request: Request, url: str = ''):
+        context = context_for(request)
+        if context.get('guest'):
+            raise HTTPException(403, 'Owner research required')
+        from astra_ai.core.work.network import NetworkError, reader_page
+        try:
+            return await asyncio.to_thread(reader_page, url, orchestrator().proxy)
+        except NetworkError as error:
+            return JSONResponse({'status': 'unavailable', 'reason': str(error)}, status_code=200)
+        except Exception as error:
+            return JSONResponse({'status': 'unavailable', 'reason': type(error).__name__}, status_code=200)

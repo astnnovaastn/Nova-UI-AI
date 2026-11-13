@@ -7,7 +7,11 @@
 export type RelationStatus = "active" | "complete" | "verified" | "contested" | "failed";
 export type RelationType =
   | "plans" | "assigns" | "searches" | "found" | "reads" | "evidence" | "verifies"
-  | "delivers" | "cites" | "writes" | "supports" | "relates" | "models";
+  | "delivers" | "cites" | "writes" | "supports" | "relates" | "models"
+  // Drawn from the saved report and its video search (collections.ts), never recorded by a run.
+  | "illustrates" | "collects" | "includes"
+  // The lower track and the convergence, from the run's recorded stages (stage-cards.ts).
+  | "processes" | "compiles" | "publishes";
 
 export type Relation = {
   id: string;
@@ -39,6 +43,12 @@ const ENDPOINTS: Record<RelationType, [readonly string[], readonly string[]]> = 
   supports: [["source"], ["map"]],
   relates: [["map"], ["map"]],
   models: [["agent"], ["map"]],
+  illustrates: [["url"], ["collection"]],
+  collects: [["query", "request", "search"], ["collection"]],
+  includes: [["collection"], ["report"]],
+  processes: [["search"], ["pipeline"]],
+  compiles: [["pipeline"], ["compile"]],
+  publishes: [["compile"], ["report"]],
 };
 const STATUSES = new Set<RelationStatus>(["active", "complete", "verified", "contested", "failed"]);
 
@@ -57,6 +67,12 @@ export const MEANING: Record<RelationType, string> = {
   supports: "This source supports the map node",
   relates: "These map nodes are related",
   models: "This agent built the map node",
+  illustrates: "An image taken from this source page",
+  collects: "The video search for this request found this",
+  includes: "This collection belongs with the report",
+  processes: "The run's sources are processed into evidence here",
+  compiles: "The cited evidence goes into the collected results",
+  publishes: "The compiled results are published to the Reader",
 };
 
 const PLURAL: Partial<Record<RelationType, string>> = {
@@ -66,9 +82,30 @@ const PLURAL: Partial<Record<RelationType, string>> = {
   evidence: "evidence links",
   cites: "citations",
   supports: "sources",
+  illustrates: "images",
+  collects: "videos",
 };
 
 export const kindOf = (ref: string) => ref.split(":", 1)[0];
+
+/** The canvas drops any line whose id is longer than this. */
+const ID_LIMIT = 128;
+/**
+ * A bundle's id: its relation ids when they fit, or else a stable digest of them. Never cut short,
+ * which would let two bundles share an id or push it past the canvas's limit, where the line is lost.
+ */
+export function strandId(bundle: readonly { id: string }[]) {
+  const ids = bundle.map((row) => row.id).sort().join("+");
+  if (`strand:${ids}`.length <= ID_LIMIT) return `strand:${ids}`;
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (let i = 0; i < ids.length; i++) {
+    const c = ids.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193);
+    b = Math.imul(b ^ c, 0x5bd1e995) ^ (b >>> 13);
+  }
+  return `strand:${bundle.length}:${(a >>> 0).toString(36)}${(b >>> 0).toString(36)}`;
+}
 
 /** A relation the canvas may trust: known type and status, endpoints of the right kinds. */
 export function validRelation(value: unknown): value is Relation {
@@ -88,6 +125,9 @@ export function relationsOf(run: { relations?: unknown } | null | undefined): Re
 
 /** One drawn string: the relations it carries, its place among its parallel strands, and its look. */
 export type StrandData = {
+  summaryOnly?: boolean;
+  detailOnly?: boolean;
+  fan?: "in" | "out";
   relations: Relation[];
   /** 0-based position among the strings joining the same two cards, and how many there are. */
   index: number;
@@ -96,7 +136,15 @@ export type StrandData = {
   label: string;
   /** Only one string of a parallel set carries a label, so labels stay sparse. */
   labelled: boolean;
+  /**
+   * Only coordination (AEGIS assigning work from its plan): steering the run rather than research
+   * flowing through it. Drawn when one of its cards, or the string, is selected.
+   */
+  control?: boolean;
 };
+
+/** Relations that steer the run, as opposed to carrying its research forward. */
+export const CONTROL = new Set<RelationType>(["assigns"]);
 
 export type StrandLink = {
   id: string;
@@ -146,9 +194,14 @@ export function strandLinks(
       unplaced.push(row);
       continue;
     }
-    // Both directions between two cards are one bundle, drawn the way it was first made.
+    // Both directions between two cards are one bundle. It points the way the work flows: a worker
+    // AEGIS assigned and that delivered back is drawn worker to AEGIS, not back against the flow.
     const key = [source, target].sort().join("\u0000");
     const group = groups.get(key) ?? { source, target, rows: [] };
+    if (!CONTROL.has(row.type) && group.rows.length && group.rows.every((other) => CONTROL.has(other.type))) {
+      group.source = source;
+      group.target = target;
+    }
     group.rows.push(row);
     groups.set(key, group);
   }
@@ -166,7 +219,7 @@ export function strandLinks(
     bundles.forEach((bundle, index) => {
       const status = combinedStatus(bundle);
       links.push({
-        id: `strand:${bundle.map((row) => row.id).sort().join("+")}`.slice(0, 180),
+        id: strandId(bundle),
         source,
         target,
         kind: "flow",
@@ -178,11 +231,96 @@ export function strandLinks(
           status,
           label: strandLabel(bundle),
           labelled: index === middle,
+          ...(bundle.every((row) => CONTROL.has(row.type)) ? { control: true } : {}),
         },
       });
     });
   }
   return { links, unplaced };
+}
+
+/** A recorded direct dependency is never inferred to be redundant from geometry or reachability. */
+export function summaryStrandIds(links: readonly StrandLink[]): Set<string> {
+  const summary = (link: StrandLink) => link.strand.relations.every(row => row.detail?.summary_only === true);
+  const next = new Map<string, Set<string>>();
+  for (const link of links) {
+    if (summary(link) || link.strand.control || link.strand.status === "failed" || link.strand.status === "contested") continue;
+    const targets = next.get(link.source) ?? new Set<string>();
+    targets.add(link.target);
+    next.set(link.source, targets);
+  }
+  const hidden = new Set<string>();
+  for (const link of links.filter(summary)) {
+    const visited = new Set([link.source]);
+    const queue = [...(next.get(link.source) ?? [])].filter(id => id !== link.target);
+    while (queue.length) {
+      const id = queue.pop()!;
+      if (visited.has(id)) continue;
+      if (id === link.target) { hidden.add(link.id); break; }
+      visited.add(id);
+      for (const target of next.get(id) ?? []) if (!visited.has(target)) queue.push(target);
+    }
+  }
+  return hidden;
+}
+
+/** Build the visual workflow without losing the individual records in the inspector. */
+export function organizeResearchStrands(links: readonly StrandLink[]): StrandLink[] {
+  const pairs = new Map<string, StrandLink[]>();
+  for (const link of links) {
+    const key = JSON.stringify([link.source, link.target, !!link.strand.control]);
+    const pair = pairs.get(key) ?? [];
+    pair.push(link);
+    pairs.set(key, pair);
+  }
+  const grouped = Array.from(pairs.values(), ([first, ...rest]) => {
+    const relations = [first!, ...rest].flatMap(link => link.strand.relations);
+    const status = combinedStatus(relations);
+    return { ...first!, live: status === "active",
+      strand: { ...first!.strand, relations, status, label: strandLabel(relations), index: 0, of: 1, labelled: true } };
+  });
+  const contextTypes = new Set<RelationType>(["reads", "searches", "supports", "models", "illustrates"]);
+  const contextOnly = (link: StrandLink) => link.strand.relations.every(row => contextTypes.has(row.type));
+  const main = grouped.filter(link => !link.strand.control && !contextOnly(link) &&
+    !link.strand.relations.every(row => row.detail?.summary_only === true));
+  const forward = new Map<string, string[]>();
+  for (const link of main) {
+    const destinations = forward.get(link.source) ?? [];
+    destinations.push(link.target);
+    forward.set(link.source, destinations);
+  }
+  function hasIntermediate(link: StrandLink) {
+    const queue = (forward.get(link.source) ?? []).filter(id => id !== link.target);
+    const visited = new Set([link.source]);
+    while (queue.length) {
+      const next = queue.pop()!;
+      if (visited.has(next)) continue;
+      if (next === link.target) return true;
+      visited.add(next);
+      queue.push(...(forward.get(next) ?? []));
+    }
+    return false;
+  }
+  // Delivery shortcuts are useful on inspection, but duplicate the staged workflow visually.
+  const overview = grouped.map(link => {
+    const detail = contextOnly(link) ||
+      (link.strand.status !== "failed" && link.strand.status !== "contested" &&
+       link.strand.relations.every(row => row.type === "delivers") && hasIntermediate(link));
+    return detail ? { ...link, strand: { ...link.strand, detailOnly: true } } : link;
+  });
+  const eligible = overview.filter(link => !link.strand.control && !link.strand.detailOnly && !link.strand.summaryOnly);
+  const outgoing = new Map<string, number>(), incoming = new Map<string, number>();
+  for (const link of eligible) {
+    outgoing.set(link.source, (outgoing.get(link.source) ?? 0) + 1);
+    incoming.set(link.target, (incoming.get(link.target) ?? 0) + 1);
+  }
+  return overview.map(link => {
+    if (!eligible.includes(link)) return link;
+    const merge = (incoming.get(link.target) ?? 0) >= 2 && /^(paper:|compile:|pipeline:|worker:)/.test(link.target);
+    const fan = merge ? "in" : (outgoing.get(link.source) ?? 0) >= 2 ? "out" :
+      (incoming.get(link.target) ?? 0) >= 2 ? "in" : undefined;
+    return fan ? { ...link, strand: { ...link.strand, fan } } : link;
+  });
 }
 
 /** A plain sentence for a strand: what joins the two cards, for its accessible name. */

@@ -30,6 +30,8 @@
     origin,
     phase,
     added = false,
+    addDisabled = false,
+    favicon = "",
     onmeasure,
     onnavigate,
     onback,
@@ -53,12 +55,14 @@
     origin: DOMRect | null;
     phase: "opening" | "shown" | "failed";
     added?: boolean;
+    addDisabled?: boolean;
+    favicon?: string;
     onmeasure: (rect: PaneRect) => void;
     onnavigate: (input: string) => void;
     onback: () => void;
     onforward: () => void;
     onreload: () => void;
-    onopenbrowse: () => void;
+    onopenbrowse?: () => void;
     onadd: () => void;
     onclose: () => void;
     children?: import("svelte").Snippet;
@@ -80,6 +84,7 @@
   let body = $state<HTMLElement>();
   let heading = $state<HTMLElement>();
   let address = $state<HTMLInputElement>();
+  let failedIcon = $state("");
   let editing = $state(false);
   let draft = $state("");
   let closing = $state(false);
@@ -271,7 +276,10 @@
   function beginEditing() {
     draft = url || value;
     editing = true;
-    address?.select();
+    if (address) {
+      address.value = draft;
+      address.select();
+    }
   }
   function onAddressKey(event: KeyboardEvent) {
     if (event.key !== "Escape") return;
@@ -329,13 +337,17 @@
     onpointercancel={end}
   >
     <span class="identity" title={tab?.title ?? ""}>
-      <FavIcon
-        image={favicons.image(tab?.icon ?? null)}
-        tone={favicons.tone(tab?.icon ?? null)}
-        loading={tab?.loading ?? false}
-        size={16}
-        lit
-      />{#if account && account === host}<AccountBadge host={account} />{/if}
+      {#if favicon && failedIcon !== favicon && !tab?.loading}
+        <img class="site-icon" src={favicon} alt="" referrerpolicy="no-referrer" onerror={() => (failedIcon = favicon)} />
+      {:else}
+        <FavIcon
+          image={favicons.image(tab?.icon ?? null)}
+          tone={favicons.tone(tab?.icon ?? null)}
+          loading={tab?.loading ?? false}
+          size={16}
+          lit
+        />
+      {/if}{#if account && account === host}<AccountBadge host={account} />{/if}
     </span>
     <span class="nav">
       <IconButton
@@ -379,14 +391,14 @@
       />
     </form>
     <span class="actions">
-      <Button size="compact" disabled={!tab || added} onclick={onadd}
+      <Button size="compact" disabled={!tab || added || addDisabled} onclick={onadd}
         ><Icon icon={PlusSignIcon} size={13} />{added
           ? m.work_pane_added()
           : m.work_pane_add()}</Button
       >
-      <Button size="compact" disabled={!tab} onclick={onopenbrowse}
+      {#if onopenbrowse}<Button size="compact" disabled={!tab} onclick={onopenbrowse}
         ><Icon icon={ArrowUpRight01Icon} size={13} />{m.work_env_open_browse()}</Button
-      >
+      >{/if}
       <IconButton icon={MinusSignIcon} label="Minimize" onclick={() => onminimize?.()} />
       <IconButton icon={Cancel01Icon} label={m.work_pane_close()} onclick={close} />
     </span>
@@ -455,6 +467,13 @@
 
   .head:active {
     cursor: grabbing;
+  }
+
+  .site-icon {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    border-radius: 3px;
   }
 
   .identity {

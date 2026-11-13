@@ -48,7 +48,10 @@
   import type { BoardActions } from "$features/work/lib/canvas-context";
   import { exchangeOf } from "$features/work/components/asks/asks";
   import Rail from "./Rail.svelte";
-  import { buildScene, reportTitle, type CanvasScene } from "./research-to-run";
+  import SkillsPanel from "./SkillsPanel.svelte";
+  import ConnectionsPanel from "./ConnectionsPanel.svelte";
+  import { workPanels } from "./work-panels.svelte";
+  import { buildScene, reportTitle, type CanvasScene, type ZephiumRun } from "./research-to-run";
   import { aegisSession, asWorkSession } from "./session.svelte";
   import { store } from "./store.svelte";
   import { setCanvasPictures } from "./media";
@@ -56,18 +59,24 @@
   import { pictureUrl } from "./report-images";
   import BrowserWindow from "./BrowserWindow.svelte";
   import { browser } from "./browser-windows.svelte";
+  import { normalizeAddress } from "./browser-address";
   import type { PaperData } from "./paper";
   import WorkStart from "$features/work/components/start/WorkStart.svelte";
   import { installPreviewProvider, savedDataProvider } from "./preview-provider";
   import NodePanel, { type Opened } from "./NodePanel.svelte";
   import { CARD, layoutMap } from "./knowledge-map";
   import { agentBranches, mapOf, type AgentBranch, type MapNode } from "./work-run";
-  import { relationsOf, strandLinks, type StrandData } from "./relations";
+  import { relationsOf, strandLinks, organizeResearchStrands, summaryStrandIds, type StrandData } from "./relations";
   import { LEGACY_GAPS, layoutPolicy } from "./layout-policy";
   import { construction } from "./construction.svelte";
   import HandOverlay from "./HandOverlay.svelte";
   import StrandPanel from "./StrandPanel.svelte";
-  import { keptPositions, retrievalOrder, semanticLayout, type Box } from "./semantic-layout";
+  import { CAPTION, WEBSITE_GAP, clearOverlaps, keptPositions, overlaps, rankAgents, retrievalOrder, semanticLayout, type Box, type Placed, type SourceRow } from "./semantic-layout";
+  import { expandStacks, stackOf } from "./stacks";
+  import { classicRelations } from "./classic-relations";
+  import { planCard, planCardSize } from "./plan-card";
+  import { COMPILE_ID, PIPELINE_ID, collectResults, evidencePipeline, stageCardSize } from "./stage-cards";
+  import { IMAGES_ID, VIDEOS_ID, collectionRelations, collectionSize, imageCollection, videoCollection } from "./collections";
   import { PART, partLead } from "$features/work/lib/run/part-size";
 
   let { portal }: { portal: HTMLElement } = $props();
@@ -81,15 +90,42 @@
   let designer = $state.raw<Designer | null>(null);
   let designerVersion = $state(0);
   let storedLayout = $state.raw<{page:string;record:LayoutRecord}|null>(null);
-  const layoutRecord = $derived(storedLayout && storedLayout.page === report?.research_id ? storedLayout.record : null);
+  const freshLayout = (() => { try { return new URLSearchParams(location.search).has("aegis-fresh-layout"); } catch { return false; } })();
+  /**
+   * The design experiment: `?aegis-design=zephium` (or the toggle, kept in this browser) draws a run in
+   * Zephium's own structure, its parts in rows by time with its own lines and marks, and none of
+   * AEGIS's layout, strings or hand. It is a read-only view: no arrangement is read or saved in it.
+   */
+  const zephiumDesign = (() => {
+    try {
+      const asked = new URLSearchParams(location.search).get("aegis-design");
+      // AEGIS's own design, unless the person chose to compare with Zephium's.
+      return asked ? asked === "zephium" : localStorage.getItem("aegis-canvas-design") === "zephium";
+    } catch {
+      return false;
+    }
+  })();
+  function switchDesign() {
+    try {
+      localStorage.setItem("aegis-canvas-design", zephiumDesign ? "aegis" : "zephium");
+      const url = new URL(location.href);
+      url.searchParams.delete("aegis-design");
+      location.replace(url.toString());
+    } catch {
+      // Without storage the design stays as it is.
+    }
+  }
+  const layoutRecord = $derived(!zephiumDesign && storedLayout && storedLayout.page === report?.research_id ? storedLayout.record : null);
   $effect(() => {
     const page = report?.research_id, api = canvasApi;
-    if (!page || !api) return;
+    // `?aegis-fresh-layout` shows the composition as if nothing had been saved, and saves nothing:
+    // a read-only view for checking the layout on real research without touching its record.
+    if (!page || !api || freshLayout || zephiumDesign) return;
     return untrack(() => {
       if (!actions) return;
       // A relation-aware run lays itself out; the organizer only keeps what the person moves.
       const current = new Designer(api, actions, page, () => untrack(() => designerVersion++),
-        record => { storedLayout = {page,record}; }, () => !relationRun);
+        record => { storedLayout = {page,record}; }, () => !composedRun);
       designer = current;
       return () => { current.dispose(); if(designer===current)designer=null; };
     });
@@ -114,7 +150,7 @@
     report?.phase === "failed" ? endedWords(report.waiting_reason ?? "", "failed") : wordsForWait(report?.waiting_reason ?? ""),
   );
   $effect(() => setWaitingReason(report?.waiting_reason ?? ""));
-  const scene = $derived<CanvasScene | null>(report ? buildScene(report, reasonWords, state.trace, wordsForWait) : null);
+  const scene = $derived<CanvasScene | null>(report ? buildScene(report, reasonWords, state.trace, wordsForWait, zephiumDesign ? (state.run as unknown as ZephiumRun | null) : null) : null);
   provideLeadLook(() => report?.research_id ?? "aegis");
 
   $effect(() => {
@@ -202,17 +238,101 @@
 
   /** The workers beside the sources they read, converging on the lead, as the record shows them. */
   const AGENT = { width: 300, height: 176 };
-  const branches = $derived(agentBranches(state.run, state.trace));
+  const branches = $derived(zephiumDesign ? [] : agentBranches(state.run, state.trace));
   /**
    * A run that records its relations draws only those as strings, and lays out by its mode's policy.
    * Older runs, saved before relations existed, keep their lines and placement exactly as they were.
    */
-  const relations = $derived(relationsOf(state.run as { relations?: unknown } | null));
   const relationRun = $derived.by(() => {
     const run = state.run as { relations?: unknown; state?: string } | null | undefined;
     if (!run || !Array.isArray(run.relations)) return false;
     return run.relations.length > 0 || ["queued", "running", "waiting", "needs_input"].includes(run.state ?? "");
   });
+  /**
+   * A classic report (research made without a Work run) is composed the same way. Its strings
+   * come from what the report stores: the pages the run opened, its source list, its citations.
+   */
+  const classicRun = $derived(!!scene && state.run === null && stages.length >= 1);
+  /** Which request a card belongs to, on a canvas with follow-ups: part ids carry their request's. */
+  const stageOf = (id: string) => Math.max(0, stages.findIndex((stage) => id.startsWith(`part:${stage.card}:`) || id === stage.card || id.endsWith(stage.card)));
+  /** Whether this canvas lays itself out left to right with semantic strings. */
+  const composedRun = $derived(!zephiumDesign && (relationRun || classicRun));
+  const classic = $derived.by(() => {
+    if (!classicRun || !scene) return null;
+    // Each request: its own search, its own pages and sources, its own report.
+    const relations: ReturnType<typeof classicRelations>["relations"] = [];
+    const urls = new Map<string, string>();
+    stages.forEach((stage, index) => {
+      const paper = scene.papers.find((entry) => stage.executions.includes(entry.run)) ?? (index === 0 && stages.length === 1 ? scene.papers[0] : undefined) ?? null;
+      const pages = partItems
+        .filter((item) => stageOf(item.id) === index)
+        .flatMap((item) => (item as unknown as { part?: { pages?: readonly { url: string }[] } }).part?.pages ?? []);
+      const found = classicRelations(paper, pages, { query: `query:${index + 1}`, report: paper ? `report:${paper.id}` : "report", prefix: index ? `${index + 1}.` : "" });
+      relations.push(...found.relations);
+      for (const [key, url] of found.urls) urls.set(key, url);
+    });
+    return { relations, urls };
+  });
+  /** The research's Images and Videos sheets, from its saved images and its video search. */
+  const imagesData = $derived(composedRun ? imageCollection(report) : null);
+  const videosData = $derived(composedRun ? videoCollection(report) : null);
+  const collectionItems = $derived(
+    [imagesData, videosData].flatMap((data) =>
+      data ? [{ id: data.kind === "images" ? IMAGES_ID : VIDEOS_ID, type: "collection", kind: data.title, title: data.title, detail: "", status: "", size: collectionSize(data), collection: data }] : [],
+    ) as unknown as typeof baseItems,
+  );
+  /**
+   * The one planning and activity card: the AI PLAN (objective, strategy, assigned agents) with the
+   * research's existing activity timeline inside it. A composed canvas draws no separate timeline.
+   */
+  const planData = $derived(composedRun && report && scene ? planCard(report.research_id, relationRun ? (state.run as never) : null, scene.steps, scene.state === "running", report.query) : null);
+  const PLAN_ID = "plan:ai";
+  /** The lower track and the convergence, from the run's own stage events (stage-cards.ts). */
+  const pipelineData = $derived(relationRun ? evidencePipeline(state.trace, state.run) : null);
+  const compileData = $derived(relationRun ? collectResults(state.trace, state.run, { images: imagesData?.images.length ?? 0, videos: videosData?.videos.length ?? 0 }) : null);
+  const stageItems = $derived(
+    [[PIPELINE_ID, pipelineData] as const, [COMPILE_ID, compileData] as const].flatMap(([id, data]) =>
+      data ? [{ id, type: "stagecard", kind: data.title, title: data.title, detail: "", status: "", size: stageCardSize(data), stages: data }] : [],
+    ) as unknown as typeof baseItems,
+  );
+  const planItems = $derived(
+    (planData ? [{ id: PLAN_ID, type: "plancard", kind: "AI plan", title: "AI PLAN", detail: "", status: "", size: planCardSize(planData), plan: planData }] : []) as unknown as typeof baseItems,
+  );
+  const relations = $derived([
+    // The plan is the AI PLAN card: the request is planned into it, and AEGIS assigns its workers from it.
+    ...(relationRun ? relationsOf(state.run as { relations?: unknown } | null) : (classic?.relations ?? [])).map((row) => {
+      if (planData && row.type === "plans" && row.target === "agent:lead") return { ...row, target: "plan" };
+      if (planData && row.type === "assigns" && row.source === "agent:lead") return { ...row, source: "plan" };
+      // The plan's searches found the sources: they branch from the AI PLAN to each source task.
+      if (planData && row.type === "found") return { ...row, source: "plan" };
+      // Discovery hands its screened sources back to the lead's plan, which then feeds the source tasks.
+      if (planData && row.type === "delivers" && row.source === "agent:discovery" && row.target === "agent:lead") return { ...row, target: "plan" };
+      // Citations are built in the evidence pipeline from the run's Sources, and reach the report through the results.
+      if (pipelineData && row.type === "cites") return { ...row, source: "search:1", target: "pipeline" };
+      // What AEGIS wrote is compiled with the media into the report.
+      if (compileData && row.type === "writes" && row.target === "report") return { ...row, target: "compile" };
+      return row;
+    }),
+    ...collectionRelations(imagesData, videosData, { query: "search:1", report: compileData ? "compile" : "report" }),
+    ...stageRelations,
+  ]);
+  /** The joins of the lower track and the convergence, each from a recorded stage of the run. */
+  const stageRelations = $derived.by(() => {
+    const made = (id: string, type: string, source: string, target: string, label: string, status: string, note: string) =>
+      ({ id, type, source, target, label, status, event_seq: 0, at: 0, evidence_id: "", url: "", note, detail: { derived: true } }) as unknown as ReturnType<typeof relationsOf>[number];
+    const rows: ReturnType<typeof relationsOf>[number][] = [];
+    const live = scene?.state === "running";
+    // Research made without a recorded plan still began from its request.
+    if (planData && !relationRun) rows.push(made("stage-plan", "plans", "request", "plan", "Research", live ? "active" : "complete", "The request started this research"));
+    if (pipelineData) rows.push(made("stage-process", "processes", "search:1", "pipeline", "Evidence", pipelineData.modules.some((m) => m.state === "running") ? "active" : "complete", "The run's sources are fetched, cleaned, ranked and cited here"));
+    if (pipelineData && compileData) rows.push(made("stage-evidence", "compiles", "pipeline", "compile", "Cited evidence", "complete", "The processed evidence and its citations go into the results"));
+    if (compileData && paperPlan.length) rows.push(made("stage-publish", "publishes", "compile", "report", "Published", live ? "active" : "complete", "The compiled results are published to the Reader"));
+    return rows;
+  });
+  /** Every source reference's URL, in the order the research retrieved them. */
+  const sourceUrls = $derived<Map<string, string>>(
+    relationRun ? new Map((state.run?.evidence ?? []).map((row) => [row.id, row.url])) : (classic?.urls ?? new Map()),
+  );
   const policy = $derived(
     relationRun
       ? layoutPolicy({
@@ -220,8 +340,45 @@
           workers: state.run?.assignments?.length ?? 0,
           sources: state.run?.evidence?.length ?? 0,
         })
-      : null,
+      : classicRun
+        ? layoutPolicy({ mode: "quick", workers: 0, sources: sourceUrls.size })
+        : null,
   );
+  /** Source stacks the person opened, per research, kept for this browser. */
+  let openStacks = $state<{ page: string; ids: Set<string> }>({ page: "", ids: new Set() });
+  const stacksKey = (page: string) => `aegis-open-stacks:${page}`;
+  $effect(() => {
+    const page = report?.research_id ?? "";
+    untrack(() => {
+      if (openStacks.page === page) return;
+      let ids: string[] = [];
+      try {
+        ids = JSON.parse(localStorage.getItem(stacksKey(page)) ?? "[]");
+      } catch {
+        // Without storage, every stack starts closed.
+      }
+      openStacks = { page, ids: new Set(Array.isArray(ids) ? ids.filter((id) => typeof id === "string") : []) };
+    });
+  });
+  $effect(() => {
+    const toggle = (event: Event) => {
+      const id = String((event as CustomEvent).detail ?? "");
+      if (!id) return;
+      const ids = new Set(openStacks.ids);
+      if (ids.has(id)) ids.delete(id);
+      else ids.add(id);
+      openStacks = { page: openStacks.page, ids };
+      try {
+        localStorage.setItem(stacksKey(openStacks.page), JSON.stringify([...ids]));
+      } catch {
+        // The stack still opens; it just will not be remembered.
+      }
+    };
+    window.addEventListener("aegis-stack-toggle", toggle);
+    return () => window.removeEventListener("aegis-stack-toggle", toggle);
+  });
+  /** The source cards as drawn: stacks closed or opened into one card per page. */
+  const shownParts = $derived(composedRun ? expandStacks(partItems as unknown as { id: string; type?: string; part?: { pages: readonly { id: string; url: string }[]; title: string; shape?: string } }[], openStacks.ids) as unknown as typeof partItems : partItems);
   const gaps = $derived(policy?.gaps ?? LEGACY_GAPS);
   const agentPlan = $derived.by(() => {
     const placed: { agent: AgentBranch; x: number; y: number }[] = [];
@@ -382,7 +539,8 @@
   });
   const trailItem = $derived.by(() => {
     const first = stages[0];
-    if (!scene?.steps.length || !first) return null;
+    // On a composed canvas the timeline lives inside the AI PLAN card: one planning and activity card only.
+    if (zephiumDesign || composedRun || !scene?.steps.length || !first) return null;
     return {
       id: `steps:${first.card}`,
       type: "trail",
@@ -401,7 +559,7 @@
    */
   const slim = <T extends (typeof baseItems)[number]>(item: T): T => {
     const part = (item as unknown as { part?: { shape?: string } }).part;
-    if (!relationRun || item.type !== "part" || !part || part.shape === "label") return item;
+    if (!composedRun || item.type !== "part" || !part || part.shape === "label") return item;
     const size = defaultSize(item);
     const width = Math.round(size.width - partLead - (part.shape === "pages" ? PART.badge : 0));
     return width >= 120 ? { ...item, size: { width, height: Math.max(80, Math.round(size.height)) } } : item;
@@ -410,10 +568,14 @@
   const keptSizes = $derived.by<Record<string, { width: number; height: number }>>(() => {
     const record = layoutRecord;
     if (!record) return {};
-    if (!relationRun || !record.automatic) return record.sizes;
-    return Object.fromEntries(Object.entries(record.sizes).filter(([id]) => record.constraints[id]?.manual || record.constraints[id]?.lockedSize || record.constraints[id]?.pinned));
+    if (!composedRun) return record.sizes;
+    // A source card's saved width once included its side caption: its size now is the card's own,
+    // unless the person locked it.
+    const own = (id: string) => !id.startsWith("part:") || record.constraints[id]?.lockedSize;
+    if (!record.automatic) return Object.fromEntries(Object.entries(record.sizes).filter(([id]) => own(id)));
+    return Object.fromEntries(Object.entries(record.sizes).filter(([id]) => own(id) && (record.constraints[id]?.manual || record.constraints[id]?.lockedSize || record.constraints[id]?.pinned)));
   });
-  const ORDERS = new Set(["objective", "request", "part", "paper", "agentcard", "blueprint", "sources"]);
+  const ORDERS = new Set(["objective", "request", "part", "paper", "agentcard", "blueprint", "sources", "collection"]);
   const view = $derived(state.view ?? { chosen: [], hidden: [] });
   const chosen = $derived(new Set(view.chosen));
   const hidden = $derived(new Set(view.hidden));
@@ -423,15 +585,19 @@
     const all = [
       ...mapItems,
       ...paperItems,
+      ...collectionItems,
+      ...planItems,
+      ...stageItems,
       ...agentItems,
       ...(trailItem ? [trailItem] : []),
       ...[...baseItems.filter((item) => !folders.has(item.id)), ...requests.items].map((item) =>
         dress.get(item.id) ? { ...item, ...dress.get(item.id) } : item,
       ),
       ...environmentBoards(stages),
-      ...partItems,
+      ...shownParts,
       ...environmentInputs(stages),
-      ...environmentSources(stages),
+      // The Sources gallery repeats the source stacks and the Search card; a composed run leaves it out.
+      ...(composedRun ? [] : environmentSources(stages)),
       ...agents.items,
     ];
     // Ask, Choose and Remove act on this view of the run, so run-drawn cards can take them.
@@ -446,42 +612,181 @@
       .map((item) => (ORDERS.has(item.type ?? "") ? { ...item, orders: true, ...(chosen.has(item.id) ? { decision: "Chosen for your next instruction" } : {}) } : item));
   });
   /**
+   * How tall each card is actually drawn, in canvas units (layout sizes ignore the camera's
+   * scale). Only ever grows for a research, rounded to the 8 px grid, so the layout settles
+   * instead of chasing its own measurements.
+   */
+  const drawnHeights = new SvelteMap<string, number>();
+  /** Cards whose height is estimated before they are drawn. A report scrolls inside its own sheet. */
+  const MEASURED = new Set(["trail", "request", "sources", "agentcard", "collection", "plancard", "stagecard"]);
+  $effect(() => {
+    void report?.research_id;
+    untrack(() => drawnHeights.clear());
+  });
+  $effect(() => {
+    const host = cardHost;
+    if (!host || !composedRun) return;
+    let frame = 0;
+    const measureAll = () => {
+      frame = 0;
+      // Cards arrive while a run works: read their kinds each time.
+      const typeOf = new Map(untrack(() => items).map((item) => [item.id, item.type ?? ""]));
+      for (const node of host.querySelectorAll<HTMLElement>(".svelte-flow__node")) {
+        const id = node.dataset.id;
+        const body = node.firstElementChild as HTMLElement | null;
+        if (!id || !body || !MEASURED.has(typeOf.get(id) ?? "")) continue;
+        const height = Math.ceil(Math.max(body.scrollHeight, body.offsetHeight) / 8) * 8;
+        if (height > (drawnHeights.get(id) ?? 0) + 8) drawnHeights.set(id, height);
+      }
+    };
+    const later = () => (frame ||= requestAnimationFrame(measureAll));
+    const resize = new ResizeObserver(later);
+    const watch = new MutationObserver(() => {
+      for (const node of host.querySelectorAll(".svelte-flow__node > *")) resize.observe(node);
+      later();
+    });
+    watch.observe(host, { childList: true, subtree: true });
+    later();
+    return () => {
+      cancelAnimationFrame(frame);
+      resize.disconnect();
+      watch.disconnect();
+    };
+  });
+  /** A card's size as the layout counts it: its set size, or the height it is really drawn at. */
+  const sizeOf = (item: (typeof items)[number]) => {
+    const size = (item as { size?: { width: number; height: number } }).size ?? defaultSize(item);
+    return { width: Math.round(size.width), height: Math.round(Math.max(size.height, drawnHeights.get(item.id) ?? 0)) };
+  };
+  /**
+   * Makes sure no card covers another once saved places are in. Cards the person placed stay;
+   * an opened stack's page cards line up beside its first card. Map cards keep their grouped layout.
+   */
+  const settleCards = (placed: Record<string, { x: number; y: number }>): Record<string, { x: number; y: number }> => {
+    const kept = keptPositions(layoutRecord);
+    const fixed = new Set(Object.keys(kept));
+    const byId = new Map(items.map((item) => [item.id, item]));
+    const companions = items.filter((item) => {
+      const stack = item.part?.stack;
+      return stack?.open && stack.index && byId.has(stack.id) && !fixed.has(item.id);
+    });
+    const companionIds = new Set(companions.map((item) => item.id));
+    const cards: Placed[] = items.flatMap((item) => {
+      const at = placed[item.id];
+      if (!at || companionIds.has(item.id) || ["agent", "mapgroup", "blueprint"].includes(item.type as string)) return [];
+      return [{ id: item.id, ...at, ...sizeOf(item), caption: item.type === "part" }];
+    });
+    const next = clearOverlaps(cards, fixed, gaps.row);
+    const occupied = cards.map((card) => {
+      const at = next[card.id] ?? card;
+      return { ...card, ...at, y: at.y - (card.caption ? CAPTION : 0), height: card.height + (card.caption ? CAPTION : 0) };
+    });
+    const rightOfStack = new Map<string, number>();
+    for (const item of companions) {
+      const stack = item.part!.stack!;
+      const first = byId.get(stack.id)!;
+      const root = next[stack.id] ?? placed[stack.id];
+      if (!root) continue;
+      const size = sizeOf(item);
+      const area = {
+        id: item.id,
+        x: (rightOfStack.get(stack.id) ?? root.x + sizeOf(first).width) + WEBSITE_GAP,
+        y: root.y - CAPTION,
+        width: size.width,
+        height: size.height + CAPTION,
+      };
+      // A saved card may sit in the row. Continue to its right while preserving the row's baseline.
+      for (const other of [...occupied].sort((a, b) => a.x - b.x)) {
+        if (overlaps(area, other, gaps.row / 2)) area.x = other.x + other.width + WEBSITE_GAP;
+      }
+      occupied.push(area);
+      rightOfStack.set(stack.id, area.x + area.width);
+      next[item.id] = { x: area.x, y: root.y };
+    }
+    return next;
+  };
+  /**
    * Where a relation-aware run's cards stand: request, searches and steps; sources in the order
    * they were retrieved; the workers and AEGIS; the report; the map. Pure arithmetic over the
    * record (see semantic-layout.ts), so it costs no model call and a reload lands it identically.
    */
   const composed = (placed: Record<string, { x: number; y: number }>): Record<string, { x: number; y: number }> => {
     const first = stages[0];
-    if (!first || stages.length !== 1) return {};
+    // A Work run's follow-ups have no relations of their own yet: they keep their placement.
+    if (!first || (stages.length !== 1 && !classicRun)) return {};
     const shown = new Map(items.map((item) => [item.id, item]));
     const box = (id: string): Box | null => {
       const item = shown.get(id);
       if (!item) return null;
       const size = (item as { size?: { width: number; height: number } }).size ?? defaultSize(item);
-      return { id, width: Math.round(size.width), height: Math.round(size.height) };
+      // A card drawn taller than its estimate gets the room it really takes.
+      return { id, width: Math.round(size.width), height: Math.round(Math.max(size.height, drawnHeights.get(id) ?? 0)) };
     };
     const start = placed[first.card];
     const request = box(first.card);
     if (!start || !request) return {};
     const parts = items.filter((item) => item.type === "part") as unknown as { id: string; part?: { shape?: string; pages?: readonly { url: string }[] } }[];
-    const evidence = new Map((state.run?.evidence ?? []).map((row, index) => [row.url, index]));
+    const evidence = new Map([...sourceUrls.values()].map((url, index) => [url, index]));
+    const original = new Map(partItems.map((item) => [item.id, item as unknown as { part?: { pages?: readonly { url: string }[] } }]));
+    const firstOf = (item: (typeof parts)[number]) => {
+      const whole = original.get(stackOf(item.id)) ?? item;
+      const first = Math.min(...(whole.part?.pages ?? []).map((page) => evidence.get(page.url) ?? Infinity));
+      return first + ((item.part as { stack?: { index?: number } } | undefined)?.stack?.index ?? 0) / 1000;
+    };
     const lanes = retrievalOrder(
       parts.filter((item) => item.part?.shape === "pages"),
-      (item) => Math.min(...(item.part?.pages ?? []).map((page) => evidence.get(page.url) ?? Infinity)),
+      // Sources by the request that found them, then in the order they were found.
+      (item) => stageOf(item.id) * 1e6 + firstOf(item),
     );
+    const sourceRows = new Map<string, SourceRow & { companions: Box[] }>();
+    for (const lane of lanes) {
+      const card = box(lane.id);
+      if (!card) continue;
+      const stack = stackOf(lane.id);
+      const row = sourceRows.get(stack);
+      if (row) row.companions.push(card);
+      else sourceRows.set(stack, { ...card, companions: [] });
+    }
     const discovery = agentPlan.find((row) => row.agent.role === "discovery");
     const specialists = agentPlan.filter((row) => !["discovery", "lead"].includes(row.agent.role));
     const present = (list: readonly (Box | null)[]) => list.filter((row): row is Box => !!row);
+    const sourceCards = new Set([...lanes.map((item) => item.id), ...items.filter((item) => item.type === "sources").map((item) => item.id)]);
+    const ranked = rankAgents(
+      (strands.links as { source: string; target: string; strand: StrandData }[]).map((link) => ({ source: link.source, target: link.target, types: link.strand.relations.map((row) => row.type) })),
+      sourceCards,
+      specialists.map((row) => `worker:${row.agent.agent}`),
+    );
     const layout = semanticLayout({
       request: { ...request, ...start },
       under: present([
-        ...(discovery ? [box(`worker:${discovery.agent.agent}`)] : []),
-        ...parts.filter((item) => item.part?.shape !== "pages").map((item) => box(item.id)),
+        // With an AI PLAN, the Sources collection and the worker that gathered it stand under the plan.
+        ...(planData ? [] : [...(discovery ? [box(`worker:${discovery.agent.agent}`)] : []), ...parts.filter((item) => item.part?.shape !== "pages" && stageOf(item.id) === 0).map((item) => box(item.id))]),
         ...(trailItem ? [box(trailItem.id)] : []),
+        // Each follow-up request under the first, with its own searches.
+        ...stages.slice(1).flatMap((stage, index) => [
+          box(stage.card),
+          ...parts.filter((item) => item.part?.shape !== "pages" && stageOf(item.id) === index + 1).map((item) => box(item.id)),
+        ]),
       ]),
-      sources: present(lanes.map((item) => box(item.id))),
-      sourceList: box(items.find((item) => item.type === "sources")?.id ?? ""),
-      workers: present(specialists.map((row) => box(`worker:${row.agent.agent}`))),
+      plan: planData && box(PLAN_ID)
+        ? {
+            ...box(PLAN_ID)!,
+            below: present([
+              ...parts.filter((item) => item.part?.shape !== "pages" && stageOf(item.id) === 0).map((item) => box(item.id)),
+              ...(discovery ? [box(`worker:${discovery.agent.agent}`)] : []),
+            ]),
+          }
+        : null,
+      sources: [...sourceRows.values()],
+      pipeline: box(PIPELINE_ID),
+      compile: box(COMPILE_ID),
+      collections: present([box(IMAGES_ID), box(VIDEOS_ID)]),
+      workers: specialists.flatMap((row) => {
+        const id = `worker:${row.agent.agent}`;
+        const card = box(id);
+        // Its stage from the run's dependencies; until it has any, from what its role does.
+        return card ? [{ ...card, rank: ranked.get(id) ?? (row.agent.role === "verification" ? 3 : 2) }] : [];
+      }),
       lead: box("worker:lead"),
       papers: present(paperPlan.map(({ paper }) => box(`paper:${paper.id}`))),
       map: mapPlan?.box ? { ...mapPlan.box, place: mapPlan.place } : null,
@@ -527,8 +832,9 @@
           ])
         : {}),
     };
-    if (relationRun) Object.assign(placed, composed(placed));
-    Object.assign(placed, relationRun ? keptPositions(layoutRecord) : (layoutRecord?.positions ?? {}));
+    if (composedRun) Object.assign(placed, composed(placed));
+    Object.assign(placed, composedRun ? keptPositions(layoutRecord) : (layoutRecord?.positions ?? {}));
+    if (composedRun) Object.assign(placed, settleCards(placed));
     if(!expandedSources.size)return placed;
     return reflowExpanded(items.map(item=>({
       id:item.id,type:item.type ?? '',title:item.title ?? item.id,
@@ -546,7 +852,7 @@
   $effect(() => {
     const api = canvasApi;
     const record = layoutRecord;
-    if (!api || !record || !relationRun) return;
+    if (!api || !record || !composedRun) return;
     untrack(() => {
       const kept = keptPositions(record);
       const ids = Object.keys(record.positions).filter((id) => !(id in kept) && positions[id]);
@@ -557,7 +863,9 @@
           .filter((item) => resized.includes(item.id))
           .map((item) => [item.id, (item as { size?: { width: number; height: number } }).size ?? defaultSize(item)]),
       );
-      api.setGeometry({ positions: Object.fromEntries(ids.map((id) => [id, positions[id]!])), sizes, constraints: record.constraints, groups: record.groups }, true);
+      // The canvas only takes a size together with a position.
+      const moved = [...new Set([...ids, ...Object.keys(sizes)])].filter((id) => positions[id]);
+      api.setGeometry({ positions: Object.fromEntries(moved.map((id) => [id, positions[id]!])), sizes, constraints: record.constraints, groups: record.groups }, true);
     });
   });
   /**
@@ -570,11 +878,11 @@
     const next = positions;
     const api = canvasApi;
     const page = report?.research_id ?? "";
-    const watching = live && relationRun;
+    const watching = live && composedRun;
     untrack(() => {
       const before = settled.page === page ? settled : { page, at: {}, watched: false };
       settled = { page, at: { ...next }, watched: before.watched || watching };
-      if (!api || !relationRun || !settled.watched || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      if (!api || !composedRun || !settled.watched || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       const moved = Object.keys(next).filter((id) => {
         const from = before.at[id];
         return from && (Math.abs(from.x - next[id]!.x) > 1 || Math.abs(from.y - next[id]!.y) > 1);
@@ -606,44 +914,61 @@
    */
   const strands = $derived.by(() => {
     const first = stages[0];
-    if (!relationRun || !first) return { links: [], unplaced: [] };
+    if (!composedRun || !first) return { links: [], unplaced: [] };
     const present = new Set(items.map((item) => item.id));
     const run = state.run;
     const agentOf = new Map((run?.assignments ?? []).map((row) => [row.role, row.agent]));
-    const urlOf = new Map((run?.evidence ?? []).map((row) => [row.id, row.url]));
+    const urlOf = sourceUrls;
     const laneOf = new Map<string, string>();
-    for (const item of partItems as unknown as { id: string; part?: { pages?: readonly { url: string }[] } }[])
+    for (const item of shownParts as unknown as { id: string; part?: { pages?: readonly { url: string }[] } }[])
       for (const page of item.part?.pages ?? []) if (!laneOf.has(page.url)) laneOf.set(page.url, item.id);
-    const sourcesCard = items.find((item) => item.type === "sources")?.id ?? null;
+    // A source with no card of its own is shown by the Search card that found it.
+    const searchCard = [`part:${first.card}:search`, ...items.filter((item) => item.type === "sources").map((item) => item.id)].find((id) => present.has(id)) ?? null;
     const paper = paperPlan[0] ? `paper:${paperPlan[0].paper.id}` : null;
     const resolve = (ref: string) => {
       const [kind, rest = ""] = ref.split(/:(.*)/s);
       let id: string | null = null;
-      if (ref === "request" || kind === "query") id = first.card;
+      if (ref === "request") id = first.card;
+      else if (kind === "query") {
+        // A search's results come from the run's Sources collection when it has one, else its request.
+        const stage = stages[Math.max(0, Math.min(stages.length - 1, (Number(rest) || 1) - 1))]!;
+        id = planData && present.has(`part:${stage.card}:search`) ? `part:${stage.card}:search` : stage.card;
+      } else if (ref === "plan") id = planData ? PLAN_ID : null;
+      else if (ref === "pipeline") id = pipelineData ? PIPELINE_ID : null;
+      else if (ref === "compile") id = compileData ? COMPILE_ID : paper;
       else if (kind === "agent") id = rest === "lead" ? "worker:lead" : agentOf.get(rest) ? `worker:${agentOf.get(rest)}` : null;
       else if (kind === "source") {
         const url = urlOf.get(rest);
-        id = (url && laneOf.get(url)) || sourcesCard;
-      } else if (ref === "report") id = paper;
+        id = (url && laneOf.get(url)) || searchCard;
+      } else if (kind === "url") id = laneOf.get(rest) || searchCard;
+      else if (kind === "collection") id = ref;
+      // The search that found something: the request's Search card, or the request itself.
+      else if (kind === "search") id = present.has(`part:${first.card}:search`) ? `part:${first.card}:search` : first.card;
+      else if (ref === "report") id = paper;
+      else if (kind === "report") id = `paper:${rest}`;
       else if (kind === "map") id = `map:${rest}`;
       return id && present.has(id) ? id : null;
     };
-    return strandLinks(relations, resolve);
+    const result = strandLinks(relations, resolve);
+    const summary = summaryStrandIds(result.links.filter(link => !hidden.has(link.source) && !hidden.has(link.target)));
+    return { ...result, links: organizeResearchStrands(result.links.filter(link => !hidden.has(link.source) && !hidden.has(link.target)).map(link => summary.has(link.id)
+      ? { ...link, strand: { ...link.strand, summaryOnly: true } }
+      : link)) };
   });
   /** What the canvas draws: a relation-aware run only its relations (and threads between requests). */
-  const canvasLinks = $derived(
-    (relationRun
-      ? [...requests.links.filter((link) => link.kind !== "flow"), ...(strands.links as unknown as CanvasLink[])]
+  const canvasLinks = $derived.by<CanvasLink[]>(() => {
+    return (composedRun
+      ? [...requests.links.filter(link => link.kind !== "flow"), ...(strands.links as unknown as CanvasLink[])]
       : [...requests.links, ...paperLinks, ...agentLinks, ...mapLinks]
-    ).filter((link) => !hidden.has(link.source) && !hidden.has(link.target)),
-  );
+    ).filter(link => !hidden.has(link.source) && !hidden.has(link.target));
+  });
 
   // The construction hand: plays back what a live run adds, from the moment this canvas opened.
   $effect(() => {
     const id = report?.research_id;
     if (!id || state.run === undefined) return;
     const isLive = live;
-    untrack(() => construction.open(id, isLive && relationRun, [...items.map((item) => item.id), ...canvasLinks.map((link) => link.id)]));
+    untrack(() => construction.open(id, isLive && composedRun, [...items.map((item) => item.id), ...canvasLinks.map((link) => link.id)]));
   });
   const arrivals = () => ({
     nodes: items.map((item) => ({ id: item.id, x: positions[item.id]?.x ?? 0, y: positions[item.id]?.y ?? 0, label: (item.title || item.kind || "card").slice(0, 40) })),
@@ -676,7 +1001,8 @@
       else if (construction.revealingNode(item.id)) css.push(rule(item.id, ">*{animation:aegis-construct-in 380ms cubic-bezier(.2,.8,.2,1) both}"));
     }
     if (selectedStrand) for (const id of [selectedStrand.source, selectedStrand.target]) css.push(rule(id, "{outline:1.5px solid color-mix(in oklab,var(--aegis-strand-green,#3fdc84) 75%,transparent);outline-offset:3px;border-radius:12px}"));
-    return css.length ? `<style>${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)}}@media (prefers-reduced-motion:reduce){.svelte-flow__node>*{animation:none!important}}</style>` : "";
+    return css.length ? `<style>
+${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)}}@media (prefers-reduced-motion:reduce){.svelte-flow__node>*{animation:none!important}}</style>` : "";
   });
   $effect(() => {
     const select = (event: Event) => (selectedStrand = (event as CustomEvent).detail);
@@ -697,7 +1023,7 @@
     const first = paperPlan[0];
     const stage = first?.stage ?? stages.at(-1);
     if (!stage) return undefined;
-    if (relationRun) {
+    if (composedRun) {
       // The whole composition, request to report, as it is laid out.
       const placedCards = items.flatMap((item) => {
         const at = positions[item.id];
@@ -881,9 +1207,9 @@
 
   /** A lane's website card: the row names a page by id, and the page knows its address. */
   function openPage(id: string, page: string) {
-    const item = items.find((entry) => entry.id === id) as { part?: { pages?: readonly { id: string; url: string }[] } } | undefined;
-    const url = item?.part?.pages?.find((entry) => entry.id === page)?.url;
-    if (url) openSourceWindow(url);
+    const item = items.find((entry) => entry.id === id);
+    const source = item?.part?.pages?.find((entry) => entry.id === page);
+    if (source?.url) openSourceWindow(source.url, source.title);
     else actions?.openView("sources");
   }
 
@@ -1015,7 +1341,10 @@
   });
   const windows = $derived(browser.all.filter((entry) => entry.researchId === (report?.research_id ?? "")));
   const minimized = $derived(windows.filter((entry) => entry.minimized));
-  const addedUrls = $derived(new Set((state.workSources ?? []).map((row) => row.url)));
+  const browserSources = $derived(new Map(
+    [...(scene?.sourceInfo.values() ?? [])].map((info) => [normalizeAddress(info.url, location.host) ?? info.url, info]),
+  ));
+  const addedUrls = $derived(new Set((state.workSources ?? []).map((row) => normalizeAddress(row.url, location.host) ?? row.url)));
   /** Puts the windows in the portal root, so they also stand over an open report. */
   function inPortal(node: HTMLElement) {
     portal.append(node);
@@ -1082,8 +1411,8 @@
     <BrowserWindow
       {entry}
       bounds={windowBounds}
-      info={scene?.sourceInfo.get(entry.history[entry.index] ?? "")}
-      added={addedUrls.has(entry.history[entry.index] ?? "") || (scene?.sourceInfo.get(entry.history[entry.index] ?? "")?.evidence ?? false)}
+      info={browserSources.get(entry.history[entry.index] ?? "")}
+      added={addedUrls.has(entry.history[entry.index] ?? "") || (browserSources.get(entry.history[entry.index] ?? "")?.evidence ?? false)}
     />
   {/each}
 </div>
@@ -1091,8 +1420,9 @@
 <BitsConfig defaultPortalTo={portal}>
   <div class="shell" data-state={scene?.state ?? "empty"} data-panel={state.panel}>
     <Rail />
+    {#if workPanels.open === "skills"}<SkillsPanel />{:else if workPanels.open === "connections"}<ConnectionsPanel />{/if}
     <div class="environment">
-      <div class="canvas-card" class:strings={relationRun} bind:this={cardHost}>
+      <div class="canvas-card" class:strings={composedRun} bind:this={cardHost}>
         {#if scene && state.run !== undefined}
           {#key `${scene.name}:${camera}`}
             <WorkCanvas
@@ -1134,7 +1464,8 @@
             />
           {/key}
           {#if designer}<DesignerOverlay {designer} version={designerVersion}/>{/if}
-          {#if relationRun}<HandOverlay onreplay={replayBuild} />{/if}
+          {#if composedRun}<HandOverlay onreplay={replayBuild} />{/if}
+          {#if report}<button type="button" class="design-switch" data-design={zephiumDesign ? "zephium" : "aegis"} onclick={switchDesign} title="Compare how this run is laid out">{zephiumDesign ? "Zephium layout · switch to AEGIS" : "AEGIS layout · try Zephium"}</button>{/if}
           {#if selectedStrand}
             <StrandPanel
               strand={selectedStrand.strand}
@@ -1474,7 +1805,7 @@
   /* The Library and Conversation stand beside the canvas, which keeps the rest of the room. */
   @media (min-width: 900px) {
     .shell[data-panel="history"] .environment {
-      margin-inline-start: 328px;
+      margin-inline-start: calc(var(--research-library-width, 360px) + 8px);
     }
 
     .shell[data-panel="conversation"] .environment {
@@ -1584,10 +1915,49 @@
   .canvas-card.strings :global(.part:not(.label-only) .label .summary) {
     display: none;
   }
+  /* A stack's caption: its name, then the control that opens it or stacks it again. */
+  .canvas-card.strings :global(.part:not(.label-only) .label:has(.stack-toggle)) {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .canvas-card.strings :global(.part .stack-toggle) {
+    flex: none;
+    padding: 1px 8px;
+    border: 1px solid color-mix(in oklab, var(--color-text) 22%, transparent);
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--color-canvas, #0b0b0b) 80%, var(--color-text));
+    color: color-mix(in oklab, var(--color-text) 85%, transparent);
+    font: 500 11px/16px var(--font-sans, Inter, sans-serif);
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  .canvas-card.strings :global(.part .stack-toggle:hover) {
+    color: var(--color-text);
+    border-color: color-mix(in oklab, var(--color-text) 40%, transparent);
+  }
+  .canvas-card.strings :global(.part .stack-toggle:focus-visible) {
+    outline: 2px solid var(--color-ring, var(--color-text));
+    outline-offset: 2px;
+  }
   .canvas-card.strings :global(.part .stack),
   .canvas-card.strings :global(.part .slot) {
     inset-inline-start: 0 !important;
   }
+  /* The individual previews slide into their reserved row, independent of the canvas camera. */
+  @media (prefers-reduced-motion: no-preference) {
+    .canvas-card.strings :global(.part.stack-page .stack),
+    .canvas-card.strings :global(.part.stack-page .label) {
+      animation: reveal-stack-page 260ms var(--ease-out, ease-out) both;
+    }
+  }
+
+  @keyframes reveal-stack-page {
+    from { opacity: 0; translate: -24px 0; }
+    to { opacity: 1; translate: 0 0; }
+  }
+
   /* A CSS glide would leave strings behind their cards: these runs move cards frame by frame. */
   .canvas-card.strings :global(.svelte-flow__node.board-block),
   .canvas-card.strings :global(.svelte-flow__node.settling) {
@@ -1933,5 +2303,29 @@
       min-inline-size: 0;
       max-inline-size: calc(100% - 24px);
     }
+  }
+  .design-switch {
+    position: absolute;
+    inset-block-start: 60px;
+    inset-inline-start: 16px;
+    z-index: 5;
+    padding: 5px 12px;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--color-surface) 92%, transparent);
+    box-shadow: inset 0 0 0 1px var(--color-border);
+    color: var(--color-muted);
+    font: 11.5px var(--font-sans, Inter, sans-serif);
+    cursor: pointer;
+  }
+
+  .design-switch[data-design="zephium"] {
+    color: var(--color-text);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--aegis-strand-green, #3fdc84) 60%, transparent);
+  }
+
+  .design-switch:focus-visible {
+    outline: 2px solid var(--color-text);
+    outline-offset: 1px;
   }
 </style>

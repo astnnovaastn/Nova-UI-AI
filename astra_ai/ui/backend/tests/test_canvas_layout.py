@@ -53,6 +53,9 @@ def test_routes_never_instantiate_research_or_provider(tmp_path):
         url=f'/api/work/runs/{id}/layout'
         assert client.get(url).json()['layout']['revision']==0
         assert client.put(url,json=payload()).status_code==200
+        assert client.get(url).json()['layout']['positions']==payload()['layout']['positions']
+        assert client.get('/api/work/layout-template').status_code==404
+        assert client.put('/api/work/layout-template',json={}).status_code==404
         assert events[0][1]=='canvas_layout'
         assert client.put(url,content='{broken').status_code==422
         assert client.put(url,json={**payload(),'undo':'yes'}).status_code==422

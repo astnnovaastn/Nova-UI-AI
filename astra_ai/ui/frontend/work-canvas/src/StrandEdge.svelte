@@ -1,95 +1,140 @@
 <!--
   One semantic string between two cards: the relations in it came from the run record (relations.ts).
-  A thin curve leaves a card's port through a small glowing junction and meets the other the same way.
+  A thin curve meets each card at a circular port.
   Parallel strands share their ends and part in the middle, so each stays visible. Status sets tone
   and dash, never the relation's type. Clicking a strand opens what it means and what made it.
 -->
 <script lang="ts" module>
   import type { StrandData } from "./relations";
-  type Side = "top" | "right" | "bottom" | "left";
-  const OUT: Record<Side, readonly [number, number]> = { top: [0, -1], right: [1, 0], bottom: [0, 1], left: [-1, 0] };
-
-  /** The curve for strand `index` of `of`: ends shared, middles spread apart by `gap`. */
-  export function strandPath(sx: number, sy: number, from: Side, tx: number, ty: number, to: Side, index: number, of: number, gap = 9) {
-    const [ax, ay] = OUT[from];
-    const [bx, by] = OUT[to];
-    const span = Math.hypot(tx - sx, ty - sy);
-    // Handles reach far enough to leave a card cleanly, even when the other card stands behind it.
-    const along = Math.max(48, Math.min(260, (Math.abs(tx - sx) + Math.abs(ty - sy) * 0.35) / 2));
-    const spread = (index - (of - 1) / 2) * gap * Math.min(1, span / 160);
-    // Perpendicular to the line between the ends.
-    const nx = span ? -(ty - sy) / span : 0;
-    const ny = span ? (tx - sx) / span : 0;
-    const c1 = [sx + ax * along + nx * spread * 1.6, sy + ay * along + ny * spread * 1.6];
-    const c2 = [tx + bx * along + nx * spread * 1.6, ty + by * along + ny * spread * 1.6];
-    return {
-      d: `M ${sx},${sy} C ${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${tx},${ty}`,
-      controls: [{ x: c1[0]!, y: c1[1]! }, { x: c2[0]!, y: c2[1]! }] as const,
-      // The curve's midpoint (t = 0.5 of the cubic), for the label.
-      mid: { x: (sx + 3 * c1[0]! + 3 * c2[0]! + tx) / 8, y: (sy + 3 * c1[1]! + 3 * c2[1]! + ty) / 8 },
-    };
-  }
-
-  /** A small meniscus where a string meets a card, opening along the port's direction. */
-  export function junction(x: number, y: number, side: Side, size = 7) {
-    const [dx, dy] = OUT[side];
-    const px = -dy;
-    const py = dx;
-    const w = size;
-    const h = size * 1.15;
-    const tipX = x + dx * h;
-    const tipY = y + dy * h;
-    return `M ${x + px * w},${y + py * w} Q ${x + dx * h * 0.25 + px * w * 0.18},${y + dy * h * 0.25 + py * w * 0.18} ${tipX},${tipY} Q ${x + dx * h * 0.25 - px * w * 0.18},${y + dy * h * 0.25 - py * w * 0.18} ${x - px * w},${y - py * w} Z`;
-  }
-
   export type StrandSelect = { id: string; source: string; target: string; strand: StrandData };
+
+  /**
+   * One colour per kind of card, so a string's two ends say what they join: the request and its
+   * searches, a source, each agent by role, the image and video collections, the report.
+   */
+  export const TONES = {
+    request: "#ef5a83",
+    source: "#3cb4ee",
+    discovery: "#4cc985",
+    analysis: "#9d82f2",
+    verification: "#e6aa3e",
+    synthesis: "#cf84ee",
+    lead: "#8c84f7",
+    images: "#f08a4e",
+    videos: "#ee5468",
+    report: "#40d29c",
+    map: "#5ea2f2",
+    card: "#98a2b3",
+  } as const;
+  export function toneOf(id: string, data: unknown): string {
+    const item = (data ?? {}) as { type?: string; branch?: { role?: string; agent?: string }; collection?: { kind?: string } };
+    if (item.type === "collection") return item.collection?.kind === "videos" ? TONES.videos : TONES.images;
+    if (item.type === "paper") return TONES.report;
+    if (item.type === "blueprint" || item.type === "mapgroup") return TONES.map;
+    if (item.type === "agentcard") {
+      const role = item.branch?.role ?? (item.branch?.agent === "lead" ? "lead" : "");
+      return (TONES as Record<string, string>)[role] ?? TONES.lead;
+    }
+    if (item.type === "part") return id.endsWith(":search") ? TONES.request : TONES.source;
+    if (item.type === "request" || item.type === "objective" || item.type === "trail") return TONES.request;
+    return TONES.card;
+  }
 </script>
 
 <script lang="ts">
   import { getContext, onMount } from "svelte";
-  import { useNodes, type EdgeProps } from "@xyflow/svelte";
-  import { curveHits, roundedPath, routeAround, type Rect } from "./route";
+  import { useEdges, useNodes, type EdgeProps } from "@xyflow/svelte";
+  import type { Rect } from "./route";
+  import { cachedResearchFan, cachedResearchStrand, dragStrand, indexRoutingNodes, researchRoutingScene, routeResearchFan, routeResearchStrand, type RoutingScene } from "./research-routing";
   import { canvasArrival } from "$features/work/lib/canvas-context";
   import { describeStrand, type StrandData as Data } from "./relations";
   import { construction } from "./construction.svelte";
 
-  let { id, source, target, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected }: EdgeProps = $props();
+  let { id, source, target, sourceX, sourceY, data, selected }: EdgeProps = $props();
   const strand = $derived(data?.strand as Data);
   const arrival = getContext<((id: string) => unknown) | undefined>(canvasArrival);
   const nodes = useNodes();
-  /** Every other card, where it stands now: a string goes around them, never through. */
-  const obstacles = $derived.by<Rect[]>(() => {
-    const list = nodes.current;
-    const byId = new Map(list.map((node) => [node.id, node]));
-    const absolute = (node: (typeof list)[number]): { x: number; y: number } => {
-      const parent = node.parentId ? byId.get(node.parentId) : undefined;
-      const base = parent ? absolute(parent) : { x: 0, y: 0 };
-      return { x: base.x + node.position.x, y: base.y + node.position.y };
-    };
-    const holders = new Set<string>();
-    for (const end of [source, target]) for (let at = byId.get(end); at?.parentId; at = byId.get(at.parentId)) holders.add(at.parentId);
-    return list.flatMap((node) => {
-      const kind = (node.data as { type?: string } | undefined)?.type;
-      if (node.id === source || node.id === target || holders.has(node.id) || node.hidden || node.type === "agent" || kind === "agent" || kind === "mapgroup" || node.type === "area") return [];
-      const width = node.measured?.width ?? node.width;
-      const height = node.measured?.height ?? node.height;
-      if (!width || !height) return [];
-      return [{ ...absolute(node), width, height }];
+  const edges = useEdges();
+  const sharedScene=getContext<(()=>RoutingScene)|undefined>(researchRoutingScene);
+  const scene=$derived(sharedScene?.()??indexRoutingNodes(nodes.current));
+  const fromRect=$derived(scene.bounds.get(source));
+  const toRect=$derived(scene.bounds.get(target));
+  const lane = $derived(strand.index - (strand.of - 1) / 2);
+  function portOffset(card: string, rect: Rect | undefined) {
+    if (!rect) return lane * 7;
+    const siblings = edges.current.filter(edge => {
+      const other = edge.data?.strand as Data | undefined;
+      return (edge.source === card || edge.target === card) &&
+        other && !other.summaryOnly && !other.detailOnly && !other.control;
+    }).map(edge => edge.id).sort();
+    const index = siblings.indexOf(id);
+    if (index < 0 || siblings.length < 2) return lane * 7;
+    const spacing = Math.min(10, Math.min(rect.width, rect.height) / (2 * (siblings.length - 1)));
+    return (index - (siblings.length - 1) / 2) * spacing;
+  }
+  const sourceOffset = $derived(portOffset(source, fromRect));
+  const targetOffset = $derived(portOffset(target, toRect));
+  const fan = $derived.by(() => {
+    const direction = strand.fan;
+    if (!direction || scene.moving.size || dormant) return null;
+    const hubId = direction === "out" ? source : target;
+    const hub = scene.cards.get(hubId);
+    if (!hub) return null;
+    const siblings = edges.current.filter(edge => {
+      const other = edge.data?.strand as Data | undefined;
+      return other?.fan === direction && (direction === "out" ? edge.source : edge.target) === hubId &&
+        !construction.pendingEdge(edge.id);
+    }).sort((a,b)=>a.id.localeCompare(b.id));
+    const members = siblings.flatMap(edge => {
+      const card = direction === "out" ? edge.target : edge.source;
+      const rect = scene.cards.get(card);
+      return rect ? [{ id: edge.id, rect, card }] : [];
+    });
+    // A link to a vertically stacked card should stay local, without breaking the fan to the right.
+    const aligned = members.filter(({rect}) => direction === "out"
+      ? rect.x - (hub.x + hub.width) >= 36
+      : hub.x - (rect.x + rect.width) >= 36);
+    const key = JSON.stringify([direction, hubId, aligned.map(member => member.id)]);
+    const route = cachedResearchFan(scene, key, () => {
+      const used = new Set([hubId, ...aligned.map(member => member.card)]);
+      const blockers = [...scene.cards].filter(([card]) => !used.has(card)).map(([, rect]) => rect);
+      return routeResearchFan(hub, aligned, blockers, direction);
+    });
+    const branch = route?.branches.get(id);
+    return branch ? { branch, trunk: route!.branches.keys().next().value === id ? route!.trunk : null } : null;
+  });
+  const focused = $derived(selected || scene.byId.get(source)?.selected || scene.byId.get(target)?.selected);
+  const dormant = $derived((!!strand.control || !!strand.detailOnly) && !focused);
+  type Path = NonNullable<ReturnType<typeof routeResearchStrand>>;
+  let settled: Path|null = null;
+  let trunk: string|null = null;
+  const geometry = $derived.by<Path|null>(() => {
+    if (!fromRect || !toRect || strand.summaryOnly || dormant) return null;
+    if (scene.moving.size) {
+      if (!scene.moving.has(source) && !scene.moving.has(target)) return settled;
+      // During the gesture keep attached lines responsive. Re-route around obstacles once on release.
+      return dragStrand(fromRect,toRect,settled?.from??"right",settled?.to??"left",sourceOffset,targetOffset);
+    }
+    const shared = fan;
+    trunk = shared?.trunk??null;
+    if (shared) return settled=shared.branch;
+    return settled=cachedResearchStrand(scene,JSON.stringify([source,target,sourceOffset,targetOffset]),()=>{
+      const holders=new Set<string>();
+      for(const end of [source,target])for(let parent=scene.byId.get(end)?.parentId;parent;parent=scene.byId.get(parent)?.parentId)holders.add(parent);
+      const obstacles=[...scene.cards].filter(([key])=>key!==source&&key!==target&&!holders.has(key)).map(([,bounds])=>bounds);
+      return routeResearchStrand(fromRect,toRect,obstacles,sourceOffset,targetOffset);
     });
   });
-  const geometry = $derived.by(() => {
-    const from = `${sourcePosition}` as Side;
-    const to = `${targetPosition}` as Side;
-    const curve = strandPath(sourceX, sourceY, from, targetX, targetY, to, strand.index, strand.of);
-    const s = { x: sourceX, y: sourceY };
-    const t = { x: targetX, y: targetY };
-    if (from !== "right" || to !== "left" || !curveHits(s, curve.controls[0], curve.controls[1], t, obstacles)) return curve;
-    const route = routeAround(s, t, obstacles, (strand.index - (strand.of - 1) / 2) * 5);
-    return route ? roundedPath(route) : curve;
-  });
-  const lit = $derived(strand.status === "active" || strand.status === "verified");
+  const visibleFan = $derived(!scene.moving.size ? fan : null);
+  const visibleTrunk=$derived(scene.moving.size
+    ? (scene.moving.has(source)||scene.moving.has(target)?null:trunk)
+    : visibleFan?.trunk);
+  const backwards = $derived(!!geometry && geometry.t.x < geometry.s.x && geometry.from !== "bottom");
+  const lit = $derived(strand.status === "active");
+  const markerHint = $derived(strand.summaryOnly ? " Summarizes the connected steps; inspect connection." : " No clear route; inspect connection.");
   const name = $derived(describeStrand(strand, source, target));
-  const label = $derived(strand.labelled || selected ? strand.label : "");
+  // Strings carry no words of their own; a selected one names itself.
+  const label = $derived(selected ? strand.label : "");
   const labelWidth = $derived(Math.max(34, label.length * 6.1 + 18));
   /** Hidden until the construction hand draws it; then drawn in along its length. */
   const pending = $derived(construction.pendingEdge(id));
@@ -99,9 +144,9 @@
   function draw() {
     if (!line || drawn) return;
     drawn = true;
-    if (construction.instant || !construction.animating(id)) return;
+    if (lit || construction.instant || !construction.animating(id)) return;
     line.animate([{ strokeDashoffset: "1" }, { strokeDashoffset: "0" }], {
-      duration: construction.drawMs(),
+      duration: construction.drawMsFor(line.getTotalLength?.() ?? 0),
       easing: "cubic-bezier(.45,.05,.25,1)",
     });
   }
@@ -118,14 +163,12 @@
   }
 </script>
 
-{#if !pending}
-  <g class="strand" data-status={strand.status} data-relations={strand.relations.map((row) => row.id).join(" ")} data-strand-index={strand.index} data-strand-of={strand.of} class:lit class:selected aria-hidden="true">
+{#if !pending && geometry}
+  <g class="strand" data-source={source} data-target={target} data-status={strand.status} data-relations={strand.relations.map((row) => row.id).join(" ")} data-strand-index={strand.index} data-strand-of={strand.of} class:lit class:selected class:back={backwards} class:dormant data-control={strand.control ? "" : undefined} aria-hidden="true">
+    {#if visibleTrunk}<path class="strand-line strand-trunk" d={visibleTrunk} fill="none" />{/if}
     <path bind:this={line} class="strand-line" d={geometry.d} pathLength="1" stroke-dasharray={construction.animating(id) ? "1" : undefined} fill="none" />
-    {#if strand.status === "active"}<path class="strand-flow" d={geometry.d} fill="none" />{/if}
-    <path class="junction" d={junction(sourceX, sourceY, `${sourcePosition}` as Side)} />
-    <path class="junction" d={junction(targetX, targetY, `${targetPosition}` as Side)} />
-    <circle class="glint" cx={sourceX} cy={sourceY} r="1.6" />
-    <circle class="glint" cx={targetX} cy={targetY} r="1.6" />
+    {#if !visibleFan || strand.fan !== "out" || visibleTrunk}<circle class="strand-port" cx={geometry.s.x} cy={geometry.s.y} r="3" />{/if}
+    {#if !visibleFan || strand.fan !== "in" || visibleTrunk}<circle class="strand-port" cx={geometry.t.x} cy={geometry.t.y} r="3" />{/if}
     {#if label}
       <g class="label" transform="translate({geometry.mid.x - labelWidth / 2}, {geometry.mid.y - 10})">
         <rect width={labelWidth} height="20" rx="10" />
@@ -136,6 +179,7 @@
   <!-- A wide, invisible path takes the pointer and the keyboard. -->
   <path
     class="strand-hit"
+    class:dormant
     d={geometry.d}
     fill="none"
     role="button"
@@ -144,84 +188,85 @@
     onclick={select}
     onkeydown={(event) => (event.key === "Enter" || event.key === " ") && select(event)}
   ><title>{name}</title></path>
+{:else if !pending && fromRect && toRect && !dormant && !scene.moving.size}
+  <circle class="strand-unrouted" cx={sourceX} cy={sourceY + lane * 10} r="5"
+    role="button" tabindex="0" aria-label={name + markerHint}
+    onclick={select} onkeydown={(event) => (event.key === "Enter" || event.key === " ") && select(event)}>
+    <title>{name}{markerHint}</title>
+  </circle>
 {/if}
 
 <style>
+  .strand-unrouted {
+    fill: var(--color-canvas);
+    stroke: var(--color-text);
+    stroke-dasharray: 2 2;
+    cursor: pointer;
+  }
+  .strand-unrouted:focus-visible { stroke: var(--aegis-strand-green, #3fdc84); }
+
   .strand {
-    --strand: color-mix(in oklab, var(--color-text) 30%, transparent);
-    --strand-glow: color-mix(in oklab, var(--color-text) 70%, transparent);
+    --strand: color-mix(in oklab, #9299a4 85%, var(--color-text));
     pointer-events: none;
   }
 
-  .strand[data-status="complete"] {
-    --strand: color-mix(in oklab, var(--color-text) 42%, transparent);
-    --strand-glow: color-mix(in oklab, var(--color-text) 85%, transparent);
-  }
-
   .strand.lit {
-    --strand: color-mix(in oklab, var(--aegis-strand-green, #3fdc84) 70%, transparent);
-    --strand-glow: var(--aegis-strand-green, #3fdc84);
+    --strand: color-mix(in oklab, #a7cdb9 80%, var(--color-text));
   }
 
   .strand[data-status="contested"] {
-    --strand: color-mix(in oklab, var(--aegis-status-waiting, #e2a336) 70%, transparent);
-    --strand-glow: var(--aegis-status-waiting, #e2a336);
+    --strand: color-mix(in oklab, var(--aegis-status-waiting, #e2a336) 52%, #9299a4);
   }
 
   .strand[data-status="failed"] {
-    --strand: color-mix(in oklab, var(--aegis-status-failed, #f0605a) 60%, transparent);
-    --strand-glow: var(--aegis-status-failed, #f0605a);
+    --strand: color-mix(in oklab, var(--aegis-status-failed, #f0605a) 52%, #9299a4);
   }
+
+  .strand.dormant { opacity: 0; }
+  .strand-hit.dormant { pointer-events: none; }
+  .strand.back:not(.selected) { opacity: 0.75; }
 
   .strand-line {
     stroke: var(--strand);
-    stroke-width: 1.25;
+    stroke-width: 1.6;
     stroke-linecap: round;
+    stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
-    transition: stroke 200ms ease;
+    opacity: 0.85;
+    transition: stroke 200ms ease, opacity 200ms ease;
   }
 
-  /* Non-colour cues: contested strands are dashed, failed strands dotted. */
-  .strand[data-status="contested"] .strand-line {
-    stroke-dasharray: 6 4;
+  .strand.lit .strand-line {
+    stroke-width: 1.8;
+    opacity: 1;
   }
 
-  .strand[data-status="failed"] .strand-line {
-    stroke-dasharray: 1.5 4;
+  .strand.lit .strand-line:not(.strand-trunk) {
+    animation: reveal-strand 650ms ease-out;
+  }
+
+  @keyframes reveal-strand {
+    from { stroke-dasharray: 1 1; stroke-dashoffset: 1; }
+    to { stroke-dasharray: 1 1; stroke-dashoffset: 0; }
+  }
+
+  .strand[data-status="contested"] .strand-line { stroke-dasharray: 6 4; }
+  .strand[data-status="failed"] .strand-line { stroke-dasharray: 1.5 4; }
+
+  .strand.selected {
+    --strand: color-mix(in oklab, #d5e2eb 72%, var(--color-text));
   }
 
   .strand.selected .strand-line {
     stroke-width: 2;
-    stroke: var(--strand-glow);
+    opacity: 1;
   }
 
-  /* Work moving along an active string: fine light travelling from its start. */
-  .strand-flow {
-    stroke: var(--strand-glow);
-    stroke-width: 1.25;
-    stroke-dasharray: 2 14;
-    stroke-linecap: round;
+  .strand-port {
+    fill: var(--strand);
+    stroke: var(--color-canvas, #0b0b0b);
+    stroke-width: 1;
     vector-effect: non-scaling-stroke;
-    animation: strand-flow 900ms linear infinite;
-    opacity: 0.9;
-  }
-
-  @keyframes strand-flow {
-    to {
-      stroke-dashoffset: -16;
-    }
-  }
-
-  /* The only glow: a small meniscus and a pin of light where the string meets the card. */
-  .junction {
-    fill: var(--strand-glow);
-    opacity: 0.55;
-    filter: blur(0.6px);
-  }
-
-  .glint {
-    fill: var(--strand-glow);
-    filter: drop-shadow(0 0 2px var(--strand-glow));
   }
 
   .label rect {
@@ -249,10 +294,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .strand-flow {
-      animation: none;
-      stroke-dasharray: none;
-      opacity: 0.35;
-    }
+    .strand.lit .strand-line:not(.strand-trunk) { animation: none; }
+    .strand-line { transition: none; }
   }
 </style>

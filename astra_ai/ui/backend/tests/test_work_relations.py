@@ -122,12 +122,12 @@ def test_a_lower_cap_routes_extra_roles_to_models_already_in_use(tmp_path):
     assert len(service.store.get(identifier).usage['distinct_models']) == 2
 
 
-def test_cap_values_above_four_are_still_four(tmp_path):
+def test_cap_values_above_six_are_still_six(tmp_path):
     adapter = FakeAdapter()
     service, artifacts, _ = build(tmp_path, adapter, env={**FOUR, 'AEGIS_WORK_MAX_MODELS': '7'})
     identifier = start(service, artifacts, 'Map a system', 'knowledge-map', storage='detailed')
     asyncio.run(service.run(identifier, CONTEXT))
-    assert len(service.store.get(identifier).usage['distinct_models']) <= 4
+    assert len(service.store.get(identifier).usage['distinct_models']) <= 6
 
 
 def test_a_fallback_that_would_exceed_the_cap_fails_honestly(tmp_path):
@@ -206,17 +206,18 @@ def test_deep_report_is_complete_sectioned_cited_and_lists_every_source(tmp_path
     assert len(re.findall(r'^- \*\*S\d+\*\*', bibliography, re.M)) == 12 == len(saved['sources'])
     assert '*cited*' in bibliography
     assert 'S99' not in report
-    # One model, several bounded calls: plan, three section batches, the frame.
+    # Several bounded calls: plan, worker stages, three section batches, the frame.
     sections = [call for call in adapter.calls if call['schema'] is REPORT_SECTIONS]
     assert [call['payload']['write_sections'] for call in sections] == [BODY[0:2], BODY[2:4], BODY[4:5]]
     assert all(call['max_tokens'] <= 9000 for call in sections)
-    assert len({call['model'] for call in adapter.calls}) == 1
+    assert 1 < len({call['model'] for call in adapter.calls}) <= 6
+    assert adapter.calls[-1]['slot'] == 'lead'
     quality = [row for row in events(artifacts, identifier, 'stage') if row['stage'] == 'quality'][-1]
     assert quality['sections_written'] == quality['sections_planned'] == 5 and quality['unresolved_citations'] == 0
     assert len(report.split()) > 2000
     cited = {row['source'] for row in run.relations if row['type'] == 'cites'}
     assert {'source:S1', 'source:S2', 'source:S3'} <= cited
-    assert all(row['source'] == 'agent:lead' for row in run.relations if row['type'] == 'searches')
+    assert all(row['source'] == 'agent:discovery' for row in run.relations if row['type'] == 'searches')
 
 
 def test_deep_writing_resumes_after_a_pause_without_rewriting_finished_sections(tmp_path):
@@ -286,3 +287,18 @@ def test_no_key_appears_in_relations_or_events(tmp_path):
     run = service.store.get(identifier)
     text = json.dumps(run.relations) + json.dumps(events(artifacts, identifier)) + json.dumps(service.store.public(run))
     assert SECRET not in text and 'g-key' not in text
+
+
+def test_a_run_records_a_part_per_model_with_when_it_worked(tmp_path):
+    """Zephium's layout puts work that overlapped in one column, so each part keeps its first start and last end."""
+    adapter = FakeAdapter()
+    service, artifacts, _ = build(tmp_path, adapter, env=FOUR)
+    identifier = start(service, artifacts, 'Map a system', 'knowledge-map', storage='detailed')
+    asyncio.run(service.run(identifier, CONTEXT))
+    parts = service.store.get(identifier).usage['parts']
+    assert {'lead', 'worker_a', 'worker_b', 'worker_c'} <= set(parts)
+    assert parts['worker_a']['title'] == 'Sources' and parts['lead']['title'] == 'AEGIS'
+    for row in parts.values():
+        assert 0 < row['began'] <= row['ended']
+        assert row['calls'] >= 1 or row['searches'] >= 1
+    assert sum(row['calls'] for row in parts.values()) == service.store.get(identifier).usage['calls']

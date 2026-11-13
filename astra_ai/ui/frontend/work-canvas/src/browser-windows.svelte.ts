@@ -7,6 +7,7 @@ export type BrowserWindowState = {
   /** The addresses this window itself opened; a framed site's own links can't be seen from here. */
   history: string[];
   index: number;
+  /** Title of the source that originally opened this window. */
   title: string;
   minimized: boolean;
   /** Raises the window: the highest stands in front. */
@@ -66,15 +67,19 @@ class BrowserWindows {
   navigate(id: number, url: string) {
     const entry = this.all.find((row) => row.id === id);
     if (!entry) return;
+    if (entry.history[entry.index] === url) {
+      this.reload(id);
+      return;
+    }
     const history = [...entry.history.slice(0, entry.index + 1), url];
-    this.#change(id, { history, index: history.length - 1, title: "" });
+    this.#change(id, { history, index: history.length - 1 });
   }
 
   step(id: number, by: -1 | 1) {
     const entry = this.all.find((row) => row.id === id);
     if (!entry) return;
     const index = entry.index + by;
-    if (index >= 0 && index < entry.history.length) this.#change(id, { index, title: "" });
+    if (index >= 0 && index < entry.history.length) this.#change(id, { index });
   }
 
   reload(id: number) {

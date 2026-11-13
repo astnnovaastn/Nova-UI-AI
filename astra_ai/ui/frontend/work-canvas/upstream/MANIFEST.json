@@ -8,6 +8,38 @@
  },
  "patches": [
   {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Mark individual expanded previews for the AEGIS stack animation."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Select the full editable address when focus moves into the toolbar."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Accept a web favicon and the AEGIS source-save state."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Type the optional web pane controls."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Use the generic icon after an image fails."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Use saved source favicons in the web host with no referrer."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Disable source saving during validation and duplicate requests."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Size the source favicon to match native tab icons."
+  },
+  {
    "file": "features/work/components/WorkCanvas.svelte",
    "why": "Expose real geometry to the provider-free AEGIS designer without synthesizing pointer events."
   },
@@ -498,6 +530,34 @@
   {
    "file": "features/work/components/WorkCanvas.svelte",
    "why": "A strand can be selected to inspect what it means."
+  },
+  {
+   "file": "features/work/lib/canvas-model.ts",
+   "why": "AEGIS groups a site's pages into a stack the person can open into one card per page. Presentation only: every page keeps its own id, URL and citations."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "A stack's caption carries the control that opens it into one card per page, and stacks it again."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "A stack opens into its own cards, which the layout makes room for, instead of fanning over its neighbours on hover."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "An AEGIS research run reads left to right from request to report: its first view holds the whole run, down to 29%, instead of cutting off the request at 50%."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "AEGIS V7: the pane's own Open Source is the primary action; leaving the workspace is offered only inside a pane that cannot show the page."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "AEGIS V7: no default Open in browser button in the pane header."
+  },
+  {
+   "file": "features/work/lib/canvas-model.ts",
+   "why": "AEGIS V7: a card AEGIS draws (its AI PLAN, Images and Videos sheets, agent cards) is drawn again when its own data changes, not only Zephium's fields, so a live run's plan card follows the run."
   }
  ],
  "files": [
@@ -1251,7 +1311,7 @@
   },
   {
    "path": "frame/src/features/work/components/run/PartRow.svelte",
-   "status": "unchanged"
+   "status": "adapted"
   },
   {
    "path": "frame/src/features/work/components/run/RunMark.svelte",

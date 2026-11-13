@@ -26,7 +26,7 @@
         <span class="state">{STATUS_WORDS[row.status]}</span>
         <p>{MEANING[row.type]}{row.note ? ": " + row.note : ""}</p>
         <p class="meta">
-          {row.source} → {row.target}{row.event_seq ? ` · recorded by event #${row.event_seq}` : ""}{row.at ? ` at ${when(row.at)}` : ""}
+          {row.source} → {row.target}{row.event_seq ? ` · recorded by event #${row.event_seq}` : row.detail?.derived ? ` · from the report's saved ${row.id.startsWith("vid") ? "video search" : "images"}` : ""}{row.at ? ` at ${when(row.at)}` : ""}
           {#if count(row.detail)}<br />{count(row.detail)}{/if}
         </p>
         {#if row.url}

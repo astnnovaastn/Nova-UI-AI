@@ -10,8 +10,9 @@ from typing import Any
 
 MODES = ('direct', 'quick', 'deep', 'structured')
 ROLES = ('discovery', 'analysis', 'verification')
-SLOTS = ('lead', 'worker_a', 'worker_b', 'worker_c')
-ROLE_SLOT = {'discovery': 'worker_a', 'analysis': 'worker_b', 'verification': 'worker_c', 'lead': 'lead'}
+#: worker_d is a second analyst that runs analysis branches in parallel; worker_e writes Deep Research sections.
+SLOTS = ('lead', 'worker_a', 'worker_b', 'worker_c', 'worker_d', 'worker_e')
+ROLE_SLOT = {'discovery': 'worker_a', 'analysis': 'worker_b', 'verification': 'worker_c', 'synthesis': 'worker_e', 'lead': 'lead'}
 
 
 def load(kind, data):

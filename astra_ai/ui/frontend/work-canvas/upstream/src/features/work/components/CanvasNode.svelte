@@ -44,6 +44,9 @@
   import AgentCard from "../../../../../src/AgentCard.svelte";
   import BlueprintCard from "../../../../../src/BlueprintCard.svelte";
   import MapGroupCard from "../../../../../src/MapGroupCard.svelte";
+  import CollectionCard from "../../../../../src/CollectionCard.svelte";
+  import PlanCard from "../../../../../src/PlanCard.svelte";
+  import StageCard from "../../../../../src/StageCard.svelte";
   import * as m from "$shared/i18n/messages";
   const open = getContext<(id: string) => void>(canvasOpen);
   const action = getContext<(id: string, action?: string) => void>(canvasAction);
@@ -104,7 +107,7 @@
 <NodeResizer
   onResizeStart={() => resize(true)}
   onResizeEnd={() => resize(false)}
-  isVisible={selected && !data.sizeLocked && ((!laid) || (data.designer && !["mapgroup","head","trail","input"].includes(type)))}
+  isVisible={selected && !data.sizeLocked && (!laid || (data.designer && !["mapgroup","head","trail","input"].includes(type)))}
   minWidth={160}
   minHeight={72}
   maxWidth={4096}
@@ -165,6 +168,9 @@
     {:else if type === "agentcard"}<AgentCard {id} item={data} {selected} />
     {:else if type === "blueprint"}<BlueprintCard {id} item={data} {selected} />
     {:else if type === "mapgroup"}<MapGroupCard item={data} />
+    {:else if type === "collection"}<CollectionCard {id} item={data} {selected} />
+    {:else if type === "plancard"}<PlanCard {id} item={data} {selected} />
+    {:else if type === "stagecard"}<StageCard {id} item={data} {selected} />
     {:else if type === "block" && data.block}<BlockHost {id} item={data} {selected} />
     {:else if type === "head"}<BoardHead {id} item={data} />
     {:else if type === "trail"}<Trail item={data} {selected} />

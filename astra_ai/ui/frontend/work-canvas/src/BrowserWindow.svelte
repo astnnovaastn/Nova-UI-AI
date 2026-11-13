@@ -21,11 +21,94 @@
 
   const actions = $derived(store.actions);
   const url = $derived(entry.history[entry.index] ?? "");
+  const loadGeneration = $derived(entry.load);
+  const sourceTitle = $derived(info?.title || (url === entry.history[0] ? entry.title : "") || reader?.title || "");
+  const validAddress = $derived(normalizeAddress(url, location.host));
+  const favicon = $derived(info?.favicon && normalizeAddress(info.favicon, location.host) || "");
   const STUCK_AFTER = 20000;
 
-  /** Checking the site's rules, showing the page, or a reason it can't be shown. */
-  let view = $state<"checking" | "frame" | "blocked">("checking");
+  /**
+   * Checking the site's rules; the live page; the Source Reader (text AEGIS retrieved, clearly not
+   * the live site); or a reason neither could be shown.
+   */
+  let view = $state<"checking" | "frame" | "blocked" | "reader">("checking");
+  const canOpenOriginal = $derived(Boolean(validAddress && view !== "checking" && (view !== "blocked" || framingDenied)));
+  function openOriginal() {
+    if (validAddress && canOpenOriginal) window.open(validAddress, "_blank", "noopener,noreferrer");
+  }
+
+  type ReaderPage = { status: string; title?: string; site?: string; html?: string; final_url?: string; retrieved_at?: number; via_proxy?: boolean; words?: number; reason?: string };
+  let reader = $state<ReaderPage | null>(null);
+  let readerLoading = $state(false);
+  let beforeReader = $state<"frame" | "blocked">("frame");
+  let readerRequest: AbortController | undefined;
+  let readerAddress = "";
+  let addressError = $state(false);
+  let adding = $state(false);
+
+  function showFrame() {
+    loaded = false;
+    stuck = false;
+    moved = false;
+    view = "frame";
+  }
+
+  async function openReader() {
+    if (view === "frame" || view === "blocked") beforeReader = view;
+    view = "reader";
+    const address = url;
+    if (readerAddress === address && reader?.status === "ok") return;
+
+    readerRequest?.abort();
+    const request = new AbortController();
+    readerRequest = request;
+    readerAddress = address;
+    readerLoading = true;
+    reader = null;
+    try {
+      const response = await fetch('/api/work/reader?' + new URLSearchParams({ url: address }), {
+        headers: actions?.imageHeaders() ?? {},
+        signal: request.signal,
+      });
+      if (!response.ok) throw new Error("Source Reader unavailable");
+      const page = (await response.json()) as ReaderPage;
+      if (!request.signal.aborted && url === address) reader = page;
+    } catch {
+      if (!request.signal.aborted && url === address) reader = { status: "unavailable", reason: "unreachable" };
+    } finally {
+      if (readerRequest === request && url === address) readerLoading = false;
+    }
+  }
+
+  async function addReference() {
+    if (!actions || adding || !validAddress) return;
+    adding = true;
+    try {
+      await actions.addWorkSource(info?.url ?? url, sourceTitle);
+    } finally {
+      adding = false;
+    }
+  }
+
+  /** The reader's page in a frame that can run nothing: no scripts, no forms, links leave in a new tab. */
+  const readerDoc = $derived(
+    reader?.status === "ok"
+      ? `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src https: data:"><base target="_blank"><style>body{margin:0;padding:22px 26px 40px;font:15px/1.65 system-ui,-apple-system,Segoe UI,sans-serif;color:#e8e8ea;background:#16171a}a{color:#9cc3ff}h1,h2,h3,h4{line-height:1.25;color:#fff}pre,code{white-space:pre-wrap;font-size:13px}table{border-collapse:collapse}td,th{border:1px solid #333;padding:4px 8px}blockquote{margin:0;padding-left:12px;border-left:2px solid #444;color:#bbb}</style></head><body>${reader.html ?? ""}</body></html>`
+      : "",
+  );
+  const READER_WHY: Record<string, string> = {
+    non_public_address: "AEGIS only opens public web addresses.",
+    invalid_address: "That is not a web address AEGIS can open.",
+    not_a_page: "This address is a file, not a page AEGIS can read.",
+    unresolvable: "The site's name could not be found.",
+    too_many_redirects: "The site redirected too many times.",
+    ConnectionError: "The site could not be reached.",
+    ReadTimeout: "The site took too long to answer.",
+    ConnectTimeout: "The site took too long to answer.",
+  };
+  const readerWhy = (reason = "") => READER_WHY[reason] ?? (reason.startsWith("http_") ? `The site answered with an error (${reason.slice(5)}).` : "The page could not be read.");
   let blockedReason = $state("");
+  const framingDenied = $derived(blockedReason === "frame_ancestors" || blockedReason === "x_frame_options");
   /** The site's rules couldn't be read in advance, so a refusal would only show inside the frame. */
   let unverified = $state(false);
   let loaded = $state(false);
@@ -36,8 +119,15 @@
 
   $effect(() => {
     const address = url;
-    void entry.load;
+    void loadGeneration;
+    const check = new AbortController();
     untrack(() => {
+      readerRequest?.abort();
+      readerRequest = undefined;
+      readerAddress = "";
+      reader = null;
+      readerLoading = false;
+      addressError = false;
       view = "checking";
       loaded = false;
       stuck = false;
@@ -50,21 +140,21 @@
       view = "blocked";
       return;
     }
-    let current = true;
-    void Promise.resolve(actions?.checkFrame(address))
+    void Promise.resolve(untrack(() => actions?.checkFrame(address, check.signal)))
       .catch(() => ({ embeddable: null, reason: "unchecked" }))
       .then((verdict) => {
-        if (!current) return;
+        if (check.signal.aborted || url !== address) return;
         if (verdict?.embeddable === false) {
           blockedReason = verdict.reason;
           view = "blocked";
           return;
         }
         unverified = verdict?.embeddable !== true;
-        view = "frame";
+        showFrame();
       });
     return () => {
-      current = false;
+      check.abort();
+      readerRequest?.abort();
     };
   });
 
@@ -79,24 +169,24 @@
       clearTimeout(timer);
       frame?.remove();
       const made = document.createElement("iframe");
-      // Scripts run in the site's own origin, which is never this app's (see browser-address).
-      // No top navigation, no downloads, and no camera, microphone or location.
-      made.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox");
+      // Keep an opaque origin even if a page redirects or links to an AEGIS address.
+      made.setAttribute("sandbox", "allow-scripts allow-forms");
       made.setAttribute("allow", "camera 'none'; microphone 'none'; geolocation 'none'; usb 'none'; payment 'none'; clipboard-read 'none'");
       made.setAttribute("referrerpolicy", "no-referrer");
       // Chromium: the page gets throwaway storage, without the person's cookies for that site.
       (made as HTMLIFrameElement & { credentialless?: boolean }).credentialless = true;
-      made.title = info?.title || "Source page";
+      made.title = sourceTitle || "Source page";
       let loads = 0;
       made.addEventListener("load", () => {
+        if (frame !== made) return;
         if (++loads > 1) moved = true;
         loaded = true;
         stuck = false;
         clearTimeout(timer);
       });
       made.src = next;
-      host.append(made);
       frame = made;
+      host.append(made);
       timer = window.setTimeout(() => {
         if (!loaded) stuck = true;
       }, STUCK_AFTER);
@@ -109,6 +199,7 @@
         clearTimeout(timer);
         window.removeEventListener("blur", raiseOnFocus);
         frame?.remove();
+        frame = null;
       },
     };
   }
@@ -116,14 +207,13 @@
   const tab = $derived({
     id: entry.id,
     url,
-    title: info?.title || entry.title || url,
+    title: sourceTitle || url,
     can_go_back: entry.index > 0,
     can_go_forward: entry.index < entry.history.length - 1,
-    loading: view === "checking" || (view === "frame" && !loaded && !stuck),
+    loading: view === "checking" || (view === "frame" && !loaded && !stuck) || (view === "reader" && readerLoading),
     icon: null,
     projection_revision: 0,
   });
-  const phase = $derived<"opening" | "shown">(view === "checking" ? "opening" : "shown");
   const retrieved = $derived(info?.retrieved_at ? new Date(info.retrieved_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "");
   const citations = $derived(info?.citations.reduce((sum, row) => sum + row.count, 0) ?? 0);
 </script>
@@ -133,8 +223,10 @@
   applied={null}
   {bounds}
   origin={null}
-  {phase}
+  phase="shown"
   {added}
+  addDisabled={adding || !validAddress || view === "checking" || (view === "blocked" && !framingDenied)}
+  {favicon}
   hidden={entry.minimized}
   order={entry.order}
   start={entry.cascade ? entry.cascade : 0}
@@ -143,27 +235,25 @@
   onmeasure={() => {}}
   onnavigate={(input: string) => {
     const next = normalizeAddress(input, location.host);
+    addressError = !next;
     if (next) browser.navigate(entry.id, next);
-    else {
-      blockedReason = "address";
-      view = "blocked";
-    }
   }}
   onback={() => browser.step(entry.id, -1)}
   onforward={() => browser.step(entry.id, 1)}
   onreload={() => browser.reload(entry.id)}
-  onopenbrowse={() => window.open(url, "_blank", "noopener,noreferrer")}
-  onadd={() => actions?.addWorkSource(url, info?.title || entry.title || "")}
+  onadd={addReference}
+  onopenbrowse={canOpenOriginal ? openOriginal : undefined}
   onclose={() => browser.close(entry.id)}
 >
   <div class="content">
+    {#if addressError}<p class="address-error" role="alert">{blockedWords("address")}</p>{/if}
     {#if info}
       <div class="about">
         <div class="about-line">
           <button type="button" class="about-title" aria-expanded={details} title={info.title} onclick={() => (details = !details)}>{info.title}</button>
           {#if retrieved}<span class="about-fact">Retrieved {retrieved}</span>{/if}
           {#if citations}<span class="about-fact">Cited {citations === 1 ? "once" : `${citations} times`}</span>{/if}
-          {#if info.evidence}<button type="button" class="about-action" onclick={() => actions?.openSource(url)}>View evidence</button>{/if}
+          {#if info.evidence}<button type="button" class="about-action" onclick={() => actions?.openSource(info?.url ?? url)}>View evidence</button>{/if}
         </div>
         {#if details}
           <div class="about-more">
@@ -174,22 +264,50 @@
         {/if}
       </div>
     {/if}
-    {#if view === "blocked"}
-      <div class="notice" role="status">
+    {#if view === "checking"}
+      <p class="waiting" role="status">Checking whether this site can open here…</p>
+    {:else if view === "reader"}
+      <div class="reader-bar" role="status" data-mode="source-reader">
+        <span class="badge">Source Reader</span>
+        <span class="why">
+          Readable text retrieved from the source.
+          {#if reader?.via_proxy} Fetched through your proxy.{/if}
+        </span>
+        <button type="button" onclick={() => beforeReader === "frame" ? showFrame() : (view = "blocked")}>
+          {beforeReader === "frame" ? "Live page" : "Back to source"}
+        </button>
+      </div>
+      {#if readerLoading}
+        <p class="waiting" role="status">Reading the page…</p>
+      {:else if reader?.status === "ok"}
+        <iframe class="reader-page" title={`Source Reader: ${reader.title ?? url}`} sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" srcdoc={readerDoc}></iframe>
+      {:else if reader}
+        <div class="notice" role="alert" data-mode="unavailable">
+          <p>This page can't be shown here. {readerWhy(reader.reason)}</p>
+          {#if info?.evidence}<button type="button" class="primary" onclick={() => actions?.openSource(info?.url ?? url)}>Read the saved copy</button>{/if}
+        </div>
+      {/if}
+    {:else if view === "blocked"}
+      <div class="notice" role="status" data-mode="unavailable">
         <p>{blockedWords(blockedReason)}</p>
-        {#if normalizeAddress(url, location.host)}<button type="button" class="primary" onclick={() => window.open(url, "_blank", "noopener,noreferrer")}>Open in browser</button>{/if}
-        {#if info?.evidence}<button type="button" onclick={() => actions?.openSource(url)}>Read the saved copy</button>{/if}
+        {#if framingDenied}
+          <div class="notice-actions">
+            <button type="button" class="primary" onclick={() => { unverified = true; showFrame(); }}>Try live page</button>
+            <button type="button" onclick={() => openReader()}>Source Reader</button>
+          </div>
+        {:else if info?.evidence}
+          <button type="button" class="primary" onclick={() => actions?.openSource(info?.url ?? url)}>Read the saved copy</button>
+        {/if}
       </div>
     {:else if view === "frame"}
-      {#key entry.load}<div class="frame" class:ready={loaded} use:pageFrame={url}></div>{/key}
+      {#key loadGeneration}<div class="frame" class:ready={loaded} use:pageFrame={url} data-mode="iframe-live"></div>{/key}
       {#if !loaded}<p class="waiting" role="status">{stuck ? "This page is taking a long time, or the site may not allow being shown here." : "Opening…"}</p>{/if}
-      {#if moved || stuck || (unverified && loaded)}
-        <p class="hint">
-          {#if moved}You followed a link on this page. The address above is where this window started.
-          {:else if stuck}<button type="button" onclick={() => window.open(url, "_blank", "noopener,noreferrer")}>Open in browser</button>
-          {:else}If this stays blank, the site may not allow being shown here. <button type="button" onclick={() => window.open(url, "_blank", "noopener,noreferrer")}>Open in browser</button>{/if}
-        </p>
-      {/if}
+      <p class="hint" class:quiet={!(moved || stuck || (unverified && loaded))}>
+        {#if moved}This site changed pages inside the frame. The toolbar and Add to Work use the address above.
+        {:else if framingDenied}This site may block the live page inside Research.
+        {:else if stuck || (unverified && loaded)}If this stays blank, the site may block embedding.{/if}
+        <button type="button" onclick={() => openReader()}>Source Reader</button>
+      </p>
     {/if}
   </div>
 </BrowserPane>
@@ -277,6 +395,13 @@
     font-weight: 600;
   }
 
+  .address-error {
+    margin: 0;
+    padding: 6px 12px;
+    color: var(--color-text);
+    border-block-end: 1px solid var(--color-border);
+  }
+
   .address-line {
     overflow-wrap: anywhere;
   }
@@ -318,6 +443,60 @@
     color: var(--color-muted);
   }
 
+  .hint {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .hint button {
+    margin-inline-start: auto;
+  }
+
+  .hint.quiet {
+    padding-block: 3px;
+  }
+
+  .reader-bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-block-end: 1px solid var(--color-border);
+    background: color-mix(in oklab, var(--aegis-status-waiting, #e2a336) 12%, var(--color-surface));
+    color: var(--color-text);
+  }
+
+  .reader-bar .badge {
+    flex: none;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--aegis-status-waiting, #e2a336) 35%, transparent);
+    font-weight: 600;
+  }
+
+  .reader-bar .why {
+    flex: 1;
+    min-inline-size: 0;
+    color: var(--color-muted);
+  }
+
+  .reader-bar button {
+    flex: none;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-text) 10%, transparent);
+  }
+
+  .reader-page {
+    flex: 1;
+    min-block-size: 0;
+    inline-size: 100%;
+    border: 0;
+    background: #16171a;
+  }
+
   .hint button {
     padding: 0;
     color: var(--color-text);
@@ -342,6 +521,13 @@
     max-inline-size: 42ch;
     margin: 0 0 4px;
     line-height: 1.5;
+  }
+
+  .notice-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
   }
 
   .notice button {

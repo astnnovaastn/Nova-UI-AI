@@ -3,6 +3,7 @@
   into the existing Reader, Edit, Sources and Media views, which it does not repeat.
 -->
 <script lang="ts">
+  import { getContext } from "svelte";
   import Icon from "$shared/ui/Icon";
   import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
   import { dressPaper, paperSites, type PaperData } from "./paper";

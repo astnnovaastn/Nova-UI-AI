@@ -37,6 +37,16 @@ export type ResearchImage = {
   placement_text?: string;
   content_hash?: string;
 };
+export type ResearchVideo = {
+  id?: string;
+  video_id?: string;
+  title?: string;
+  url: string;
+  channel?: string;
+  thumbnail?: string;
+  provider?: string;
+  published_at?: string;
+};
 export type ResearchReport = {
   research_id: string;
   research_revision?: string;
@@ -53,6 +63,11 @@ export type ResearchReport = {
   evidence_collection?: boolean;
   legacy_evidence?: boolean;
   image_items?: ResearchImage[];
+  /** Videos the backend's video search found, or the report itself links (see artifacts.media). */
+  media?: ResearchVideo[];
+  media_status?: string;
+  media_failures?: { reason?: string }[];
+  mode?: string;
   failures?: { reason?: string }[];
   extensions?: { blocks?: { id: string; text: string; section_id?: string; section_title?: string }[]; report?: string };
   extension_activity?: { phase?: string; reason?: string; collected_sources?: number };
@@ -65,7 +80,9 @@ const MAX_LANES = 6;
 
 /** What a source window can say about its page. */
 export type SourceInfo = {
+  url: string;
   title: string;
+  favicon?: string;
   excerpt: string;
   retrieved_at: string;
   citations: { section: string; count: number }[];
@@ -258,7 +275,56 @@ export function researchSteps(report: ResearchReport, state: RunState, sourceCou
   return lines;
 }
 
-export function buildScene(report: ResearchReport, reason = "", trace: readonly TraceEvent[] = [], waitWords: (reason: string) => string = () => ""): CanvasScene {
+/**
+ * What Zephium's own run layout needs from a Work run: one part per helper (each model at its purpose)
+ * with when it worked, so overlapping work stands in one column, and what the run drew on.
+ */
+export type ZephiumRun = {
+  plan?: { mode?: string; workflow?: string };
+  assignments?: { agent: string; role: string; task?: string; state?: string; model?: string }[];
+  results?: Record<string, { summary?: string; state?: string } | unknown>;
+  usage?: { parts?: Record<string, { title: string; helper: string; began: number; ended: number; calls: number; tokens: number; searches: number; model: string }> };
+  evidence?: unknown[];
+  state?: string;
+};
+
+const PART_ROLE: Record<string, string> = { worker_a: "discovery", worker_b: "analysis", worker_c: "verification", worker_d: "analysis", worker_e: "synthesis" };
+const PART_GOALS: Record<string, string> = {
+  worker_a: "Search and screen the sources",
+  worker_b: "Extract and compare the findings",
+  worker_c: "Check the claims against the sources",
+  worker_d: "Analyse the other half of the sources",
+  worker_e: "Write the report's sections",
+};
+
+/** The run's parts, oldest first, as Zephium records them. The lead is the run itself, not a part. */
+export function zephiumParts(run: ZephiumRun, live: boolean, sourceCount: number) {
+  const parts = Object.entries(run.usage?.parts ?? {}).filter(([slot]) => slot !== "lead");
+  const assigned = run.assignments ?? [];
+  // Assigned workers that have not called a model yet still stand, planned or running.
+  for (const row of assigned) if (!parts.some(([slot]) => slot === row.agent)) parts.push([row.agent, { title: row.role, helper: "research", began: 0, ended: 0, calls: 0, tokens: 0, searches: 0, model: row.model ?? "" }]);
+  parts.sort((a, b) => (a[1].began || Infinity) - (b[1].began || Infinity));
+  return parts.map(([slot, row]) => {
+    const assignment = assigned.find((entry) => entry.agent === slot);
+    const result = (run.results ?? {})[PART_ROLE[slot] ?? ""] as { summary?: string; state?: string } | undefined;
+    const settled = !live || (assignment?.state && ["done", "failed", "skipped"].includes(assignment.state));
+    const state = !row.began ? (live ? "planned" : assignment?.state === "failed" ? "failed" : "done") : assignment?.state === "failed" || result?.state === "failed" ? "failed" : settled ? "done" : "running";
+    const summary =
+      slot === "worker_a" ? `${sourceCount} ${sourceCount === 1 ? "source" : "sources"}` : row.calls ? `${row.calls} ${row.calls === 1 ? "call" : "calls"} · ${row.model.split(":").pop()}` : "";
+    return {
+      id: `part-${slot}`,
+      title: row.title.charAt(0).toUpperCase() + row.title.slice(1),
+      helper: "research" as const,
+      goal: assignment?.task || PART_GOALS[slot] || row.title,
+      state,
+      ...(row.began ? { started_ms: String(Math.round(row.began * 1000)) } : {}),
+      ...(row.ended && state !== "running" ? { ended_ms: String(Math.round(row.ended * 1000)) } : {}),
+      ...(summary ? { summary } : {}),
+    };
+  });
+}
+
+export function buildScene(report: ResearchReport, reason = "", trace: readonly TraceEvent[] = [], waitWords: (reason: string) => string = () => "", zephium: ZephiumRun | null = null): CanvasScene {
   const name = report.research_id;
   const state = runState(report);
   // Sources the report holds, or while it is being written, those the backend has reported finding.
@@ -311,6 +377,7 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
       id: `${runId}-search-${index}`,
       turn: 1,
       kind: { kind: "search", query: search.query },
+      ...(zephium ? { part: "part-worker_a" } : {}),
       status: search.status === "running" && live ? "running" : search.status === "failed" ? "failed" : "succeeded",
       ...(sources.length && index === 0 ? { artifacts: [`${runId}-sources`], evidence: `${runId}-search` } : {}),
       ...(search.reason ? { note: search.reason.replace(/_/g, " ") } : report.failures?.length && index === 0 ? { note: report.failures.map((f) => String(f.reason ?? "").replace(/_/g, " ")).join(" · ") } : {}),
@@ -332,6 +399,7 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
       id: step,
       turn: 2,
       kind: { kind: "read", url: source.url },
+      ...(zephium ? { part: "part-worker_a" } : {}),
       status: tracedByUrl.get(source.url)?.state === "failed" ? "failed" : tracedByUrl.get(source.url)?.state === "reading" && live ? "running" : "succeeded",
       ...(tracedByUrl.get(source.url)?.state === "failed" ? { note: "This page couldn't be opened" } : {}),
       local: { page_title: source.title },
@@ -364,6 +432,16 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
     } as unknown as WorkStepFact);
 
   const runs = [execution(runId, report.query, statusOf(state), steps, artifacts, citations, live)];
+  if (zephium) {
+    // Zephium's own structure: the run's parts in rows by time, and what it drew on left of the request.
+    const first = runs[0] as unknown as { parts: unknown[]; inputs: unknown[] };
+    first.parts = zephiumParts(zephium, live, sources.length);
+    const flow = zephium.plan?.workflow || (zephium.plan?.mode === "deep" ? "Deep Research" : zephium.plan?.mode === "quick" ? "Quick Research" : "Research");
+    first.inputs = [
+      { kind: "skill", label: flow, reference: (zephium.plan?.mode ?? "research").toLowerCase() },
+      ...(Object.keys(zephium.usage?.parts ?? {}).length ? [{ kind: "connection", label: `${new Set(Object.values(zephium.usage?.parts ?? {}).map((row) => row.model).filter(Boolean)).size} AI models` }] : []),
+    ];
+  }
 
   const allSources = [...(report.sources ?? []), ...(report.linked_sources ?? []), ...(report.image_sources ?? [])];
   const papers: PaperData[] = [];
@@ -474,7 +552,9 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
   for (const source of [...sources, ...allSources]) {
     if (sourceInfo.has(source.url)) continue;
     sourceInfo.set(source.url, {
+      url: source.url,
       title: source.title,
+      favicon: source.favicon,
       excerpt: plainExcerpt(source.content, 420),
       retrieved_at: source.retrieved_at ?? "",
       citations: citationSections(reportText, saved.includes(source) || allSources.includes(source) ? source.id : undefined),

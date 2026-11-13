@@ -180,6 +180,8 @@ export type PartView = {
   cited?: readonly { key: string; url: string; where: string; title: string; opened?: boolean }[];
   /** The rows are one web search's results, not the sites research cited. */
   search?: boolean;
+  /** AEGIS: this card is a stack of `count` pages (`open`: shown as one card per page). */
+  stack?: { id: string; count: number; open: boolean; index?: number };
   /** Every result is on one site: its mark says so, so no row repeats its name. */
   oneSite?: boolean;
   /** What the run searched for, and how many searches the row stands for. */
@@ -544,7 +546,8 @@ export function reconcileNodes(
         JSON.stringify(node.data.facts) === JSON.stringify(item.facts) &&
         JSON.stringify(node.data.block) === JSON.stringify(item.block) &&
         JSON.stringify(node.data.trail) === JSON.stringify(item.trail) &&
-        JSON.stringify(node.data.size) === JSON.stringify(item.size);
+        JSON.stringify(node.data.size) === JSON.stringify(item.size) &&
+        ["plan", "collection", "branch", "stages"].every((key) => JSON.stringify((node.data as Record<string, unknown>)[key]) === JSON.stringify((item as Record<string, unknown>)[key]));
       // The agent follows its work; a card follows its lane when the lane moves it.
       const target = positions[item.id];
       const followed =

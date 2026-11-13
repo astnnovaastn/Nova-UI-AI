@@ -63,6 +63,8 @@ alebot*.log
 gitkey.pub
 acli.exe
 astra_ai/Date/backups/
+# Read-only reference clone of the upstream Zephium repository
+astra_ai/ui/zephium-source/
 
 # OS-specific
 .DS_Store
@@ -243,5 +245,6 @@ astra_ai/memory/research_artifacts/
 # Managed private application state, including media, backups and device credentials.
 /state/
 
-# Local checkout used to refresh the vendored Work canvas
-astra_ai/ui/zephium-source/
+# Research canvas: build tools and generated message files (the built bundle in public/work-canvas is kept)
+astra_ai/ui/frontend/work-canvas/node_modules/
+astra_ai/ui/frontend/work-canvas/upstream/src/shared/i18n/

@@ -257,9 +257,23 @@ class ResearchSearch:
             # Requests exceptions may contain URLs and private keys. Keep type only.
             return [], {'provider':provider,'reason':type(error).__name__,'retryable':True}
 
+    # Video discovery: YouTube search on SerpAPI first. When it is not configured, out of quota or
+    # unavailable, the same query goes to a web index restricted to youtube.com (Tavily, then Exa).
+    # Every video kept is a real watch URL the provider returned; nothing is guessed or invented.
     def _video_request(self, query, exclude=()):
+        rows,error=self._serpapi_videos(query,exclude)
+        if rows:return rows,error
+        first=error
+        for provider in ('tavily','exa'):
+            rows,error=self._indexed_videos(provider,query,exclude)
+            if rows:return rows,None
+            if error and error['reason']=='no_relevant_videos_returned':first=error
+        return [],first
+
+    def _serpapi_videos(self, query, exclude=()):
         from .research_topics import search_key
-        key=search_key(self.key_provider,'quick')
+        from astra_ai.core.work.connections import allowed
+        key=search_key(self.key_provider,'quick') if allowed('serpapi') else ''
         if not key:return [],{'reason':'video_provider_not_configured'}
         try:
             response=self.transport.get('https://serpapi.com/search.json',params={'api_key':key,'engine':'youtube','search_query':query},timeout=20)
@@ -273,7 +287,31 @@ class ResearchSearch:
                 # Only actual video results, never channels/playlists or synthetic URLs.
                 seen.add(video)
                 thumb=row.get('thumbnail',{});thumb=thumb.get('static','') if isinstance(thumb,dict) else thumb
-                videos.append({'id':'V'+video,'video_id':video,'title':safe(str(row.get('title','Video'))),'url':'https://www.youtube.com/watch?v='+video,'channel':safe(str((row.get('channel') or {}).get('name',''))),'thumbnail':thumb if str(thumb).startswith('https://') else '', 'published_at':safe(str(row.get('published_date',''))),'retrieved_at':now(),'content':safe(str(row.get('description',''))),'discovery_only':True})
+                videos.append({'id':'V'+video,'video_id':video,'title':safe(str(row.get('title','Video'))),'url':'https://www.youtube.com/watch?v='+video,'channel':safe(str((row.get('channel') or {}).get('name',''))),'thumbnail':thumb if str(thumb).startswith('https://') else '', 'published_at':safe(str(row.get('published_date',''))),'retrieved_at':now(),'content':safe(str(row.get('description',''))),'discovery_only':True,'provider':'serpapi'})
+                if len(videos)==5:break
+            return videos,None if videos else {'reason':'no_relevant_videos_returned'}
+        except Exception as error:return [],{'reason':'video_'+type(error).__name__}
+
+    def _indexed_videos(self, provider, query, exclude=()):
+        """YouTube watch pages from a web index, searched only within youtube.com."""
+        from astra_ai.core.work.connections import allowed
+        key=(self.key_provider('TAVILY_API_KEY') if provider=='tavily' else self.key_provider('EXA_API_KEY')) if allowed(provider) else ''
+        if not key:return [],None
+        try:
+            if provider=='tavily':
+                response=self.transport.post('https://api.tavily.com/search',headers={'Authorization':'Bearer '+key},json={'query':query,'include_domains':['youtube.com'],'max_results':10,'search_depth':'basic','include_answer':False,'auto_parameters':False},timeout=25)
+            else:
+                response=self.transport.post('https://api.exa.ai/search',headers={'x-api-key':key},json={'query':query,'includeDomains':['youtube.com'],'numResults':10},timeout=25)
+            if response.status_code!=200:return [],{'reason':'video_provider_quota' if response.status_code in {402,429,432,433} else 'video_provider_unavailable'}
+            videos=[];seen=set(exclude)
+            for row in (response.json().get('results') or [])[:20]:
+                url=str(row.get('url',''))
+                video=ResearchArtifacts.video_id(url)
+                # Watch pages only: a channel, playlist or search page has no single video.
+                if not video or video in seen or '/watch' not in url and 'youtu.be/' not in url and '/shorts/' not in url:continue
+                seen.add(video)
+                title=re.sub(r'\s*-\s*YouTube\s*$','',safe(str(row.get('title') or 'Video')))
+                videos.append({'id':'V'+video,'video_id':video,'title':title,'url':'https://www.youtube.com/watch?v='+video,'channel':safe(str(row.get('author') or '')),'thumbnail':'https://i.ytimg.com/vi/'+video+'/hqdefault.jpg','published_at':safe(str(row.get('publishedDate') or row.get('published_date') or '')),'retrieved_at':now(),'content':safe(str(row.get('content') or row.get('text') or ''))[:600],'discovery_only':True,'provider':provider})
                 if len(videos)==5:break
             return videos,None if videos else {'reason':'no_relevant_videos_returned'}
         except Exception as error:return [],{'reason':'video_'+type(error).__name__}

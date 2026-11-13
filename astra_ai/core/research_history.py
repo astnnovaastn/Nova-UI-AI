@@ -34,8 +34,9 @@ def update(store,identifier,context,title=None,archived=None):
 
 def listing(store,context,offset=0,limit=30,archived=False):
     with store.lock:
-        first=store.listing(context,0,50);rows=list(first['items'])
-        for cursor in range(50,first['total'],50):rows.extend(store.listing(context,cursor,50)['items'])
         preferences=store.read({}).get('history_metadata',{}) if store.repository else read(metadata_path(store),{})
-        rows=[{**row,'history_title':preferences.get(row['research_id'],{}).get('title') or title_for(row.get('display_title') or row.get('query')),'archived':archived} for row in rows if bool(preferences.get(row['research_id'],{}).get('archived'))==archived]
-        return {**first,'total':len(rows),'items':rows[max(0,offset):max(0,offset)+max(1,min(50,limit))]}
+        page=store.listing(context,offset,limit,include=lambda identifier: bool(preferences.get(identifier,{}).get('archived'))==archived)
+        return {**page,'items':[
+            {**row,'history_title':preferences.get(row['research_id'],{}).get('title') or title_for(row.get('display_title') or row.get('query')),'archived':archived}
+            for row in page['items']
+        ]}

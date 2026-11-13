@@ -3,6 +3,8 @@
   import { pointerTool as currentTool, setPointerTool } from "../lib/pointer-tool.svelte";
   const pointerTool = $derived(currentTool());
   import { SvelteFlow, Background, type Edge, type useSvelteFlow } from "@xyflow/svelte";
+  import { RESEARCH_GRID_STEP } from "../../../../../src/layout-policy";
+  import { indexRoutingNodes, researchRoutingScene, type RoutingScene } from "../../../../../src/research-routing";
   import { NodeToolbar, Position, SelectionMode } from "@xyflow/svelte";
   import { untrack, setContext, tick } from "svelte";
   import { fade } from "svelte/transition";
@@ -210,6 +212,9 @@
   let resizing = $state(false);
   setContext(canvasResize, (active: boolean) => { if(active)onmanual?.('resize'); resizing = active; });
   let nodes = $state.raw<WorkNode[]>([]);
+  let previousRouting:RoutingScene|undefined;
+  const routingScene = $derived.by(()=>previousRouting=indexRoutingNodes(nodes,previousRouting));
+  setContext(researchRoutingScene,()=>routingScene);
   let canvasWidth = $state(0);
   let canvasHeight = $state(0);
   let host = $state<HTMLDivElement>();
@@ -254,7 +259,7 @@
    */
   function framing(rect: { x: number; y: number; width: number }) {
     const room = Math.max(1, canvasWidth - AIR * 2);
-    const zoom = Math.max(0.5, Math.min(1, room / Math.max(1, rect.width)));
+    const zoom = Math.max(0.29, Math.min(1, room / Math.max(1, rect.width)));
     const over = Math.max(0, rect.width * zoom - room);
     return { x: AIR - rect.x * zoom - over, y: fitTopInset + 40 - rect.y * zoom, zoom };
   }
@@ -1063,7 +1068,7 @@
       }}
     >
       <CanvasFlowHandle onready={(handle) => (flow = handle)} />
-      <Background patternColor="var(--work-canvas-dot)" gap={20} size={1.5} />
+      <Background patternColor="var(--work-canvas-dot)" gap={RESEARCH_GRID_STEP} size={1.5} />
       <CanvasControls bottomInset={fitBottomInset} onfit={() => (following = true)} />
       <NodeToolbar
         nodeId={selectedItems}

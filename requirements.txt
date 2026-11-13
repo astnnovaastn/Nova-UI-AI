@@ -51,4 +51,5 @@ PyQt6-Qt6>=6.4.0
 PyQt6-sip>=13.4.0
 
 # Text-to-speech fallback (offline)
-pyttsx3>=2.90 
+pyttsx3>=2.90
+PySocks==1.7.1  # SOCKS5 proxy support for the research source reader

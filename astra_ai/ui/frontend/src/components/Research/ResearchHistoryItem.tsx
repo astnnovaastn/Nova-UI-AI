@@ -8,8 +8,40 @@ export function historyActivity(item:any){
  const pending=!waiting && !['failed','complete','completed','draft','cancelled'].includes(phase) && (['queued','collecting_sources','comparing_evidence','preparing_report','running'].includes(phase)||item.completeness==='pending');
  return {pending,waiting,stateLabel:waiting?'Waiting to continue':pending?'Research in progress':''};
 }
-export function ResearchHistoryItem({item,meta,active,selecting,checked,disabled,onPick,onWarm,onToggle,onUpdate,onDelete}:any) {
- const title=item.history_title || String(item.display_title || item.query || 'Research findings').split(/\s+/).slice(0,7).join(' ');
+function TimelineTitle({title}:{title:string}) {
+ const label=useRef<HTMLSpanElement>(null);
+ const [preview,setPreview]=useState(title);
+ useEffect(()=>{
+   const node=label.current;
+   const context=document.createElement('canvas').getContext('2d');
+   if(!node||!context)return;
+   const words=title.trim().split(/\s+/);
+   const fit=()=>{
+     const style=getComputedStyle(node);
+     context.font=[style.fontStyle,style.fontWeight,style.fontSize,style.fontFamily].join(' ');
+     const width=node.clientWidth;
+     if(!width)return;
+     if(context.measureText(title).width<=width){setPreview(title);return;}
+     let low=0,high=words.length-1;
+     while(low<high){
+       const mid=Math.ceil((low+high)/2);
+       if(context.measureText(words.slice(0,mid).join(' ')+'…').width<=width)low=mid;
+       else high=mid-1;
+     }
+     // A single oversized word uses the browser's normal ellipsis fallback.
+     setPreview(low?words.slice(0,low).join(' ')+'…':words[0]+'…');
+   };
+   fit();
+   const observer=new ResizeObserver(fit);
+   observer.observe(node);
+   document.fonts.addEventListener('loadingdone',fit);
+   return ()=>{observer.disconnect();document.fonts.removeEventListener('loadingdone',fit);};
+ },[title]);
+ return <span className="rh-title" ref={label}>{preview}</span>;
+}
+export function ResearchHistoryItem({item,meta,active,selecting,checked,disabled,onPick,onWarm,onToggle,onUpdate,onDelete,timeline=false}:any) {
+ const fullTitle=String(item.history_title || item.display_title || item.query || 'Research findings');
+ const title=timeline || item.history_title ? fullTitle : fullTitle.split(/\s+/).slice(0,7).join(' ');
  const row=useRef<HTMLDivElement>(null), menu=useRef<HTMLDivElement>(null), trigger=useRef<HTMLButtonElement>(null);
  const [position,setPosition]=useState<{top:number;left:number}|null>(null),[editing,setEditing]=useState(false),[draft,setDraft]=useState(title),[busy,setBusy]=useState(false),[error,setError]=useState('');
  useEffect(()=>{if(!position)return;const close=(e:Event)=>{if(!menu.current?.contains(e.target as Node)&&!trigger.current?.contains(e.target as Node))setPosition(null);};const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){setPosition(null);trigger.current?.focus();}};document.addEventListener('pointerdown',close);document.addEventListener('keydown',key);window.addEventListener('resize',close);return()=>{document.removeEventListener('pointerdown',close);document.removeEventListener('keydown',key);window.removeEventListener('resize',close);};},[position]);
@@ -29,8 +61,8 @@ export function ResearchHistoryItem({item,meta,active,selecting,checked,disabled
  return <div className="rh-item" ref={row} data-open={!!position || undefined}>
   {editing ? <form className="rh-rename" onSubmit={e=>{e.preventDefault();void update({title:draft});}}><input autoFocus aria-label="Research title" maxLength={80} value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setEditing(false);}}/><div><button disabled={busy||!draft.trim()} type="submit">{busy?'Saving…':'Save'}</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>Cancel</button></div></form> : <>
   {selecting&&<label className="rh-check-control"><input className="rh-check" aria-label={'Select '+title} type="checkbox" checked={checked} disabled={disabled} onChange={onToggle}/><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3.5 8 3 3 6-6"/></svg></label>}
-  <button className="rh-row" data-selecting={selecting||undefined} aria-current={active?'true':undefined} aria-pressed={selecting?checked:undefined} title={title} disabled={disabled} onPointerEnter={warm} onFocus={warm} onClick={selecting?onToggle:onPick}><span className="rh-title"><span>{title}</span></span>{meta&&<small className="rh-meta">{meta}</small>}</button>
-  {!selecting&&<button className="rh-dots" ref={trigger} aria-label={'Options for '+title} aria-haspopup="menu" aria-expanded={!!position} disabled={disabled||busy} onClick={()=>{if(position){setPosition(null);return;}const rect=trigger.current!.getBoundingClientRect();setPosition({top:Math.min(rect.bottom+5,window.innerHeight-160),left:Math.min(rect.left,window.innerWidth-190)});}}><Glyph name="more"/></button>}
+  <button className="rh-row" data-selecting={selecting||undefined} aria-current={active?'true':undefined} aria-pressed={selecting?checked:undefined} title={title} aria-label={timeline ? [title,meta].filter(Boolean).join(" · ") : undefined} disabled={disabled} onPointerEnter={warm} onFocus={warm} onClick={selecting?onToggle:onPick}>{timeline?<TimelineTitle title={title}/>:<span className="rh-title"><span>{title}</span></span>}{meta&&<small className="rh-meta">{meta}</small>}</button>
+  {!selecting&&<button className="rh-dots" ref={trigger} aria-label={'Options for '+title} aria-haspopup="menu" aria-expanded={!!position} disabled={disabled||busy} onClick={()=>{if(position){setPosition(null);return;}const rect=trigger.current!.getBoundingClientRect();setPosition({top:Math.min(rect.bottom+5,window.innerHeight-160),left:Math.max(8,Math.min(timeline?rect.right-178:rect.left,window.innerWidth-190))});}}><Glyph name="more"/></button>}
   </>}
   {error&&<p className="rh-error" role="alert">{error}</p>}
   {position&&createPortal(<div className="rh-menu" role="menu" aria-label={'Actions for '+title} ref={menu} style={position} onKeyDown={e=>{const buttons=Array.from(menu.current?.querySelectorAll<HTMLButtonElement>('button')||[]);const index=buttons.indexOf(document.activeElement as HTMLButtonElement);if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();buttons[(index+(e.key==='ArrowDown'?1:buttons.length-1))%buttons.length]?.focus();}}}>

@@ -123,3 +123,6 @@ class CanvasLayouts:
             row['canvas_layout_operations']=(receipts+[dict(id=operation,digest=digest)])[-100:]
             self.artifacts.write(data)
             return copy.deepcopy(record)
+
+TEMPLATE_KINDS = {'request','plan','search','source','pipeline','discovery','analysis','verification','agent','images','videos','results','report','steps','map','group','other'}
+TEMPLATE_PORTS = {'left','right','top','bottom'}

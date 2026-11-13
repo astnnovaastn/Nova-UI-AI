@@ -1,6 +1,5 @@
 /**
- * The Research Library beside the canvas: every saved entry, searchable, by recency, active or
- * archived. Rows reuse ResearchHistoryItem and its real rename, archive and delete actions.
+ * The Research Library beside the canvas: every saved entry, searchable, by recency. Rows reuse ResearchHistoryItem and its real rename, archive and delete actions.
  * The backend has no search route, so the whole list is loaded and searched here.
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -26,21 +25,48 @@ export type LibraryRow = {
   archived?: boolean;
 };
 
+export type LibraryPage = { items: LibraryRow[]; removed?: any[]; total: number };
+
 const whenOf = (row: LibraryRow) => {
   const time = Date.parse(row.retrieved_at || "");
   return Number.isNaN(time) ? 0 : time;
 };
 
-export function libraryGroup(time: number, now: number): string {
-  if (!time) return "Older";
-  const day = new Date(now);
-  day.setHours(0, 0, 0, 0);
-  const start = day.getTime();
-  if (time >= start) return "Today";
-  if (time >= start - 86400000) return "Yesterday";
-  if (time >= start - 6 * 86400000) return "This week";
-  if (time >= start - 29 * 86400000) return "This month";
-  return "Older";
+const timelineScales = ["Day", "Week", "Month"] as const;
+type TimelineScale = typeof timelineScales[number];
+const shortDate = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const fullDate = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
+const monthDate = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
+
+function startOfWeek(date: Date) {
+  const monday = new Date(date);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - (monday.getDay() + 6) % 7);
+  return monday;
+}
+
+export function libraryGroup(time: number, now: number, scale: TimelineScale = "Day"): string {
+  if (!time) return "Undated";
+  const date = new Date(time);
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  if (scale === "Month") {
+    return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear()
+      ? "This month" : monthDate.format(date);
+  }
+  if (scale === "Week") {
+    const monday = startOfWeek(date);
+    if (+monday === +startOfWeek(today)) return "This week";
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return shortDate.format(monday) + " – " + fullDate.format(sunday);
+  }
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (+date === +today) return "Today";
+  if (+date === +yesterday) return "Yesterday";
+  return fullDate.format(date);
 }
 
 export function libraryMatches(row: LibraryRow, search: string): boolean {
@@ -70,6 +96,8 @@ export function libraryMeta(row: LibraryRow): string {
 export function ResearchLibrary({
   api,
   activeId,
+  visible,
+  firstPage,
   revision,
   deleting,
   selecting,
@@ -81,10 +109,11 @@ export function ResearchLibrary({
   onWarm,
   onDelete,
   onClose,
-  children,
 }: {
   api: (path: string, init?: RequestInit) => Promise<any>;
   activeId: string;
+  visible: boolean;
+  firstPage?: LibraryPage;
   /** Goes up whenever the saved list may have changed. */
   revision: number;
   deleting: string;
@@ -97,42 +126,59 @@ export function ResearchLibrary({
   onWarm: (id: string) => void;
   onDelete: (row: LibraryRow) => void;
   onClose: () => void;
-  children?: React.ReactNode;
 }) {
-  const [archived, setArchived] = useState(false);
-  const [rows, setRows] = useState<LibraryRow[]>([]);
-  const [removed, setRemoved] = useState<any[]>([]);
+  const [loadedRows, setRows] = useState<LibraryRow[]>();
+  const [loadedRemoved, setRemoved] = useState<any[]>();
+  const rows = loadedRows ?? firstPage?.items ?? [];
+  const removed = loadedRemoved ?? firstPage?.removed ?? [];
+  const [scale, setScale] = useState<TimelineScale>("Day");
+  const listRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
   const [shown, setShown] = useState(SHOWN);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [again, setAgain] = useState(0);
-  const latest = useRef(0);
+  const completed = useRef<{ revision: number; again: number } | undefined>(undefined);
+  const usedPage = useRef<LibraryPage | undefined>(undefined);
+  const lastAttempt = useRef(0);
 
   useEffect(() => {
-    const ask = ++latest.current;
+    if (!visible || (completed.current?.revision === revision && completed.current.again === again)) return;
+    const controller = new AbortController();
+    const seed = lastAttempt.current === again && usedPage.current !== firstPage ? firstPage : undefined;
+    usedPage.current = firstPage;
+    lastAttempt.current = again;
     setLoading(true);
+    setError("");
     (async () => {
-      const all: LibraryRow[] = [];
-      let total = 0;
-      let last: any = null;
-      do {
-        last = await api("?offset=" + all.length + "&limit=" + PAGE + "&archived=" + archived);
-        total = last.total || 0;
-        all.push(...(last.items || []));
-      } while (all.length < total && (last.items || []).length);
-      if (ask !== latest.current) return;
-      setRows(all);
-      setRemoved(last.removed || []);
-      setError("");
+      const read = (offset: number): Promise<LibraryPage> => api(
+        "?offset=" + offset + "&limit=" + PAGE + "&archived=false",
+        { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]) },
+      );
+      let page = seed ?? await read(0);
+      if (controller.signal.aborted) return;
+      const all = new Map(page.items.map(row => [row.research_id, row]));
+      let offset = page.items.length;
+      setRemoved(page.removed || []);
+      if (!completed.current) setRows([...all.values()]);
+      while (offset < page.total && page.items.length) {
+        page = await read(offset);
+        if (controller.signal.aborted) return;
+        offset += page.items.length;
+        for (const row of page.items) all.set(row.research_id, row);
+        if (!completed.current) setRows([...all.values()]);
+      }
+      setRows([...all.values()]);
+      completed.current = { revision, again };
     })()
       .catch((e) => {
-        if (ask === latest.current) setError(e.message || "The library could not be loaded.");
+        if (!controller.signal.aborted) setError(e.message || "The library could not be loaded.");
       })
       .finally(() => {
-        if (ask === latest.current) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       });
-  }, [archived, revision, again]);
+    return () => controller.abort();
+  }, [api, visible, firstPage, revision, again]);
 
   const found = useMemo(
     () => rows.filter((row) => libraryMatches(row, search)).sort((a, b) => whenOf(b) - whenOf(a)),
@@ -142,26 +188,45 @@ export function ResearchLibrary({
     const now = Date.now();
     const list: { name: string; rows: LibraryRow[] }[] = [];
     for (const row of found.slice(0, shown)) {
-      const name = libraryGroup(whenOf(row), now);
-      const group = list.find((entry) => entry.name === name);
-      if (group) group.rows.push(row);
+      const name = libraryGroup(whenOf(row), now, scale);
+      const group = list[list.length - 1];
+      if (group?.name === name) group.rows.push(row);
       else list.push({ name, rows: [row] });
     }
     return list;
-  }, [found, shown]);
+  }, [found, shown, scale]);
   const everyShown = found.length > 0 && found.slice(0, shown).every((row) => selected.has(row.research_id));
 
-  function view(next: boolean) {
-    setArchived(next);
-    setShown(SHOWN);
-    setSelected(new Set());
-    setSelecting(false);
-  }
-
   return (
-    <aside className="research-library" id="research-history-panel" aria-label="Research library">
+    <aside className="research-library" id="research-history-panel" aria-label="Research library"
+      hidden={!visible} style={visible ? undefined : { display: "none" }}>
       <header className="rl-head">
-        <h2>Library</h2>
+        <h2>Timeline</h2>
+        <div className="rl-scale" role="group" aria-label="Group timeline by">
+          {timelineScales.map((option) => (
+            <button key={option} type="button" aria-pressed={scale === option} onClick={() => {
+              setScale(option);
+              if (listRef.current) listRef.current.scrollTop = 0;
+            }}>{option}</button>
+          ))}
+        </div>
+        <button className="rl-close" aria-label="Close library" title="Close (Esc)" onClick={onClose}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <div className="rl-toolbar">
+        <div className="rl-search">
+          <input
+            type="search"
+            value={search}
+            placeholder="Search research"
+            aria-label="Search research"
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setShown(SHOWN);
+            }}
+          />
+        </div>
         <button
           className="rl-text-button"
           aria-pressed={selecting}
@@ -173,26 +238,6 @@ export function ResearchLibrary({
         >
           {selecting ? "Done" : "Select"}
         </button>
-        <button className="rl-close" aria-label="Close library" title="Close (Esc)" onClick={onClose}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
-        </button>
-      </header>
-      <div className="rl-search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>
-        <input
-          type="search"
-          value={search}
-          placeholder="Search research"
-          aria-label="Search research"
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setShown(SHOWN);
-          }}
-        />
-      </div>
-      <div className="rl-tabs" role="group" aria-label="Which research to show">
-        <button aria-pressed={!archived} onClick={() => view(false)}>Active</button>
-        <button aria-pressed={archived} onClick={() => view(true)}>Archived</button>
       </div>
       {selecting && (
         <div className="rl-selection" aria-label="Selection controls">
@@ -209,7 +254,7 @@ export function ResearchLibrary({
           </button>
         </div>
       )}
-      <div className="rl-list">
+      <div className="rl-list" ref={listRef}>
         {error && (
           <p className="rl-empty" role="alert">
             {error}{" "}
@@ -218,16 +263,23 @@ export function ResearchLibrary({
         )}
         {!error && !found.length && (
           <p className="rl-empty" role="status">
-            {loading ? "Loading…" : search.trim() ? "Nothing matches that search." : archived ? "Nothing archived." : "No saved research yet."}
+            {loading ? "Loading…" : search.trim() ? "Nothing matches that search." : "No saved research yet."}
           </p>
         )}
         {groups.map((group) => (
-          <section key={group.name} aria-label={group.name}>
-            <h3>{group.name}</h3>
+          <section className="rl-period" key={group.name} aria-label={group.name}>
+            <h3>
+              <svg className="rl-curve" viewBox="0 0 24 40" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M22.5 0 C22.5 10 11.5 9 11.5 20" />
+                <path d="M11.5 20 C11.5 31 22.5 30 22.5 40" />
+              </svg>
+              {group.name}
+            </h3>
             {group.rows.map((row) => (
               <ResearchHistoryItem
                 key={row.research_id}
                 item={row}
+                timeline
                 meta={libraryMeta(row)}
                 active={activeId === row.research_id}
                 selecting={selecting}
@@ -247,8 +299,8 @@ export function ResearchLibrary({
                   // Confirmed by the server, so the row changes now; the reload follows, since saving takes a moment.
                   setRows((old) =>
                     typeof value.archived === "boolean"
-                      ? old.filter((entry) => entry.research_id !== row.research_id)
-                      : old.map((entry) => (entry.research_id === row.research_id ? { ...entry, history_title: value.title } : entry)),
+                      ? (old ?? rows).filter((entry) => entry.research_id !== row.research_id)
+                      : (old ?? rows).map((entry) => (entry.research_id === row.research_id ? { ...entry, history_title: value.title } : entry)),
                   );
                   setAgain((n) => n + 1);
                 }}
@@ -264,6 +316,7 @@ export function ResearchLibrary({
         )}
         {!!removed.length && (
           <RecentlyRemovedResearch
+            inline
             items={removed}
             onRestore={async (item: any) => {
               const result = await api("/" + item.research_id + "/restore", { method: "POST", body: JSON.stringify({ undo_token: item.undo_token }) });
@@ -272,7 +325,6 @@ export function ResearchLibrary({
             }}
           />
         )}
-        {children}
       </div>
     </aside>
   );

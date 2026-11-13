@@ -33,12 +33,17 @@ export type Policy = {
 };
 
 export const LEGACY_GAPS: Gaps = { column: 80, row: 32, paper: 70, map: 90 };
+export const RESEARCH_GRID_STEP = 20;
 
+/**
+ * Clear space between card edges, in canvas units at 100%: a wide corridor between stages, for
+ * the strings to run and branch in, and a calm gap between the cards of one stage.
+ */
 const GAPS: Record<ResearchMode, Gaps> = {
-  direct: { column: 56, row: 22, paper: 52, map: 72 },
-  quick: { column: 56, row: 22, paper: 52, map: 72 },
-  deep: { column: 72, row: 28, paper: 64, map: 84 },
-  structured: { column: 72, row: 28, paper: 64, map: 84 },
+  direct: { column: 150, row: 56, paper: 170, map: 110 },
+  quick: { column: 150, row: 56, paper: 170, map: 110 },
+  deep: { column: 176, row: 64, paper: 200, map: 120 },
+  structured: { column: 176, row: 64, paper: 200, map: 120 },
 };
 
 export function modeOf(value: unknown): ResearchMode {
@@ -72,7 +77,7 @@ export function layoutPolicy(input: {
   const base = GAPS[mode];
   // Many sources or workers need a little more air between columns; few need less.
   const busy = input.sources > 8 || input.workers > 2;
-  const gaps = busy ? { ...base, column: base.column + 8, row: base.row + 4 } : base;
+  const gaps = busy ? { ...base, column: base.column + 24, row: base.row + 8 } : base;
   const view = input.view && input.view.width > 0 && input.view.height > 0 ? input.view : { width: 1440, height: 900 };
   const map = mode === "structured" && input.map && input.run ? mapPlacement(input.run, input.map, view, gaps.map) : "below";
   return { mode, gaps, map, discoveryLift: mode === "quick" || mode === "direct" ? 40 : 56 };

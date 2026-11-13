@@ -13,7 +13,7 @@ Don't paste keys into a chat, a screenshot or a file that gets committed.
 | `worker_b` | Analysis: findings and knowledge maps | Groq | `openai/gpt-oss-120b` | Same |
 | `worker_c` | Verification: independent check | Groq | `qwen/qwen3.8-27b` | Same |
 
-Deep Research uses the lead for planning and writing. The search tool gathers and ranks evidence. Quick and Structured may use configured workers, and a configured fallback may handle a failed model call. These calls can send the request and selected evidence to the corresponding provider. Set a slot’s fallback to none to keep it on that slot.
+**This sends data to Groq by default.** With a `GROQ_API_KEY` present, each Work run sends your prompt and the public web text it retrieved to Groq. Pasted text in a prompt goes too. To keep a run off Groq, set each worker's provider to another provider (see below). With no worker slots available, the lead does the workers' jobs.
 
 Web search uses your existing `TAVILY_API_KEY`.
 
@@ -35,13 +35,12 @@ Run-wide settings:
 ```
 AEGIS_WORK_DAILY_TOKENS=1500000   # all Work runs together; pauses until midnight UTC when reached
 AEGIS_WORK_DEEP_SOURCES=18        # Deep Research source cap, 3 to 40
-AEGIS_WORK_MAX_MODELS=4          # Maximum distinct models per run, 1 to 4
 ```
 
 ## Things worth knowing
 
 - **Fallback goes only where a setting says.** By default the lead falls back to `worker_b`, and workers fall back to `lead`. Set `FALLBACK=none` to fail instead. A card says when a model stepped in for another.
-- Provider quotas depend on the account and model. Set the local pacing limit to match the configured account.
+- **Different keys aren't always different quotas.** Groq reported a limit of 8,000 tokens per minute per model on the key tested on 6 November 2026. A key on a higher tier can raise `TOKENS_PER_MINUTE`.
 - **Several models can cost more.** Each run records real tokens per model. Compare before assuming multi-model routing saves money.
 - **Model lists change.** Check what's available on the host:
 
@@ -57,7 +56,26 @@ AEGIS_WORK_MAX_MODELS=4          # Maximum distinct models per run, 1 to 4
 |---|---|---|---|---|---|---|
 | Direct | 3 | 16,000 | 0 | 0 | 0 | 3 minutes |
 | Quick | 5 | 36,000 | 2 | 6 | 1 | 5 minutes |
-| Deep | 12 | 200,000 | 5 | 18 | 0 | 20 minutes |
+| Deep | 14 | 170,000 | 10 | 18 | 3 | 20 minutes |
 | Structured | 12 | 140,000 | 6 | 12 | 3 | about 17 minutes |
 
 All of these are enforced. The time limit counts working time, not time paused for a provider's limit or for your answer, and it's checked between stages, so a stage already under way finishes first. Retrying a run that hit its time limit gives it a fresh allowance.
+
+## Six slots and NVIDIA NIM (2026-11-10)
+
+A run may use at most **six distinct models, the AEGIS lead included** (`MAX_MODELS = 6`, enforced in `_admit` before every attempt, fallbacks included). Simple runs still use fewer: Quick uses the lead plus discovery (2 models); Deep and Structured use the lead plus discovery, analysis and verification, plus the optional second analyst and synthesis writer.
+
+| Slot | Role | Configured model (probed 2026-11-10) |
+|---|---|---|
+| `lead` | AEGIS: plan, executive summary/frame, final acceptance | Gemini `gemini-3.5-flash-lite` |
+| `worker_a` | discovery: source screening | Groq `openai/gpt-oss-20b` |
+| `worker_b` | analysis | Groq `openai/gpt-oss-120b` |
+| `worker_c` | independent verification (different model family from the analyst) | NVIDIA `nvidia/nemotron-3-ultra-550b-a55b`, falls back to `worker_d` |
+| `worker_d` | second analyst: takes every other analysis branch so branches run in parallel | NVIDIA `nvidia/nemotron-3.5-super-vl-120b-a12b` |
+| `worker_e` | synthesis: writes Deep Research body sections | Gemini `gemini-3.5-flash`, falls back only to `lead` |
+
+`worker_d` and `worker_e` have no default model, so an `.env` without them keeps the earlier four slots.
+
+NVIDIA provider: `AEGIS_WORK_<SLOT>_PROVIDER=nvidia`, key from `NVIDIA_API_KEY` (or `NOVA_RESEARCH_NVIDIA_API_KEY`). Base URL `https://integrate.api.nvidia.com/v1`. Requests send `max_tokens` (not `max_completion_tokens`) and a strict `response_format: json_schema`; NIM rejects `nvext.guided_json`. Several listed NIM models (for example `nvidia/nemotron-3-super-120b-a12b`, `moonshotai/kimi-k2.6`) returned 404 for this account, and `deepseek-ai/deepseek-v4.1-flash` and `z-ai/glm-5.3-flash` timed out, so they were not chosen. Gemini Pro models returned 429 (quota) on the current key.
+
+Deep Research now runs the discovery, analysis and verification workers (budget: 22 calls, 320k tokens, 1,500 s). Tests: `astra_ai/ui/backend/tests/test_work_six_models.py`.

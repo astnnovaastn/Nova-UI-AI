@@ -109,7 +109,14 @@ describe("layout policies", () => {
     const deep = layoutPolicy({ mode: "deep", workers: 0, sources: 14 });
     expect(quick).toEqual(layoutPolicy({ mode: "quick", workers: 1, sources: 3 }));
     expect(quick.gaps.column).toBeLessThan(deep.gaps.column);
-    expect(quick.gaps.column).toBeLessThan(LEGACY_GAPS.column);
+    // V4: stages stand well apart (130–220 units of clear corridor), cards in a stage 48–88 apart.
+    for (const policy of [quick, deep]) {
+      expect(policy.gaps.column).toBeGreaterThanOrEqual(130);
+      expect(policy.gaps.column).toBeLessThanOrEqual(220);
+      expect(policy.gaps.row).toBeGreaterThanOrEqual(48);
+      expect(policy.gaps.row).toBeLessThanOrEqual(88);
+    }
+    expect(quick.gaps.column).toBeGreaterThan(LEGACY_GAPS.column);
     expect(layoutPolicy({ mode: "nonsense", workers: 0, sources: 0 }).mode).toBe("quick");
   });
 
@@ -145,8 +152,8 @@ describe("construction playback", () => {
   it("times trips by distance, within bounds, faster at higher speed", () => {
     const near = travelMs({ x: 0, y: 0 }, { x: 10, y: 0 });
     const far = travelMs({ x: 0, y: 0 }, { x: 5000, y: 0 });
-    expect(near).toBeGreaterThanOrEqual(240);
-    expect(far).toBeLessThanOrEqual(720);
+    expect(near).toBeGreaterThanOrEqual(460);
+    expect(far).toBeLessThanOrEqual(1250);
     expect(near).toBeLessThan(far);
     expect(travelMs({ x: 0, y: 0 }, { x: 400, y: 0 }, 2)).toBeLessThan(travelMs({ x: 0, y: 0 }, { x: 400, y: 0 }, 1));
   });

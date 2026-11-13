@@ -128,7 +128,42 @@ def test_direct_answer_uses_only_the_lead_and_says_it_has_no_sources(tmp_path):
     assert 'No sources were retrieved' in artifacts.get(identifier, CONTEXT)['artifact']['report']
 
 
-def test_detailed_work_keeps_requested_depth_and_full_report_with_one_model(tmp_path):
+
+@pytest.mark.parametrize(('workflow', 'query', 'expects_map'), [
+    ('explain-code', 'Explain def double(x): return x * 2', True),
+    ('map-a-project', 'Map the public CPython repository', True),
+    ('moodboard', 'Collect visual references for a transit dashboard', False),
+    ('competitor-landscape', 'Compare current public Python package hosts', False),
+    ('plan-my-day', 'Focus at 9, team sync at 10 and send the draft at 2', False),
+    ('learning-path', 'Learn how to write accessible web components', False),
+    ('meeting-prep', 'Prepare for a meeting about the public Python packaging roadmap', False),
+    ('market-map', 'Map public source-control providers', True),
+    ('deep-research', 'Compare large stationary energy storage systems', False),
+])
+def test_workflow_deliverable_reaches_lead_and_supported_map(tmp_path, workflow, query, expects_map):
+    adapter = FakeAdapter(plan={'needs_web': workflow != 'explain-code'}, report='# Result\n\nCompleted the task.')
+    service, artifacts, search = build(tmp_path, adapter)
+    identifier = start(service, artifacts, query, workflow=workflow)
+    assert asyncio.run(service.run(identifier, CONTEXT))['status'] == 'completed'
+    spec = WORKFLOWS[workflow]
+    assert len(spec.deliverable.split()) >= 5
+    plan_call = next(call for call in adapter.calls if call['schema'] is LEAD_PLAN)
+    report_call = next(call for call in adapter.calls if call['schema'] is REPORT)
+    assert plan_call['payload']['required_mode'] == spec.mode
+    assert plan_call['payload']['deliverable'] == report_call['payload']['deliverable'] == spec.deliverable
+    map_calls = [call for call in adapter.calls if call['schema'] is KNOWLEDGE_MAP]
+    assert len(map_calls) == int(expects_map)
+    if expects_map:
+        assert map_calls[0]['payload']['map_brief'] == spec.map_brief
+    if spec.mode == 'direct':
+        assert not search.queries
+        assert [call['slot'] for call in adapter.calls] == ['lead', 'lead']
+        saved = service.store.get(identifier)
+        assert saved.plan['needs_web'] is False
+        assert saved.plan['queries'] == []
+
+
+def test_detailed_work_keeps_requested_depth_and_full_report_with_workers(tmp_path):
     sections = [
         ('Mechanisms', 'The operating mechanism and its boundary conditions are explained by the first source [S1].'),
         ('Comparison', 'The second source compares the observed behavior across the two environments [S2].'),
@@ -154,12 +189,14 @@ def test_detailed_work_keeps_requested_depth_and_full_report_with_one_model(tmp_
         assert adapter.calls[0]['payload']['required_mode'] == run.plan['mode'] == mode
         assert run.usage['tokens'] <= run.budget['tokens']
         if mode == 'deep':
-            assert [call['slot'] for call in adapter.calls] == ['lead', 'lead']
+            # The lead plans and writes; discovery, analysis and verification run on workers in between.
+            assert adapter.calls[0]['slot'] == adapter.calls[-1]['slot'] == 'lead'
+            assert {row['role'] for row in run.assignments} == {'discovery', 'analysis', 'verification'}
+            assert len(run.usage['distinct_models']) <= 6
             assert adapter.calls[-1]['max_tokens'] == 10000
             assert len(search.queries) == 5 and len(saved['sources']) == 5
             assert saved['report'] == detailed == run.results['report_text']
             assert len(saved['report'].split()) > 1200
-            assert not run.assignments
         else:
             assert len(adapter.calls) == 3
             assert adapter.calls[-1]['max_tokens'] == 2000
@@ -217,8 +254,15 @@ def test_lead_failure_falls_back_only_to_the_configured_slot_and_failure_is_hone
     alone = FakeAdapter(fail={'lead': 'http_503'})
     service, artifacts, _ = build(tmp_path / 'b', alone, env={'AEGIS_WORK_LEAD_FALLBACK': 'none'})
     identifier = start(service, artifacts)
+    # A busy provider pauses the run, a bounded number of times, then the run fails honestly.
     result = asyncio.run(service.run(identifier, CONTEXT))
-    assert result == {'status': 'failed', 'reason': 'work_model_http_503', 'research_id': identifier}
+    assert result['status'] == 'waiting_for_quota' and result['reason'] == 'work_provider_unavailable'
+    from astra_ai.core.work.orchestrator import OUTAGE_PAUSES
+    for _ in range(OUTAGE_PAUSES):
+        service.router.guard.open_until.clear()
+        result = asyncio.run(service.run(identifier, CONTEXT))
+    assert result == {'status': 'failed', 'reason': 'work_model_unavailable', 'research_id': identifier}
+    assert service.store.get(identifier).usage['outage_pauses'] == OUTAGE_PAUSES + 1
     assert artifacts.request_state(identifier, CONTEXT)['phase'] == 'failed'
     assert {call['slot'] for call in alone.calls} == {'lead'}
     assert artifacts.get(identifier, CONTEXT)['artifact']['report'] == ''
@@ -398,7 +442,7 @@ def test_assignments_scale_with_the_mode():
     plan = TaskPlan(intent='x', needs_web=True)
     assert choose_assignments('direct', plan, budget_for('direct')) == []
     assert [role for role, _ in choose_assignments('quick', plan, budget_for('quick'))] == ['discovery']
-    assert choose_assignments('deep', plan, budget_for('deep')) == []
+    assert [role for role, _ in choose_assignments('deep', plan, budget_for('deep'))] == ['discovery', 'analysis', 'verification']
     assert [role for role, _ in choose_assignments('structured', TaskPlan(intent='x', needs_web=False), budget_for('structured'))] == ['analysis', 'verification']
 
 

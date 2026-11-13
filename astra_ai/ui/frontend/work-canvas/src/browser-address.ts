@@ -1,7 +1,6 @@
 /**
- * Which addresses the workspace browser may open. A framed page is untrusted, so this stops it
- * ever being the app itself, its backend or anything on the local network, and allows only web
- * addresses. The backend repeats the private-address check using the real DNS answer.
+ * Validate addresses opened through the workspace controls. The server repeats the public-address
+ * check using DNS, and the browser sandbox isolates navigations initiated inside the frame.
  */
 const PRIVATE_HOST =
   /^(localhost|.*\.localhost|.*\.local|.*\.internal|127\.\d+\.\d+\.\d+|0\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|\[.*\])$/i;
@@ -18,9 +17,10 @@ export function normalizeAddress(input: string, ownHost = ""): string | null {
     return null;
   }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
-  if (parsed.username || parsed.password) return null;
-  if (!parsed.hostname.includes(".") || PRIVATE_HOST.test(parsed.hostname)) return null;
-  if (ownHost && (parsed.host === ownHost || parsed.hostname === ownHost.split(":")[0])) return null;
+  if (parsed.username || parsed.password || parsed.port) return null;
+  const hostname = parsed.hostname.replace(/\.$/, "");
+  if (!hostname.includes(".") || PRIVATE_HOST.test(hostname)) return null;
+  if (ownHost && hostname === ownHost.split(":")[0]?.toLowerCase().replace(/\.$/, "")) return null;
   return parsed.href;
 }
 

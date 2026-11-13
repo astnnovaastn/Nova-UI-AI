@@ -138,6 +138,7 @@
 <section
   class="part work-drag-handle {shape}"
   class:label-only={shape === "label"}
+  class:stack-page={!!part.stack?.index && part.stack.open}
   class:selected
   class:working
   aria-label={part.title}
@@ -157,6 +158,16 @@
       <PartMark {part} />
       <strong>{part.title}</strong>
     </button>
+    {#if part.stack && (!part.stack.open || !part.stack.index)}<button
+        type="button"
+        class="stack-toggle nodrag nopan"
+        aria-expanded={part.stack.open}
+        aria-label={part.stack.open ? `Stack the ${part.stack.count} pages again` : `Show all ${part.stack.count} pages from ${part.title}`}
+        onclick={(event) => {
+          event.stopPropagation();
+          globalThis.dispatchEvent(new CustomEvent("aegis-stack-toggle", { detail: part.stack!.id }));
+        }}>{part.stack.open ? "Stack pages" : `${part.stack.count} pages`}</button
+      >{/if}
     {#if waiting?.human}<NeedsYou
         inline
         page={waiting.human}
@@ -208,7 +219,7 @@
   {:else if shape === "pages"}
     <div
       class="stack"
-      class:fans={shown.length > 1}
+      class:fans={shown.length > 1 && !part.stack}
       class:holding={!!waiting?.human}
       style:inset-inline-start="{partLead}px"
       style:inline-size="{stack.width}px"

@@ -64,8 +64,8 @@ export type CanvasBridgeActions = {
   useClassic(): void;
   imageHeaders(): Record<string, string>;
   renderMarkdown(text: string): string;
-  checkFrame(url: string): Promise<{embeddable: boolean | null; reason: string}>;
-  addWorkSource(url: string, title: string): void;
+  checkFrame(url: string, signal?: AbortSignal): Promise<{embeddable: boolean | null; reason: string}>;
+  addWorkSource(url: string, title: string): Promise<void>;
   startWork(text: string, options?: {workflow?: string; chosen?: unknown[]; fromResearch?: string}): void;
   askNodes(question: string, nodes: {id: string; kind: string; title: string; url?: string; summary: string}[], runId: string): void;
   answerRun(text: string): void;

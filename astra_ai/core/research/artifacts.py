@@ -587,7 +587,7 @@ class ResearchArtifacts:
             data['imports'][key].update(state='completed',note_id=note['id'],verified_at=now());self.write(data)
             return {'status':'completed','note_id':note['id'],'research_id':identifier,'research_revision':revision,'characters':len(body),'verified':True}
 
-    def listing(self, context, offset=0, limit=30):
+    def listing(self, context, offset=0, limit=30, *, include=None):
         self.reconcile_publication(context)
         with self.lock:
             data=self.snapshot()
@@ -605,6 +605,8 @@ class ResearchArtifacts:
                 removed.append({**self.brief(row),'undo_token':entry['token']})
             from ..research_sessions import root_id
             rows=[row for row in rows if root_id(data,row['id'])==row['id']]
+            if include is not None:
+                rows=[row for row in rows if include(row['id'])]
             removed=[row for row in removed if root_id(data,row['research_id'])==row['research_id']]
             return {'status':'ok','removed':removed[-20:],'total':len(rows),'items':[{**self.brief(r),'followup_count':sum(bool(entry.get('report','').strip()) for entry in data.get('extensions',{}).get(r['id'],[]))} for r in rows[max(0,offset):max(0,offset)+max(1,min(50,limit))]]}
 

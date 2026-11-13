@@ -24,17 +24,27 @@ const MAX_ANIMATED = 14;
 
 export const SPEEDS = [0.75, 1, 1.5, 2] as const;
 
-/** How long a trip takes: by distance, eased, never frantic and never slow. */
+/** How long a trip takes: by distance, unhurried, so the eye can follow it, but never a crawl. */
 export function travelMs(from: Point, to: Point, speed = 1) {
   const distance = Math.hypot(to.x - from.x, to.y - from.y);
-  return Math.round(Math.min(720, Math.max(240, 200 + distance * 0.42)) / speed);
+  return Math.round(Math.min(1250, Math.max(460, 380 + distance * 0.62)) / speed);
 }
 
-export const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+/** Smootherstep: starts and stops with no jolt (zero speed and zero acceleration at both ends). */
+export const ease = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
 
-/** A point on the cubic a string follows from one port to the other (ports face right and left). */
+/** A trip between two points bows gently to one side, as a hand does, instead of a straight dash. */
+export function glide(from: Point, to: Point, t: number): Point {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy);
+  const bow = Math.min(46, length * 0.09) * Math.sin(Math.PI * t);
+  return length ? { x: from.x + dx * t - (dy / length) * bow, y: from.y + dy * t + (dx / length) * bow } : { ...to };
+}
+
+/** A point on the S-curve a string follows from one port to the other (route.ts `facingCurve`). */
 export function alongString(from: Point, to: Point, t: number): Point {
-  const reach = Math.max(48, Math.min(260, (Math.abs(to.x - from.x) + Math.abs(to.y - from.y) * 0.35) / 2));
+  const reach = Math.max(36, (to.x - from.x) * 0.5);
   const c1 = { x: from.x + reach, y: from.y };
   const c2 = { x: to.x - reach, y: to.y };
   const u = 1 - t;
@@ -56,7 +66,9 @@ export function plan(
   const steps: Step[] = [];
   const placed = new Set(shown);
   const waiting = [...edges];
-  const ordered = [...nodes].sort((a, b) => a.x - b.x || a.y - b.y);
+  // Column by column, left to right, and down each column: the order the canvas reads in.
+  const column = (x: number) => Math.round(x / 60);
+  const ordered = [...nodes].sort((a, b) => column(a.x) - column(b.x) || a.y - b.y || a.x - b.x);
   const flush = () => {
     for (let index = 0; index < waiting.length; ) {
       const edge = waiting[index]!;
@@ -101,6 +113,10 @@ class Construction {
   private running = false;
   private last: Point | null = null;
   private frame = 0;
+  /** Settles the trip in progress, so a stopped playback never waits on a cancelled frame. */
+  private settleTrip: (() => void) | null = null;
+  /** A replay the person asked for: only they, or a new replay, end it. */
+  private replaying = false;
   private yieldUntil = 0;
   /** Bumped when playback is finished early, so a trip in flight stops where it is. */
   private generation = 0;
@@ -136,7 +152,8 @@ class Construction {
     this.stats.page = page;
     this.stats.active = live;
     if (page === this.page) {
-      if (!live) this.finish();
+      // A live run that ended shows the rest at once; a replay the person started plays on.
+      if (!live && !this.replaying) this.finish();
       this.active = live;
       return;
     }
@@ -199,7 +216,11 @@ class Construction {
   }
 
   drawMs() {
-    return Math.round(520 / this.speed);
+    return Math.round(880 / this.speed);
+  }
+  /** How long a string of this length takes to draw: longer strings take longer, within bounds. */
+  drawMsFor(length: number) {
+    return Math.round(Math.max(880, Math.min(2200, length * 0.9)) / this.speed);
   }
 
   get busy() {
@@ -230,6 +251,9 @@ class Construction {
   finish() {
     this.generation++;
     cancelAnimationFrame(this.frame);
+    this.settleTrip?.();
+    this.settleTrip = null;
+    this.replaying = false;
     for (const step of this.queue) this.shown.add(step.id);
     for (const id of this.hidden) this.shown.add(id);
     this.queue = [];
@@ -247,6 +271,7 @@ class Construction {
     edges: readonly { id: string; source: string; target: string; label: string }[],
   ) {
     this.finish();
+    this.replaying = true;
     this.shown = new Set();
     const was = this.active;
     this.active = true;
@@ -298,12 +323,17 @@ class Construction {
     const from = this.last ?? to;
     const geometry = this.geometry;
     const generation = this.generation;
-    return new Promise<void>((resolve) => {
+    return new Promise<void>((done) => {
+      const resolve = () => {
+        if (this.settleTrip === resolve) this.settleTrip = null;
+        done();
+      };
+      this.settleTrip = resolve;
       const start = performance.now();
       const tick = (now: number) => {
         if (!this.running || generation !== this.generation) return resolve();
         const t = Math.min(1, (now - start) / ms);
-        const at = path ? path(ease(t)) : { x: from.x + (to.x - from.x) * ease(t), y: from.y + (to.y - from.y) * ease(t) };
+        const at = path ? path(ease(t)) : glide(from, to, ease(t));
         const screen = geometry?.screen(at) ?? at;
         this.hand = { ...this.hand, x: screen.x, y: screen.y, visible: true };
         this.last = at;
@@ -335,6 +365,7 @@ class Construction {
     } finally {
       this.running = false;
       if (!this.queue.length) {
+        this.replaying = false;
         await this.wait(500);
         if (!this.queue.length) this.hand = { ...this.hand, visible: false, pressing: false };
       }
@@ -355,7 +386,7 @@ class Construction {
     this.hand = { ...this.hand, pressing: true };
     this.revealing.add(step.id);
     this.reveal(step.id);
-    await this.wait(260 / this.speed);
+    await this.wait(380 / this.speed);
     this.hand = { ...this.hand, pressing: false };
     setTimeout(() => {
       this.revealing.delete(step.id);
@@ -377,10 +408,15 @@ class Construction {
     this.hand = { ...this.hand, pressing: true };
     this.drawing.add(step.id);
     this.reveal(step.id);
-    await this.travel(to, this.drawMs(), (t) => alongString(from, to, t));
+    // Trace the string as it is really drawn (through the columns it passes), once it is on screen.
+    await this.wait(32);
+    const line = typeof document === "undefined" ? null : document.querySelector<SVGPathElement>(`.svelte-flow__edge[data-id="${CSS.escape(step.id)}"] path.strand-line`);
+    const length = line?.getTotalLength?.() ?? 0;
+    const along = line && length > 0 ? (t: number) => { const p = line.getPointAtLength(t * length); return { x: p.x, y: p.y }; } : (t: number) => alongString(from, to, t);
+    await this.travel(along(1), this.drawMsFor(length), along);
     this.drawing.delete(step.id);
     this.hand = { ...this.hand, pressing: false };
-    await this.wait(90 / this.speed);
+    await this.wait(180 / this.speed);
   }
 
   private reveal(id: string) {

@@ -83,11 +83,15 @@ describe("semantic layout", () => {
     expect(box.width).toBeGreaterThan(box.height);
   });
 
-  it("is deterministic, and a new source never moves the ones already placed", () => {
+  it("is deterministic, and a new source keeps every placed source in its column and order", () => {
     const a = semanticLayout(deepRun(7)).positions;
     expect(semanticLayout(deepRun(7)).positions).toEqual(a);
     const b = semanticLayout(deepRun(8)).positions;
-    for (let i = 1; i <= 7; i++) expect(b[`source:${i}`]).toEqual(a[`source:${i}`]);
+    for (let i = 1; i <= 7; i++) {
+      expect(b[`source:${i}`]!.x).toBe(a[`source:${i}`]!.x);
+      // Its column re-centres by at most half a slot: a gentle step, never a reshuffle.
+      expect(Math.abs(b[`source:${i}`]!.y - a[`source:${i}`]!.y)).toBeLessThanOrEqual((238 + CAPTION + gaps.row) / 2 + 1);
+    }
     expect(b["request"]).toEqual(a["request"]);
   });
 
@@ -95,14 +99,19 @@ describe("semantic layout", () => {
     const input = { ...deepRun(3), request: { id: "request", x: 400, y: -120, width: 320, height: 90 } };
     const { positions } = semanticLayout(input);
     expect(positions["request"]).toEqual({ x: 400, y: -120 });
-    expect(positions["worker:lead"]!.y).toBe(-120);
+    expect(Math.min(...Object.values(positions).map((p) => p.y))).toBeGreaterThanOrEqual(-120);
   });
 
-  it("keeps the band between the request and AEGIS free of sources", () => {
+  it("centres every stage on one midline: a lone card sits level with its neighbours' middle", () => {
     const input = deepRun(6);
     const { positions } = semanticLayout(input);
-    const spine = Math.max(input.request.height, input.lead!.height) / 2;
-    for (const s of input.sources) expect(positions[s.id]!.y - CAPTION).toBeGreaterThan(spine);
+    const middle = (id: string, height: number) => positions[id]!.y + height / 2;
+    const lead = middle("worker:lead", 176);
+    expect(Math.abs(lead - middle("paper", 960))).toBeLessThanOrEqual(1);
+    // Two workers in one stage branch evenly above and below that midline.
+    const a = middle("worker:analysis", 176);
+    const b = middle("worker:verification", 176);
+    expect(Math.abs((a + b) / 2 - lead)).toBeLessThanOrEqual(1);
   });
 
   it("places the knowledge map beside or under the run, as the policy chose", () => {

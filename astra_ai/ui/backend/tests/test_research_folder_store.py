@@ -104,6 +104,13 @@ def test_real_artifact_interface_uses_folders(tmp_path):
     from astra_ai.core.research_history import update,listing
     assert update(store,pending['id'],ctx,title='Custom title')['status']=='completed'
     assert listing(store,ctx)['items'][0]['history_title']=='Custom title'
+    other=store.reserve('Another research','quick',ctx,'another-library-entry')['id']
+    assert update(store,other,ctx,archived=True)['status']=='completed'
+    active=listing(store,ctx,limit=1)
+    assert active['total']==1
+    assert active['items'][0]['research_id']==pending['id']
+    assert listing(store,ctx,offset=1,limit=1)['items']==[]
+    assert listing(store,ctx,limit=1,archived=True)['items'][0]['research_id']==other
 
 
 def test_empty_transaction_directory_does_not_invalidate_loaded_pages(tmp_path,monkeypatch):

@@ -16,6 +16,8 @@ export type CanvasActions = {
   /** Opens the real report: Reader, Edit, Sources or Media. */
   openView(view: string): void;
   openSource(url: string): void;
+  /** Asks the backend's video search for more videos on the open research (a real search request). */
+  findVideos?(): void;
   openPanel(panel: "history" | "conversation"): void;
   newEntry(kind: "research" | "chat" | "documentary"): void;
   attach(): void;
@@ -29,9 +31,9 @@ export type CanvasActions = {
   /** The Reader's sanitizer: report Markdown to safe HTML. */
   renderMarkdown(text: string): string;
   /** Whether a public page allows being shown here. Only a verdict comes back, never the page. */
-  checkFrame(url: string): Promise<{ embeddable: boolean | null; reason: string }>;
+  checkFrame(url: string, signal?: AbortSignal): Promise<{ embeddable: boolean | null; reason: string }>;
   /** Saves a reference to this page on the open research. */
-  addWorkSource(url: string, title: string): void;
+  addWorkSource(url: string, title: string): Promise<void>;
   /** Starts a work run: the lead plans it and assigns only the workers it needs. */
   startWork(text: string, options?: { workflow?: string; chosen?: unknown[]; fromResearch?: string }): void;
   /** Asks AEGIS about canvas cards; the reply appears in the conversation. */

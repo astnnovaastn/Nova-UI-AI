@@ -7,11 +7,14 @@
     Clock01Icon,
     DashboardSquare01Icon,
     FileSearchIcon,
+    BookOpen01Icon,
     MoreHorizontalIcon,
+    Plug01Icon,
     PlusSignIcon,
     Settings01Icon,
   } from "@hugeicons/core-free-icons";
   import { store } from "./store.svelte";
+  import { workPanels } from "./work-panels.svelte";
 
   let more = $state(false);
   const actions = $derived(store.actions);
@@ -57,6 +60,29 @@
       onclick={() => actions?.openPanel("conversation")}
     >
       <Icon icon={BubbleChatIcon} size={19} strokeWidth={1.6} />
+    </button>
+  </div>
+  <span class="rule" aria-hidden="true"></span>
+  <div class="group">
+    <button
+      type="button"
+      class:selected={workPanels.open === "skills"}
+      aria-label="Skills"
+      aria-expanded={workPanels.open === "skills"}
+      title="Skills"
+      onclick={() => workPanels.toggle("skills")}
+    >
+      <Icon icon={BookOpen01Icon} size={19} strokeWidth={1.6} />
+    </button>
+    <button
+      type="button"
+      class:selected={workPanels.open === "connections"}
+      aria-label="Connections"
+      aria-expanded={workPanels.open === "connections"}
+      title="Connections"
+      onclick={() => workPanels.toggle("connections")}
+    >
+      <Icon icon={Plug01Icon} size={19} strokeWidth={1.6} />
     </button>
   </div>
   <span class="gap"></span>

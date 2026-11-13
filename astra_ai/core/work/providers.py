@@ -31,16 +31,21 @@ PROVIDER_KEYS = {
     'gemini': ('NOVA_RESEARCH_GEMINI_API_KEY', 'GEMINI_API_KEY'),
     'groq': ('NOVA_RESEARCH_GROQ_API_KEY', 'GROQ_API_KEY'),
     'openai': ('NOVA_RESEARCH_OPENAI_API_KEY', 'OPENAI_API_KEY'),
+    'nvidia': ('NOVA_RESEARCH_NVIDIA_API_KEY', 'NVIDIA_API_KEY'),
 }
 #: What each provider's models can do, as far as AEGIS relies on it. Discovery confirms availability.
 PROVIDER_CAPABILITIES = {
     'gemini': {'context_tokens': 1000000, 'output_tokens': 16000, 'structured': True, 'tokens_per_minute': 0},
     'groq': {'context_tokens': 131072, 'output_tokens': 8000, 'structured': True, 'tokens_per_minute': 7200},
     'openai': {'context_tokens': 400000, 'output_tokens': 16000, 'structured': True, 'tokens_per_minute': 0},
+    # NVIDIA NIM limits requests per minute, not tokens; strict json_schema works, nvext.guided_json is rejected.
+    'nvidia': {'context_tokens': 128000, 'output_tokens': 16000, 'structured': True, 'tokens_per_minute': 0},
 }
 RETRYABLE = {'rate_limit', 'timeout', 'transport', 'http_408', 'http_500', 'http_502', 'http_503', 'http_504'}
 BREAKER_FAILURES = 3
 BREAKER_SECONDS = 90
+#: Failures that say nothing about the request itself: a busy, limited or briefly broken provider.
+TRANSIENT = RETRYABLE | {'circuit_open'}
 
 
 class ProviderError(Exception):
@@ -73,6 +78,8 @@ class ModelSlot:
     fallback: str = ''
     tokens_per_minute: int = 0
     price_per_million: float | None = None
+    #: NVIDIA reasoning models: 'off', or a number of reasoning tokens allowed before the answer.
+    thinking: str = ''
 
     @property
     def key_marker(self):
@@ -107,13 +114,14 @@ def load_slots(settings):
                 research = 'NOVA_RESEARCH_GEMINI_MODEL' if provider == 'gemini' else 'NOVA_RESEARCH_OPENAI_MODEL' if provider == 'openai' else ''
                 model = (settings(research) if research else '') or (settings('GEMINI_TEXT_MODEL') if provider == 'gemini' else '') or DEFAULT_MODELS['worker_b']
             else:
-                model = DEFAULT_MODELS[slot] if provider == 'groq' else ''
+                model = DEFAULT_MODELS.get(slot, '') if provider == 'groq' else ''
         if not model:
             continue
         fallback = (settings(prefix + 'FALLBACK') or ('worker_b' if slot == 'lead' else 'lead')).strip().lower()
         limit = _number(settings(prefix + 'TOKENS_PER_MINUTE'), PROVIDER_CAPABILITIES[provider]['tokens_per_minute'])
         price = _number(settings(prefix + 'PRICE_PER_MILLION'), None)
-        found[slot] = ModelSlot(slot, provider, model, key, '' if fallback == 'none' else fallback, int(limit), price)
+        thinking = (settings(prefix + 'THINKING') or ('off' if provider == 'nvidia' else '')).strip().lower()
+        found[slot] = ModelSlot(slot, provider, model, key, '' if fallback == 'none' else fallback, int(limit), price, thinking)
     return found
 
 
@@ -123,8 +131,8 @@ def estimate_tokens(*values):
 
 
 class OpenAICompatibleAdapter:
-    """Groq and OpenAI. Both take chat completions with a strict JSON schema."""
-    BASE = {'groq': 'https://api.groq.com/openai/v1', 'openai': 'https://api.openai.com/v1'}
+    """Groq, OpenAI and NVIDIA NIM. All take chat completions with a strict JSON schema."""
+    BASE = {'groq': 'https://api.groq.com/openai/v1', 'openai': 'https://api.openai.com/v1', 'nvidia': 'https://integrate.api.nvidia.com/v1'}
 
     def __init__(self, transport=requests):
         self.transport = transport
@@ -137,8 +145,16 @@ class OpenAICompatibleAdapter:
                 {'role': 'user', 'content': json.dumps(payload, ensure_ascii=False)},
             ],
             'response_format': {'type': 'json_schema', 'json_schema': {'name': 'work_answer', 'strict': True, 'schema': schema}},
-            'max_completion_tokens': max_tokens,
         }
+        # NVIDIA NIM reads the older max_tokens name. Its Nemotron models reason before answering, and that
+        # reasoning counts against max_tokens: left on, a large task can spend the whole allowance thinking.
+        body['max_tokens' if slot.provider == 'nvidia' else 'max_completion_tokens'] = max_tokens
+        if slot.provider == 'nvidia':
+            if slot.thinking.isdigit():
+                body['nvext'] = {'max_thinking_tokens': int(slot.thinking)}
+                body['max_tokens'] = max_tokens + int(slot.thinking)
+            elif slot.thinking != 'on':
+                body['chat_template_kwargs'] = {'enable_thinking': False}
         if slot.model.startswith('openai/gpt-oss'):
             body['reasoning_effort'] = 'low'
         try:
@@ -296,7 +312,7 @@ class ModelRouter:
         self.settings = settings
         self.guard = guard or ProviderGuard()
         compatible = OpenAICompatibleAdapter()
-        self.adapters = adapters or {'groq': compatible, 'openai': compatible, 'gemini': GeminiAdapter()}
+        self.adapters = adapters or {'groq': compatible, 'openai': compatible, 'nvidia': compatible, 'gemini': GeminiAdapter()}
         self.sleep = sleep
 
     def slots(self):
@@ -306,7 +322,11 @@ class ModelRouter:
         """The role's own slot when healthy, else any other healthy worker, else the lead."""
         slots = self.slots()
         wanted = ROLE_SLOT.get(role, role)
-        order = [wanted, *[name for name in ('worker_b', 'worker_c', 'worker_a') if name != wanted], 'lead']
+        if role == 'synthesis':
+            # Long-form writing falls back only to the lead, never to a short-output worker.
+            order = [wanted, 'lead']
+        else:
+            order = [wanted, *[name for name in ('worker_b', 'worker_d', 'worker_c', 'worker_a') if name != wanted], 'lead']
         for name in order:
             slot = slots.get(name)
             if slot and self.guard.available(slot):
@@ -326,12 +346,13 @@ class ModelRouter:
         pause = 0.0
         last = ProviderError('not_configured')
         capped = False
+        kinds = []
         while True:
             if not current or current.slot in tried:
                 if not capped or admit is None:
                     break
                 # The chain ran into the cap: finish on a model the run has already admitted.
-                current = next((row for name in ('lead', 'worker_b', 'worker_c', 'worker_a') if (row := slots.get(name)) and row.slot not in tried and self.guard.available(row) and admit(row, False)), None)
+                current = next((row for name in ('lead', 'worker_b', 'worker_d', 'worker_c', 'worker_a', 'worker_e') if (row := slots.get(name)) and row.slot not in tried and self.guard.available(row) and admit(row, False)), None)
                 capped = False
                 if not current:
                     last = ProviderError('model_cap')
@@ -349,12 +370,16 @@ class ModelRouter:
                 return result, record
             except ProviderError as error:
                 last = error
+                kinds.append(error.kind)
                 if error.kind == 'rate_limit':
                     pause = max(pause, error.retry_after or 20)
                 log.warning('work_model_failed slot=%s provider=%s kind=%s', current.slot, current.provider, error.kind)
                 current = slots.get(current.fallback)
         if pause and last.kind in RETRYABLE:
             raise WorkPaused(time.time() + max(pause, 5), 'work_rate_limited')
+        if kinds and last.kind in TRANSIENT and all(kind in TRANSIENT for kind in kinds):
+            # Every model in the chain was only busy or briefly broken: wait for the circuits, don't fail.
+            raise WorkPaused(time.time() + max(pause, 30), 'work_provider_unavailable')
         raise last
 
     def _attempts(self, slot, instruction, payload, schema, max_tokens, timeout, attempts):

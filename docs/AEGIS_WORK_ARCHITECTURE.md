@@ -16,10 +16,10 @@ Canvas reads GET /api/research/{id}/trace?after=N and GET /api/work/runs/{id}
 | Stage | Who | What it records |
 |---|---|---|
 | `plan` | Lead | Request received, intent, mode, plan, assignments, or one question |
-| `discover` | Search tool and optional Worker A | Queries, each source, any quality assessments, and pages read |
+| `discover` | Worker A, plus the search tool | Queries, each source, quality scores, pages read |
 | `analyze` | Worker B, up to 3 parallel branches | Findings with source IDs; the knowledge map for structured runs |
 | `verify` | Worker C | A verdict per claim, and gaps |
-| `fill_gaps` | Existing Deep runs with saved specialist assignments | One bounded extra round |
+| `fill_gaps` | Worker A's search tool and Worker B, Deep only | One bounded extra round |
 | `write` | Lead | Result, citation check, one repair if needed |
 | `publish` | No model | Images, media, report |
 
@@ -29,10 +29,10 @@ Canvas reads GET /api/research/{id}/trace?after=N and GET /api/work/runs/{id}
 |---|---|---|
 | Direct | None | Lead plans and writes |
 | Quick | Discovery only, when the web is needed | Lead, Worker A, lead |
-| Deep | None on new runs | Lead plans and writes. Longer reports use checkpointed section batches and a closing synthesis. |
-| Structured | Discovery if needed, analysis, verification | Lead plans and writes. Specialist calls extract and review findings and construct the map. |
+| Deep | All three | Lead, A, B per branch, C, B again for gaps, lead |
+| Structured | Discovery if needed, analysis, verification | As Deep, plus the map, with no gap round |
 
-A workflow card sets the mode. For a typed research prompt, the composer sends its selected Quick or Detailed depth. Workers can't start other workers or spend outside the run's budget.
+A workflow card sets the mode. For a typed prompt, the lead picks the smallest mode that does the job. Workers can't start other workers or spend outside the run's budget.
 
 ## Files
 

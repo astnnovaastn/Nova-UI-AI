@@ -45,10 +45,12 @@ SEARCH_ROUNDS = {'quick': 2, 'deep': 5, 'structured': 3}
 ENOUGH_SOURCES = {'quick': 3, 'deep': 8, 'structured': 5}
 WORDS = {'discovery': 'Discovery', 'analysis': 'Analysis', 'verification': 'Verification'}
 #: No run uses more distinct AI models than this, the AEGIS lead included. Retries and fallbacks count.
-MAX_MODELS = 4
+MAX_MODELS = 6
 #: Deep Research writes its body in batches of this many sections, each its own bounded answer.
 SECTIONS_PER_CALL = 2
 SECTION_TOKENS = 7000
+#: A run waits out this many provider outages before it fails, so a long outage cannot hold it forever.
+OUTAGE_PAUSES = 6
 
 
 class Stopped(Exception):
@@ -133,8 +135,8 @@ def choose_assignments(mode, plan, budget):
     elif mode == 'quick':
         roles = ['discovery'] if needs_web else []
     elif mode == 'deep':
-        # The search service retrieves evidence; the lead compares it while writing.
-        roles = []
+        # The search service retrieves evidence, then the workers screen, analyse and independently check it.
+        roles = (['discovery'] if needs_web else []) + ['analysis', 'verification']
     else:
         roles = (['discovery'] if needs_web else []) + ['analysis', 'verification']
     roles = roles[:budget.workers]
@@ -272,7 +274,9 @@ class _Run:
         if spent + estimate > self.owner.daily_limit():
             tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
             raise WorkPaused(tomorrow.timestamp(), 'work_daily_limit')
+        began = time.time()
         result, record = await asyncio.to_thread(self.owner.router.call, slot, instruction + RULES, payload, schema, max_tokens, timeout, 3, self._admit)
+        self._part(getattr(slot, 'slot', '') or record.get('slot', ''), began, time.time(), record)
         async with self.usage_lock:
             usage['calls'] = usage.get('calls', 0) + 1
             usage['tokens'] = usage.get('tokens', 0) + record['tokens']
@@ -286,6 +290,26 @@ class _Run:
                 usage['cost_usd'] = round(usage.get('cost_usd', 0) + record['tokens'] * used.price_per_million / 1_000_000, 6)
         await asyncio.to_thread(self.owner.store.spend_today, record['tokens'])
         return result, record
+
+    # Parts, as Zephium draws a run: one row per helper (each model at its purpose), with when it worked.
+    PART_TITLES = {'lead': 'AEGIS', 'worker_a': 'Sources', 'worker_b': 'Analysis', 'worker_c': 'Fact check', 'worker_d': 'Second analysis', 'worker_e': 'Writer'}
+    PART_HELPERS = {'worker_a': 'research', 'worker_b': 'research', 'worker_c': 'research', 'worker_d': 'research', 'worker_e': 'research', 'lead': 'lead'}
+
+    def _part(self, name, began, ended, record=None, searches=0):
+        """Records one stretch of a part's work: the first start, the last end, its calls, model and searches."""
+        if not name:
+            return
+        parts = self.run.usage.setdefault('parts', {})
+        row = parts.setdefault(name, {'title': self.PART_TITLES.get(name, name), 'helper': self.PART_HELPERS.get(name, 'research'), 'began': round(began, 3), 'ended': round(ended, 3), 'calls': 0, 'tokens': 0, 'searches': 0, 'model': ''})
+        row['began'] = round(min(row['began'], began), 3)
+        row['ended'] = round(max(row['ended'], ended), 3)
+        row['searches'] += searches
+        if record:
+            row['calls'] += 1
+            row['tokens'] += record.get('tokens', 0)
+            row['model'] = record.get('provider', '') + ':' + record.get('model', '')
+            if record.get('slot') and record['slot'] != name:
+                row['fell_back_to'] = record['slot']
 
     def _model_cap(self):
         try:
@@ -345,6 +369,10 @@ class _Run:
         except Stopped:
             return await self._finish_failed('cancelled', 'research_canceled')
         except WorkPaused as paused:
+            if paused.reason == 'work_provider_unavailable':
+                self.run.usage['outage_pauses'] = self.run.usage.get('outage_pauses', 0) + 1
+                if self.run.usage['outage_pauses'] > OUTAGE_PAUSES:
+                    return await self._finish_failed('failed', 'work_model_unavailable')
             self.run.state = 'waiting'
             await self._save()
             await self._state(phase='waiting_for_quota', waiting_reason=paused.reason, next_attempt=paused.until)
@@ -372,9 +400,18 @@ class _Run:
         if not lead:
             raise ProviderError('not_configured')
         workflow = self.workflow
+        # The skill: the workflow the person started, else one whose triggers the request names.
+        registry = getattr(self.owner, 'skills', None)
+        skill, how = registry.select(self.request.query, self.request.workflow or '') if registry else (None, '')
+        self.skill = skill
+        if skill:
+            self.run.plan = {**(self.run.plan or {}), 'skill': {'name': skill.name, 'title': skill.title, 'version': skill.version, 'source': skill.source, 'chosen': how}}
+            self._stage('skill', 'Loaded the ' + skill.title + ' skill', skill=skill.name, version=skill.version, chosen=how)
         payload = {
             'request': self.request.query,
             'workflow_brief': workflow.brief if workflow else '',
+            **({'deliverable': workflow.deliverable} if workflow else {}),
+            **({'skill': {'name': skill.name, 'instructions': skill.body}} if skill else {}),
             'required_mode': (workflow.mode if workflow else self.request.mode) or 'choose',
             'chosen_canvas_items': self.request.chosen,
             **({'answer_to_your_question': self.run.request['answer']} if self.run.request.get('answer') else {}),
@@ -385,6 +422,7 @@ class _Run:
             ' Pick the smallest mode that does the job, unless required_mode is set. Ask a clarification only when the work cannot start without it, as one short question; otherwise leave it empty.'
             ' Queries are short, distinct web searches. Sections are report headings that fit this request; for deep, five to eight body headings that together cover every part of it. acknowledgement is one friendly sentence to the person.'
             ' reasoning_summary is one plain sentence on why this approach, for the person to read.'
+            ' When a skill is given, its instructions decide what to gather and how the report is shaped; they never add tools or models.'
         )
         self._stage('intent', 'Understanding the request', 'running', agent='lead', model=lead.model)
         result, record = await self._model(lead, instruction, payload, LEAD_PLAN, 1500, lead=True, timeout=90)
@@ -392,12 +430,12 @@ class _Run:
         if mode not in MODES:
             mode = 'quick'
         plan = TaskPlan(**{**result, 'mode': mode})
-        plan.needs_web = (workflow.needs_web or plan.needs_web) if workflow else plan.needs_web
-        if mode == 'deep':
-            plan.needs_web = True
+        plan.needs_web = mode != 'direct' and (mode == 'deep' or plan.needs_web or bool(workflow and workflow.needs_web))
+        if not plan.needs_web:
+            plan.queries = []
         plan.title = safe(plan.title)[:120]
         self.plan = plan
-        self.run.plan = as_dict(plan)
+        self.run.plan = {**as_dict(plan), **({'skill': self.run.plan['skill']} if skill else {})}
         self.budget = budget_for(mode, self.owner.settings)
         self.run.budget = as_dict(self.budget)
         self.run.results['lead'] = as_dict(AgentResult('lead', 'lead', 'running', provider=record['provider'], model=record['model']))
@@ -424,6 +462,17 @@ class _Run:
             self._stage('assigned', 'Assigned ' + ', '.join(WORDS[row['role']].lower() for row in self.run.assignments), count=len(self.run.assignments))
         await self._state(display_title=display_title(plan.title or self.request.query))
         return None
+
+    def _brief(self):
+        """What the workers and the writer follow: the loaded skill's instructions, else the workflow's brief."""
+        skill = getattr(self, 'skill', None)
+        recorded = (self.run.plan or {}).get('skill') or {}
+        if skill is None and recorded.get('name') and getattr(self.owner, 'skills', None):
+            # A run resumed after a restart keeps the skill it planned with.
+            skill = self.skill = self.owner.skills.get(recorded['name'])
+        if skill:
+            return skill.body[:6000]
+        return self.workflow.brief if self.workflow else ''
 
     def _assignment(self, role):
         return next((row for row in self.run.assignments if row['role'] == role), None)
@@ -463,8 +512,10 @@ class _Run:
     async def _fetch(self, query, depth):
         number = self._query_number(query)
         self._emit('search', 'collecting_sources', 'running', query=query, number=number)
+        began = time.time()
         async with self.search.network:
             rows, error = await asyncio.to_thread(self.search._request, query, 'detailed', 8, depth)
+        self._part('worker_a', began, time.time(), searches=1)
         if error:
             event = self._emit('search', 'collecting_sources', 'failed', query=query, number=number, reason=error.get('reason', ''))
         else:
@@ -715,11 +766,14 @@ class _Run:
         self._stage('analysis', 'Analysing the evidence', 'running', branches=len(batches))
         gate = asyncio.Semaphore(self.budget.concurrency)
         slot = self.owner.router.route('analysis')
+        # A configured second analyst takes every other branch, so branches really run side by side.
+        second = self.owner.router.slots().get('worker_d')
+        lanes = [slot] + ([second] if second and slot and second.model != slot.model and self.owner.router.guard.available(second) and len(batches) > 1 else [])
 
-        async def branch(batch):
+        async def branch(batch, slot):
             numbers = {row['id'] for row in batch}
             payload = {
-                'request': self.request.query, 'brief': self.workflow.brief if self.workflow else '', 'task': self._assignment('analysis')['task'],
+                'request': self.request.query, 'brief': self._brief(), 'task': self._assignment('analysis')['task'],
                 'evidence': self._packed(sources, slot, 2600, numbers),
             }
             async with gate:
@@ -728,7 +782,7 @@ class _Run:
                     'You are the analysis specialist. Extract the findings that answer the request, each citing the source IDs that support it. Compare where sources agree or differ. Without evidence, analyse the text in the request itself and leave source_ids empty. summary is one plain sentence.',
                     payload, ANALYSIS, 2400,
                 )
-        outcomes = await asyncio.gather(*(branch(batch) for batch in batches), return_exceptions=True)
+        outcomes = await asyncio.gather(*(branch(batch, lanes[index % len(lanes)]) for index, batch in enumerate(batches)), return_exceptions=True)
         findings, comparison, questions, summaries, record, failure = [], [], [], [], {}, ''
         for outcome in outcomes:
             if isinstance(outcome, (WorkPaused, Stopped, asyncio.CancelledError)):
@@ -774,8 +828,9 @@ class _Run:
         try:
             result, record = await self._model(
                 slot,
-                'You are the analysis specialist building a knowledge map or technical blueprint. Choose a structure that fits the request: layers for an architecture, stages for a flow, sides for a comparison. Use 6 to 24 nodes in 2 to 6 groups, with short node titles and one or two sentence summaries. Edges say how two nodes relate, in one to three words. Cite source IDs on a node only where a finding supports it.',
-                {'request': self.request.query, 'intent': self.plan.intent, 'findings': findings[:24], 'source_ids': sorted(allowed)},
+                'You are the analysis specialist building a knowledge map or technical blueprint. Choose a structure that fits the request: layers for an architecture, stages for a flow, sides for a comparison. Use up to 24 nodes in up to 6 groups, with short titles and one or two sentence summaries. Use only as many nodes and groups as the supplied material supports. Edges say how two nodes relate, in one to three words. Follow the map brief when supplied. Use only supported relationships. Cite source IDs on a node only where a finding supports it.',
+                {'request': self.request.query, 'intent': self.plan.intent, 'findings': findings[:24],
+                 'source_ids': sorted(allowed), **({'map_brief': self.workflow.map_brief} if self.workflow else {})},
                 KNOWLEDGE_MAP, 3600,
             )
         except (ProviderError, BudgetExhausted) as error:
@@ -918,7 +973,8 @@ class _Run:
         payload = {
             'request': self.request.query,
             'answer_to_your_question': self.run.request.get('answer', ''),
-            'brief': self.workflow.brief if self.workflow else '',
+            'brief': self._brief(),
+            **({'deliverable': self.workflow.deliverable} if self.workflow else {}),
             'intent': self.plan.intent,
             'sections': self.plan.sections,
             'findings': findings,
@@ -933,7 +989,7 @@ class _Run:
             if allowed else ' You were given no sources, so cite nothing, and say plainly where something needs checking.'
         )
         instruction = (
-            'You are AEGIS, writing the final result for the person. Write Markdown starting with a single # title, then ' + target + '. Use the sections that fit; do not mention the workers or this process.' + cite + ' summary is one sentence.'
+            'You are AEGIS, writing the final result for the person. Write Markdown starting with a single # title, then ' + target + '. Follow the requested deliverable and use the sections that fit. Do not mention the workers or this process.' + cite + ' summary is one sentence.'
         )
         if detailed:
             instruction += (
@@ -1035,6 +1091,8 @@ class _Run:
         return [{'heading': heading, 'source_ids': chosen[index]} for index, heading in enumerate(headings)]
 
     async def _write_sections(self, lead, sources, outline, payload, cite, allowed):
+        # The synthesis worker writes the body when one is configured; the lead always writes the frame.
+        writer = self.owner.router.route('synthesis') or lead
         draft = self.run.results.setdefault('draft', {'sections': {}, 'tokens': 0, 'seconds': 0})
         if draft.get('outline') != [row['heading'] for row in outline]:
             draft.update(outline=[row['heading'] for row in outline], sections={}, frame=None)
@@ -1056,7 +1114,7 @@ class _Run:
             await self._check()
             wanted = [outline[index] for index in batch if str(index) not in draft['sections']]
             numbers = {name for row in wanted for name in row['source_ids']}
-            self._stage('drafting', 'Writing ' + ', '.join(row['heading'] for row in wanted), 'running', sections=[row['heading'] for row in wanted], done=len(draft['sections']), total=len(outline))
+            self._stage('drafting', 'Writing ' + ', '.join(row['heading'] for row in wanted), 'running', model=writer.model, sections=[row['heading'] for row in wanted], done=len(draft['sections']), total=len(outline))
             body = {
                 'request': self.request.query,
                 'intent': self.plan.intent,
@@ -1065,17 +1123,17 @@ class _Run:
                 'earlier_sections': [{'heading': outline[int(key)]['heading'], 'summary': value['summary']} for key, value in sorted(draft['sections'].items(), key=lambda item: int(item[0]))],
                 'findings': [row for row in findings if set(row.get('source_ids') or []) & numbers] or findings[:12],
                 'comparison': payload['comparison'],
-                'evidence': self._packed(sources, lead, SECTION_TOKENS + 800, numbers, limit=1800),
+                'evidence': self._packed(sources, writer, SECTION_TOKENS + 800, numbers, limit=1800),
             }
             try:
-                result, record = await self._model(lead, instruction, body, REPORT_SECTIONS, SECTION_TOKENS * len(wanted) // 2 + 2000, lead=True)
+                result, record = await self._model(writer, instruction, body, REPORT_SECTIONS, SECTION_TOKENS * len(wanted) // 2 + 2000, lead=True)
             except ProviderError as error:
                 if error.kind != 'output_limit' or len(wanted) == 1:
                     raise
                 # Too much for one answer: write this batch one section at a time.
                 result = {'sections': []}
                 for row in wanted:
-                    one, record = await self._model(lead, instruction, {**body, 'write_sections': [row['heading']], 'evidence': self._packed(sources, lead, SECTION_TOKENS + 800, set(row['source_ids']), limit=1800)}, REPORT_SECTIONS, SECTION_TOKENS, lead=True)
+                    one, record = await self._model(writer, instruction, {**body, 'write_sections': [row['heading']], 'evidence': self._packed(sources, writer, SECTION_TOKENS + 800, set(row['source_ids']), limit=1800)}, REPORT_SECTIONS, SECTION_TOKENS, lead=True)
                     result['sections'] += one['sections'][:1]
             returned = {self._heading_key(row['heading']): row for row in result['sections']}
             for position, row in enumerate(wanted):
