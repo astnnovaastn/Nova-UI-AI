@@ -1,0 +1,154 @@
+:root {
+  color-scheme: dark;
+  --canvas: #16171a;
+  --text: #e8e8ea;
+  --muted: #9a9ca3;
+  --line: #2c2e33;
+  --accent: #b9ecff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  background: var(--canvas);
+  color: var(--text);
+  font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+}
+
+main {
+  width: min(440px, calc(100vw - 48px));
+  text-align: center;
+}
+
+.mark {
+  width: 56px;
+  height: 56px;
+  color: var(--accent);
+}
+
+h1 {
+  margin: 10px 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+}
+
+#status {
+  min-height: 21px;
+  margin: 0 0 16px;
+  color: var(--muted);
+}
+
+#status.failed {
+  color: var(--text);
+}
+
+#progress {
+  width: 160px;
+  height: 2px;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+#progress span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  background: var(--accent);
+  animation: slide 1.4s ease-in-out infinite;
+}
+
+#progress.done {
+  visibility: hidden;
+}
+
+@keyframes slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #progress span {
+    width: 100%;
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+form {
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+
+label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #1d1e22;
+  color: var(--text);
+  font: inherit;
+}
+
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.help {
+  margin: 6px 0 16px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-weight: 400;
+}
+
+button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--canvas);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

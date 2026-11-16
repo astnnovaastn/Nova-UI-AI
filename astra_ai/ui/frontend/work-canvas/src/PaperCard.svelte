@@ -45,7 +45,7 @@
     const chip = target.closest<HTMLElement>("[data-url]");
     if (chip) {
       event.preventDefault();
-      browser.open(chip.dataset.url!, chip.title);
+      browser.open(chip.dataset.url!, chip.title, "report-citation", undefined, event);
       return;
     }
     if (target.closest("figure")) {
@@ -55,7 +55,7 @@
     const link = target.closest<HTMLAnchorElement>("a[href]");
     if (link && paper.sources.some((source) => source.url === link.href)) {
       event.preventDefault();
-      browser.open(link.href);
+      browser.open(link.href, "", "report-link", undefined, event);
     }
   }
 </script>
@@ -80,7 +80,7 @@
       </button>
       <span class="sites">
         {#each sites.slice(0, 5) as site (site.host)}
-          <button type="button" class="nodrag nopan" title={site.source.title} onclick={() => browser.open(site.source.url, site.source.title)}>{site.host}</button>
+          <button type="button" class="nodrag nopan" title={site.source.title} onclick={(event) => browser.open(site.source.url, site.source.title, "report-source", undefined, event)}>{site.host}</button>
         {/each}
       </span>
     </footer>
@@ -96,10 +96,7 @@
     block-size: 100%;
     overflow: hidden;
     border-radius: 14px;
-    background: var(--color-raised);
-    box-shadow:
-      0 0 0 1px var(--color-border),
-      var(--shadow-float);
+    background: transparent;
     color: var(--color-text);
   }
 
@@ -155,7 +152,7 @@
     flex: 1;
     min-block-size: 0;
     padding: 30px 44px 36px;
-    overflow-y: auto;
+    overflow: hidden;
     cursor: text;
     user-select: text;
   }
@@ -263,14 +260,14 @@
   .text :global(pre) {
     margin: 0 0 13px;
     padding: 12px;
-    overflow-x: auto;
+    overflow-x: hidden;
     border-radius: 10px;
     background: color-mix(in srgb, var(--color-text) 7%, transparent);
   }
 
   .text :global(.table-wrap) {
     margin: 0 0 16px;
-    overflow-x: auto;
+    overflow-x: hidden;
     border: 1px solid var(--color-border);
     border-radius: 10px;
   }

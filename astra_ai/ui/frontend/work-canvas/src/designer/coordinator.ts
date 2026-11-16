@@ -60,9 +60,11 @@ export class Designer {
     private finalPass = false;
     private plannedKey = '';
     topic = '';
+    workflow = '';
     /** Only a live run witnessed in its initiating window can trigger final composition. */
-    observeRun(state: string, topic = '') {
+    observeRun(state: string, topic = '', workflow = '') {
         this.topic = topic;
+        this.workflow = workflow;
         if (!this.initiated || this.dead) return;
         if (['running','waiting','queued'].includes(state)) this.observedRunning = true;
         if (state === 'completed' && this.observedRunning && !this.completed) {
@@ -106,8 +108,12 @@ export class Designer {
         window.addEventListener('offline', this.disconnected);
         window.addEventListener('keydown', this.userInput, true);
         window.addEventListener('pointerdown', this.userInput, true);
+        // A saved arrangement arrives by push ('aegis-canvas-layout') and is re-read on focus and
+        // when the page is shown again, so asking the backend is only a slow safety net. Checking
+        // the cards already on the page stays frequent: it costs no request.
+        let ticks = 0;
         this.poll = window.setInterval(() => { if (!document.hidden) {
-            void this.refresh();
+            if (++ticks % 12 === 0) void this.refresh();
             this.checkGraph();
         } }, 2500);
         void this.refresh(true);
@@ -198,7 +204,7 @@ export class Designer {
     input(incremental = false): LayoutInput {
         const s = this.api.snapshot();
         const nodes = s.nodes.map(n => ({ ...n, constraint: this.record.constraints[n.id] || {} }));
-        return { ...s, nodes, strategy: this.strategy, topic:this.topic, selectedOnly: this.selectedOnly, incremental, known: Object.keys(this.record.positions) };
+        return { ...s, nodes, strategy: this.strategy, topic:this.topic, workflow:this.workflow, previousFamily:incremental?this.record.strategy:undefined, selectedOnly: this.selectedOnly, incremental, known: Object.keys(this.record.positions) };
     }
     arrange(preview = true, incremental = false, final = false) {
         if (!['idle', 'preview'].includes(this.phase))

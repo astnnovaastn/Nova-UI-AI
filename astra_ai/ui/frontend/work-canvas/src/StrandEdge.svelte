@@ -43,9 +43,9 @@
 
 <script lang="ts">
   import { getContext, onMount } from "svelte";
-  import { useEdges, useNodes, type EdgeProps } from "@xyflow/svelte";
-  import type { Rect } from "./route";
-  import { cachedResearchFan, cachedResearchStrand, dragStrand, indexRoutingNodes, researchRoutingScene, routeResearchFan, routeResearchStrand, type RoutingScene } from "./research-routing";
+  import { useNodes, type EdgeProps } from "@xyflow/svelte";
+  import { indexRoutingNodes } from "./research-routing";
+  import { routingContext, type RoutingSnapshot } from "./routing-service";
   import { canvasArrival } from "$features/work/lib/canvas-context";
   import { describeStrand, type StrandData as Data } from "./relations";
   import { construction } from "./construction.svelte";
@@ -54,81 +54,18 @@
   const strand = $derived(data?.strand as Data);
   const arrival = getContext<((id: string) => unknown) | undefined>(canvasArrival);
   const nodes = useNodes();
-  const edges = useEdges();
-  const sharedScene=getContext<(()=>RoutingScene)|undefined>(researchRoutingScene);
-  const scene=$derived(sharedScene?.()??indexRoutingNodes(nodes.current));
+  const sharedRouter=getContext<(()=>RoutingSnapshot)|undefined>(routingContext);
+  const snapshot=$derived(sharedRouter?.());
+  const scene=$derived(snapshot?.scene??indexRoutingNodes(nodes.current));
   const fromRect=$derived(scene.bounds.get(source));
   const toRect=$derived(scene.bounds.get(target));
   const lane = $derived(strand.index - (strand.of - 1) / 2);
-  function portOffset(card: string, rect: Rect | undefined) {
-    if (!rect) return lane * 7;
-    const siblings = edges.current.filter(edge => {
-      const other = edge.data?.strand as Data | undefined;
-      return (edge.source === card || edge.target === card) &&
-        other && !other.summaryOnly && !other.detailOnly && !other.control;
-    }).map(edge => edge.id).sort();
-    const index = siblings.indexOf(id);
-    if (index < 0 || siblings.length < 2) return lane * 7;
-    const spacing = Math.min(10, Math.min(rect.width, rect.height) / (2 * (siblings.length - 1)));
-    return (index - (siblings.length - 1) / 2) * spacing;
-  }
-  const sourceOffset = $derived(portOffset(source, fromRect));
-  const targetOffset = $derived(portOffset(target, toRect));
-  const fan = $derived.by(() => {
-    const direction = strand.fan;
-    if (!direction || scene.moving.size || dormant) return null;
-    const hubId = direction === "out" ? source : target;
-    const hub = scene.cards.get(hubId);
-    if (!hub) return null;
-    const siblings = edges.current.filter(edge => {
-      const other = edge.data?.strand as Data | undefined;
-      return other?.fan === direction && (direction === "out" ? edge.source : edge.target) === hubId &&
-        !construction.pendingEdge(edge.id);
-    }).sort((a,b)=>a.id.localeCompare(b.id));
-    const members = siblings.flatMap(edge => {
-      const card = direction === "out" ? edge.target : edge.source;
-      const rect = scene.cards.get(card);
-      return rect ? [{ id: edge.id, rect, card }] : [];
-    });
-    // A link to a vertically stacked card should stay local, without breaking the fan to the right.
-    const aligned = members.filter(({rect}) => direction === "out"
-      ? rect.x - (hub.x + hub.width) >= 36
-      : hub.x - (rect.x + rect.width) >= 36);
-    const key = JSON.stringify([direction, hubId, aligned.map(member => member.id)]);
-    const route = cachedResearchFan(scene, key, () => {
-      const used = new Set([hubId, ...aligned.map(member => member.card)]);
-      const blockers = [...scene.cards].filter(([card]) => !used.has(card)).map(([, rect]) => rect);
-      return routeResearchFan(hub, aligned, blockers, direction);
-    });
-    const branch = route?.branches.get(id);
-    return branch ? { branch, trunk: route!.branches.keys().next().value === id ? route!.trunk : null } : null;
-  });
   const focused = $derived(selected || scene.byId.get(source)?.selected || scene.byId.get(target)?.selected);
   const dormant = $derived((!!strand.control || !!strand.detailOnly) && !focused);
-  type Path = NonNullable<ReturnType<typeof routeResearchStrand>>;
-  let settled: Path|null = null;
-  let trunk: string|null = null;
-  const geometry = $derived.by<Path|null>(() => {
-    if (!fromRect || !toRect || strand.summaryOnly || dormant) return null;
-    if (scene.moving.size) {
-      if (!scene.moving.has(source) && !scene.moving.has(target)) return settled;
-      // During the gesture keep attached lines responsive. Re-route around obstacles once on release.
-      return dragStrand(fromRect,toRect,settled?.from??"right",settled?.to??"left",sourceOffset,targetOffset);
-    }
-    const shared = fan;
-    trunk = shared?.trunk??null;
-    if (shared) return settled=shared.branch;
-    return settled=cachedResearchStrand(scene,JSON.stringify([source,target,sourceOffset,targetOffset]),()=>{
-      const holders=new Set<string>();
-      for(const end of [source,target])for(let parent=scene.byId.get(end)?.parentId;parent;parent=scene.byId.get(parent)?.parentId)holders.add(parent);
-      const obstacles=[...scene.cards].filter(([key])=>key!==source&&key!==target&&!holders.has(key)).map(([,bounds])=>bounds);
-      return routeResearchStrand(fromRect,toRect,obstacles,sourceOffset,targetOffset);
-    });
-  });
-  const visibleFan = $derived(!scene.moving.size ? fan : null);
-  const visibleTrunk=$derived(scene.moving.size
-    ? (scene.moving.has(source)||scene.moving.has(target)?null:trunk)
-    : visibleFan?.trunk);
+  const routed = $derived(!strand.summaryOnly && !dormant ? snapshot?.get(id) : null);
+  const geometry = $derived(routed?.geometry ?? null);
+  const visibleTrunk = $derived(routed?.trunk ?? null);
+  const visibleFan = false;
   const backwards = $derived(!!geometry && geometry.t.x < geometry.s.x && geometry.from !== "bottom");
   const lit = $derived(strand.status === "active");
   const markerHint = $derived(strand.summaryOnly ? " Summarizes the connected steps; inspect connection." : " No clear route; inspect connection.");

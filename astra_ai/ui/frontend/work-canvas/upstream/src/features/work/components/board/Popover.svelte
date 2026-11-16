@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, type Snippet } from "svelte";
+  import {fitPopover} from "../../../../../../src/objects/fit-popover";
   import { duration, easing, reducedMotion } from "$shared/lib/motion";
   let {
     label,
@@ -24,13 +25,14 @@
       ],
       { duration: duration(reducedMotion() ? "instant" : "fast"), easing: easing("out") },
     );
+    const stopFit=fitPopover(root);
     root?.focus({ preventScroll: true });
     // Anything pressed outside it closes it; the press still does what it does.
     const away = (event: PointerEvent) => {
       if (root && !root.contains(event.target as Node)) onclose();
     };
     window.addEventListener("pointerdown", away, true);
-    return () => window.removeEventListener("pointerdown", away, true);
+    return () => {stopFit();window.removeEventListener("pointerdown", away, true);};
   });
 </script>
 

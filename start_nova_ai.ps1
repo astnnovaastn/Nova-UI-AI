@@ -1,4 +1,5 @@
-param([switch]$NoBrowser)
+# -NoFrontend: start only the backend. AEGIS Desktop uses it, because it serves the built web app itself.
+param([switch]$NoBrowser, [switch]$NoFrontend)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $backend = Join-Path $root 'astra_ai\ui\backend'
@@ -92,7 +93,7 @@ if (-not $health -or $health.status -ne 'healthy') {
 $frontendResponse = $null
 try { $frontendResponse = Invoke-WebRequest 'http://127.0.0.1:5173/' -UseBasicParsing -TimeoutSec 2 } catch { }
 $frontendProcess = $null
-if (-not $frontendResponse -or $frontendResponse.StatusCode -ne 200) {
+if (-not $NoFrontend -and (-not $frontendResponse -or $frontendResponse.StatusCode -ne 200)) {
     $frontendLog = Join-Path $logs 'frontend-console.log'
     $frontendError = Join-Path $logs 'frontend-errors.log'
     $frontendProcess = Start-Process -FilePath $node.Source -ArgumentList @("`"$vite`"", '--host', '127.0.0.1') -WorkingDirectory $frontend -WindowStyle Hidden -PassThru -RedirectStandardOutput $frontendLog -RedirectStandardError $frontendError
@@ -109,6 +110,6 @@ Write-Host '  UI:      http://127.0.0.1:5173/'
 Write-Host '  Backend: http://127.0.0.1:8340/api/health'
 Write-Host ("  Gemini:  " + $(if ($health.gemini_live_configured) { 'configured' } else { 'not configured' }))
 Write-Host 'Click the microphone in the UI to grant microphone access and start talking.'
-if (-not $NoBrowser) { Start-Process 'http://127.0.0.1:5173/' }
+if (-not $NoBrowser -and -not $NoFrontend) { Start-Process 'http://127.0.0.1:5173/' }
 
 

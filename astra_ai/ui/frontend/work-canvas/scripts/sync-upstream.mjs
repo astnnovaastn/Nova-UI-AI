@@ -4,6 +4,10 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import {designerPatches} from "./designer-patches.mjs";
+import {v17Patches} from "./v17-patches.mjs";
+import {v20Patches} from "./v20-patches.mjs";
+import {v22Patches, runtimeSeams} from "./v22-patches.mjs";
+import {v21Patches} from "./v21-patches.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -16,6 +20,21 @@ const out = path.join(pkg, "upstream");
 const dest = path.join(out, "src");
 
 const roots = [
+  "features/work/components/bar/NotePanel.svelte",
+  "features/tools/components/previews/NotesView.svelte",
+  "features/tools/components/previews/TasksView.svelte",
+  "features/notes/components/NotesPage.svelte",
+  "features/tasks/components/TasksPage.svelte",
+  "features/work/components/bar/TasksPanel.svelte",
+  "features/work/components/objects/ObjectCentre.svelte",
+  "features/work/components/LiftHeader.svelte",
+  "features/work/components/local/CommandReview.svelte",
+  "features/work/components/local/CommandRecord.svelte",
+  "features/work/components/objects/ObjectView.svelte",
+  "features/notes/components/Notes.svelte",
+  "features/tasks/components/TaskBoard.svelte",
+  "features/tasks/components/TaskList.svelte",
+  "features/tasks/components/TaskComposer.svelte",
   "features/work/components/WorkCanvas.svelte",
   "features/work/components/bar/WorkBar.svelte",
   "features/work/components/bar/BarTool.svelte",
@@ -545,6 +564,7 @@ function walk(file) {
   for (const raw of specs) {
     if (!raw) continue;
     const spec = raw.split("?")[0];
+    if (runtimeSeams(path.relative(from,file).replaceAll("\\","/"),spec)) continue;
     const target = resolve(spec, file);
     if (target) walk(target);
     else if (target === undefined && !spec.startsWith("$shared/i18n")) unresolved.add(`${spec} (from ${path.relative(from, file)})`);
@@ -812,7 +832,7 @@ patches.push(
     file: "features/work/components/run/PartRow.svelte",
     why: "A stack's caption carries the control that opens it into one card per page, and stacks it again.",
     find: "      <strong>{part.title}</strong>\n    </button>\n",
-    replace: "      <strong>{part.title}</strong>\n    </button>\n    {#if part.stack && (!part.stack.open || !part.stack.index)}<button\n        type=\"button\"\n        class=\"stack-toggle nodrag nopan\"\n        aria-expanded={part.stack.open}\n        aria-label={part.stack.open ? `Stack the ${part.stack.count} pages again` : `Show all ${part.stack.count} pages from ${part.title}`}\n        onclick={(event) => {\n          event.stopPropagation();\n          globalThis.dispatchEvent(new CustomEvent(\"aegis-stack-toggle\", { detail: part.stack!.id }));\n        }}>{part.stack.open ? \"Stack pages\" : `${part.stack.count} pages`}</button\n      >{/if}\n",
+    replace: "      <strong>{part.title}</strong>\n    </button>\n    {#if part.stack}<button type=\"button\" class=\"stack-toggle nodrag nopan\" aria-label={`Show all ${part.stack.count} pages from ${part.title}`} onclick={(event) => { event.stopPropagation(); stackGesture(event, \"toggle\"); }} onpointerenter={(event) => event.pointerType !== \"touch\" && stackGesture(event, \"enter\")} onpointerleave={(event) => stackGesture(event, \"leave\")}>{part.stack.count} pages</button>{/if}\n",
   },
   {
     file: "features/work/components/run/PartRow.svelte",
@@ -900,6 +920,84 @@ patches.push({
   "why": "Mark individual expanded previews for the AEGIS stack animation."
 });
 
+patches.push(...[
+  {
+    "file": "features/work/components/run/PartRow.svelte",
+    "find": "  const fanOf = (index: number) => `translate(${index * (PART.window + 16)}px, 0)`;",
+    "replace": "  const fanOf = (index: number) => `translate(${index * (PART.window + 16)}px, 0)`;\n  function stackGesture(event: Event, kind: \"enter\" | \"leave\" | \"toggle\") {\n    if (!part.stack) return;\n    const origin = event.currentTarget as HTMLElement;\n    const anchor = origin.closest(\".part\")?.querySelector<HTMLElement>(\".stack .page\");\n    if (anchor) globalThis.dispatchEvent(new CustomEvent(\"aegis-source-stack\", { detail: { id: item.id, anchor, origin, kind, pageOrder: ordered.map((page) => page.id) } }));\n  }",
+    "why": "AEGIS source stack and webpage preview integration."
+  },
+  {
+    "file": "features/work/components/run/PartRow.svelte",
+    "find": "      class:holding={!!waiting?.human}\n      style:inset-inline-start=\"{partLead}px\"",
+    "replace": "      class:holding={!!waiting?.human}\n      role=\"group\"\n      aria-label={part.title}\n      onpointerenter={(event) => event.pointerType !== \"touch\" && stackGesture(event, \"enter\")}\n      onpointerleave={(event) => stackGesture(event, \"leave\")}\n      style:inset-inline-start=\"{partLead}px\"",
+    "why": "AEGIS source stack and webpage preview integration."
+  },
+  {
+    "file": "features/work/components/run/PartRow.svelte",
+    "find": "    aria-label={page.title || page.url}\n    onclick={(event) => {\n      event.stopPropagation();\n      onopen(page.id);\n    }}",
+    "replace": "    aria-label={part.stack ? `Show pages from ${part.title}` : page.title || page.url}\n    tabindex={part.stack && index > 0 ? -1 : 0}\n    aria-hidden={part.stack && index > 0 ? true : undefined}\n    onclick={(event) => {\n      event.stopPropagation();\n      if (part.stack) stackGesture(event, \"toggle\");\n      else onopen(page.id);\n    }}",
+    "why": "AEGIS source stack and webpage preview integration."
+  },
+  {
+    "file": "features/work/components/run/PageFace.svelte",
+    "find": "    {#if shown}\n      <canvas",
+    "replace": "    {#if preview?.thumbnail}\n      <img class=\"website-thumb\" src={preview.thumbnail} alt=\"\" loading=\"lazy\" decoding=\"async\" />\n      <span class=\"preview-label\" title={preview.capturedAt ? new Date(preview.capturedAt * 1000).toLocaleString() : undefined}>Webpage preview</span>\n      {#if preview.excerpt}<span class=\"caption\">{preview.excerpt}</span>{/if}\n    {:else if shown}\n      <canvas",
+    "why": "AEGIS source stack and webpage preview integration."
+  },
+  {
+    "file": "features/work/components/run/PageFace.svelte",
+    "find": "<style>\n",
+    "replace": "<style>\n  .website-thumb { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }\n  .preview-label { position: absolute; z-index: 1; top: 5px; right: 5px; border-radius: 4px; padding: 2px 5px; background: #202124ed; color: #f1f1f1; font-size: 9px; line-height: 1.2; }\n",
+    "why": "AEGIS source stack and webpage preview integration."
+  },
+  {
+    "file": "features/work/components/run/PageFace.svelte",
+    "find": "<span class=\"window\" class:live class:still>",
+    "replace": "<span class=\"window\" class:live class:still title={[title, url, preview?.retrieval ? \"Retrieval: \" + preview.retrieval : \"\", preview?.citations ? `${preview.citations} citation(s)` : \"\"].filter(Boolean).join(\"\\n\")}>",
+    "why": "AEGIS source stack and webpage preview integration."
+  }
+]);
+
+patches.push(...[
+  {
+    "file": "features/work/components/CanvasNode.svelte",
+    "why": "Attach actual loaded Skills beside the existing AEGIS prompt card.",
+    "find": "  import RequestText from \"./cards/RequestText.svelte\";",
+    "replace": "  import RequestText from \"./cards/RequestText.svelte\";\n  import SkillMarks from \"../../../../../src/SkillMarks.svelte\";\n  import type { LoadedSkill } from \"../../../../../src/work-run\";"
+  },
+  {
+    "file": "features/work/components/CanvasNode.svelte",
+    "why": "Draw Skill marks as a presentation layer without adding graph nodes.",
+    "find": "    {:else if type === \"objective\" || type === \"request\"}<RequestText",
+    "replace": "    {:else if type === \"objective\" || type === \"request\"}\n      {@const skills = (data as typeof data & { aegisSkills?: LoadedSkill[] }).aegisSkills}\n      {#if skills?.length}<SkillMarks {skills} />{/if}\n      <RequestText"
+  }
+]);
+
+patches.push(...[
+  {
+    "file": "features/work/components/run/PageFace.svelte",
+    "why": "Fit existing page identity and excerpt into a zoomed stack card without clipping the title.",
+    "find": "    still = false,\n  }: {",
+    "replace": "    still = false,\n    compact = false,\n  }: {\n    compact?: boolean;"
+  },
+  {
+    "file": "features/work/components/run/PageFace.svelte",
+    "why": "Make compact stack page layout explicit.",
+    "find": "<span class=\"window\" class:live class:still title=",
+    "replace": "<span class=\"window\" class:live class:still class:compact title="
+  },
+  {
+    "file": "features/work/components/run/PageFace.svelte",
+    "why": "Keep the miniature title and excerpt distinct at narrow sizes.",
+    "find": "  .website-thumb {",
+    "replace": "  .compact .bar { block-size: 24px; gap: 5px; padding: 0 7px; font-size: 10px; }\n  .compact .sign { display: none; }\n  .compact .face { display: block; padding: 9px 11px; }\n  .compact .words { font-size: 13px; line-height: 17px; -webkit-line-clamp: 2; line-clamp: 2; }\n  .compact .excerpt { display: -webkit-box; margin-top: 5px; line-height: 13px; font-size: 10px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }\n  .website-thumb {"
+  }
+]);
+
+patches.push(...v17Patches);
+patches.push(...v20Patches);
+patches.push(...v21Patches, ...v22Patches);
 for (const patch of patches) {
   const target = path.join(dest, patch.file);
   const text = fs.readFileSync(target, "utf8").replace(/\r\n/g, "\n");

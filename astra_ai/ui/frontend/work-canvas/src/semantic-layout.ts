@@ -30,6 +30,7 @@ export type SemanticInput = {
   plan?: (Box & { below: readonly Box[] }) | null;
   /** Opened sources (or source stacks), already in retrieval order. Each carries a caption above it. */
   sources: readonly SourceRow[];
+  acquisition?: Box | null;
   /** The list of every retrieved source, under the first column of sources. */
   sourceList?: Box | null;
   /** Workers that read the sources, each with the stage its dependencies put it in (2 = right after the sources). */
@@ -100,6 +101,7 @@ export function semanticLayout(input: SemanticInput): SemanticLayout {
         rowGap: websites ? WEBSITE_GAP - CAPTION : stageGap });
     if (columns.length) stages.push(columns);
   };
+  if(input.acquisition)chunk([{...input.acquisition,caption:false}],stageGap);
   chunk(input.sources.map((card) => ({ ...card, caption: true })), input.plan ? gaps.column : stageGap, true);
   // The full list of retrieved sources hangs under the first column of sources (placed after the
   // stages are centred, so a long list never pulls the midline down), or is the stage itself.

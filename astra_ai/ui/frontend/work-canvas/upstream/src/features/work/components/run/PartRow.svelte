@@ -28,11 +28,15 @@
     onlist,
     onneed,
     onwait,
+    fanState,
+    reverseFan = false,
   }: {
+    fanState?: "closed" | "open";
+    reverseFan?: boolean;
     item: CanvasItem;
     selected: boolean;
     /** Opens one of the part's pages in the centre. */
-    onopen: (page: string) => void;
+    onopen: (page: string, event?: MouseEvent) => void;
     /** Opens everything the part read or cited. */
     onlist: () => void;
     /** Meets the part's need: `sign_in` opens the site, `again` runs the part again. */
@@ -61,8 +65,10 @@
       return (part.host ?? "").replace(/^www\./u, "");
     }
   };
-  const shown = $derived(ordered.slice(0, PART.shown));
-  const stack = $derived(stackSize(part.pages.length));
+  const shown = $derived(fanState ? ordered : ordered.slice(0, PART.shown));
+  const windowWidth = $derived((item as any).aegisSourceWidth || PART.window);
+  const frameHeight = $derived(windowWidth * 10 / 16);
+  const stack = $derived({...stackSize(part.pages.length),width:stackSize(part.pages.length).width+windowWidth-PART.window,height:stackSize(part.pages.length).height+frameHeight-PART.frame});
   const working = $derived(part.state === "running" || part.state === "waiting");
   const cited = $derived(part.cited ?? []);
   const more = $derived(Math.max(0, (part.citedCount ?? 0) - cited.length));
@@ -71,9 +77,15 @@
   const passed = $derived(cited.filter((row) => !row.opened));
   /** Folded, each window behind the front one peeks out right and below it. */
   const placeOf = (index: number) =>
-    `translate(${index * PART.behindX}px, ${index * PART.behindY}px)`;
+    `translate(${(reverseFan ? -1 : 1) * index * PART.behindX}px, ${index * PART.behindY}px)`;
   /** Fanned out on hover, the windows stand side by side along the row. */
-  const fanOf = (index: number) => `translate(${index * (PART.window + 16)}px, 0)`;
+  const fanOf = (index: number) => `translate(${(reverseFan ? -1 : 1) * index * (windowWidth + 16)}px, 0)`;
+  function stackGesture(event: Event, kind: "enter" | "leave" | "toggle") {
+    if (!part.stack) return;
+    const origin = event.currentTarget as HTMLElement;
+    const anchor = origin.closest(".part")?.querySelector<HTMLElement>(".stack .page");
+    if (anchor) globalThis.dispatchEvent(new CustomEvent("aegis-source-stack", { detail: { id: item.id, anchor, origin, kind, pageOrder: ordered.map((page) => page.id) } }));
+  }
   /** A helper's own view of its work, when its stream has built one. */
   const content = $derived(shape === "helper" ? partContent(part.helper) : null);
   const asking = $derived(part.ask ? askCard() : null);
@@ -158,16 +170,7 @@
       <PartMark {part} />
       <strong>{part.title}</strong>
     </button>
-    {#if part.stack && (!part.stack.open || !part.stack.index)}<button
-        type="button"
-        class="stack-toggle nodrag nopan"
-        aria-expanded={part.stack.open}
-        aria-label={part.stack.open ? `Stack the ${part.stack.count} pages again` : `Show all ${part.stack.count} pages from ${part.title}`}
-        onclick={(event) => {
-          event.stopPropagation();
-          globalThis.dispatchEvent(new CustomEvent("aegis-stack-toggle", { detail: part.stack!.id }));
-        }}>{part.stack.open ? "Stack pages" : `${part.stack.count} pages`}</button
-      >{/if}
+    {#if part.stack}<button type="button" class="stack-toggle nodrag nopan" aria-label={`Show all ${part.stack.count} pages from ${part.title}`} onclick={(event) => { event.stopPropagation(); stackGesture(event, "toggle"); }} onpointerenter={(event) => event.pointerType !== "touch" && stackGesture(event, "enter")} onpointerleave={(event) => stackGesture(event, "leave")}>{part.stack.count} pages</button>{/if}
     {#if waiting?.human}<NeedsYou
         inline
         page={waiting.human}
@@ -220,7 +223,13 @@
     <div
       class="stack"
       class:fans={shown.length > 1 && !part.stack}
-      class:holding={!!waiting?.human}
+      class:holding={!!waiting?.human || !!part.stack}
+      class:presented={!!fanState}
+      data-expanded={fanState === "open"}
+      role="group"
+      aria-label={part.title}
+      onpointerenter={(event) => event.pointerType !== "touch" && stackGesture(event, "enter")}
+      onpointerleave={(event) => stackGesture(event, "leave")}
       style:inset-inline-start="{partLead}px"
       style:inline-size="{stack.width}px"
       style:block-size="{stack.height}px"
@@ -303,14 +312,18 @@
     class:behind={index > 0}
     style:--place={placeOf(index)}
     style:--fan={fanOf(index)}
-    style:z-index={PART.shown - index}
-    style:inline-size="{PART.window}px"
-    style:block-size="{PART.bar + PART.frame}px"
+    style:z-index={shown.length - index}
+    data-source-url={page.url}
+    style:inline-size="{windowWidth}px"
+    style:block-size="{PART.bar + frameHeight}px"
     title={page.title || page.url}
-    aria-label={page.title || page.url}
+    aria-label={part.stack ? `Show pages from ${part.title}` : page.title || page.url}
+    tabindex={part.stack && index > 0 ? -1 : 0}
+    aria-hidden={part.stack && index > 0 ? true : undefined}
     onclick={(event) => {
       event.stopPropagation();
-      onopen(page.id);
+      if (part.stack) stackGesture(event, "toggle");
+      else onopen(page.id, event);
     }}
   >
     <PageFace
@@ -325,6 +338,10 @@
 {/snippet}
 
 <style>
+  .part:has(.presented) .label, .presented .count { display: none; }
+  .part .stack.presented { inset-inline-start: 0 !important; }
+  .presented .page { transition-duration: 280ms; }
+  @media (prefers-reduced-motion: reduce) { .presented .page { transition: none; } }
   /* The row's box is larger than what it draws: only what is drawn takes the pointer, so
      the empty space around the windows pans the canvas like any other. */
   .part {
@@ -487,7 +504,8 @@
   }
 
   /* Hovering the stack fans its windows out along the row, over what follows. */
-  .fans:hover .page {
+  .fans:not(.presented):hover .page,
+  .presented[data-expanded="true"] .page {
     transform: var(--fan);
   }
 

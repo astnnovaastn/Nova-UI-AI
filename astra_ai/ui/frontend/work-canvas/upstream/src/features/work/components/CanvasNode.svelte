@@ -37,6 +37,8 @@
   import InputMark from "./run/InputMark.svelte";
   import ObjectHost from "./run/ObjectHost.svelte";
   import RequestText from "./cards/RequestText.svelte";
+  import SkillMarks from "../../../../../src/SkillMarks.svelte";
+  import type { LoadedSkill } from "../../../../../src/work-run";
   import BlockHost from "./board/BlockHost.svelte";
   import BoardHead from "./board/BoardHead.svelte";
   import Trail from "./board/Trail.svelte";
@@ -47,6 +49,7 @@
   import CollectionCard from "../../../../../src/CollectionCard.svelte";
   import PlanCard from "../../../../../src/PlanCard.svelte";
   import StageCard from "../../../../../src/StageCard.svelte";
+  import AdaptiveCard from "../../../../../src/objects/AdaptiveCard.svelte";
   import * as m from "$shared/i18n/messages";
   const open = getContext<(id: string) => void>(canvasOpen);
   const action = getContext<(id: string, action?: string) => void>(canvasAction);
@@ -56,7 +59,7 @@
     canvasAreas,
   );
   const arrival = getContext<((id: string) => Duration | null) | undefined>(canvasArrival);
-  let { id, data, selected }: NodeProps<WorkItemNode> = $props();
+  let { id, data, selected, positionAbsoluteY }: NodeProps<WorkItemNode> = $props();
   const seen = getContext<((id: string) => boolean) | undefined>(canvasSeen);
   /** Far from the view it is an empty box of its size; its content draws once it comes near. */
   const near = $derived(!seen || seen(id));
@@ -107,7 +110,7 @@
 <NodeResizer
   onResizeStart={() => resize(true)}
   onResizeEnd={() => resize(false)}
-  isVisible={selected && !data.sizeLocked && (!laid || (data.designer && !["mapgroup","head","trail","input"].includes(type)))}
+  isVisible={selected && !data.sizeLocked && ((!laid) || (data.designer && !["mapgroup","head","trail","input"].includes(type)))}
   minWidth={160}
   minHeight={72}
   maxWidth={4096}
@@ -115,7 +118,7 @@
   lineClass="work-resize-line"
   handleClass="work-resize-handle"
 />
-<NodeToolbar isVisible={selected && tooled && activeToolbar?.() === id} position={Position.Top} offset={10 * scale}>
+<NodeToolbar isVisible={selected && tooled && activeToolbar?.() === id} position={selected && positionAbsoluteY * viewport.current.zoom + viewport.current.y < 100 * scale ? Position.Bottom : Position.Top} offset={10 * scale}>
   <div class="bar nopan nodrag" role="toolbar" aria-label={data.title} style:--scale={scale}>
     <button type="button" onclick={() => (waiting ? action(id, "help") : open(id))}>
       <Icon icon={ArrowUpRight01Icon} size={14} />{waiting
@@ -124,6 +127,7 @@
           ? m.work_board_close()
           : m.work_env_open()}
     </button>
+    {#if type === "adaptive"}<button type="button" onclick={() => window.dispatchEvent(new CustomEvent('aegis-object-save',{detail:{id:(data as any).aegisObject.id,action:'note'}}))}>Save as note</button><button type="button" onclick={() => window.dispatchEvent(new CustomEvent('aegis-object-save',{detail:{id:(data as any).aegisObject.id,action:'task'}}))}>Make task</button>{/if}
     {#if data.artifact && !inert}<button
         type="button"
         onclick={async () => {
@@ -189,13 +193,17 @@
       />
     {:else if type === "note"}<NoteCard item={data} {selected} />
     {:else if type === "media"}<MediaCard item={data} {selected} />
-    {:else if type === "objective" || type === "request"}<RequestText
+    {:else if type === "objective" || type === "request"}
+      {@const skills = (data as typeof data & { aegisSkills?: LoadedSkill[] }).aegisSkills}
+      {#if skills?.length}<SkillMarks {skills} />{/if}
+      <RequestText
         item={data}
         {selected}
         ontoggle={() => action(id, "expand-request")}
         onaction={() => action(id)}
       />
     {:else if type === "object" && data.object}<ObjectHost {id} item={data} {selected} />
+    {:else if type === "adaptive"}<AdaptiveCard value={(data as any).aegisObject}/>
     {:else if type === "input"}<InputMark item={data} />
     {:else if type === "sources"}<SourcesCard item={data} {selected} />
     {:else if type === "part"}<PartRow
@@ -256,6 +264,9 @@
   }
 
   .bar {
+    flex-wrap: wrap;
+    inline-size: max-content;
+    max-inline-size: min(360px, calc(100vw - 32px));
     transform: scale(var(--scale, 1));
     transform-origin: 50% 100%;
     display: flex;

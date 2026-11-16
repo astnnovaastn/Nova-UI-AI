@@ -15,7 +15,7 @@ from astra_ai.memory.shared_memory import atomic, read
 
 from .contracts import RunState, as_dict, load
 
-PUBLIC_FIELDS = ('run_id', 'research_id', 'state', 'stage', 'plan', 'assignments', 'artifacts', 'relations', 'usage', 'failure', 'created', 'updated')
+PUBLIC_FIELDS = ('run_id', 'research_id', 'state', 'stage', 'plan', 'assignments', 'artifacts', 'relations', 'usage', 'failure', 'created', 'updated', 'schema_version', 'task_graph', 'canvas_objects', 'coverage')
 
 
 class WorkStore:

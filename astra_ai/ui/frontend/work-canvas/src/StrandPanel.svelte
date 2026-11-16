@@ -2,7 +2,7 @@
 <script lang="ts">
   import { MEANING, STATUS_WORDS, type StrandData } from "./relations";
 
-  let { strand, from, to, onclose, onsource }: { strand: StrandData; from: string; to: string; onclose: () => void; onsource: (url: string) => void } = $props();
+  let { strand, from, to, relays = [], onclose, onsource }: { strand: StrandData; from: string; to: string; relays?: string[]; onclose: () => void; onsource: (url: string) => void } = $props();
   const when = (seconds: number) => (seconds ? new Date(seconds * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "");
   const count = (detail: Record<string, unknown>) =>
     Object.entries(detail)
@@ -19,6 +19,7 @@
     </div>
     <button type="button" onclick={onclose} aria-label="Close connection details">×</button>
   </header>
+  {#if relays.length}<p class="meta">Visual relays: {relays.join(" → ")}. These cards do not add processing steps.</p>{/if}
   <ol>
     {#each strand.relations as row (row.id)}
       <li data-status={row.status}>

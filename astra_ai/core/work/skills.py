@@ -95,6 +95,24 @@ def render(skill: Skill) -> str:
     return '\n'.join(lines) + '\n---\n\n' + skill.body.strip() + '\n'
 
 
+def compatible(skill, other):
+    return skill.category == other.category or {skill.name, other.name} == {'map-a-project', 'system-design'}
+
+
+def snapshot(skill, how, workflow='', available_tools=()):
+    detail = skill.public()
+    detail.pop('triggers', None)
+    detail.pop('enabled', None)
+    detail['tools'] = [tool for tool in detail['tools'] if tool in available_tools]
+    detail.update(chosen=how, workflow=workflow, status='loaded')
+    return {'public': detail, 'instructions': skill.body[:4200]}
+
+
+def instructions_for(snapshots):
+    return '\n\n'.join(item['public']['title'] + ':\n' + item['instructions'] for item in snapshots)
+
+
+
 class SkillRegistry:
     """Built-in skills (the workflow catalog, with fuller bodies where shipped), then the person's own."""
 
@@ -154,17 +172,34 @@ class SkillRegistry:
     # Choosing
 
     def select(self, request: str, workflow: str = ''):
-        """The skill for a run: the workflow the person started, else one whose triggers the request names."""
+        selected = self.select_many(request, workflow)
+        return selected[0] if selected else (None, '')
+
+    def select_many(self, request: str, workflow: str = ''):
+        """Choose the explicit workflow first, then strongly matched complementary skills."""
         skills = {name: skill for name, skill in self.all().items() if skill.enabled}
-        if workflow and workflow in skills:
-            return skills[workflow], 'workflow'
-        text = request.lower()
-        best = None
+        text = request.casefold()
+        matches = []
         for skill in skills.values():
-            hits = [t for t in skill.triggers if t and re.search(r'\b' + re.escape(t.lower()) + r'\b', text)]
-            if hits and (not best or len(hits) > best[1]):
-                best = (skill, len(hits))
-        return (best[0], 'matched') if best else (None, '')
+            if skill.name == workflow:
+                continue
+            hits = [trigger for trigger in skill.triggers if trigger and
+                    re.search(r'(?<!\w)' + re.escape(trigger.casefold()) + r'(?!\w)', text)]
+            if hits:
+                matches.append((skill, len(hits), max(len(trigger.split()) for trigger in hits)))
+        matches.sort(key=lambda row: (-row[1], -row[2], row[0].name))
+        primary = skills.get(workflow)
+        selected = [(primary, 'workflow')] if primary else []
+        for skill, _, phrase_size in matches:
+            if not selected or (phrase_size > 1 and all(compatible(skill, other) for other, _ in selected)):
+                selected.append((skill, 'matched'))
+            if len(selected) == (3 if primary else 2):
+                break
+        return selected
+
+    def snapshots(self, request, workflow='', available_tools=()):
+        return [snapshot(skill, how, workflow, available_tools)
+                for skill, how in self.select_many(request, workflow)]
 
     # Changing (the person only)
 

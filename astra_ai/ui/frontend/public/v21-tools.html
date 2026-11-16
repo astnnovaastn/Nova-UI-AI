@@ -1,0 +1,7 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AEGIS · Isolated Notes and Tasks fixture</title><link rel="stylesheet" href="/work-canvas/aegis-work.css"><link rel="stylesheet" href="/v21-host.css"><style>body{pointer-events:none;margin:0;background:#101216;color:#ccd1d9;font:14px Inter,system-ui}body>aside{position:fixed;left:72px;top:64px;bottom:32px;width:336px;border:1px solid #42464d;border-radius:12px;overflow:visible}#tools{height:100%}body>p{margin:24px 72px}</style></head><body><p>Local fixture · isolated temporary Notes and Tasks · no AI calls</p><aside class="aegis-tools-sidebar"><div id="tools" class="aegis-work-root" data-theme="dark"></div></aside><script type="module">
+if(!['127.0.0.1','localhost'].includes(location.hostname))throw Error('Local fixture only');
+const kind=new URLSearchParams(location.search).get('kind')==='tasks'?'tasks':'notes';
+const {mountWorkspaceTools}=await import('/work-canvas/aegis-work.js');
+await mountWorkspaceTools(document.querySelector('#tools'),{kind,onclose:()=>document.querySelector('aside').remove(),onlegacy:()=>alert('Existing AEGIS controls remain available in the application shell.')});
+</script></body></html>
+

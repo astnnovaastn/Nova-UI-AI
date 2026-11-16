@@ -7,6 +7,43 @@ from fastapi.responses import JSONResponse
 def install(app, *, context_for, artifacts_for, writer, learning, jobs, collaboration,
             state, manager, ui_context, workspace, confirm_destructive,
             continue_research, start_research_page):
+    preview_services = {}
+
+    def previews_for(artifacts):
+        from astra_ai.core.research.source_previews import SourcePreviews
+        path = artifacts.path.with_name(artifacts.path.stem + '.webpage-thumbnails')
+        if path not in preview_services:
+            preview_services[path] = SourcePreviews(path)
+        return preview_services[path]
+
+    @app.get('/api/research/{identifier}/source-previews')
+    async def source_previews(identifier: str, request: Request, revision: str = ''):
+        from astra_ai.core.research.source_previews import source_catalog
+        context = context_for(request)
+        artifacts, _ = artifacts_for()
+        catalog = await asyncio.to_thread(source_catalog, artifacts, identifier, context, revision)
+        if catalog is None:
+            raise HTTPException(404, 'Research unavailable')
+        result = await asyncio.to_thread(previews_for(artifacts).request, artifacts, context, catalog)
+        if context_for(request) != context:
+            raise HTTPException(403, 'Research session changed')
+        return {'status': 'ok', 'previews': [
+            {'id': key, 'url': catalog[key], **entry} for key, entry in result.items()
+        ]}
+
+    @app.get('/api/research/{identifier}/source-previews/{preview_id}')
+    async def source_preview_image(identifier: str, preview_id: str, request: Request, revision: str = ''):
+        from fastapi.responses import Response
+        from astra_ai.core.research.source_previews import source_catalog
+        context = context_for(request)
+        artifacts, _ = artifacts_for()
+        catalog = await asyncio.to_thread(source_catalog, artifacts, identifier, context, revision)
+        url = (catalog or {}).get(preview_id)
+        image = await asyncio.to_thread(previews_for(artifacts).read, context, url) if url else None
+        if not image or context_for(request) != context:
+            raise HTTPException(404, 'Preview unavailable')
+        return Response(image, media_type='image/webp', headers={'Cache-Control': 'private, max-age=300',
+                                                                  'X-Content-Type-Options': 'nosniff'})
     @app.get('/api/research/frame-check')
     async def research_frame_check(request:Request,url:str=''):
         # Only says whether a public page allows framing; the page itself is never relayed.

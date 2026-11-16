@@ -4,6 +4,9 @@ from .shared_memory import stable, canonical, normal, safe
 from .category_policy import lifecycle, matches_scope, POLICIES, instant
 
 
+CACHE_SECONDS=15
+
+
 def visible(record, meta, profile_id='', project_id=''):
     if not matches_scope(record, profile_id, project_id):return False
     if record.get('attributes',{}).get('private_session') or record.get('private') or record.get('private_session') or record.get('consent') in {'denied','revoked','private','none'}:return False
@@ -66,11 +69,16 @@ def projection(manager, profile_id='', project_id=''):
             topic['palette']=palette({'id':topic['id'],'color_family':FAMILIES[int(stable(topic['id'])[:4],16)%len(FAMILIES)]})
         revision=stable('globe-2',profile_id,project_id,canonical(raw))
         result={'revision':revision,'raw':raw,'records':records}
-        until=time.time()+1
+        # While the memory files are unchanged (the signature is part of the key) the projection
+        # only changes when a record starts or ends, so it is kept until the nearest such moment.
+        # The cap covers time rules not listed here (category retention, transcript expiry), which
+        # then show at most CACHE_SECONDS late. Rebuilding every second cost most of a CPU core.
+        now=time.time();until=now+CACHE_SECONDS
         for record in m['records'].values():
             try:
-                expiry=instant(record.get('valid_until'))
-                if expiry and expiry.timestamp()>time.time():until=min(until,expiry.timestamp())
+                for field in ('valid_until','valid_from'):
+                    moment=instant(record.get(field))
+                    if moment and moment.timestamp()>now:until=min(until,moment.timestamp())
             except (ValueError,TypeError):pass
         manager._globe_projection_cache=(key,until,result)
         return result
@@ -84,8 +92,10 @@ def page(manager, profile_id='', project_id='', cursor='', limit=500):
             if rev!=snap['revision'] or scope!=stable(profile_id,project_id):return {'status':'stale','revision':snap['revision'],'next_cursor':None,'total':len(snap['records']),'raw':None}
             if not isinstance(start,int) or start<0:raise ValueError()
         except (ValueError,TypeError,UnicodeError):raise ValueError('Invalid globe cursor') from None
-    rows=list(snap['records'].items());end=min(len(rows),start+max(1,min(int(limit),1000)));chosen=dict(rows[start:end]);raw=copy.deepcopy(snap['raw'])
-    for section in ('facts','events','activity_history'):raw[section]={cid:{rid:r for rid,r in group.items() if rid in chosen} for cid,group in raw[section].items()}
+    rows=list(snap['records'].items());end=min(len(rows),start+max(1,min(int(limit),1000)));chosen=dict(rows[start:end]);paged=('facts','events','activity_history')
+    # Only this page's records are copied; copying every record for each page was most of a page's cost.
+    raw={name:copy.deepcopy(value) for name,value in snap['raw'].items() if name not in paged}
+    for section in paged:raw[section]={cid:{rid:copy.deepcopy(r) for rid,r in group.items() if rid in chosen} for cid,group in snap['raw'][section].items()}
     next_cursor=base64.urlsafe_b64encode(json.dumps([snap['revision'],end,stable(profile_id,project_id)]).encode()).decode() if end<len(rows) else None
     return {'status':'ok','revision':snap['revision'],'next_cursor':next_cursor,'total':len(rows),'raw':raw}
 

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AEGIS</title>
+    <link rel="stylesheet" href="shell.css" />
+  </head>
+  <body>
+    <main>
+      <svg class="mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <path d="M16 2.5 27 7v8.1c0 6.1-5.2 11.3-11 14.4C10.2 26.4 5 21.2 5 15.1V7L16 2.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+        <path d="m10.4 21.2 5.6-12 5.6 12M12.7 16.7h6.6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <h1>AEGIS</h1>
+      <p id="status" role="status">Starting AEGIS…</p>
+      <div id="progress" aria-hidden="true"><span></span></div>
+
+      <form id="setup" hidden>
+        <label for="ui-url">Workspace address</label>
+        <input id="ui-url" type="text" spellcheck="false" autocomplete="off" />
+        <p class="help">Where the AEGIS web app is served. On this computer that is http://127.0.0.1:5173/. Another computer must use https.</p>
+
+        <label for="project-root">AEGIS project folder</label>
+        <input id="project-root" type="text" spellcheck="false" autocomplete="off" placeholder="Leave empty for a workspace on another computer" />
+        <p class="help">The folder that holds start_nova_ai.ps1. AEGIS Desktop uses it to start the backend and the web app for you.</p>
+
+        <label class="check"><input id="auto-start" type="checkbox" /> Start AEGIS automatically when it is not running</label>
+        <label class="check"><input id="stop-on-exit" type="checkbox" /> Stop it again when I close this window</label>
+
+        <button type="submit">Save and connect</button>
+      </form>
+    </main>
+    <script src="shell.js"></script>
+  </body>
+</html>

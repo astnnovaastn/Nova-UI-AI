@@ -27,6 +27,7 @@ from .contracts import (
 )
 from .providers import BudgetExhausted, ProviderError, WorkPaused, estimate_tokens
 from . import relations as rel
+from . import task_graph, workspace_objects
 
 log = logging.getLogger('work.orchestrator')
 
@@ -157,7 +158,7 @@ class WorkOrchestrator:
         self.settings = settings
 
     def create(self, research_id, request, context):
-        run = RunState(run_id=research_id, research_id=research_id, request=as_dict(request))
+        run = RunState(run_id=research_id, research_id=research_id, request=as_dict(request), schema_version=2)
         return self.store.create(run)
 
     async def run(self, research_id, context):
@@ -349,8 +350,32 @@ class _Run:
         self.run.state = 'running'
         self.run.failure = ''
         earlier = self.run.usage.get('active_seconds', 0)
+        failed_tasks = {}
+        legacy_stages = iter(stages)
+        handlers = dict(stages)
         try:
-            for name, stage in stages:
+            while True:
+                if self.run.schema_version != 2:
+                    next_stage = next(legacy_stages, None)
+                    if next_stage is None:
+                        break
+                    name, stage = next_stage
+                elif not self.run.done.get('plan'):
+                    name, stage = 'plan', self._plan
+                else:
+                    if not self.run.task_graph:
+                        self.run.task_graph = task_graph.compile_plan({**self.run.plan,'assignments':self.run.assignments},self.request.workflow,self.run.plan.get('skills',[]))
+                        await self._save()
+                    available = [node for node in task_graph.ready(self.run.task_graph,self.run.done) if node['id'] not in failed_tasks]
+                    if not available:
+                        if failed_tasks:
+                            for node in self.run.task_graph['nodes']:
+                                if not self.run.done.get(node['id']) and node['id'] not in failed_tasks:
+                                    node['status'] = 'blocked'
+                            return await self._finish_failed('failed', next(iter(failed_tasks.values())))
+                        break
+                    node = available[0]
+                    name, stage = node['id'], handlers[node['type']]
                 if self.run.done.get(name):
                     continue
                 await self._check()
@@ -360,11 +385,26 @@ class _Run:
                 if time.monotonic() - self.started > SLICE_SECONDS:
                     await self._save()
                     return {'status': 'waiting_for_retry', 'next_attempt': time.time() + 1, 'reason': 'work_continuing', 'research_id': self.id}
-                outcome = await stage()
+                task_graph.set_status(self.run.task_graph,name,'running')
+                try:
+                    outcome = await stage()
+                except ProviderError as error:
+                    if self.run.schema_version != 2 or name == 'plan':
+                        raise
+                    # Independent ready tasks can still complete. A retry resumes only unfinished tasks.
+                    failed_tasks[name] = 'work_model_' + error.kind
+                    task_graph.set_status(self.run.task_graph,name,'failed')
+                    self._emit('task', status='failed', task_id=name, reason=failed_tasks[name])
+                    await self._save()
+                    continue
                 if outcome:
+                    task_graph.set_status(self.run.task_graph,name,'blocked')
                     await self._save()
                     return outcome
                 self.run.done[name] = True
+                task_graph.set_status(self.run.task_graph,name,'done')
+                if self.run.schema_version == 2 and name != 'plan':
+                    self._emit('task', status='done', task_id=name)
                 await self._save()
         except Stopped:
             return await self._finish_failed('cancelled', 'research_canceled')
@@ -388,6 +428,8 @@ class _Run:
         return {'status': 'completed', 'research_id': self.id, 'state': self.run.state, 'usage': self.run.usage}
 
     async def _finish_failed(self, state, reason):
+        for task in self.run.task_graph.get('nodes',[]):
+            if task['status']=='running':task['status']='failed' if state=='failed' else 'cancelled'
         self.run.state = state
         self.run.failure = reason
         await self._save()
@@ -400,19 +442,29 @@ class _Run:
         if not lead:
             raise ProviderError('not_configured')
         workflow = self.workflow
-        # The skill: the workflow the person started, else one whose triggers the request names.
         registry = getattr(self.owner, 'skills', None)
-        skill, how = registry.select(self.request.query, self.request.workflow or '') if registry else (None, '')
-        self.skill = skill
-        if skill:
-            self.run.plan = {**(self.run.plan or {}), 'skill': {'name': skill.name, 'title': skill.title, 'version': skill.version, 'source': skill.source, 'chosen': how}}
-            self._stage('skill', 'Loaded the ' + skill.title + ' skill', skill=skill.name, version=skill.version, chosen=how)
+        if self.run.skill_snapshots is None:
+            self.run.skill_snapshots = registry.snapshots(
+                self.request.query, self.request.workflow or '', ('web_search', 'web_fetch')
+            ) if registry else []
+            facts = [row['public'] for row in self.run.skill_snapshots]
+            self.run.plan = {**(self.run.plan or {}), 'skills': facts}
+            if facts:
+                self.run.plan['skill'] = facts[0]
+            for fact in facts:
+                self._stage('skill', 'Loaded the ' + fact['title'] + ' skill', skill=fact['name'],
+                            version=fact['version'], chosen=fact['chosen'])
+        facts = [row['public'] for row in self.run.skill_snapshots]
+        pricing_evidence = any(fact['name'] == 'pricing-research' and fact['source'] == 'builtin' for fact in facts)
         payload = {
             'request': self.request.query,
             'workflow_brief': workflow.brief if workflow else '',
             **({'deliverable': workflow.deliverable} if workflow else {}),
-            **({'skill': {'name': skill.name, 'instructions': skill.body}} if skill else {}),
+            **({'skills': [{'name': row['public']['name'], 'instructions': row['instructions']}
+                           for row in self.run.skill_snapshots]} if facts else {}),
             'required_mode': (workflow.mode if workflow else self.request.mode) or 'choose',
+            **({'source_requirement': 'Compare current pricing from the official vendor pages and plan one focused search per vendor.'}
+               if pricing_evidence else {}),
             'chosen_canvas_items': self.request.chosen,
             **({'answer_to_your_question': self.run.request['answer']} if self.run.request.get('answer') else {}),
         }
@@ -430,12 +482,12 @@ class _Run:
         if mode not in MODES:
             mode = 'quick'
         plan = TaskPlan(**{**result, 'mode': mode})
-        plan.needs_web = mode != 'direct' and (mode == 'deep' or plan.needs_web or bool(workflow and workflow.needs_web))
+        plan.needs_web = mode != 'direct' and (mode == 'deep' or plan.needs_web or pricing_evidence or bool(workflow and workflow.needs_web))
         if not plan.needs_web:
             plan.queries = []
         plan.title = safe(plan.title)[:120]
         self.plan = plan
-        self.run.plan = {**as_dict(plan), **({'skill': self.run.plan['skill']} if skill else {})}
+        self.run.plan = {**as_dict(plan), 'skills': facts, **({'skill': facts[0]} if facts else {})}
         self.budget = budget_for(mode, self.owner.settings)
         self.run.budget = as_dict(self.budget)
         self.run.results['lead'] = as_dict(AgentResult('lead', 'lead', 'running', provider=record['provider'], model=record['model']))
@@ -464,14 +516,16 @@ class _Run:
         return None
 
     def _brief(self):
-        """What the workers and the writer follow: the loaded skill's instructions, else the workflow's brief."""
-        skill = getattr(self, 'skill', None)
+        """Reuse the exact loaded instructions after a retry or restart."""
+        from .skills import instructions_for
+        if self.run.skill_snapshots:
+            return instructions_for(self.run.skill_snapshots)
         recorded = (self.run.plan or {}).get('skill') or {}
-        if skill is None and recorded.get('name') and getattr(self.owner, 'skills', None):
-            # A run resumed after a restart keeps the skill it planned with.
-            skill = self.skill = self.owner.skills.get(recorded['name'])
-        if skill:
-            return skill.body[:6000]
+        registry = getattr(self.owner, 'skills', None)
+        if self.run.skill_snapshots is None and registry and recorded.get('name'):
+            skill = registry.get(recorded['name'])
+            if skill and skill.version == recorded.get('version'):
+                return skill.body[:4200]
         return self.workflow.brief if self.workflow else ''
 
     def _assignment(self, role):
@@ -1063,7 +1117,9 @@ class _Run:
 
     def _section_plan(self):
         """The body sections of a Deep report, each with the sources that speak to it. No model call."""
-        headings = [h for h in dict.fromkeys(safe(str(item)).strip()[:120] for item in self.plan.sections) if h and not self.BOOKEND.match(h)][:10]
+        headings = [h for h in dict.fromkeys(safe(str(item)).strip()[:120] for item in self.plan.sections) if h and not self.BOOKEND.match(h)]
+        if self.run.schema_version < 2:
+            headings = headings[:10]
         if len(headings) < 3:
             return None
         evidence = self.run.evidence
@@ -1074,7 +1130,7 @@ class _Run:
             scores = [sum(term in text for term in words) for words in terms]
             ranked = sorted(range(len(headings)), key=lambda index: (-scores[index], len(chosen[index])))
             # A source goes to the section it fits best, and to a second one it clearly also fits.
-            picks = [ranked[0]] if scores[ranked[0]] else [position % len(headings)]
+            picks = [ranked[0]] if scores[ranked[0]] else ([] if self.run.schema_version >= 2 else [position % len(headings)])
             if len(ranked) > 1 and scores[ranked[1]] and scores[ranked[1]] >= scores[ranked[0]] - 1:
                 picks.append(ranked[1])
             for index in picks:
@@ -1083,6 +1139,8 @@ class _Run:
         # A section never writes from fewer than two sources when the run has more.
         order = [row['id'] for row in sorted(evidence, key=lambda row: -(row.get('relevance', 0) * 2 + row.get('credibility', 0)))]
         for index in chosen:
+            if self.run.schema_version >= 2:
+                continue  # Missing evidence is an explicit gap, not unrelated filler.
             for name in order:
                 if len(chosen[index]) >= 2:
                     break
@@ -1113,6 +1171,18 @@ class _Run:
                 continue
             await self._check()
             wanted = [outline[index] for index in batch if str(index) not in draft['sections']]
+            if self.run.schema_version >= 2:
+                for row in wanted:
+                    if not row['source_ids']:
+                        draft['sections'][str(outline.index(row))] = {
+                            'markdown': '## ' + row['heading'] + '\n\nEvidence gap: the collected sources do not establish this requirement. Further evidence is needed before drawing a conclusion.',
+                            'summary': 'Unresolved evidence gap: ' + row['heading'],
+                            'evidence_gap': True,
+                        }
+                wanted = [row for row in wanted if row['source_ids']]
+                await self._save()
+                if not wanted:
+                    continue
             numbers = {name for row in wanted for name in row['source_ids']}
             self._stage('drafting', 'Writing ' + ', '.join(row['heading'] for row in wanted), 'running', model=writer.model, sections=[row['heading'] for row in wanted], done=len(draft['sections']), total=len(outline))
             body = {
@@ -1176,6 +1246,9 @@ class _Run:
         body_text = strip_unknown_citations(body_text, allowed)
         cited = cited_ids(body_text)
         failures = [] if cited else [{'reason': 'report_has_no_citations'}]
+        gaps = [outline[int(key)]['heading'] for key, value in draft['sections'].items() if value.get('evidence_gap')]
+        if gaps:
+            failures.append({'reason': 'report_evidence_gaps', 'sections': gaps})
         if missing:
             failures.append({'reason': 'report_sections_missing', 'sections': missing[:10]})
         report = body_text + self._bibliography(cited)
@@ -1252,6 +1325,11 @@ class _Run:
 
     async def _publish(self):
         report = self.run.results['report_text']
+        if self.run.schema_version == 2:
+            self.run.canvas_objects = workspace_objects.project(self.run,report)
+            self.run.coverage = task_graph.coverage(self.run.plan,self.run.evidence,report)
+            if self.plan.mode in ('deep','structured') and self.run.coverage.get('requirements'):
+                self.run.canvas_objects.append(workspace_objects.coverage_object(self.run.coverage,self.run.evidence))
         failures = self.run.results.get('report_failures', [])
         mode = 'quick' if self.plan.mode in {'quick', 'direct'} else 'detailed'
         sources = await self._saved_sources()

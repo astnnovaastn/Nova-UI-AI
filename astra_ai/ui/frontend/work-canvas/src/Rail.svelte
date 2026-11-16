@@ -23,7 +23,7 @@
 
 <nav class="rail" aria-label="AEGIS">
   <button type="button" class="logo" aria-label="AEGIS dashboard" title="AEGIS" onclick={() => actions?.navigate("dashboard")}>
-    <span class="mark" aria-hidden="true"></span>
+    <img class="mark" src="/assets/aegis-seal.svg" width="30" height="30" alt="" />
   </button>
   <div class="group">
     <button type="button" aria-label="Dashboard" title="Dashboard" onclick={() => actions?.navigate("dashboard")}>
@@ -181,10 +181,9 @@
   }
 
   .mark {
-    inline-size: 28px;
-    block-size: 28px;
-    background: var(--color-text);
-    mask: url("/assets/aegis_logo.svg") center / contain no-repeat;
+    display: block;
+    inline-size: 30px;
+    block-size: 30px;
   }
 
   :global(.aegis-menu) {

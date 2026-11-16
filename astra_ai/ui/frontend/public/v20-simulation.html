@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>AEGIS Work · Local simulation</title>
+<link rel="stylesheet" href="/work-canvas/aegis-work.css">
+<style>html,body{margin:0;height:100%;background:#111318}#canvas,#portal{font-family:Inter,system-ui,sans-serif}#canvas{position:fixed;inset:0}</style>
+</head><body><div id="canvas" class="aegis-work-root" data-theme="dark"></div><div id="portal" class="aegis-work-root" data-theme="dark"></div>
+<script type="module">
+ if(!['localhost','127.0.0.1','[::1]'].includes(location.hostname))throw new Error('Simulation is local only');
+ if(!new URLSearchParams(location.search).has('aegisFixture'))location.search='?aegisFixture=mixed-result';
+ // No API client or account shell is mounted. This loads the production canvas entry.
+ // Block external requests as well as local API requests, including accidental future adapters.
+ const allowed=url=>{const u=new URL(url,location.href);return u.origin===location.origin&&!u.pathname.startsWith('/api/');};
+ const fetchOriginal=window.fetch;
+ window.fetch=(input,init)=>{const url=input instanceof Request?input.url:String(input);if(!allowed(url))return Promise.reject(new Error('Simulation blocked network: '+new URL(url,location.href).pathname));return fetchOriginal(input,init);};
+ const openOriginal=XMLHttpRequest.prototype.open;
+ XMLHttpRequest.prototype.open=function(method,url,...rest){if(!allowed(url))throw new Error('Simulation blocked XHR');return openOriginal.call(this,method,url,...rest);};
+ window.WebSocket=class{constructor(){throw new Error('Simulation blocked WebSocket');}};
+ navigator.sendBeacon=()=>false;
+ const {mountCanvas}=await import('/work-canvas/aegis-work.js');
+ window.aegisFixture=mountCanvas(document.querySelector('#canvas'),document.querySelector('#portal'));
+ window.aegisFixture.update({theme:'dark'});
+ window.addEventListener('beforeunload',()=>window.aegisFixture.destroy(),{once:true});
+</script></body></html>

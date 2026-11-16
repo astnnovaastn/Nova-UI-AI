@@ -14,14 +14,34 @@ export type KnowledgeMap = {
   edges: { from: string; to: string; label: string }[];
 };
 
+export type LoadedSkill = {
+  name: string; title: string; description?: string; version?: string; category?: string;
+  tools?: string[]; chosen?: string; workflow?: string; status?: string;
+};
+
+export function loadedSkills(run: WorkRun | null | undefined, events: readonly TraceEvent[]): LoadedSkill[] {
+  const skills = run?.plan?.skills ?? (run?.plan?.skill ? [run.plan.skill] : undefined);
+  if (skills) return skills.filter((entry) => entry?.name && entry?.title);
+  const recorded = new Map<string, LoadedSkill>();
+  for (const event of events) {
+    if (event.kind !== "skill") continue;
+    const skill = event.skill_fact as LoadedSkill | undefined;
+    if (skill?.name && skill.title) recorded.set(skill.name, skill);
+  }
+  return [...recorded.values()];
+}
+
 export type WorkRun = {
+  schema_version?: number;
+  canvas_objects?: unknown[];
+  task_graph?: {version:number;nodes:unknown[]};
   run_id: string;
   research_id: string;
   state: string;
   stage: string;
   failure: string;
   request: { query: string; workflow?: string; mode?: string };
-  plan: { title?: string; acknowledgement?: string; intent?: string; mode?: string; clarification?: string; sections?: string[]; reasoning_summary?: string };
+  plan: { title?: string; acknowledgement?: string; intent?: string; mode?: string; clarification?: string; sections?: string[]; reasoning_summary?: string; skills?: LoadedSkill[]; skill?: LoadedSkill };
   assignments: { agent: string; role: string; task: string; provider: string; model: string; state: string }[];
   results: Record<string, { agent: string; role: string; state: string; summary: string; provider: string; model: string; tokens: number; seconds: number; failure: string }>;
   evidence: { id: string; url: string; title: string; domain: string; retrieved_at: string; relevance: number; credibility: number; assessment: string; query: string }[];

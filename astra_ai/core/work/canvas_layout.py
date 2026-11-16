@@ -6,6 +6,14 @@ import math
 import re
 
 STRATEGIES = {'auto','pipeline','timeline','milestones','tree','hierarchy','dependency','swimlanes','evidence','subgraphs','radial','hub','comparison','matrix','gallery','editorial','cause','converging'}
+STRATEGIES.update({
+    'focused-answer','parallel-investigation','branching-research','evidence-convergence',
+    'architecture-atlas','dependency-explorer','source-collections','comparison-desk',
+    'timeline-milestones','execution-board','daily-schedule','research-publication',
+    'visual-moodboard','ui-teardown','debugging-workbench','decision-workspace',
+    'knowledge-constellation','document-production','market-landscape','mixed-result',
+    'claim-review','code-walkthrough','change-review','priority-inbox','trip-budget',
+})
 MAX_NODES = 1000
 
 

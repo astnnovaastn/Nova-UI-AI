@@ -10,6 +10,9 @@ export default function MemoryGlobeHost({active,libraryOpen,onSelection,onRecord
  const engine=useRef<GlobeEngine|null>(null),cache=useRef<GraphData|null>(null),revision=useRef(""),refresh=useRef<()=>void>(()=>{}),selected=useRef<string|null>(null),activity=useRef(new Map<string,number>()),pendingRecall=useRef<{ids:string[];until:number}[]>([]);
  const queuedCommands=useRef<Record<string,any>[]>([]),applyCommand=useRef<(v:Record<string,any>)=>void>(()=>{});
  const recordsCallback=useRef(onRecords),selectionCallback=useRef(onSelection);recordsCallback.current=onRecords;selectionCallback.current=onSelection;
+ // The whole memory is only fetched and laid out while the Memory screen is open. Changes that
+ // arrive meanwhile mark it stale, and it loads once when the screen is next shown.
+ const shown=useRef(active),stale=useRef(true);shown.current=active;
  useEffect(()=>{const sync=()=>{const next=conversationSnapshot();setConnection(old=>old.clientId===next.clientId&&old.connected===next.connected&&old.guest===next.guest?old:next);};window.addEventListener("nova-conversation",sync);return()=>window.removeEventListener("nova-conversation",sync);},[]);
  const select=useCallback((selection:SelectionInfo|null)=>{selected.current=selection?.id||null;setDetail(null);setDetailError("");selectionCallback.current?.(selection);if(!selection||selection.type!=="memory"){setDetailLoading(false);return;}setDetailLoading(true);const id=selection.id,snapshot=conversationSnapshot(),client=snapshot.clientId,guest=snapshot.guest;fetch(`/api/memory/globe/record/${encodeURIComponent(id)}`,{headers:{"X-Nova-Client":client}}).then(async r=>{if(!r.ok)throw Error();return r.json();}).then(result=>{if(selected.current===id&&conversationSnapshot().clientId===client&&conversationSnapshot().guest===guest)setDetail(result.record);}).catch(()=>{if(selected.current===id&&conversationSnapshot().clientId===client&&conversationSnapshot().guest===guest)setDetailError("Full memory is unavailable. Reconnect and select it again.");}).finally(()=>{if(selected.current===id)setDetailLoading(false);});},[]);
  useEffect(()=>{
@@ -31,7 +34,8 @@ export default function MemoryGlobeHost({active,libraryOpen,onSelection,onRecord
   };
   worker.onerror=()=>setError("Memory graph preparation unavailable");
   const load=async()=>{
-   if(busy){again=true;return;}busy=true;const version=++generation;
+   if(!shown.current){stale.current=true;return;}
+   if(busy){again=true;return;}busy=true;stale.current=false;const version=++generation;
    try{let raw:RawMemoryFile={},cursor="",rev="";
     for(let attempts=0;;){const result=await request(`/api/memory/globe?limit=1000${cursor?"&cursor="+encodeURIComponent(cursor):""}`);
      if(result.status==="stale"){if(++attempts>3)throw Error("Memory changed while loading; retry shortly");raw={};cursor="";rev="";continue;}
@@ -52,6 +56,12 @@ export default function MemoryGlobeHost({active,libraryOpen,onSelection,onRecord
   refresh.current=load;load();window.addEventListener("nova-memory-globe-changed",changed);window.addEventListener("nova-memory-changed",changed);window.addEventListener("nova-memory-activity",signal);window.addEventListener("online",changed);
   return()=>{abort.abort();worker.terminate();clearTimeout(timer);clearTimeout(settle);engine.current=null;for(const name of ["nova-memory-globe-changed","nova-memory-changed","online"])window.removeEventListener(name,changed);window.removeEventListener("nova-memory-activity",signal);};
  },[connection.clientId,connection.connected,connection.guest]);
+ useEffect(()=>{
+  if(active){if(stale.current)refresh.current();return;}
+  // Left alone for a minute, the hidden globe gives its records back; reopening loads them again.
+  const release=setTimeout(()=>{cache.current=null;revision.current="";stale.current=true;setData(null);},60000);
+  return()=>clearTimeout(release);
+ },[active]);
  useEffect(()=>{
   const resolve=(id:string)=>{if(id?.startsWith("category:"))return "cat:"+id.slice(9);if(cache.current?.entities.some(e=>e.id===id))return "ent:"+id;return id;};
   const choose=(event:Event)=>(()=>{const id=resolve((event as CustomEvent).detail?.id)||null;if(!id)return engine.current?.select(null);let target=id;while(target.includes('#')&&!cache.current?.layout?.nodes.some(n=>n.id===target))target=target.slice(0,target.lastIndexOf('#'));engine.current?.select(target);})();

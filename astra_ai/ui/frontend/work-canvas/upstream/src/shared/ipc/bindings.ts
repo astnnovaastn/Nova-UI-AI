@@ -272,7 +272,7 @@ export const commands = {
 	onboardingFinish: () => __TAURI_INVOKE<boolean>("onboarding_finish"),
 	tabsNavigate: (id: string, input: string) => __TAURI_INVOKE<OperationAdmission>("tabs_navigate", { id, input }),
 	tabsReload: (id: string) => __TAURI_INVOKE<OperationAdmission>("tabs_reload", { id }),
-	tabsAnswerPageRequest: (id: string, answer: PageRequestAnswer) => __TAURI_INVOKE<OperationAdmission>("tabs_answer_page_request", { id, answer }),
+	tabsAnswerPageRequest: (id: string, request: number, answer: PageRequestAnswer) => __TAURI_INVOKE<OperationAdmission>("tabs_answer_page_request", { id, request, answer }),
 	/**
 	 *  Answers the tab's sign-in prompt; no credentials cancels it. The typed
 	 *  values move into storage wiped on drop and are never logged.
@@ -286,6 +286,13 @@ export const commands = {
 	 *  person's own network only, and loads the page again.
 	 */
 	tabsContinuePastCertificate: (id: string) => __TAURI_INVOKE<OperationAdmission>("tabs_continue_past_certificate", { id }),
+	/**
+	 *  Opens the page the filter lists refused anyway; its host stays allowed
+	 *  until the app quits.
+	 */
+	tabsContinuePastBlock: (id: string, url: string) => __TAURI_INVOKE<OperationAdmission>("tabs_continue_past_block", { id, url }),
+	/**  Leaves the page the filter lists refused. */
+	tabsLeaveBlockedPage: (id: string) => __TAURI_INVOKE<OperationAdmission>("tabs_leave_blocked_page", { id }),
 	/**  Shows the folder with Zephium's local log and crash report. */
 	diagnosticsShowLogs: () => __TAURI_INVOKE<boolean>("diagnostics_show_logs"),
 	/**  The text for a bug report: version, system and the redacted recent log. */
@@ -390,6 +397,11 @@ export const commands = {
 	 *  sheet and the page leaves the screen.
 	 */
 	pagePermissionCardHost: (available: boolean) => __TAURI_INVOKE<void>("page_permission_card_host", { available }),
+	/**
+	 *  Whether one of the browser's own dialogs is open over the window. Pages
+	 *  are native views above chrome, so they leave the screen while it shows.
+	 */
+	chromeModal: (open: boolean) => __TAURI_INVOKE<void>("chrome_modal", { open }),
 	tabSetMuted: (id: string, muted: boolean) => __TAURI_INVOKE<OperationAdmission>("tab_set_muted", { id, muted }),
 	mediaPlayer: (id: string, action: MediaPlayerAction) => __TAURI_INVOKE<OperationAdmission>("media_player", { id, action }),
 	/**
@@ -401,7 +413,7 @@ export const commands = {
 	 *  Changes one saved decision of the focused profile; no decision forgets it,
 	 *  so the site is asked again.
 	 */
-	sitePermissionSet: (origin: string, kind: SitePermissionKindView, decision: "allow" | "block" | null) => __TAURI_INVOKE<OperationAdmission>("site_permission_set", { origin, kind, decision }),
+	sitePermissionSet: (origin: string, kind: SitePermissionKindView, decision: "allow" | "block" | null, scheme: string | null) => __TAURI_INVOKE<OperationAdmission>("site_permission_set", { origin, kind, decision, scheme }),
 	blockerStatus: () => typedError<BlockerStatusView, null>(__TAURI_INVOKE("blocker_status")),
 	blockerStats: (profile: string) => typedError<BlockerStatsView, null>(__TAURI_INVOKE("blocker_stats", { profile })),
 	blockerSetEnabled: (enabled: boolean) => __TAURI_INVOKE<OperationAdmission>("blocker_set_enabled", { enabled }),
@@ -446,6 +458,7 @@ export const commands = {
 	runCommand: (id: string) => __TAURI_INVOKE<OperationAdmission>("run_command", { id }),
 	panelHide: () => __TAURI_INVOKE<void>("panel_hide"),
 	panelReady: () => __TAURI_INVOKE<{
+	switcher: TabSwitcherState | null,
 	window_id: string | null,
 	revision: string,
 	session_id: string,
@@ -460,6 +473,8 @@ export const commands = {
 	/**  The tab whose address is being edited; it is no destination of its own. */
 	seed_tab: string | null,
 } | null>("panel_ready"),
+	tabSwitcherOpen: () => __TAURI_INVOKE<boolean>("tab_switcher_open"),
+	tabSwitcherAction: (sessionId: string, intent: TabSwitcherAction) => __TAURI_INVOKE<boolean>("tab_switcher_action", { sessionId, intent }),
 	panelIntent: (intent: PanelIntent) => __TAURI_INVOKE<boolean>("panel_intent", { intent }),
 	/**
 	 *  The launcher's content reports what it shows; native sizes the window and
@@ -504,12 +519,14 @@ export const commands = {
 } | null>("launcher_set_double_tap", { mode }),
 	launcherOpenAccessibility: () => __TAURI_INVOKE<void>("launcher_open_accessibility"),
 	settingGet: (key: string) => __TAURI_INVOKE<string | null>("setting_get", { key }),
+	searchShortcutDefaults: () => __TAURI_INVOKE<SearchShortcut_Serialize[]>("search_shortcut_defaults"),
 	settingSet: (key: string, value: string) => __TAURI_INVOKE<OperationAdmission>("setting_set", { key, value }),
 	windowsDiagnosticsSettings: () => __TAURI_INVOKE<boolean>("windows_diagnostics_settings"),
 	/**  None identifies a local launch-read fallback to ON, separate from Windows policy. */
 	windowsReputationManaged: () => __TAURI_INVOKE<boolean | null>("windows_reputation_managed"),
 	uiInfo: () => __TAURI_INVOKE<UiInfo>("ui_info"),
 	uiReady: () => __TAURI_INVOKE<boolean>("ui_ready"),
+	captionReplay: () => __TAURI_INVOKE<void>("caption_replay"),
 	menuPopup: (x: number | null, y: number | null) => __TAURI_INVOKE<boolean>("menu_popup", { x, y }),
 	addMenuPopup: (x: number | null, y: number | null, canSplit: boolean) => __TAURI_INVOKE<boolean>("add_menu_popup", { x, y, canSplit }),
 	tabMenuPopup: (id: string, x: number | null, y: number | null, context: TabMenuContext) => __TAURI_INVOKE<boolean>("tab_menu_popup", { id, x, y, context }),
@@ -579,14 +596,16 @@ export const commands = {
 	 *  its language's own hour cycle.
 	 */
 	systemClock24h: () => __TAURI_INVOKE<boolean | null>("system_clock_24h"),
-	updateStatus: () => __TAURI_INVOKE<({ state: "unavailable" }) & { retry_reason?: never; version?: never } | ({ state: "idle" }) & { retry_reason?: never; version?: never } | ({ state: "checking" }) & { retry_reason?: never; version?: never } | ({ state: "upToDate" }) & { retry_reason?: never; version?: never } | ({ state: "downloading" }) & { retry_reason?: never; version?: never } | { state: "ready"; version: string; retry_reason?: string | null } | ({ state: "manualInstall"; version: string }) & { retry_reason?: never } | ({ state: "installing" }) & { retry_reason?: never; version?: never } | ({ state: "failed" }) & { retry_reason?: never; version?: never } | null>("update_status"),
+	updateStatus: () => __TAURI_INVOKE<({ state: "unavailable" }) & { retry_reason?: never; version?: never } | ({ state: "idle" }) & { retry_reason?: never; version?: never } | ({ state: "checking" }) & { retry_reason?: never; version?: never } | ({ state: "upToDate" }) & { retry_reason?: never; version?: never } | ({ state: "downloading" }) & { retry_reason?: never; version?: never } | { state: "ready"; version: string; retry_reason?: UpdateRetryReason | null } | ({ state: "manualInstall"; version: string }) & { retry_reason?: never } | ({ state: "installing" }) & { retry_reason?: never; version?: never } | ({ state: "failed" }) & { retry_reason?: never; version?: never } | null>("update_status"),
 	/**
 	 *  Checks for a newer release and downloads it. Returns the resulting status;
 	 *  a check already in flight, or an update already waiting, is reported as is.
 	 */
-	updateCheck: () => __TAURI_INVOKE<({ state: "unavailable" }) & { retry_reason?: never; version?: never } | ({ state: "idle" }) & { retry_reason?: never; version?: never } | ({ state: "checking" }) & { retry_reason?: never; version?: never } | ({ state: "upToDate" }) & { retry_reason?: never; version?: never } | ({ state: "downloading" }) & { retry_reason?: never; version?: never } | { state: "ready"; version: string; retry_reason?: string | null } | ({ state: "manualInstall"; version: string }) & { retry_reason?: never } | ({ state: "installing" }) & { retry_reason?: never; version?: never } | ({ state: "failed" }) & { retry_reason?: never; version?: never } | null>("update_check"),
+	updateCheck: () => __TAURI_INVOKE<({ state: "unavailable" }) & { retry_reason?: never; version?: never } | ({ state: "idle" }) & { retry_reason?: never; version?: never } | ({ state: "checking" }) & { retry_reason?: never; version?: never } | ({ state: "upToDate" }) & { retry_reason?: never; version?: never } | ({ state: "downloading" }) & { retry_reason?: never; version?: never } | { state: "ready"; version: string; retry_reason?: UpdateRetryReason | null } | ({ state: "manualInstall"; version: string }) & { retry_reason?: never } | ({ state: "installing" }) & { retry_reason?: never; version?: never } | ({ state: "failed" }) & { retry_reason?: never; version?: never } | null>("update_check"),
 	/**  Installs the parked update and relaunches through the orderly shutdown. */
 	updateRelaunch: () => __TAURI_INVOKE<boolean>("update_relaunch"),
+	/**  Closes Zephium as a quit does, then starts it again. */
+	appRelaunch: () => __TAURI_INVOKE<boolean>("app_relaunch"),
 	/**  What the release now running brought, when it arrived as an update. */
 	updateHighlights: () => __TAURI_INVOKE<{
 	version: string,
@@ -1250,7 +1269,12 @@ export type BrowsingDataError = "invalid" | "unavailable" | "capacity" |
 /**  How far back a browsing data clear reaches. */
 export type BrowsingDataRange = "hour" | "day" | "week" | "four_weeks" | "everything";
 
-export type BrowsingDataResponse = { kind: "cleared" } | { kind: "sites"; sites: SiteDataView[];
+export type BrowsingDataResponse = { kind: "cleared" } |
+/**
+ *  Removed, but some of the site's data may remain: the engine would not
+ *  delete everything, or could not reach every place it is kept.
+ */
+{ kind: "partly_cleared" } | { kind: "sites"; sites: SiteDataView[];
 /**
  *  The engine can only name sites by some of what it holds: sites
  *  with only storage and no cookies are missing from the list.
@@ -1412,6 +1436,8 @@ export type DownloadView = {
 	received: string,
 	total: string | null,
 	error: DownloadError | null,
+	/**  The file came over a connection that is not encrypted. */
+	insecure: boolean,
 };
 
 export type DownloadsChanged = {
@@ -1689,7 +1715,7 @@ export type ImportSourceView = {
 	needs_permission: boolean,
 };
 
-export type ImportStateView = "queued" | "running" | "done" | "failed" | "skipped";
+export type ImportStateView = "queued" | "running" | "done" | "partial" | "failed" | "skipped";
 
 export type ItemId = string;
 
@@ -1767,7 +1793,7 @@ export type LoginItemStatus = {
 	needs_approval: boolean,
 };
 
-export type Material = "none" | "vibrancy" | "liquid_glass" | "acrylic" | "mica";
+export type Material = "none" | "vibrancy" | "liquid_glass" | "acrylic" | "mica" | "mica_alt";
 
 /**  Outcome of admitting one public image for a subject on the canvas. */
 export type MediaAdmitV1 =
@@ -2486,6 +2512,16 @@ host: string;
 insecure: boolean; proxy: boolean;
 /**  The last username or password was wrong. */
 retry: boolean } |
+/**
+ *  The site wants to save a file. `allowed` says the site may already
+ *  download and only this unclicked download is asked about.
+ */
+{ kind: "download"; request: number; site: string; filename: string; allowed: boolean; unclicked: boolean } |
+/**
+ *  AutoFill was asked for on a page that is not encrypted; `host` is the
+ *  page's host.
+ */
+{ kind: "insecure_autofill"; host: string } |
 /**  The page stopped responding: wait for it, or reload it. */
 { kind: "unresponsive" };
 
@@ -2580,6 +2616,7 @@ export type PanelRect = {
 };
 
 export type PanelState = {
+	switcher: TabSwitcherState | null,
 	window_id: string | null,
 	revision: string,
 	session_id: string,
@@ -2916,6 +2953,12 @@ export type ResourceSummary = {
 	work: string | null,
 };
 
+export type RuntimeRestartReason =
+/**  A newer browser runtime is installed; only a restart adopts it. */
+"runtime_update" |
+/**  A profile's browser engine can be trusted again only after a restart. */
+"profile";
+
 /**  Sanitized advisory delivered only to privileged main chrome. */
 export type RuntimeSecurityAdvisory = {
 	kind: RuntimeSecurityAdvisoryKind,
@@ -2941,6 +2984,8 @@ export type RuntimeSecurityUpdateTarget = "zephium" | "operating_system" | "brow
  */
 export type RuntimeStatus = {
 	restart_required: boolean,
+	/**  Why a restart is required; none while it is not. */
+	restart_reason: RuntimeRestartReason | null,
 	/**
 	 *  The saved session could not be restored this launch: its bytes were
 	 *  kept in a file and the browser started with fresh tabs.
@@ -2975,6 +3020,8 @@ export type SearchContext = {
 	space_id: string,
 };
 
+export type SearchEngine = "google" | "duckduckgo" | "bing" | "brave" | "custom";
+
 export type SearchResult = {
 	kind: string,
 	title: string,
@@ -2984,6 +3031,7 @@ export type SearchResult = {
 };
 
 export type SearchResults = {
+	shortcut?: string | null,
 	pending: boolean,
 	context: SearchContext | null,
 	query: string,
@@ -2994,6 +3042,30 @@ export type SearchResults = {
 	 */
 	completion: string | null,
 	results: SearchResult[],
+};
+
+export type SearchShortcut = SearchShortcut_Serialize | SearchShortcut_Deserialize;
+
+export type SearchShortcut_Deserialize = {
+	id: string,
+	name: string,
+	keywords: string[],
+	search_url: string,
+	home_url: string,
+	domain: string,
+	suggestions: SearchEngine | null,
+	enabled: boolean,
+};
+
+export type SearchShortcut_Serialize = {
+	id: string,
+	name: string,
+	keywords: string[],
+	search_url: string,
+	home_url: string,
+	domain: string,
+	suggestions?: SearchEngine | null,
+	enabled: boolean,
 };
 
 export type ShutSiteView = {
@@ -3060,13 +3132,15 @@ export type SitePermissionDecisionView = "allow" | "block";
  *  A kind of decision Site settings lists. Which kinds a platform keeps is
  *  in `SitePermissionsView::kinds`.
  */
-export type SitePermissionKindView = "camera" | "microphone" | "geolocation" | "notifications" | "clipboard_read" | "midi" | "sensors" | "local_fonts" | "automatic_downloads" | "popups";
+export type SitePermissionKindView = "camera" | "microphone" | "geolocation" | "notifications" | "clipboard_read" | "midi" | "sensors" | "local_fonts" | "automatic_downloads" | "popups" | "downloads" | "app_links";
 
 export type SitePermissionView = {
 	/**  Canonical origin, such as `https://meet.example`. */
 	origin: string,
 	kind: SitePermissionKindView,
 	decision: SitePermissionDecisionView,
+	/**  The kind of application link, for `app_links`. */
+	scheme: string | null,
 };
 
 /**  The focused profile's saved site decisions. */
@@ -3166,6 +3240,12 @@ export type TabAudioView = {
 
 export type TabAvailability = { state: "sleeping" } | { state: "waiting_for_capacity"; url: string } | { state: "blocked_by_capacity"; url: string };
 
+export type TabBlockReason =
+/**  A known scam or malware site, from uBlock Origin's badware list. */
+"badware" |
+/**  A known ad or tracking redirect. */
+"filter_lists";
+
 export type TabCertificateProblem =
 /**  Expired, or not valid yet. */
 "expired" |
@@ -3190,6 +3270,8 @@ export type TabFailure = {
 	 *  they may continue past it. Never true for a public name.
 	 */
 	can_continue?: boolean,
+	/**  For a page the filter lists refused, why. */
+	blocked?: TabBlockReason | null,
 	/**
 	 *  The page that was showing is gone; the failure stands in its place
 	 *  until another page opens, even while one loads.
@@ -3199,7 +3281,14 @@ export type TabFailure = {
 
 export type TabFailureReason = "offline" | "host_not_found" | "unreachable" | "timed_out" | "insecure" |
 /**  The page's process ended and it could not be brought back on its own. */
-"crashed" | "other";
+"crashed" |
+/**
+ *  The profile's browser engine can be trusted again only after Zephium
+ *  restarts; every tab in it says so.
+ */
+"restart_required" |
+/**  The filter lists refused the page; `blocked` says why. */
+"blocked" | "other";
 
 /**
  *  What the tab menu can offer for the tab it opens on, as the sidebar sees
@@ -3225,6 +3314,31 @@ export type TabMenuContext = {
 	media_only: boolean,
 };
 
+export type TabSwitcherAction = { type: "step"; reverse: boolean } | { type: "select"; index: number } | { type: "commit" } | { type: "cancel" } | { type: "close" } |
+/**  Leaves the switcher for a new tab in its window. */
+{ type: "new_tab" } |
+/**  Leaves the switcher for this tab, whatever is selected by then. */
+{ type: "activate"; tab_id: string } |
+/**  Closes this tab, whatever is selected by then, and stays open. */
+{ type: "close_tab"; tab_id: string };
+
+export type TabSwitcherEntry = {
+	tab_id: string,
+	title: string,
+	url_host: string,
+	favicon: IconRef | null,
+	preview_url: string | null,
+	active: boolean,
+};
+
+export type TabSwitcherState = {
+	session_id: string,
+	window_id: string,
+	entries: TabSwitcherEntry[],
+	selected: number,
+	keyboard: boolean,
+};
+
 export type TabView = {
 	id: string,
 	/**
@@ -3241,6 +3355,8 @@ export type TabView = {
 	loading: boolean,
 	/**  What the page asked for that waits on the person. */
 	page_request?: PageRequestView | null,
+	/**  Names the request shown, for its answer. */
+	page_request_serial?: number | null,
 	/**
 	 *  Transient native residency state. It never replaces the committed URL
 	 *  or title, and an explicit retry remains a fresh navigation intent.
@@ -3406,11 +3522,13 @@ export type UpdateHighlights = {
 	items: string[],
 };
 
+export type UpdateRetryReason = "previousInstallIncomplete" | "workNotSaved" | "activityCheckFailed";
+
 export type UpdateStatus = UpdateStatus_Serialize | UpdateStatus_Deserialize;
 
-export type UpdateStatus_Deserialize = ({ state: "unavailable" }) & { retry_reason?: never; version?: never } | ({ state: "idle" }) & { retry_reason?: never; version?: never } | ({ state: "checking" }) & { retry_reason?: never; version?: never } | ({ state: "upToDate" }) & { retry_reason?: never; version?: never } | ({ state: "downloading" }) & { retry_reason?: never; version?: never } | { state: "ready"; version: string; retry_reason: string | null } | ({ state: "manualInstall"; version: string }) & { retry_reason?: never } | ({ state: "installing" }) & { retry_reason?: never; version?: never } | ({ state: "failed" }) & { retry_reason?: never; version?: never };
+export type UpdateStatus_Deserialize = ({ state: "unavailable" }) & { retry_reason?: never; version?: never } | ({ state: "idle" }) & { retry_reason?: never; version?: never } | ({ state: "checking" }) & { retry_reason?: never; version?: never } | ({ state: "upToDate" }) & { retry_reason?: never; version?: never } | ({ state: "downloading" }) & { retry_reason?: never; version?: never } | { state: "ready"; version: string; retry_reason: UpdateRetryReason | null } | ({ state: "manualInstall"; version: string }) & { retry_reason?: never } | ({ state: "installing" }) & { retry_reason?: never; version?: never } | ({ state: "failed" }) & { retry_reason?: never; version?: never };
 
-export type UpdateStatus_Serialize = ({ state: "unavailable" }) & { retry_reason?: never; version?: never } | ({ state: "idle" }) & { retry_reason?: never; version?: never } | ({ state: "checking" }) & { retry_reason?: never; version?: never } | ({ state: "upToDate" }) & { retry_reason?: never; version?: never } | ({ state: "downloading" }) & { retry_reason?: never; version?: never } | { state: "ready"; version: string; retry_reason?: string | null } | ({ state: "manualInstall"; version: string }) & { retry_reason?: never } | ({ state: "installing" }) & { retry_reason?: never; version?: never } | ({ state: "failed" }) & { retry_reason?: never; version?: never };
+export type UpdateStatus_Serialize = ({ state: "unavailable" }) & { retry_reason?: never; version?: never } | ({ state: "idle" }) & { retry_reason?: never; version?: never } | ({ state: "checking" }) & { retry_reason?: never; version?: never } | ({ state: "upToDate" }) & { retry_reason?: never; version?: never } | ({ state: "downloading" }) & { retry_reason?: never; version?: never } | { state: "ready"; version: string; retry_reason?: UpdateRetryReason | null } | ({ state: "manualInstall"; version: string }) & { retry_reason?: never } | ({ state: "installing" }) & { retry_reason?: never; version?: never } | ({ state: "failed" }) & { retry_reason?: never; version?: never };
 
 /**  A take moved on. `text` is set once, when it is done. */
 export type VoiceChanged = {

@@ -304,7 +304,8 @@
   .calendar {
     display: flex;
     flex-direction: column;
-    inline-size: calc(var(--gutter) + 7 * var(--cell));
+    inline-size: min(100%, calc(var(--gutter) + 7 * var(--cell)));
+    container-type: inline-size;
     overflow: hidden;
     border-radius: var(--radius-card);
     background: var(--color-surface);
@@ -316,6 +317,7 @@
   .weekdays,
   .week {
     display: grid;
+    --cell: calc((100cqw - var(--gutter)) / 7);
     grid-template-columns: var(--gutter) repeat(7, var(--cell));
   }
 

@@ -20,10 +20,10 @@ SEARCH = {
     'exa': ('Exa', ('EXA_API_KEY',), ['YouTube video search']),
 }
 UNAVAILABLE = {
-    'folders': ('Local folders', 'Needs the AEGIS desktop host: a browser page cannot be granted your folders safely.'),
+    'folders': ('Unrestricted local folders', 'Only host-configured repositories are readable through Repository context; other folders are unavailable.'),
     'git': ('Git and GitHub', 'Needs a confined command runner, which this build does not have.'),
     'mcp': ('MCP servers', 'No MCP client is installed in this build; nothing is connected.'),
-    'accounts': ('Signed-in accounts (Gmail, Slack, Calendar)', 'AEGIS does not read your accounts. Paste what it should use.'),
+    'accounts': ('Other accounts (Slack and others)', 'No connector is installed for these accounts. Google Calendar and Gmail have a separate optional connection.'),
 }
 
 

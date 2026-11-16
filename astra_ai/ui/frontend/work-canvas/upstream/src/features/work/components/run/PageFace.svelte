@@ -15,7 +15,9 @@
     host = "",
     live = false,
     still = false,
+    compact = false,
   }: {
+    compact?: boolean;
     url: string;
     title: string;
     frame: string | null;
@@ -45,7 +47,7 @@
   });
 </script>
 
-<span class="window" class:live class:still>
+<span class="window" class:live class:still class:compact title={[title, url, preview?.retrieval ? "Retrieval: " + preview.retrieval : "", preview?.citations ? `${preview.citations} citation(s)` : ""].filter(Boolean).join("\n")}>
   <span class="bar">
     <span class="mark">{#if preview?.favicon}<img class="favicon" src={preview.favicon} alt="" width="14" height="14" loading="lazy" referrerpolicy="no-referrer" crossorigin="anonymous" onerror={(event) => ((event.currentTarget as HTMLElement).style.visibility = "hidden")} />{:else}<HostGlyph {host} {url} size={14} initial={false} />{/if}</span>
     <span class="host">{site}</span>
@@ -55,7 +57,11 @@
   <span class="view">
     <!-- Every frame, the live one too, is drawn into a canvas at the size it is seen:
          an image element held its decoded pixels long after the work was left. -->
-    {#if shown}
+    {#if preview?.thumbnail}
+      <img class="website-thumb" src={preview.thumbnail} alt="" loading="lazy" decoding="async" />
+      <span class="preview-label" title={preview.capturedAt ? new Date(preview.capturedAt * 1000).toLocaleString() : undefined}>Webpage preview</span>
+      {#if preview.excerpt}<span class="caption">{preview.excerpt}</span>{/if}
+    {:else if shown}
       <canvas
         class="thumb"
         use:thumbnail={{ url: frame!, width: 360, onmissing: () => (failed = frame) }}
@@ -72,6 +78,13 @@
 </span>
 
 <style>
+  .compact .bar { block-size: 24px; gap: 5px; padding: 0 7px; font-size: 10px; }
+  .compact .sign { display: none; }
+  .compact .face { display: block; padding: 9px 11px; }
+  .compact .words { font-size: 13px; line-height: 17px; -webkit-line-clamp: 2; line-clamp: 2; }
+  .compact .excerpt { display: -webkit-box; margin-top: 5px; line-height: 13px; font-size: 10px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+  .website-thumb { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+  .preview-label { position: absolute; z-index: 1; top: 5px; right: 5px; border-radius: 4px; padding: 2px 5px; background: #202124ed; color: #f1f1f1; font-size: 9px; line-height: 1.2; }
   .favicon {
     display: block;
     inline-size: 14px;

@@ -14,7 +14,7 @@ describe('real deterministic arrangements',()=>{
   const rects=input.nodes.map(n=>({...plan.geometry.positions[n.id],...plan.geometry.sizes[n.id]}));
   rects.forEach((r,i)=>{expect(Object.values(r).every(Number.isFinite)).toBe(true);rects.slice(i+1).forEach(s=>expect(overlap(r,s)).toBe(false));});
  });
- it('offers 17 distinct arrangements',()=>{expect(new Set(STRATEGIES.map(([strategy])=>JSON.stringify(planLayout({...fixture(),strategy}).geometry.positions))).size).toBe(17);});
+ it('retains 17 legacy arrangements alongside 25 adaptive families',()=>{expect(STRATEGIES).toHaveLength(42);expect(new Set(STRATEGIES.slice(25).map(([strategy])=>JSON.stringify(planLayout({...fixture(),strategy}).geometry.positions))).size).toBe(17);});
  it('anchors pins, manual moves, active editors and incremental old nodes',()=>{
   const input=fixture();input.nodes[0].constraint={pinned:true};input.nodes[1].constraint={manual:true};input.nodes[2].editing=true;
   input.nodes.forEach((n,i)=>{n.x=i*800;n.y=i*500;});

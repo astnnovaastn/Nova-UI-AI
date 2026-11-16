@@ -6,6 +6,9 @@
 -->
 <script lang="ts">
   import { onMount } from "svelte";
+  import GoogleConnections, {type AccountInput} from './GoogleConnections.svelte';
+  import RepositoryConnections from './RepositoryConnections.svelte';
+  let {onAttach}: {onAttach?: (input:AccountInput)=>void} = $props();
   import { workApi, workPanels } from "./work-panels.svelte";
 
   type Row = { id: string; title: string; kind: string; status: string; enabled: boolean; toggle: boolean; capabilities: string[]; scope: string };
@@ -83,6 +86,8 @@
   </header>
   <p class="lede">What AEGIS can reach for your research. Keys stay on the server; nothing here can send, post or delete.</p>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
+  <GoogleConnections {onAttach} />
+  <RepositoryConnections {onAttach} />
 
   {#each KINDS as [kind, label] (kind)}
     {@const group = rows.filter((row) => row.kind === kind)}

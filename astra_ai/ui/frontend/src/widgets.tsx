@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 
 import CalculatorWidget from './components/Calculator/CalculatorWidget.jsx';
-import NotesWidget from './components/Notes/NotesWidget.jsx';
+import WorkspaceTools from './components/WorkspaceTools';
 import WeatherWidget from './components/weather/weatherWidget.jsx';
 import TicTacToeWidget from './components/TicTacToe/TicTacToeWidget.jsx';
 import ImageWidget from './components/IMAGE/ImageWidget.jsx';
@@ -433,6 +433,8 @@ const WidgetContainer = () => {
   const [searchState, setSearchState] = useState<SearchWidgetState>(defaultSearchState);
   const [searchAiConnected, setSearchAiConnected] = useState(false);
   const [notesCommand, setNotesCommand] = useState<NotesWidgetCommand | null>(null);
+  useEffect(()=>{const open=(event:Event)=>{const d=(event as CustomEvent).detail;if(d?.kind==='notes'){if(d.create)setNotesCommand({command:'show_add',issuedAt:Date.now()});openWidget('notes');}else if(d?.kind==='tasks')openWidget('task');};window.addEventListener('aegis-open-tools',open);return()=>window.removeEventListener('aegis-open-tools',open);},[]);
+
   const [notesAiConnected, setNotesAiConnected] = useState(false);
   const [weatherCommand, setWeatherCommand] = useState<WeatherWidgetCommand | null>(null);
   const [weatherAiConnected, setWeatherAiConnected] = useState(false);
@@ -1328,16 +1330,7 @@ const WidgetContainer = () => {
       )}
 
       {activeWidgets.calculator && <CalculatorWidget onClose={() => closeWidget('calculator')} />}
-      {activeWidgets.notes && (
-        <NotesWidget
-          onClose={() => closeWidget('notes')}
-          aiConnected={notesAiConnected}
-          aiCommand={notesCommand}
-          onCommandResult={(result: Record<string, unknown>) => {
-            window.dispatchEvent(new CustomEvent('aegisWidgetActionResult', { detail: result }));
-          }}
-        />
-      )}
+      {activeWidgets.notes && <WorkspaceTools kind="notes" command={notesCommand} onClose={()=>{setNotesCommand(null);closeWidget('notes');}}/>}
       {weatherVisibility === 'open' && activeWidgets.weather && (
         <WeatherWidget
           onClose={() => closeWidget('weather')}
@@ -1399,13 +1392,8 @@ const WidgetContainer = () => {
           }}
         />
       )}
-      {taskVisibility === 'open' && activeWidgets.task && (
-        <TaskWidget
-          onClose={() => closeWidget('task')}
-          onMinimize={minimizeTaskWidget}
-          aiConnectionStatus={aegisConnections.task}
-        />
-      )}
+      {taskVisibility === 'open' && activeWidgets.task && !activeWidgets.notes && <WorkspaceTools kind="tasks" onClose={()=>closeWidget('task')}/>}
+
     </div>
   );
 };

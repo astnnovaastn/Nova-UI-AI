@@ -5,6 +5,25 @@
   both MPL-2.0) to AEGIS research data. This file is therefore also MPL-2.0.
 -->
 <script lang="ts">
+ import PersonalNotePanel from "$features/work/components/bar/NotePanel.svelte";
+ import {noteSession} from '$domain/notes';
+ import {invoke as nativeCall} from './native/core';
+ import {Note01Icon} from '@hugeicons/core-free-icons';
+ const workNotes=noteSession('aegis-owner','work')!;
+ async function attachNote(id:string){
+  const reply=await nativeCall<any>('note_call',{expectedProfile:'aegis-owner',call:{kind:'get',id}});
+  if(reply.response.kind!=='record')return;
+  const r=reply.response.record;accountInputs=[...accountInputs.filter(x=>x.id!==id),{id,kind:'note',title:r.summary.title,url:'',summary:r.markdown}].slice(-24);tool=null;
+ }
+ import {taskSession} from '$domain/resources';
+ import {toolContext} from './tools/context.svelte';
+ const personalTasks=taskSession('aegis-owner','work');
+ const selectedPersonalTask=$derived(personalTasks.rows.find(row=>row.id===personalTasks.selectedId));
+ function attachTask(){
+  const row=selectedPersonalTask;if(!row)return;
+  attachAccount({id:row.id,kind:'task',title:row.title,url:row.context?.url||'',summary:JSON.stringify({description:row.description,status:row.status,dueDate:row.dueDate,dueTime:row.dueTime,steps:row.steps,priority:row.priority})});tool=null;
+ }
+ import PersonalTasksPanel from "$features/work/components/bar/TasksPanel.svelte";
   import { untrack } from "svelte";
   import {Designer} from "./designer/coordinator";
   import {reflowExpanded} from "./designer/reflow";
@@ -23,6 +42,10 @@
     ShapeCollectionIcon,
   } from "@hugeicons/core-free-icons";
   import WorkCanvas from "$features/work/components/WorkCanvas.svelte";
+  import {objectItems} from './objects/registry';
+  import {planLayout} from './designer/planner';
+  import {familyForWorkflow} from './designer/families';
+  import ObjectFocus from './objects/ObjectFocus.svelte';
   import WorkBar from "$features/work/components/bar/WorkBar.svelte";
   import BarTool from "$features/work/components/bar/BarTool.svelte";
   import AgentLine from "$features/work/components/AgentLine.svelte";
@@ -50,6 +73,11 @@
   import Rail from "./Rail.svelte";
   import SkillsPanel from "./SkillsPanel.svelte";
   import ConnectionsPanel from "./ConnectionsPanel.svelte";
+  import type {AccountInput} from './GoogleConnections.svelte';
+  let accountInputs = $state<AccountInput[]>([]);
+  function attachAccount(input:AccountInput) {
+    accountInputs=[...accountInputs.filter(x=>x.id!==input.id),input].slice(-24);
+  }
   import { workPanels } from "./work-panels.svelte";
   import { buildScene, reportTitle, type CanvasScene, type ZephiumRun } from "./research-to-run";
   import { aegisSession, asWorkSession } from "./session.svelte";
@@ -58,11 +86,11 @@
   import { ACTIVE_JOBS, endedWords, setWaitingReason, wordsForWait } from "./waiting.svelte";
   import { pictureUrl } from "./report-images";
   import BrowserWindow from "./BrowserWindow.svelte";
-  import { browser } from "./browser-windows.svelte";
+  import { addressOf, browser } from "./browser-windows.svelte";
   import { normalizeAddress } from "./browser-address";
   import type { PaperData } from "./paper";
   import WorkStart from "$features/work/components/start/WorkStart.svelte";
-  import { installPreviewProvider, savedDataProvider } from "./preview-provider";
+  import { installPreviewProvider, savedDataProvider, watchThumbnails } from "./preview-provider";
   import NodePanel, { type Opened } from "./NodePanel.svelte";
   import { CARD, layoutMap } from "./knowledge-map";
   import { agentBranches, mapOf, type AgentBranch, type MapNode } from "./work-run";
@@ -73,6 +101,9 @@
   import StrandPanel from "./StrandPanel.svelte";
   import { CAPTION, WEBSITE_GAP, clearOverlaps, keptPositions, overlaps, rankAgents, retrievalOrder, semanticLayout, type Box, type Placed, type SourceRow } from "./semantic-layout";
   import { expandStacks, stackOf } from "./stacks";
+  import SourceStackOverlay from "./SourceStackOverlay.svelte";
+  import { loadedSkills } from "./work-run";
+  const promptSkills = $derived(loadedSkills(state.run, state.trace));
   import { classicRelations } from "./classic-relations";
   import { planCard, planCardSize } from "./plan-card";
   import { COMPILE_ID, PIPELINE_ID, collectResults, evidencePipeline, stageCardSize } from "./stage-cards";
@@ -83,6 +114,12 @@
 
   const state = $derived(store.state);
   const actions = $derived(store.actions);
+  const accountScope = $derived(JSON.stringify([state.run?.run_id,state.guest,actions?.imageHeaders() ?? {}]));
+  let previousAccountScope = '';
+  $effect(() => {
+    const scope=accountScope;
+    if(scope!==previousAccountScope){previousAccountScope=scope;untrack(()=>{accountInputs=[];});}
+  });
   const report = $derived(state.report);
 
   let value = $state("");
@@ -132,7 +169,7 @@
   });
   $effect(() => { if(!state.connected)untrack(()=>{if(designer && ['moving','paused','planning'].includes(designer.phase))designer.stop();}); });
 
-  let tool = $state<"views" | "tasks" | "new" | null>(null);
+  let tool = $state<"views" | "tasks" | "notes" | "new" | null>(null);
   let cardHost = $state<HTMLElement>();
   let composerSurface = $state<HTMLElement>();
   let dockHeight = $state(64);
@@ -155,7 +192,19 @@
 
   $effect(() => {
     const current=designer, status=scene?.state, title=report?.query ?? '';
-    if(current && status)untrack(()=>current.observeRun(status,title));
+    const workflow=state.run?.schema_version===2 ? state.run.request.workflow : '';
+    if(current && status)untrack(()=>current.observeRun(status,title,workflow));
+  });
+
+  const previewKeys = $derived(JSON.stringify([...scene?.previews.keys() ?? []]));
+  const previewRevision = $derived(report?.research_revision ?? "");
+  const previewResearch = $derived(state.guest ? "" : report?.research_id ?? "");
+  $effect(() => {
+    const urls = JSON.parse(previewKeys) as string[];
+    const id = previewResearch, revision = previewRevision;
+    if (!id || !urls.length) return;
+    const headers = untrack(() => actions?.imageHeaders());
+    if (headers) return watchThumbnails(id, revision, new Set(urls), headers);
   });
 
   let picturesReady = $state(0);
@@ -344,41 +393,67 @@
         ? layoutPolicy({ mode: "quick", workers: 0, sources: sourceUrls.size })
         : null,
   );
-  /** Source stacks the person opened, per research, kept for this browser. */
-  let openStacks = $state<{ page: string; ids: Set<string> }>({ page: "", ids: new Set() });
-  const stacksKey = (page: string) => `aegis-open-stacks:${page}`;
-  $effect(() => {
-    const page = report?.research_id ?? "";
-    untrack(() => {
-      if (openStacks.page === page) return;
-      let ids: string[] = [];
-      try {
-        ids = JSON.parse(localStorage.getItem(stacksKey(page)) ?? "[]");
-      } catch {
-        // Without storage, every stack starts closed.
-      }
-      openStacks = { page, ids: new Set(Array.isArray(ids) ? ids.filter((id) => typeof id === "string") : []) };
-    });
+  type StackGesture = { id: string; anchor: HTMLElement; origin: HTMLElement; kind: "enter" | "leave" | "toggle"; pageOrder: string[] };
+  let activeStack = $state.raw<(StackGesture & { focusFirst: boolean }) | null>(null);
+  let closingStack = $state(false);
+  let stackTimer: ReturnType<typeof setTimeout>;
+  const stackPart = $derived(activeStack ? shownParts.find((item) => item.id === activeStack?.id)?.part : undefined);
+  const fanPages = $derived.by(() => {
+    const pages = new Map(stackPart?.pages.map((page) => [page.id, page]) ?? []);
+    return (activeStack?.pageOrder ?? []).flatMap((id) => {
+      const page = pages.get(id);
+      if (!page) return [];
+      pages.delete(id);
+      return [page];
+    }).concat([...pages.values()]);
   });
+  const noOpenStacks: ReadonlySet<string> = new Set();
+  const shownParts = $derived(expandStacks(partItems as unknown as { id: string; type?: string; part?: { pages: readonly { id: string; url: string }[]; title: string; shape?: string } }[], noOpenStacks) as unknown as typeof partItems);
+
+  function holdStack() {
+    clearTimeout(stackTimer);
+    closingStack = false;
+  }
+
+  function closeStack(restoreFocus = false) {
+    holdStack();
+    const origin = activeStack?.origin;
+    activeStack = null;
+    if (restoreFocus && origin?.isConnected && origin.matches("button")) origin.focus({ preventScroll: true });
+  }
+
+  function scheduleStackClose() {
+    clearTimeout(stackTimer);
+    stackTimer = setTimeout(() => {
+      const focus = document.activeElement;
+      if (focus?.closest(".source-stack-fan") || activeStack?.anchor.closest(".part")?.contains(focus)) return;
+      closingStack = true;
+      stackTimer = setTimeout(closeStack, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 280);
+    }, 100);
+  }
+
+  function sourceStack(event: Event) {
+    const detail = (event as CustomEvent<StackGesture>).detail;
+    if (detail.kind === "leave") {
+      if (activeStack?.id === detail.id) scheduleStackClose();
+      return;
+    }
+    if (detail.kind === "toggle" && activeStack?.id === detail.id && activeStack.focusFirst) {
+      closeStack(true);
+      return;
+    }
+    holdStack();
+    if (activeStack?.id !== detail.id || detail.kind === "toggle") {
+      activeStack = { ...detail, focusFirst: detail.kind === "toggle" };
+      if (detail.kind === "toggle") requestAnimationFrame(() =>
+        portal.querySelector<HTMLButtonElement>(".source-stack-fan .page")?.focus({ preventScroll: true }));
+    }
+  }
+
   $effect(() => {
-    const toggle = (event: Event) => {
-      const id = String((event as CustomEvent).detail ?? "");
-      if (!id) return;
-      const ids = new Set(openStacks.ids);
-      if (ids.has(id)) ids.delete(id);
-      else ids.add(id);
-      openStacks = { page: openStacks.page, ids };
-      try {
-        localStorage.setItem(stacksKey(openStacks.page), JSON.stringify([...ids]));
-      } catch {
-        // The stack still opens; it just will not be remembered.
-      }
-    };
-    window.addEventListener("aegis-stack-toggle", toggle);
-    return () => window.removeEventListener("aegis-stack-toggle", toggle);
+    void report?.research_id;
+    return () => closeStack();
   });
-  /** The source cards as drawn: stacks closed or opened into one card per page. */
-  const shownParts = $derived(composedRun ? expandStacks(partItems as unknown as { id: string; type?: string; part?: { pages: readonly { id: string; url: string }[]; title: string; shape?: string } }[], openStacks.ids) as unknown as typeof partItems : partItems);
   const gaps = $derived(policy?.gaps ?? LEGACY_GAPS);
   const agentPlan = $derived.by(() => {
     const placed: { agent: AgentBranch; x: number; y: number }[] = [];
@@ -561,28 +636,30 @@
     const part = (item as unknown as { part?: { shape?: string } }).part;
     if (!composedRun || item.type !== "part" || !part || part.shape === "label") return item;
     const size = defaultSize(item);
+    const readable = state.run?.schema_version === 2 && part.shape === 'pages';
     const width = Math.round(size.width - partLead - (part.shape === "pages" ? PART.badge : 0));
-    return width >= 120 ? { ...item, size: { width, height: Math.max(80, Math.round(size.height)) } } : item;
+    const saved=layoutRecord?.sizes[item.id];
+    const frameWidth=readable&&saved?Math.max(120,336+saved.width-width):404;
+    return width >= 120 ? { ...item, ...(readable?{aegisSourceWidth:frameWidth}:{}), size: saved??{ width:width+(readable?68:0), height: Math.max(80, Math.round(size.height+(readable?42.5:0))) } } : item;
   };
-  /** Sizes the person set. In a relation-aware run, the organizer's own sizes give way to the cards'. */
+  /** Saved dimensions remain authoritative until an explicit Arrange/resize operation. */
   const keptSizes = $derived.by<Record<string, { width: number; height: number }>>(() => {
     const record = layoutRecord;
     if (!record) return {};
-    if (!composedRun) return record.sizes;
-    // A source card's saved width once included its side caption: its size now is the card's own,
-    // unless the person locked it.
-    const own = (id: string) => !id.startsWith("part:") || record.constraints[id]?.lockedSize;
-    if (!record.automatic) return Object.fromEntries(Object.entries(record.sizes).filter(([id]) => own(id)));
-    return Object.fromEntries(Object.entries(record.sizes).filter(([id]) => own(id) && (record.constraints[id]?.manual || record.constraints[id]?.lockedSize || record.constraints[id]?.pinned)));
+    return record.sizes;
   });
-  const ORDERS = new Set(["objective", "request", "part", "paper", "agentcard", "blueprint", "sources", "collection"]);
+  const ORDERS = new Set(["objective", "request", "part", "paper", "agentcard", "blueprint", "sources", "collection", "adaptive"]);
   const view = $derived(state.view ?? { chosen: [], hidden: [] });
   const chosen = $derived(new Set(view.chosen));
   const hidden = $derived(new Set(view.hidden));
+  // The full report and subject map already have established Reader/canvas renderers.
+  // Typed extracted objects supplement them without duplicating those same outputs.
+  const resultItems = $derived(objectItems(state.run?.canvas_objects).filter(item=>!['report','diagram','knowledge-graph'].includes(item.aegisObject.kind)));
   const items = $derived.by(() => {
     void picturesReady;
     if (!scene) return [];
     const all = [
+      ...resultItems as unknown as typeof baseItems,
       ...mapItems,
       ...paperItems,
       ...collectionItems,
@@ -590,9 +667,11 @@
       ...stageItems,
       ...agentItems,
       ...(trailItem ? [trailItem] : []),
-      ...[...baseItems.filter((item) => !folders.has(item.id)), ...requests.items].map((item) =>
-        dress.get(item.id) ? { ...item, ...dress.get(item.id) } : item,
-      ),
+      ...[...baseItems.filter((item) => !folders.has(item.id)), ...requests.items].map((item) => {
+        const present = dress.get(item.id);
+        const skills = item.id === stages[0]?.card && promptSkills.length ? { aegisSkills: promptSkills } : {};
+        return { ...item, ...present, ...skills };
+      }),
       ...environmentBoards(stages),
       ...shownParts,
       ...environmentInputs(stages),
@@ -627,23 +706,40 @@
     const host = cardHost;
     if (!host || !composedRun) return;
     let frame = 0;
+    const dirty = new Set<HTMLElement>();
+    const observed = new Set<HTMLElement>();
     const measureAll = () => {
       frame = 0;
       // Cards arrive while a run works: read their kinds each time.
       const typeOf = new Map(untrack(() => items).map((item) => [item.id, item.type ?? ""]));
-      for (const node of host.querySelectorAll<HTMLElement>(".svelte-flow__node")) {
+      for (const body of dirty) {
+        const node = body.closest<HTMLElement>(".svelte-flow__node");
+        if (!node || !body.isConnected) continue;
         const id = node.dataset.id;
-        const body = node.firstElementChild as HTMLElement | null;
         if (!id || !body || !MEASURED.has(typeOf.get(id) ?? "")) continue;
         const height = Math.ceil(Math.max(body.scrollHeight, body.offsetHeight) / 8) * 8;
         if (height > (drawnHeights.get(id) ?? 0) + 8) drawnHeights.set(id, height);
       }
+      dirty.clear();
     };
     const later = () => (frame ||= requestAnimationFrame(measureAll));
-    const resize = new ResizeObserver(later);
-    const watch = new MutationObserver(() => {
-      for (const node of host.querySelectorAll(".svelte-flow__node > *")) resize.observe(node);
-      later();
+    const resize = new ResizeObserver(entries => { for (const entry of entries) dirty.add(entry.target as HTMLElement); later(); });
+    const register = (element: Element) => {
+      const nodes = element.matches(".svelte-flow__node") ? [element] : [...element.querySelectorAll(".svelte-flow__node")];
+      for (const node of nodes) {
+        const body = node.firstElementChild as HTMLElement | null;
+        if (body && !observed.has(body)) { observed.add(body); dirty.add(body); resize.observe(body); }
+      }
+    };
+    register(host);
+    const watch = new MutationObserver(records => {
+      for (const record of records) {
+        for (const added of record.addedNodes) if (added instanceof Element) register(added);
+        const node = (record.target as Element).closest?.(".svelte-flow__node");
+        if (node) { register(node); const body = node.firstElementChild as HTMLElement; if (body) dirty.add(body); }
+      }
+      for (const body of observed) if (!body.isConnected) { resize.unobserve(body); observed.delete(body); dirty.delete(body); }
+      if (dirty.size) later();
     });
     watch.observe(host, { childList: true, subtree: true });
     later();
@@ -663,7 +759,7 @@
    * an opened stack's page cards line up beside its first card. Map cards keep their grouped layout.
    */
   const settleCards = (placed: Record<string, { x: number; y: number }>): Record<string, { x: number; y: number }> => {
-    const kept = keptPositions(layoutRecord);
+    const kept = layoutRecord?.positions ?? {};
     const fixed = new Set(Object.keys(kept));
     const byId = new Map(items.map((item) => [item.id, item]));
     const companions = items.filter((item) => {
@@ -773,11 +869,12 @@
             ...box(PLAN_ID)!,
             below: present([
               ...parts.filter((item) => item.part?.shape !== "pages" && stageOf(item.id) === 0).map((item) => box(item.id)),
-              ...(discovery ? [box(`worker:${discovery.agent.agent}`)] : []),
+              ...(discovery && state.run?.schema_version!==2 ? [box(`worker:${discovery.agent.agent}`)] : []),
             ]),
           }
         : null,
       sources: [...sourceRows.values()],
+      acquisition: state.run?.schema_version===2 && discovery && sourceRows.size ? box(`worker:${discovery.agent.agent}`) : null,
       pipeline: box(PIPELINE_ID),
       compile: box(COMPILE_ID),
       collections: present([box(IMAGES_ID), box(VIDEOS_ID)]),
@@ -833,7 +930,12 @@
         : {}),
     };
     if (composedRun) Object.assign(placed, composed(placed));
-    Object.assign(placed, composedRun ? keptPositions(layoutRecord) : (layoutRecord?.positions ?? {}));
+    if(resultItems.length){
+      const right=Math.max(0,...items.filter(i=>placed[i.id]).map(i=>placed[i.id].x+defaultSize(i).width))+120;
+      const local=planLayout({nodes:resultItems.map(i=>({id:i.id,title:i.title,type:i.type,objectKind:i.aegisObject.kind,x:0,y:0,...i.size})),edges:[],strategy:familyForWorkflow(state.run?.workflow??'')??'mixed-result',width:1200,height:800,viewport:{x:0,y:0,zoom:1}});
+      for(const [id,p] of Object.entries(local.geometry.positions))placed[id]={x:right+p.x,y:p.y};
+    }
+    Object.assign(placed, layoutRecord?.positions ?? {});
     if (composedRun) Object.assign(placed, settleCards(placed));
     if(!expandedSources.size)return placed;
     return reflowExpanded(items.map(item=>({
@@ -854,7 +956,7 @@
     const record = layoutRecord;
     if (!api || !record || !composedRun) return;
     untrack(() => {
-      const kept = keptPositions(record);
+      const kept = record.positions;
       const ids = Object.keys(record.positions).filter((id) => !(id in kept) && positions[id]);
       const resized = Object.keys(record.sizes).filter((id) => !keptSizes[id]);
       if (!ids.length && !resized.length) return;
@@ -990,7 +1092,13 @@
         : null,
     );
   });
-  let selectedStrand = $state<{ id: string; source: string; target: string; strand: StrandData } | null>(null);
+  type RelayChoice = { id: string; source: string; target: string; strand: StrandData; relays?: string[] };
+  let selectedStrand = $state<RelayChoice | null>(null);
+  let sharedChoices = $state<RelayChoice[]>([]);
+  function chooseConnection(choice: RelayChoice | null) {
+    sharedChoices = [];
+    window.dispatchEvent(new CustomEvent("aegis-strand-select", {detail: choice}));
+  }
   /** Cards waiting for the hand are not shown yet; the one it is placing grows in. */
   const constructionCss = $derived.by(() => {
     void construction.version;
@@ -1006,12 +1114,18 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
   });
   $effect(() => {
     const select = (event: Event) => (selectedStrand = (event as CustomEvent).detail);
+    const relay = (event: Event) => {
+      const members = (event as CustomEvent<{members:RelayChoice[]}>).detail.members;
+      if (members.length === 1) chooseConnection(members[0]);
+      else { chooseConnection(null); sharedChoices = members; }
+    };
     window.addEventListener("aegis-strand-select", select);
-    return () => window.removeEventListener("aegis-strand-select", select);
+    window.addEventListener("aegis-relay-select", relay);
+    return () => { window.removeEventListener("aegis-strand-select", select); window.removeEventListener("aegis-relay-select", relay); };
   });
   $effect(() => {
     void report?.research_id;
-    untrack(() => (selectedStrand = null));
+    untrack(() => { selectedStrand = null; sharedChoices = []; });
   });
   const replayBuild = () => {
     const next = arrivals();
@@ -1029,7 +1143,8 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
         const at = positions[item.id];
         if (!at || ["agent", "mapgroup", "blueprint"].includes(item.type as string)) return [];
         const size = (item as { size?: { width: number } }).size ?? defaultSize(item);
-        return [{ x: at.x, y: at.y, right: at.x + size.width }];
+        const skillMargin = item.id === stages[0]?.card && promptSkills.length ? 256 : 0;
+        return [{ x: at.x - skillMargin, y: at.y, right: at.x + size.width }];
       });
       if (placedCards.length) {
         const x = Math.min(...placedCards.map((row) => row.x));
@@ -1038,7 +1153,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     }
     const box = stage.lane.box as { x: number; y: number; width?: number } | undefined;
     if (!first && !agentPlan.length) return box;
-    const x = Math.min(stage.place.x, box?.x ?? stage.place.x);
+    const x = Math.min(stage.place.x - (promptSkills.length ? 256 : 0), box?.x ?? stage.place.x);
     const top = Math.min(stage.place.y, first?.y ?? Infinity, ...agentPlan.map((row) => row.y));
     const right = first ? first.x + PAPER.width : agentRight;
     return { x, y: top, width: right - x };
@@ -1101,12 +1216,12 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     choose: () => {},
     evidence: (reference) => {
       const url = (reference as { url?: string }).url;
-      if (url) openSourceWindow(url);
+      if (url) openSourceWindow(url, "", "evidence");
       else actions?.openView("sources");
     },
     entity: () => actions?.openView("reader"),
     command: () => {},
-    page: (url) => openSourceWindow(url),
+    page: (url) => openSourceWindow(url, "", "board-page"),
     note: () => undefined,
   };
 
@@ -1134,6 +1249,8 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
   }
 
   function openItem(id: string) {
+    const adaptive=objectItems(state.run?.canvas_objects).find(o=>o.id===id);
+    if(adaptive){window.dispatchEvent(new CustomEvent('aegis-object-open',{detail:{object:adaptive.aegisObject}}));return;}
     const item = itemOf(id);
     if (!item) return;
     if (item.type === "agentcard" && item.branch) opened = { kind: "agent", id, agent: item.branch };
@@ -1209,13 +1326,13 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
   function openPage(id: string, page: string) {
     const item = items.find((entry) => entry.id === id);
     const source = item?.part?.pages?.find((entry) => entry.id === page);
-    if (source?.url) openSourceWindow(source.url, source.title);
+    if (source?.url) openSourceWindow(source.url, source.title, "source-card", source.id);
     else actions?.openView("sources");
   }
 
   /** Web sources open in the workspace browser; anything else, such as an attached file, in its own view. */
-  function openSourceWindow(url: string, title = "") {
-    if (/^https?:\/\//i.test(url)) browser.open(url, title || (scene?.sourceInfo.get(url)?.title ?? ""));
+  function openSourceWindow(url: string, title = "", control = "canvas", sourceId?: string, event?: Event) {
+    if (/^https?:\/\//i.test(url)) browser.open(url, title || (scene?.sourceInfo.get(url)?.title ?? ""), control, sourceId, event);
     else actions?.openSource(url);
   }
 
@@ -1227,6 +1344,10 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     if (!text) return;
     const about = asking.length ? asking : view.chosen;
     if (state.run?.state === "needs_input") actions?.answerRun(text);
+    else if (accountInputs.length) {
+      actions?.startWork(text,{chosen:[...accountInputs,...about.map(describe)].slice(0,24),workflow:skill??'',fromResearch:report?.research_id??''});
+      accountInputs=[];
+    }
     else if (about.length && useChosenIn === "task") actions?.startWork(text, { chosen: about.map(describe), fromResearch: report?.research_id ?? "" });
     else if (about.length && report) actions?.askNodes(text, about.map(describe), state.run?.run_id ?? report.research_id);
     else if (!report) actions?.startWork(text, { workflow: skill ?? "" });
@@ -1336,10 +1457,13 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
       window.removeEventListener("resize", fit);
     };
   });
+  const browserRun = $derived(state.loading ? "" : report?.research_id ?? "");
   $effect(() => {
-    browser.researchId = report?.research_id ?? "";
+    const id = browserRun;
+    untrack(() => browser.selectResearch(id));
   });
-  const windows = $derived(browser.all.filter((entry) => entry.researchId === (report?.research_id ?? "")));
+  const windows = $derived(browser.all.filter((entry) => entry.researchId === browserRun));
+  $effect(()=>{const front=windows.filter(w=>!w.minimized).sort((a,b)=>b.order-a.order)[0];toolContext.source=front?{url:addressOf(front),title:front.live?.title||front.title}:null;return()=>{toolContext.source=null;};});
   const minimized = $derived(windows.filter((entry) => entry.minimized));
   const browserSources = $derived(new Map(
     [...(scene?.sourceInfo.values() ?? [])].map((info) => [normalizeAddress(info.url, location.host) ?? info.url, info]),
@@ -1361,10 +1485,22 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
 </script>
 
 <svelte:window
-  onkeydown={keydown}
+  onclickcapture={(event) => browser.capture(event)}
+  ondblclickcapture={(event) => browser.capture(event)}
+  onkeydowncapture={(event) => browser.capture(event)}
+  onkeydown={(event) => {
+    if (event.key === "Escape" && activeStack && !event.defaultPrevented) {
+      event.preventDefault();
+      closeStack(true);
+      return;
+    }
+    keydown(event);
+  }}
+  onaegis-source-stack={sourceStack}
   onaegis-open-source-window={(event: Event) => {
-    const detail = (event as CustomEvent<{ url: string; title?: string }>).detail;
-    openSourceWindow(detail.url, detail.title);
+    const detail = (event as CustomEvent<{ url: string; title?: string; sourceId?: string; activation?: Event }>).detail;
+    if (!detail?.activation?.isTrusted) return;
+    openSourceWindow(detail.url, detail.title, "sources-panel", detail.sourceId, detail.activation);
   }}
 />
 
@@ -1406,21 +1542,36 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
   </div>
 {/if}
 
+{#if activeStack && stackPart?.pages?.length}
+  <div use:inPortal>
+    {#key activeStack.id}
+      <SourceStackOverlay anchor={activeStack.anchor} bounds={windowBounds} pages={fanPages} title={stackPart.title}
+        focusFirst={activeStack.focusFirst} closing={closingStack}
+        onhold={holdStack} onleave={scheduleStackClose} onclose={() => closeStack(true)}
+        onopen={(page, event) => {
+          openSourceWindow(page.url, page.title, "source-stack", page.id, event);
+          closeStack();
+        }} />
+    {/key}
+  </div>
+{/if}
+
 <div class="browser-layer" style="pointer-events: none" use:inPortal>
   {#each windows as entry (entry.id)}
     <BrowserWindow
       {entry}
       bounds={windowBounds}
-      info={browserSources.get(entry.history[entry.index] ?? "")}
-      added={addedUrls.has(entry.history[entry.index] ?? "") || (browserSources.get(entry.history[entry.index] ?? "")?.evidence ?? false)}
+      info={browserSources.get(addressOf(entry))}
+      added={addedUrls.has(addressOf(entry)) || (browserSources.get(addressOf(entry))?.evidence ?? false)}
     />
   {/each}
 </div>
 
 <BitsConfig defaultPortalTo={portal}>
+  <ObjectFocus onsource={(url,title,event)=>openSourceWindow(url,title,'object-provenance',undefined,event)} onask={object=>actions?.askNodes('Ask about '+object.title,[{id:object.id,kind:object.kind,title:object.title,summary:object.body||object.caption||''}],state.run?.run_id||'')}/>
   <div class="shell" data-state={scene?.state ?? "empty"} data-panel={state.panel}>
     <Rail />
-    {#if workPanels.open === "skills"}<SkillsPanel />{:else if workPanels.open === "connections"}<ConnectionsPanel />{/if}
+    {#if workPanels.open === "skills"}<SkillsPanel />{:else if workPanels.open === "connections"}<ConnectionsPanel onAttach={attachAccount} />{/if}
     <div class="environment">
       <div class="canvas-card" class:strings={composedRun} bind:this={cardHost}>
         {#if scene && state.run !== undefined}
@@ -1448,7 +1599,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
               onopen={openItem}
               onopenlink={(href: string) => openSourceWindow(href)}
               onevidence={(_id: string, reference: { url?: string }) =>
-                reference.url ? openSourceWindow(reference.url) : actions?.openView("sources")}
+                reference.url ? openSourceWindow(reference.url, "", "citation") : actions?.openView("sources")}
               onaction={(id: string, action?: string) => {
                 if (nodeOrder(id, action)) return;
                 if (action?.startsWith("page:")) openPage(id, action.slice(5));
@@ -1466,12 +1617,21 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
           {#if designer}<DesignerOverlay {designer} version={designerVersion}/>{/if}
           {#if composedRun}<HandOverlay onreplay={replayBuild} />{/if}
           {#if report}<button type="button" class="design-switch" data-design={zephiumDesign ? "zephium" : "aegis"} onclick={switchDesign} title="Compare how this run is laid out">{zephiumDesign ? "Zephium layout · switch to AEGIS" : "AEGIS layout · try Zephium"}</button>{/if}
+          {#if sharedChoices.length}
+            <aside class="relay-choices" aria-label="Shared connections" data-construction-control>
+              <header><strong>{sharedChoices.length} connections share this string</strong><button aria-label="Close shared connections" onclick={() => chooseConnection(null)}>×</button></header>
+              {#each sharedChoices as choice (choice.id)}
+                <button class="relay-choice" onclick={() => chooseConnection(choice)}>{itemOf(choice.source)?.title ?? choice.source} → {itemOf(choice.target)?.title ?? choice.target}<small>{choice.strand.label}</small></button>
+              {/each}
+            </aside>
+          {/if}
           {#if selectedStrand}
             <StrandPanel
               strand={selectedStrand.strand}
               from={itemOf(selectedStrand.source)?.title ?? selectedStrand.source}
               to={itemOf(selectedStrand.target)?.title ?? selectedStrand.target}
-              onclose={() => (selectedStrand = null)}
+              relays={(selectedStrand.relays ?? []).map(id => itemOf(id)?.title ?? id)}
+              onclose={() => chooseConnection(null)}
               onsource={(url) => openSourceWindow(url)}
             />
           {/if}
@@ -1490,7 +1650,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
         {#if minimized.length}
           <div class="minimized" style:--dock="{dockHeight}px" aria-label="Minimized source windows">
             {#each minimized as entry (entry.id)}
-              <button type="button" onclick={() => browser.minimize(entry.id, false)}>{nameOf(entry.history[entry.index] ?? "")}</button>
+              <button type="button" onclick={() => browser.minimize(entry.id, false)}>{nameOf(addressOf(entry))}</button>
             {/each}
           </div>
         {/if}
@@ -1549,6 +1709,13 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
         </div>
       {/if}
       <div class="bar-dock" bind:this={barDock} bind:clientHeight={dockHeight}>
+        {#if accountInputs.length}
+          <div class="account-inputs" role="status">
+            <span>{accountInputs.length} inputs selected for the next task</span>
+            {#each accountInputs as input (input.id)}<button type="button" title={input.summary} onclick={()=>accountInputs=accountInputs.filter(x=>x.id!==input.id)}>{input.title} ×</button>{/each}
+            <button type="button" onclick={()=>accountInputs=[]}>Clear all</button>
+          </div>
+        {/if}
         <WorkBar
           bind:surface={composerSurface}
           bind:value
@@ -1585,11 +1752,12 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
   />
   <BarTool
     icon={CheckListIcon}
-    label="Research tasks"
+    label="Tasks"
     open={tool === "tasks"}
     onopenchange={(next: boolean) => (tool = next ? "tasks" : null)}
     content={tasksPanel}
   />
+  <BarTool icon={Note01Icon} label="Notes" open={tool === "notes"} onopenchange={(next:boolean)=>tool=next?"notes":null} content={notesPanel}/>
   <BarTool
     icon={PlusSignIcon}
     label="New or attach"
@@ -1622,7 +1790,13 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
   </div>
 {/snippet}
 
+{#snippet notesPanel()}
+ <PersonalNotePanel notes={workNotes} placed={accountInputs.filter(x=>x.kind==='note').map(x=>x.id)} onpick={attachNote} oncreate={()=>{tool=null;window.dispatchEvent(new CustomEvent('aegis-open-tools',{detail:{kind:'notes',create:true}}));}}/>
+{/snippet}
+
 {#snippet tasksPanel()}
+  <PersonalTasksPanel profile="aegis-owner"/>
+  {#if selectedPersonalTask}<div class="tool-panel"><button type="button" onclick={attachTask}>Use this task in Work</button></div>{/if}
   <div class="tool-panel">
     <span class="tool-label">Research tasks</span>
     {#if !state.jobs.length}<span class="tool-empty">No research tasks yet.</span>{/if}
@@ -1662,6 +1836,15 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
 {/if}
 
 <style>
+  .account-inputs { display:flex; flex-wrap:wrap; gap:6px; max-height:100px; overflow:auto; padding:8px 12px; background:var(--color-raised); border-radius:12px; font:12px var(--font-sans); }
+  .account-inputs span { width:100%; color:var(--color-muted); }
+  .account-inputs button { max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border:1px solid var(--color-border); border-radius:8px; padding:4px 7px; background:transparent; color:inherit; cursor:pointer; }
+  .relay-choices { position:absolute;top:56px;right:12px;z-index:7;width:min(340px,calc(100% - 24px));max-height:calc(100% - 140px);overflow:auto;padding:14px;border-radius:12px;background:var(--color-surface);color:var(--color-text);box-shadow:inset 0 0 0 1px var(--color-border); }
+  .relay-choices header {display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;}
+  .relay-choices button {color:inherit;background:transparent;border:0;font:inherit;cursor:pointer;}
+  .relay-choices .relay-choice {display:block;width:100%;padding:10px 0;text-align:left;border-top:1px solid var(--color-border);margin-top:8px;font-size:12px;}
+  .relay-choice small {display:block;color:var(--color-muted);margin-top:4px;}
+  .relay-choices button:focus-visible {outline:2px solid var(--color-ring);outline-offset:2px;}
   .lift-layer :global(*) {
     pointer-events: auto;
   }

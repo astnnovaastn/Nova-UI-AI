@@ -38,7 +38,11 @@ def load_notes_state(state_dir: Path) -> Dict[str, Any]:
 
 def _save_notes_state(state_dir: Path, notes: List[Dict[str, Any]], summaries: List[Dict[str, Any]]) -> None:
     from astra_ai.memory.shared_memory import atomic
-    atomic(_state_path(state_dir), {'notes': notes, 'summaries': summaries})
+    path = _state_path(state_dir)
+    # Preserve adapter metadata; malformed stores must never be overwritten.
+    data = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+    data.update(notes=notes, summaries=summaries)
+    atomic(path, data)
 
 
 def add_note(state_dir: Path, notes: List[Dict[str, Any]], summaries: List[Dict[str, Any]], content: str, category: str = "") -> Dict[str, Any]:

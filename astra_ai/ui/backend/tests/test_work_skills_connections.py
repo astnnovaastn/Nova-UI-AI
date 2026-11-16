@@ -68,12 +68,33 @@ def test_a_run_loads_its_skill_records_its_version_and_follows_it(tmp_path):
     asyncio.run(service.run(identifier, CONTEXT))
     run = service.store.get(identifier)
     skill = service.skills.get('pricing-research')
-    assert run.plan['skill'] == {'name': 'pricing-research', 'title': skill.title, 'version': skill.version, 'source': 'builtin', 'chosen': 'workflow'}
+    fact = run.plan['skills'][0]
+    assert fact == run.plan['skill']
+    assert (fact['name'], fact['title'], fact['version'], fact['source'], fact['chosen'], fact['status']) == (
+        'pricing-research', skill.title, skill.version, 'builtin', 'workflow', 'loaded')
     assert any(row.get('stage') == 'skill' for row in events(artifacts, identifier, 'stage'))
     plan_call = adapter.calls[0]
-    assert plan_call['payload']['skill']['instructions'] == skill.body
+    assert plan_call['payload']['skills'][0]['instructions'] == skill.body
+    assert any(skill.body in call['payload'].get('brief', '') for call in adapter.calls[1:])
+    assert 'instructions' not in json.dumps(service.store.public(run))
     # The skill changes instructions only: no extra model identity.
     assert len(run.usage['distinct_models']) <= 6
+
+
+def test_architecture_prompt_loads_two_registered_skills_and_freezes_their_instructions(tmp_path):
+    from astra_ai.core.work.orchestrator import _Run
+    from astra_ai.core.work.skills import instructions_for
+    adapter = FakeAdapter()
+    service, artifacts, _ = build(tmp_path, adapter)
+    service.skills = SkillRegistry(tmp_path)
+    identifier = start(service, artifacts, 'Map the architecture of Google DeepMind robotics')
+    asyncio.run(service.run(identifier, CONTEXT))
+    run = service.store.get(identifier)
+    assert {row['name'] for row in run.plan['skills']} == {'system-design', 'map-a-project'}
+    assert {row['name'] for row in adapter.calls[0]['payload']['skills']} == {'system-design', 'map-a-project'}
+    frozen = instructions_for(run.skill_snapshots)
+    service.skills.set_enabled('system-design', False)
+    assert _Run(service, run, CONTEXT, artifacts, service.services()[1])._brief() == frozen
 
 
 # Connections

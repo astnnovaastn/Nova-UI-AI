@@ -1,44 +1,12 @@
 {
  "upstream": "https://github.com/zephium-browser/Zephium",
- "commit": "7ccc28ff1cb102aba69ef4415fee266b8239fa0d",
+ "commit": "9026a1fffad74d6e201ef97fe8c02c1b01403cd2",
  "license": "MPL-2.0",
  "messages": {
   "file": "frame/messages/en.json",
   "change": "Zephium replaced with Aegis in user-facing text"
  },
  "patches": [
-  {
-   "file": "features/work/components/run/PartRow.svelte",
-   "why": "Mark individual expanded previews for the AEGIS stack animation."
-  },
-  {
-   "file": "features/work/components/pane/BrowserPane.svelte",
-   "why": "Select the full editable address when focus moves into the toolbar."
-  },
-  {
-   "file": "features/work/components/pane/BrowserPane.svelte",
-   "why": "Accept a web favicon and the AEGIS source-save state."
-  },
-  {
-   "file": "features/work/components/pane/BrowserPane.svelte",
-   "why": "Type the optional web pane controls."
-  },
-  {
-   "file": "features/work/components/pane/BrowserPane.svelte",
-   "why": "Use the generic icon after an image fails."
-  },
-  {
-   "file": "features/work/components/pane/BrowserPane.svelte",
-   "why": "Use saved source favicons in the web host with no referrer."
-  },
-  {
-   "file": "features/work/components/pane/BrowserPane.svelte",
-   "why": "Disable source saving during validation and duplicate requests."
-  },
-  {
-   "file": "features/work/components/pane/BrowserPane.svelte",
-   "why": "Size the source favicon to match native tab icons."
-  },
   {
    "file": "features/work/components/WorkCanvas.svelte",
    "why": "Expose real geometry to the provider-free AEGIS designer without synthesizing pointer events."
@@ -558,6 +526,258 @@
   {
    "file": "features/work/lib/canvas-model.ts",
    "why": "AEGIS V7: a card AEGIS draws (its AI PLAN, Images and Videos sheets, agent cards) is drawn again when its own data changes, not only Zephium's fields, so a live run's plan card follows the run."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Accept a web favicon and the AEGIS source-save state."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Type the optional web pane controls."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Use the generic icon after an image fails."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Use saved source favicons in the web host with no referrer."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Disable source saving during validation and duplicate requests."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Size the source favicon to match native tab icons."
+  },
+  {
+   "file": "features/work/components/pane/BrowserPane.svelte",
+   "why": "Select the full editable address when focus moves into the toolbar."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Mark individual expanded previews for the AEGIS stack animation."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "AEGIS source stack and webpage preview integration."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "AEGIS source stack and webpage preview integration."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "AEGIS source stack and webpage preview integration."
+  },
+  {
+   "file": "features/work/components/run/PageFace.svelte",
+   "why": "AEGIS source stack and webpage preview integration."
+  },
+  {
+   "file": "features/work/components/run/PageFace.svelte",
+   "why": "AEGIS source stack and webpage preview integration."
+  },
+  {
+   "file": "features/work/components/run/PageFace.svelte",
+   "why": "AEGIS source stack and webpage preview integration."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Attach actual loaded Skills beside the existing AEGIS prompt card."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Draw Skill marks as a presentation layer without adding graph nodes."
+  },
+  {
+   "file": "features/work/components/run/PageFace.svelte",
+   "why": "Fit existing page identity and excerpt into a zoomed stack card without clipping the title."
+  },
+  {
+   "file": "features/work/components/run/PageFace.svelte",
+   "why": "Make compact stack page layout explicit."
+  },
+  {
+   "file": "features/work/components/run/PageFace.svelte",
+   "why": "Keep the miniature title and excerpt distinct at narrow sizes."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Shared visual relay renderer, separate from the logical connection renderer."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Logical dependencies drive layout; local relay segments drive rendering and culling."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Render each shared local segment once instead of painting each logical long wire."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Promote only the moving card, not every screenshot into a composited layer."
+  },
+  {
+   "file": "features/work/lib/workspace/layers.ts",
+   "why": "Do not force layout or trigger subtree measurement observers after gestures."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "One stable routing scene shared by every edge; camera transforms are not routing inputs."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Keep the router alive across node store updates and dispose it with this canvas."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Reuse upstream PartRow itself in the bounded AEGIS overlay, including its transforms and PageFace."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Retain upstream stack geometry while allowing expansion into available space on the left."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Use the same fan spacing for the mirrored direction in a narrow viewport."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Preserve the original trusted page activation through the existing browser controller."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Show every page in the scrollable overlay rather than dropping sources after the third."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Control the original fan transition for keyboard, touch and graceful close; keep base stack still beneath it."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Positive paint order for stacks larger than three."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Forward this page click, not a synthesized event."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Use the original expanded transform for controlled activation as well as hover."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "The overlay supplies bounds; original page geometry and styling stay in PartRow."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Validated adaptive result renderer in the existing canvas."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Render approved result data, never model-supplied components."
+  },
+  {
+   "file": "features/work/components/WorkCanvas.svelte",
+   "why": "Pass actual typed result metadata to deterministic layout."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Versioned readable source size; legacy cards keep their dimensions."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Expanded pages use the same width as their anchored source."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Preview width follows its versioned source card."
+  },
+  {
+   "file": "features/work/components/run/PartRow.svelte",
+   "why": "Keep genuine screenshot aspect ratio."
+  },
+  {
+   "file": "features/notes/lib/platform.ts",
+   "why": "AEGIS stores Notes in its existing database; export Markdown instead of advertising an unavailable native reveal command."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Use one selected-object toolbar; retain original Open and add existing AEGIS result persistence actions."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Keep selected actions reachable on narrow cards instead of one oversized toolbar extending beyond the canvas."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Place the selected toolbar below cards near the top of the viewport so every action remains clickable."
+  },
+  {
+   "file": "features/work/components/CanvasNode.svelte",
+   "why": "Toolbar placement follows camera geometry without triggering routing."
+  },
+  {
+   "file": "features/tools/components/previews/NotesView.svelte",
+   "why": "Use the existing AEGIS host for page navigation and active source context."
+  },
+  {
+   "file": "features/tools/components/previews/NotesView.svelte",
+   "why": "Use the existing AEGIS host for page navigation and active source context."
+  },
+  {
+   "file": "features/tools/components/previews/TasksView.svelte",
+   "why": "Use the existing AEGIS host for page navigation and active source context."
+  },
+  {
+   "file": "features/tools/components/previews/TasksView.svelte",
+   "why": "Use the existing AEGIS host for page navigation and active source context."
+  },
+  {
+   "file": "features/tasks/components/TasksPage.svelte",
+   "why": "Use the existing AEGIS host for page navigation and active source context."
+  },
+  {
+   "file": "features/tasks/components/TasksPage.svelte",
+   "why": "Use the existing AEGIS host for page navigation and active source context."
+  },
+  {
+   "file": "features/tools/components/ToolFrame.svelte",
+   "why": "Limit this host to the installed Notes and Tasks tools."
+  },
+  {
+   "file": "features/tools/components/previews/NotesView.svelte",
+   "why": "Individual notes export as Markdown in AEGIS."
+  },
+  {
+   "file": "features/tools/components/previews/NotesView.svelte",
+   "why": "Folder selection uses the existing desktop bridge."
+  },
+  {
+   "file": "features/work/components/objects/Plan.svelte",
+   "why": "Month browsing does not require permission to edit a calendar."
+  },
+  {
+   "file": "features/work/components/objects/PlanCalendar.svelte",
+   "why": "Keep all seven days visible inside existing manually sized cards and narrow focus views."
+  },
+  {
+   "file": "features/work/components/objects/PlanCalendar.svelte",
+   "why": "Use the measured calendar width for day columns and multi-day labels without changing saved node geometry."
+  },
+  {
+   "file": "features/work/components/board/Popover.svelte",
+   "why": "Keep anchored object inspectors inside the AEGIS focus panel and narrow canvas."
+  },
+  {
+   "file": "features/work/components/board/Popover.svelte",
+   "why": "Measure only the open inspector; dispose all observers on close."
+  },
+  {
+   "file": "features/work/components/board/Popover.svelte",
+   "why": "Dispose focus-inspector measurement."
   }
  ],
  "files": [
@@ -819,10 +1039,130 @@
   },
   {
    "path": "frame/src/features/notes/lib/platform.ts",
-   "status": "unchanged"
+   "status": "adapted"
   },
   {
    "path": "frame/src/features/notes/lib/sections.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/DueMenu.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/SiteMark.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/TaskBoard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/TaskBulkBar.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/TaskCheck.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/TaskComposer.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/TaskDetail.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/TaskFailure.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/TaskList.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/TaskNotice.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/TaskRow.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/TaskSubtasks.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/Tasks.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/TasksNavigation.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/components/TasksPage.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/tasks/lib/capture.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/lib/detail-motion.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/lib/labels.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/lib/page-view.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/lib/priority.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/lib/task-calendar.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/lib/task-language.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/lib/task-order.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/lib/task-sections.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tasks/lib/today.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tools/components/ToolFrame.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/tools/components/previews/NotesView.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/tools/components/previews/TasksView.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/tools/components/tools.css",
    "status": "unchanged"
   },
   {
@@ -938,6 +1278,14 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/features/work/components/bar/NotePanel.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/bar/TasksPanel.svelte",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/features/work/components/bar/VoiceView.svelte",
    "status": "unchanged"
   },
@@ -1003,7 +1351,7 @@
   },
   {
    "path": "frame/src/features/work/components/board/Popover.svelte",
-   "status": "unchanged"
+   "status": "adapted"
   },
   {
    "path": "frame/src/features/work/components/board/Prose.svelte",
@@ -1114,6 +1462,14 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/features/work/components/local/CommandRecord.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/work/components/local/CommandReview.svelte",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/features/work/components/objects/Checklist.svelte",
    "status": "unchanged"
   },
@@ -1174,6 +1530,10 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/features/work/components/objects/ObjectCentre.svelte",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/features/work/components/objects/ObjectView.svelte",
    "status": "unchanged"
   },
@@ -1191,11 +1551,11 @@
   },
   {
    "path": "frame/src/features/work/components/objects/Plan.svelte",
-   "status": "unchanged"
+   "status": "adapted"
   },
   {
    "path": "frame/src/features/work/components/objects/PlanCalendar.svelte",
-   "status": "unchanged"
+   "status": "adapted"
   },
   {
    "path": "frame/src/features/work/components/objects/PlayMark.svelte",
@@ -1478,6 +1838,10 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/features/work/lib/local-steps.ts",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/features/work/lib/note-hue.svelte.ts",
    "status": "unchanged"
   },
@@ -1611,6 +1975,10 @@
   },
   {
    "path": "frame/src/features/work/lib/workspace/layers.ts",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/session/tool-drafts.svelte.ts",
    "status": "unchanged"
   },
   {
@@ -1634,11 +2002,19 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/shared/lib/fit.ts",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/shared/lib/lag.svelte.ts",
    "status": "unchanged"
   },
   {
    "path": "frame/src/shared/lib/lifecycle.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/lib/match-range.ts",
    "status": "unchanged"
   },
   {
@@ -1650,11 +2026,19 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/shared/lib/pointer-drag.svelte.ts",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/shared/lib/still.ts",
    "status": "unchanged"
   },
   {
    "path": "frame/src/shared/lib/virtual-window.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/lib/visible-interval.ts",
    "status": "unchanged"
   },
   {
@@ -1671,6 +2055,22 @@
   },
   {
    "path": "frame/src/shared/ui/Button/control.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Disclosure/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Disclosure/Disclosure.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EmptyState/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EmptyState/EmptyState.svelte",
    "status": "unchanged"
   },
   {
@@ -1727,6 +2127,10 @@
   },
   {
    "path": "frame/src/shared/ui/Menu/Menu.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Menu/MenuStep.svelte",
    "status": "unchanged"
   },
   {

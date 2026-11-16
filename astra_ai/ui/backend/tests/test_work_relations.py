@@ -153,7 +153,8 @@ def test_failed_attempts_count_toward_the_cap(tmp_path):
 
 TWELVE = [
     {'title': 'Source ' + str(n) + ' on battery storage', 'url': 'https://site' + str(n) + '.example.org/article',
-     'content': ('Grid battery storage costs and lifetimes, measured in study ' + str(n) + '. ') * 30,
+     # The complete-report fixture actually supplies evidence for every requested topic.
+     'content': ('Battery storage ' + ['costs','lifetimes','grid integration','safety','policy'][n % 5] + ', measured in study ' + str(n) + '. ') * 30,
      'retrieved_at': '2026-11-06T00:00:00+00:00', 'provider': 'tavily'}
     for n in range(1, 13)
 ]

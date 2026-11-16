@@ -620,21 +620,10 @@ body::-webkit-scrollbar-thumb {
 }
 
 #app-brand .app-brand-mark {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 32px;
   height: 32px;
   flex-shrink: 0;
-  color: var(--accent-strong);
-}
-#app-brand .app-brand-mark::before {
-  content: "";
-  width: 29px;
-  height: 29px;
-  background: currentColor;
-  mask: url('/assets/aegis_logo.svg') center / contain no-repeat;
-  -webkit-mask: url('/assets/aegis_logo.svg') center / contain no-repeat;
-  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent-strong) 25%, transparent));
 }
 #app-brand .app-brand-name {
   display: inline-flex;

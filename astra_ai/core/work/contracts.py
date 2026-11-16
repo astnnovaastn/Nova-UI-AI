@@ -124,11 +124,16 @@ class ResearchEvent:
 class RunState:
     run_id: str
     research_id: str
+    schema_version: int = 1
+    task_graph: dict = field(default_factory=dict)
+    canvas_objects: list = field(default_factory=list)
+    coverage: dict = field(default_factory=dict)
     state: str = 'queued'
     stage: str = ''
     request: dict = field(default_factory=dict)
     budget: dict = field(default_factory=dict)
     plan: dict = field(default_factory=dict)
+    skill_snapshots: list | None = None
     assignments: list = field(default_factory=list)
     results: dict = field(default_factory=dict)
     evidence: list = field(default_factory=list)

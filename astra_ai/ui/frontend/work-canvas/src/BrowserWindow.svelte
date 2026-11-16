@@ -8,7 +8,8 @@
   import { untrack } from "svelte";
   import BrowserPane from "$features/work/components/pane/BrowserPane.svelte";
   import { blockedWords, normalizeAddress } from "./browser-address";
-  import { browser, type BrowserWindowState } from "./browser-windows.svelte";
+  import { browserHost } from "./browser-host";
+  import { addressOf, browser, type BrowserWindowState } from "./browser-windows.svelte";
   import { store } from "./store.svelte";
   import type { SourceInfo } from "./research-to-run";
 
@@ -20,27 +21,30 @@
   }: { entry: BrowserWindowState; bounds: DOMRect; info: SourceInfo | undefined; added: boolean } = $props();
 
   const actions = $derived(store.actions);
-  const url = $derived(entry.history[entry.index] ?? "");
+  /** AEGIS Desktop shows the page in a real browser view of its own; AEGIS Web has only an iframe. */
+  const native = browserHost.kind === "native";
+  const live = $derived(entry.live);
+  const url = $derived(addressOf(entry));
   const loadGeneration = $derived(entry.load);
   const sourceTitle = $derived(info?.title || (url === entry.history[0] ? entry.title : "") || reader?.title || "");
   const validAddress = $derived(normalizeAddress(url, location.host));
-  const favicon = $derived(info?.favicon && normalizeAddress(info.favicon, location.host) || "");
+  const favicon = $derived(info?.favicon && normalizeAddress(info.favicon, location.host) || live?.favicon || "");
   const STUCK_AFTER = 20000;
 
   /**
    * Checking the site's rules; the live page; the Source Reader (text AEGIS retrieved, clearly not
    * the live site); or a reason neither could be shown.
    */
-  let view = $state<"checking" | "frame" | "blocked" | "reader">("checking");
-  const canOpenOriginal = $derived(Boolean(validAddress && view !== "checking" && (view !== "blocked" || framingDenied)));
+  let view = $state<"checking" | "frame" | "native" | "blocked" | "reader">("checking");
+  const canOpenOriginal = $derived(Boolean(validAddress && view !== "checking" && (native || view !== "blocked" || framingDenied)));
   function openOriginal() {
-    if (validAddress && canOpenOriginal) window.open(validAddress, "_blank", "noopener,noreferrer");
+    if (validAddress && canOpenOriginal) void browserHost.openExternal(validAddress).catch(() => {});
   }
 
   type ReaderPage = { status: string; title?: string; site?: string; html?: string; final_url?: string; retrieved_at?: number; via_proxy?: boolean; words?: number; reason?: string };
   let reader = $state<ReaderPage | null>(null);
   let readerLoading = $state(false);
-  let beforeReader = $state<"frame" | "blocked">("frame");
+  let beforeReader = $state<"frame" | "native" | "blocked">("frame");
   let readerRequest: AbortController | undefined;
   let readerAddress = "";
   let addressError = $state(false);
@@ -54,7 +58,7 @@
   }
 
   async function openReader() {
-    if (view === "frame" || view === "blocked") beforeReader = view;
+    if (view === "frame" || view === "native" || view === "blocked") beforeReader = view;
     view = "reader";
     const address = url;
     if (readerAddress === address && reader?.status === "ok") return;
@@ -135,6 +139,11 @@
       unverified = false;
       blockedReason = "";
     });
+    if (native) {
+      // Nothing to check: the page is not framed, so the site's framing rules do not apply.
+      untrack(() => (view = "native"));
+      return () => readerRequest?.abort();
+    }
     if (!normalizeAddress(address, location.host)) {
       blockedReason = "address";
       view = "blocked";
@@ -204,13 +213,173 @@
     };
   }
 
+  // ---- AEGIS Desktop: the pane's own browser view -------------------------------------------
+  /** The part of the pane the browser view fills. The view is not in the page: it is told where this is. */
+  let hole = $state<HTMLElement>();
+  let opened = $state(false);
+  /** Something of AEGIS's is in front of the pane. The view paints above the page, so it is hidden meanwhile. */
+  let covered = $state(false);
+  let failure = $state<{ words: string; url: string } | null>(null);
+  let notice = $state("");
+  /** The pane has finished opening, so its measurements are real. */
+  let settled = false;
+  /** An address typed before the view exists. */
+  let pending = "";
+
+  function failureWords(code: string): string {
+    if (code.includes("NAME_NOT_RESOLVED")) return "The site's name could not be found.";
+    if (code.includes("INTERNET_DISCONNECTED")) return "There is no internet connection.";
+    if (code.includes("CERT")) return "The site's security certificate is not valid, so it was not opened.";
+    if (code.includes("CONNECTION") || code.includes("TIMED_OUT") || code.includes("UNREACHABLE")) return "The site could not be reached.";
+    return "The page could not be loaded.";
+  }
+
+  function place() {
+    const element = hole;
+    if (!native || !element) return;
+    const box = element.getBoundingClientRect();
+    if (box.width < 2 || box.height < 2) return;
+    const rect = { x: box.left, y: box.top, width: box.width, height: box.height };
+    if (opened) {
+      void browserHost.setBounds(entry.id, rect);
+      return;
+    }
+    opened = true;
+    const address = pending || entry.live?.url || url;
+    pending = "";
+    const openingId = entry.id;
+    browserHost.openSource(openingId, address, rect).then(() => {
+      if (!browser.shown.some((item) => item.id === openingId)) return browserHost.close(openingId);
+    }).catch((error) => {
+      if (!browser.shown.some((item) => item.id === openingId)) return;
+      opened = false;
+      blockedReason = String(error).includes("non_public_address") ? "address" : "";
+      view = "blocked";
+    });
+  }
+
+  function isCovered(): boolean {
+    const element = hole;
+    if (!element) return false;
+    const box = element.getBoundingClientRect();
+    if (box.width < 2 || box.height < 2) return true;
+    const pane = element.closest<HTMLElement>(".pane");
+    for (let column = 0; column < 5; column++) {
+      for (let row = 0; row < 5; row++) {
+        const top = document.elementFromPoint(box.left + 3 + ((box.width - 6) * column) / 4, box.top + 3 + ((box.height - 6) * row) / 4);
+        // The pane's own corner grips reach a little into the view; they are not in front of it.
+        if (top && !pane?.contains(top)) return true;
+      }
+    }
+    // Another source window in front, even where it misses the points above.
+    const order = Number(pane?.style.zIndex) || 0;
+    for (const other of document.querySelectorAll<HTMLElement>(".browser-layer .pane")) {
+      if (other === pane || other.style.display === "none" || (Number(other.style.zIndex) || 0) < order) continue;
+      const theirs = other.getBoundingClientRect();
+      if (theirs.left < box.right && theirs.right > box.left && theirs.top < box.bottom && theirs.bottom > box.top) return true;
+    }
+    return false;
+  }
+
+  $effect(() => {
+    const element = hole;
+    if (!native || !element) return;
+    const observer = new ResizeObserver(() => {
+      if (settled) place();
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
+
+  $effect(() => {
+    if (!native || !opened) return;
+    const timer = setInterval(() => (covered = isCovered()), 150);
+    return () => clearInterval(timer);
+  });
+
+  const showing = $derived(native && opened && view === "native" && !entry.minimized && !covered && !failure);
+  $effect(() => {
+    if (native && opened) void browserHost.setVisible(entry.id, showing);
+  });
+
+  // Runs once for the life of the window: `entry` is replaced on every change, and re-running
+  // this would close the page each time.
+  const id = untrack(() => entry.id);
+  $effect(() => {
+    if (!native) return;
+    const stop = browserHost.subscribe((event) => {
+      if (event.id !== id) return;
+      switch (event.kind) {
+        case "load":
+          if (event.loading) {
+            failure = null;
+            notice = "";
+          }
+          browser.report(id, event.url ? { loading: event.loading, url: event.url } : { loading: event.loading });
+          break;
+        case "title":
+          browser.report(id, { title: event.title });
+          break;
+        case "history":
+          browser.report(id, { back: event.back, forward: event.forward });
+          break;
+        case "favicon":
+          browser.report(id, { favicon: event.url });
+          break;
+        case "focus":
+          browser.raise(id);
+          break;
+        case "blocked":
+          notice = "That link was not followed: the workspace browser only opens public websites.";
+          break;
+        case "download":
+          notice = "The workspace browser doesn't save files. Use Open in browser to download from this page.";
+          break;
+        case "failed":
+          failure = { words: failureWords(event.description), url: event.url };
+          browser.report(id, { loading: false });
+          break;
+      }
+    });
+    return () => {
+      stop();
+      // Closing the pane, or leaving this research, ends the page and frees its memory.
+      void browserHost.close(id);
+    };
+  });
+
+  function go(input: string) {
+    const next = normalizeAddress(input, location.host);
+    addressError = !next;
+    if (!next) return;
+    if (!native) {
+      browser.navigate(entry.id, next);
+      return;
+    }
+    failure = null;
+    browser.sent(entry.id, next);
+    if (opened) {
+      view = "native";
+      void browserHost.navigate(entry.id, next).catch(() => {});
+    } else {
+      pending = next;
+      view = "native";
+    }
+  }
+
+  function reload() {
+    if (!native) browser.reload(entry.id);
+    else if (failure) void browserHost.navigate(entry.id, failure.url).catch(() => {});
+    else void browserHost.reload(entry.id).catch(() => {});
+  }
+
   const tab = $derived({
     id: entry.id,
     url,
-    title: sourceTitle || url,
-    can_go_back: entry.index > 0,
-    can_go_forward: entry.index < entry.history.length - 1,
-    loading: view === "checking" || (view === "frame" && !loaded && !stuck) || (view === "reader" && readerLoading),
+    title: (native && live?.title) || sourceTitle || url,
+    can_go_back: native ? Boolean(live?.back) : entry.index > 0,
+    can_go_forward: native ? Boolean(live?.forward) : entry.index < entry.history.length - 1,
+    loading: native && view === "native" ? (live?.loading ?? !failure) : view === "checking" || (view === "frame" && !loaded && !stuck) || (view === "reader" && readerLoading),
     icon: null,
     projection_revision: 0,
   });
@@ -225,22 +394,21 @@
   origin={null}
   phase="shown"
   {added}
-  addDisabled={adding || !validAddress || view === "checking" || (view === "blocked" && !framingDenied)}
+  addDisabled={adding || !validAddress || view === "checking" || (view === "blocked" && !framingDenied && !native)}
   {favicon}
   hidden={entry.minimized}
   order={entry.order}
   start={entry.cascade ? entry.cascade : 0}
   onraise={() => browser.raise(entry.id)}
   onminimize={() => browser.minimize(entry.id, true)}
-  onmeasure={() => {}}
-  onnavigate={(input: string) => {
-    const next = normalizeAddress(input, location.host);
-    addressError = !next;
-    if (next) browser.navigate(entry.id, next);
+  onmeasure={() => {
+    settled = true;
+    place();
   }}
-  onback={() => browser.step(entry.id, -1)}
-  onforward={() => browser.step(entry.id, 1)}
-  onreload={() => browser.reload(entry.id)}
+  onnavigate={go}
+  onback={() => (native ? void browserHost.goBack(entry.id).catch(() => {}) : browser.step(entry.id, -1))}
+  onforward={() => (native ? void browserHost.goForward(entry.id).catch(() => {}) : browser.step(entry.id, 1))}
+  onreload={reload}
   onadd={addReference}
   onopenbrowse={canOpenOriginal ? openOriginal : undefined}
   onclose={() => browser.close(entry.id)}
@@ -253,6 +421,7 @@
           <button type="button" class="about-title" aria-expanded={details} title={info.title} onclick={() => (details = !details)}>{info.title}</button>
           {#if retrieved}<span class="about-fact">Retrieved {retrieved}</span>{/if}
           {#if citations}<span class="about-fact">Cited {citations === 1 ? "once" : `${citations} times`}</span>{/if}
+          {#if native && view === "native"}<button type="button" class="about-action" onclick={() => openReader()}>Source Reader</button>{/if}
           {#if info.evidence}<button type="button" class="about-action" onclick={() => actions?.openSource(info?.url ?? url)}>View evidence</button>{/if}
         </div>
         {#if details}
@@ -273,8 +442,8 @@
           Readable text retrieved from the source.
           {#if reader?.via_proxy} Fetched through your proxy.{/if}
         </span>
-        <button type="button" onclick={() => beforeReader === "frame" ? showFrame() : (view = "blocked")}>
-          {beforeReader === "frame" ? "Live page" : "Back to source"}
+        <button type="button" onclick={() => beforeReader === "frame" ? showFrame() : (view = beforeReader)}>
+          {beforeReader === "blocked" ? "Back to source" : "Live page"}
         </button>
       </div>
       {#if readerLoading}
@@ -286,6 +455,25 @@
           <p>This page can't be shown here. {readerWhy(reader.reason)}</p>
           {#if info?.evidence}<button type="button" class="primary" onclick={() => actions?.openSource(info?.url ?? url)}>Read the saved copy</button>{/if}
         </div>
+      {/if}
+    {:else if view === "native"}
+      <div class="native" bind:this={hole} data-mode="native-live" data-showing={showing}>
+        {#if failure}
+          <div class="notice" role="alert" data-mode="unavailable">
+            <p>{failure.words}</p>
+            <div class="notice-actions">
+              <button type="button" class="primary" onclick={reload}>Try again</button>
+              <button type="button" onclick={() => openReader()}>Source Reader</button>
+            </div>
+          </div>
+        {:else if !opened}
+          <p class="waiting" role="status">Opening…</p>
+        {:else if covered}
+          <p class="waiting" role="status">{live?.title || sourceTitle || "This page"} is hidden while something is in front of it.</p>
+        {/if}
+      </div>
+      {#if notice}
+        <p class="hint" role="status">{notice}<button type="button" onclick={() => (notice = "")}>Dismiss</button></p>
       {/if}
     {:else if view === "blocked"}
       <div class="notice" role="status" data-mode="unavailable">
@@ -416,6 +604,15 @@
 
   .frame.ready {
     opacity: 1;
+  }
+
+  /* Inset from the pane's edges so the resize grips and rounded corners stay outside the browser view. */
+  .native {
+    position: relative;
+    flex: 1;
+    min-block-size: 0;
+    margin: 0 6px 6px;
+    background: var(--color-surface);
   }
 
   .frame :global(iframe) {

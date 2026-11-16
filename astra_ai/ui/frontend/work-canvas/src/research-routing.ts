@@ -1,5 +1,5 @@
 import { roundedPath, type Point, type Rect } from "./route";
-import { getBezierPath, Position } from "@xyflow/svelte";
+import { getBezierPath, Position } from "@xyflow/system";
 import { RESEARCH_GRID_STEP } from "./layout-policy";
 
 export type PortSide = "right" | "left" | "top" | "bottom";
@@ -114,6 +114,73 @@ function portCurve(s: Point, t: Point, from: PortSide, to: PortSide, boxes: read
 export function dragStrand(source: Rect, target: Rect, from: PortSide, to: PortSide, lane = 0, targetLane = lane) {
   const s = port(source, from, lane), t = port(target, to, targetLane);
   return { s, t, from, to, ...xyflowCurve(s, t, from, to) };
+}
+
+/** A cheap, collision-checked preview while a full route is scheduled. */
+export function clearDragStrand(source: Rect, target: Rect, obstacles: readonly Rect[], from: PortSide, to: PortSide, lane = 0, targetLane = lane) {
+  const s = port(source, from, lane), t = port(target, to, targetLane);
+  const curve = portCurve(s, t, from, to, [...obstacles.map(expand), source, target]);
+  return curve ? {s, t, from, to, ...curve} : null;
+}
+
+/** Bounds of the full SVG control hull, conservative for collision invalidation. */
+export function routeEnvelope(d: string): Rect {
+  const points = [...d.matchAll(/(-?[\d.e+]+),(-?[\d.e+]+)/gi)].map(m => ({x:Number(m[1]),y:Number(m[2])}));
+  const xs = points.map(p=>p.x), ys=points.map(p=>p.y);
+  const x=Math.min(...xs),y=Math.min(...ys);
+  return {x:x-clearance,y:y-clearance,width:Math.max(...xs)-x+2*clearance,height:Math.max(...ys)-y+2*clearance};
+}
+
+/** Approximate ink length by subdividing cubics; used only to compare safe candidates. */
+function ink(d: string) {
+  const commands = d.match(/[MLCQH][^MLCQH]*/g) ?? [];
+  let p={x:0,y:0}, total=0;
+  for(const command of commands) {
+    const nums=(command.slice(1).match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi)??[]).map(Number);
+    if(command[0]==='H') { total+=Math.abs(nums[0]!-p.x);p={x:nums[0]!,y:p.y};continue; }
+    const points=[];for(let i=0;i<nums.length;i+=2)points.push({x:nums[i]!,y:nums[i+1]!});
+    if(command[0]==='M') {p=points[0]!;continue;}
+    if(command[0]==='L') {total+=distance(p,points[0]!);p=points[0]!;continue;}
+    const controls=[p,...points];
+    for(let i=1;i<=12;i++) { let row=controls;while(row.length>1)row=row.slice(1).map((v,j)=>mix(row[j]!,v,i/12));total+=distance(p,row[0]!);p=row[0]!; }
+  }
+  return total;
+}
+
+/** A display-only junction. All members retain their real source and destination. */
+export function routeResearchCorridorFan(hub: Rect, members: readonly {id:string;rect:Rect}[], obstacles: readonly Rect[], direction: 'in'|'out') {
+  let best=routeResearchFan(hub,members,obstacles,direction);
+  if(members.length<2)return best;
+  const sign=direction==='out'?1:-1;
+  const root=port(hub,sign===1?'right':'left',0);
+  const rows=members.map(m=>m.rect.y+m.rect.height/2).sort((a,b)=>a-b);
+  const y=rows[Math.floor(rows.length/2)]!;
+  const boundary=direction==='out'?Math.min(...members.map(m=>m.rect.x)):Math.max(...members.map(m=>m.rect.x+m.rect.width));
+  if(sign*(boundary-root.x)<80)return best;
+  const cost=(value:NonNullable<typeof best>)=>ink(value.trunk)+[...value.branches.values()].reduce((sum,b)=>sum+ink(b.d),0);
+  let bestCost=best?.branches.size===members.length?cost(best):Infinity;
+  for(const ratio of [.75,.5,.25]) {
+    const join={x:root.x+(boundary-root.x)*ratio,y};
+    const junction={...join,width:0,height:0};
+    const trunk=direction==='out'
+      ?routeResearchStrand(hub,junction,[...obstacles,...members.map(m=>m.rect)])
+      :routeResearchStrand(junction,hub,[...obstacles,...members.map(m=>m.rect)]);
+    if(!trunk)continue;
+    const branches=new Map<string,NonNullable<ReturnType<typeof routeResearchStrand>>>();
+    for(const member of members) {
+      const blocked=[...obstacles,hub,...members.filter(m=>m.id!==member.id).map(m=>m.rect)];
+      const branch=direction==='out'?routeResearchStrand(junction,member.rect,blocked):routeResearchStrand(member.rect,junction,blocked);
+      if(!branch)break;
+      // Avoid routing a branch the long way around a member to reach the common trunk.
+      if(ink(branch.d)>distance(join,port(member.rect,sign===1?'left':'right',0))*1.8+80)break;
+      branches.set(member.id,{...branch,s:direction==='out'?trunk.s:branch.s,t:direction==='out'?branch.t:trunk.t});
+    }
+    if(branches.size!==members.length)continue;
+    const candidate={branches,trunk:trunk.d};
+    const length=cost(candidate);
+    if(length+16<bestCost) { best=candidate;bestCost=length; }
+  }
+  return best;
 }
 
 // Intersect a segment with the open interior of a card's clearance rectangle.
@@ -274,7 +341,7 @@ export function routeResearchFan(
       });
     }
     if (branches.size < 2) continue;
-    return { branches, trunk:`M ${root.x},${root.y} H ${join.x}` };
+    return { branches, trunk:direction==='out'?`M ${root.x},${root.y} L ${join.x},${join.y}`:`M ${join.x},${join.y} L ${root.x},${root.y}` };
   }
   return null;
 }
@@ -297,10 +364,20 @@ export function indexRoutingNodes(nodes: readonly RoutingNode[], previous?: Rout
     if(node.dragging || (node.parentId && moving.has(node.parentId)))moving.add(node.id);
     const width=node.measured?.width??node.width, height=node.measured?.height??node.height;
     if(!width||!height)continue;
-    const rect={...point(node),width,height};
+    const position=point(node);
+    const visual=(node.data as {visualBounds?:Rect}|undefined)?.visualBounds;
+    // Presentation geometry only. Saved frames and positions remain authoritative.
+    const usable=visual&&[visual.x,visual.y,visual.width,visual.height].every(Number.isFinite)&&visual.width>0&&visual.height>0;
+    const rect=usable?{x:position.x+visual.x,y:position.y+visual.y,width:Math.min(width,visual.width),height:Math.min(height,visual.height)}:{...position,width,height};
     bounds.set(node.id,rect);
     const kind=(node.data as {type?:string}|undefined)?.type;
     if(!node.hidden&&node.type!=="agent"&&kind!=="agent"&&kind!=="mapgroup"&&node.type!=="area")cards.set(node.id,rect);
+    // Display-only exclusions; Skill decorations never become graph endpoints or change card sizes.
+    const skills=(node.data as {aegisSkills?:unknown[]}|undefined)?.aegisSkills;
+    if(!node.hidden&&skills?.length){
+      const height=skills.length*48-12;
+      cards.set(`skill-decoration:${node.id}`,{x:rect.x-256,y:rect.y+(rect.height-height)/2,width:200,height});
+    }
   }
   // A child moves with its parent even when the library lists the child first.
   for(const node of nodes)for(let parent=node.parentId;parent;parent=byId.get(parent)?.parentId){

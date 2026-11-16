@@ -95,7 +95,7 @@ describe("organized workflow", () => {
     const hub = box(0, 100);
     const leaves = [{ id: "upper", rect: box(280, 0) }, { id: "lower", rect: box(300, 230) }];
     const fan = routeResearchFan(hub, leaves, [], "out")!;
-    expect(fan.trunk).toBe("M 120,140 H 136");
+    expect(fan.trunk).toBe("M 120,140 L 136,140");
     expect(fan.branches.get("upper")?.d).toMatch(/^M 136,140 C .* L 280,40$/);
     expect(fan.branches.get("lower")?.d).toMatch(/^M 136,140 C .* L 300,270$/);
     expect(fan.branches.get("upper")?.t).toEqual({ x: 280, y: 40 });
@@ -112,7 +112,7 @@ describe("organized workflow", () => {
       make("shortcut","delivers","analysis","lead"),make("citation","cites","source","report")];
     const overview = organizeResearchStrands(strandLinks(rows, id=>id).links);
     expect(overview.find(link=>link.target==="analysis")?.strand.relations.map(row=>row.id)).toEqual(["a","b"]);
-    expect(overview.find(link=>link.id==="strand:shortcut")?.strand.detailOnly).toBe(true);
+    expect(overview.find(link=>link.id==="strand:shortcut")?.strand.detailOnly).toBeUndefined();
     expect(overview.find(link=>link.id==="strand:citation")?.strand.detailOnly).toBeUndefined();
   });
 });

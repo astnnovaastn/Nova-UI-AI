@@ -1,5 +1,7 @@
 import { emptyGeometry, type LayoutInput, type LayoutNode, type LayoutPlan, type Rect, type Geometry } from './types';
+import {FAMILIES,isFamily,familyPositions,selectFamily} from './families';
 export const STRATEGIES = [
+    ...FAMILIES.map(([id,label])=>[id,label] as const),
     ['pipeline', 'Horizontal pipeline'], ['timeline', 'Vertical timeline'], ['milestones', 'Milestone groups'],
     ['tree', 'Left-to-right branching tree'], ['hierarchy', 'Top-down hierarchy'], ['dependency', 'Service dependency graph'],
     ['swimlanes', 'Agent swimlanes'], ['evidence', 'Evidence clusters'], ['subgraphs', 'Grouped subgraphs'],
@@ -157,7 +159,12 @@ function candidate(input: LayoutInput, strategy: string): LayoutPlan {
     const addGroup = (title: string, ns: LayoutNode[]) => { if (ns.length < 2)
         return; const rs = ns.map(n => ({ ...geometry.positions[n.id], ...geometry.sizes[n.id] })); const x = Math.min(...rs.map(n => n.x)) - 24, y = Math.min(...rs.map(n => n.y)) - 48; geometry.groups.push({ id: 'layout:' + ns[0].id, title, members: ns.map(n => n.id), x, y, width: Math.max(...rs.map(n => n.x + n.width)) - x + 24, height: Math.max(...rs.map(n => n.y + n.height)) - y + 24 }); };
     const grouped = buckets(roots, n => n.group || n.role || n.type);
-    if (strategy === 'pipeline')
+    if (isFamily(strategy)) {
+        const planned=familyPositions(input,roots,rank,strategy);
+        for(const n of roots){const p=planned[n.id];if(p)put(n,p.x,p.y);}
+        for(const [title,ns] of grouped)if(ns.length>1 && ['source-collections','market-landscape','knowledge-constellation','parallel-investigation'].includes(strategy))addGroup(title,ns);
+    }
+    else if (strategy === 'pipeline')
         row(roots, 0, 0);
     else if (strategy === 'timeline')
         roots.forEach((n, i) => put(n, i % 2 ? 48 : 0, roots.slice(0, i).reduce((s, m) => s + m.height + GAP, 0)));
@@ -368,8 +375,12 @@ export function planLayout(input: LayoutInput): LayoutPlan {
             throw Error(why);
         return candidate(input, input.strategy);
     }
+    // V20 semantic composition takes precedence when a workflow/family is recorded.
+    // Existing unversioned Auto arrangements retain their historical selection policy.
+    if(input.workflow || input.preferredFamily || input.previousFamily)
+        return candidate(input,selectFamily(input));
     // One-dimensional recipes remain explicit choices; Auto avoids long chains.
-    const ranked = STRATEGIES.filter(([id]) => !eligibility(input, id) && !(input.nodes.length>6 && ['pipeline','timeline'].includes(id))).map(([id]) => candidate(input, id)).sort((a, b) => a.score - b.score || a.strategy.localeCompare(b.strategy));
+    const ranked = STRATEGIES.filter(([id]) => !isFamily(id) && !eligibility(input, id) && !(input.nodes.length>6 && ['pipeline','timeline'].includes(id))).map(([id]) => candidate(input, id)).sort((a, b) => a.score - b.score || a.strategy.localeCompare(b.strategy));
     const topic=(input.topic ?? '').toLowerCase();
     const preferred=/compar|versus|\\bvs\\b/.test(topic)?['comparison','matrix']:
         /architect|dependenc|system design/.test(topic)?['tree','dependency','hierarchy']:

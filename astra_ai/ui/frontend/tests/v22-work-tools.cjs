@@ -1,0 +1,24 @@
+const {chromium,expect}=require('@playwright/test'),fs=require('node:fs');
+(async()=>{const b=await chromium.launch({channel:'chrome'});try{
+ const p=await b.newPage({viewport:{width:1440,height:960}}),errors=[];p.on('pageerror',e=>errors.push(e.message));
+ await p.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
+ await p.goto('http://127.0.0.1:5194/v22-work-tools.html');
+ await p.getByRole('button',{name:'Notes',exact:true}).click();
+ await p.locator('.note-panel').getByRole('button',{name:/Fixture note 1/}).click();
+ await expect(p.locator('.account-inputs')).toContainText('Fixture note 1');
+ await p.getByRole('button',{name:'Tasks',exact:true}).click();
+ await p.getByRole('tab',{name:'Inbox',exact:true}).click();
+ await p.locator('.tasks-panel').getByText('Reviewed architecture fixture',{exact:true}).click();
+ await p.getByRole('button',{name:'Use this task in Work',exact:true}).click();
+ await expect(p.locator('.account-inputs')).toContainText('Reviewed architecture fixture');
+ await p.getByPlaceholder('What do you want to do?',{exact:true}).fill('Summarize the selected note and task');
+ await p.screenshot({path:'v22-verification/work-selected-inputs.png'});
+ await p.getByRole('button',{name:'Send',exact:true}).click();
+ await p.waitForFunction(()=>window.fixtureSubmission);
+ const submission=await p.evaluate(()=>window.fixtureSubmission);
+ const chosen=submission.options.chosen;
+ if(!chosen.some(x=>x.kind==='note'&&x.summary.includes('Preserve the source'))||!chosen.some(x=>x.kind==='task'&&x.summary.includes('Original task editor persistence')))throw Error('Selected content did not reach submission');
+ if(errors.length)throw Error(errors.join('\n'));
+ fs.writeFileSync('v22-verification/work-input-results.json',JSON.stringify({noteSelected:true,taskSelected:true,selectedContentDelivered:true,submissionIsFake:true,errors},null,2));
+ console.log('PASS production Work toolbar selects original Notes/Tasks and supplies their content to the fake submission');
+}finally{await b.close();}})().catch(e=>{console.error(e);process.exitCode=1});

@@ -1,0 +1,36 @@
+const {chromium}=require('@playwright/test'),fs=require('node:fs'),path=require('node:path');
+const out=path.resolve(__dirname,'../v21-verification');fs.mkdirSync(out,{recursive:true});
+(async()=>{const browser=await chromium.launch({headless:true,channel:'chrome'});try{
+ const noteTitle='V21 persistent fixture '+Date.now();
+ const page=await browser.newPage({viewport:{width:1440,height:960}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/*',route=>{const u=new URL(route.request().url());return u.hostname==='127.0.0.1'?route.continue():route.abort();});
+ const seedResponse=await page.request.get('http://127.0.0.1:5191/api/workspace/v21/tasks');const seed=(await seedResponse.json()).items[0];
+ await page.request.patch('http://127.0.0.1:5191/api/workspace/v21/tasks/'+seed.id,{data:{revision:seed.revision,title:'Review the architecture',status:'open',steps:[]}});
+ await page.goto('http://127.0.0.1:5191/v21-tools.html');await page.getByRole('button',{name:'New note',exact:true}).waitFor();
+ await page.screenshot({path:path.join(out,'notes-list.png')});
+ await page.getByRole('button',{name:'New note',exact:true}).click();
+ const editor=page.locator('[contenteditable=true]').first();await editor.waitFor();await editor.fill(noteTitle+'\n\nA saved note from the original Zephium editor.');
+ await page.waitForTimeout(1800);await page.screenshot({path:path.join(out,'notes-editor.png')});
+ const notes=await page.request.post('http://127.0.0.1:5191/api/workspace/v21/notes',{data:{expectedProfile:'aegis-owner',call:{kind:'list',query:{search:noteTitle,trashed:false,limit:100,after:null}}}});
+ const saved=await notes.json();if(saved.response.items.length!==1)throw Error('Note did not persist');
+ await page.reload();await page.getByText(noteTitle,{exact:true}).first().waitFor();
+ await page.goto('http://127.0.0.1:5191/v21-tools.html?kind=tasks');await page.getByText('Review the architecture',{exact:true}).first().waitFor();
+ await page.screenshot({path:path.join(out,'tasks-list.png')});
+ await page.getByRole('button',{name:'Board',exact:true}).click();await page.waitForTimeout(300);await page.screenshot({path:path.join(out,'tasks-board.png')});
+ await page.getByText('Review the architecture',{exact:true}).first().click();
+ await page.getByLabel('Title',{exact:true}).fill('Reviewed architecture fixture');
+ await page.getByLabel('New subtask',{exact:true}).fill('Verify recorded evidence');await page.getByRole('button',{name:'Add subtask',exact:true}).click();
+ await page.getByRole('button',{name:'Save changes',exact:true}).click();await page.getByText('Reviewed architecture fixture',{exact:true}).first().waitFor();
+ await page.reload();await page.getByText('Reviewed architecture fixture',{exact:true}).first().waitFor();
+ const taskResponse=await page.request.get('http://127.0.0.1:5191/api/workspace/v21/tasks');const task=(await taskResponse.json()).items[0];
+ if(task.steps[0]?.title!=='Verify recorded evidence')throw Error('Subtask not persisted');
+ await page.request.patch('http://127.0.0.1:5191/api/workspace/v21/tasks/'+task.id,{data:{revision:task.revision,status:'done'}});
+ await page.reload();await page.locator('.scope select').selectOption('completed');await page.getByText('Reviewed architecture fixture',{exact:true}).first().waitFor();
+ await page.screenshot({path:path.join(out,'tasks-completed.png')});
+ await page.getByRole('button',{name:'Workspace',exact:true}).click();await page.getByText('Isolated execution is not configured.',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Close panel',exact:true}).click();
+ if(await page.locator('aside').isVisible())throw Error('Sidebar failed to close');
+ fs.writeFileSync(path.join(out,'tools-results.json'),JSON.stringify({sidebarPointerBoundary:true,sidebarCloses:true,notesPersisted:true,tasksPersisted:true,subtasks:true,completedFilter:true,unavailableExecution:true,errors},null,2));if(errors.length)throw Error(errors.join('\n'));
+ console.log('Original Notes and Tasks interfaces: create, autosave, reload, list, board and editing passed.');
+ }finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
+

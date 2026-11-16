@@ -20,7 +20,10 @@ def _chosen(rows):
     picked = []
     for row in rows[:MAX_CHOSEN]:
         if isinstance(row, dict):
-            picked.append({key: safe(str(row.get(key, '')))[:600] for key in ('id', 'kind', 'title', 'url', 'summary') if row.get(key)})
+            summary_limit = 12000 if row.get('kind') in {'code','note','task'} else 600
+            item={key: safe(str(row.get(key, '')))[:summary_limit if key == 'summary' else 600] for key in ('id', 'kind', 'title', 'url', 'summary') if row.get(key)}
+            if len(safe(str(row.get('summary',''))))>summary_limit:item['summary']+='\n[Selected context truncated; request the missing section when needed.]'
+            picked.append(item)
     return picked
 
 
@@ -31,6 +34,10 @@ def _view_ids(value):
 
 
 def install(app, *, context_for, artifacts_for, jobs, orchestrator, owner_only, emit=None):
+    from .work_google import install as install_google
+    install_google(app, context_for=context_for, owner_only=owner_only, orchestrator=orchestrator)
+    from .work_repositories import install as install_repositories
+    install_repositories(app, owner_only=owner_only, orchestrator=orchestrator)
     def owner(request):
         context = context_for(request)
         if context.get('guest'):

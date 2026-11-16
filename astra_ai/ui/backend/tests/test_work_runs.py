@@ -304,7 +304,9 @@ def test_resume_does_not_repeat_finished_stages(tmp_path):
         return original(schema, payload)
     adapter.answer = failing
     assert asyncio.run(service.run(identifier, CONTEXT))['status'] == 'failed'
-    assert service.store.get(identifier).done == {'plan': True, 'discover': True, 'analyze': True, 'verify': True, 'fill_gaps': True}
+    # V20 records only admitted tasks. Unneeded specialist stages are not fake completions.
+    assert service.store.get(identifier).done == {'plan': True, 'discover': True}
+    assert [n['type'] for n in service.store.get(identifier).task_graph['nodes']] == ['discover', 'write', 'publish']
     before = len(adapter.calls)
     searched = len(search.queries)
     adapter.answer = original

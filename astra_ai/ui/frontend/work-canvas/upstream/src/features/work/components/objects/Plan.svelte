@@ -40,7 +40,7 @@
   } as const;
   const priced = $derived(object.steps.some((step) => step.cost));
   /** The person's calendar turns a month at a time; one the agent drew shows all its months. */
-  const keeps = $derived(!!object.calendar && !!actions.edit);
+  const keeps = $derived(!!object.calendar);
   let turned = $state(0);
   const month = $derived.by(() => {
     const opening = openingMonth(object);

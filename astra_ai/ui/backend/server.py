@@ -2317,6 +2317,7 @@ async def _synthesize_research(query,sources):
             options={'state':metadata.get('extension_compositions',{}).get(extension_operation,{}) if extension_operation else metadata.get('synthesis_checkpoint',{}),'checkpoint':checkpoint}
     from astra_ai.core.research.providers import EVIDENCE_POLICY
     permission=False;decision=None;private=False;progress=None
+    skill_brief = ''
     if identifier:
         artifacts,_=get_research_services()
         from astra_ai.core.research_sessions import root_id
@@ -2324,10 +2325,25 @@ async def _synthesize_research(query,sources):
         decision=artifacts.request_state(root,context).get('groq_private_allowed')
         permission=decision is True
         private=bool(artifacts.snapshot().get('attachments',{}).get(identifier))
+        if not context.get('guest') and not context.get('background') and not query.startswith('[DOCUMENTARY]\n'):
+            from astra_ai.core.work.skills import instructions_for
+            metadata = await asyncio.to_thread(artifacts.request_state, identifier, context)
+            if metadata.get('status') == 'ok' and metadata.get('kind', 'research') == 'research':
+                snapshots = metadata.get('classic_skill_snapshots')
+                if snapshots is None:
+                    snapshots = get_work_orchestrator().skills.snapshots(
+                        metadata.get('query') or query, available_tools=('web_search', 'web_fetch'))
+                    await asyncio.to_thread(artifacts.request_state, identifier, context, classic_skill_snapshots=snapshots)
+                    for row in snapshots:
+                        artifacts.trace.record(identifier, 'skill', 'preparing_report', context=context, skill_fact=row['public'])
+                skill_brief = instructions_for(snapshots)
         def progress(provider,model):artifacts.request_state(identifier,context,writing_provider=provider,writing_model=model)
     policy=EVIDENCE_POLICY.set({'allow_private':permission,'private_decision':decision,'private':private,'progress':progress})
     try:
-        return await research_model.report(query.removeprefix('[DOCUMENTARY]\n'),sources,kind='documentary' if query.startswith('[DOCUMENTARY]\n') else 'research',**options)
+        request = query.removeprefix('[DOCUMENTARY]\n')
+        if skill_brief:
+            request += '\n\nApply these loaded research workflow instructions to the response:\n' + skill_brief
+        return await research_model.report(request,sources,kind='documentary' if query.startswith('[DOCUMENTARY]\n') else 'research',**options)
     finally:EVIDENCE_POLICY.reset(policy)
 
 async def _complete_research(report,query,sources):
@@ -5266,10 +5282,21 @@ async def _legacy_handle_transcript_message(websocket: WebSocket, message: Dict[
 # LIFESPAN CONTEXT
 # =================================================  ,, ===========================
 
+MEMORY_RECHECK_SECONDS=15
+
 async def memory_change_loop():
-    previous=None
+    previous=None;checked=None
     while True:
         try:
+            # The full comparison below walks every record. It is only worth doing when the memory
+            # files changed, a connection came or went, or enough time passed for a time rule
+            # (a record expiring) to matter. Otherwise this tick costs a few file stats.
+            watch=(state.live_memory._signature(),guest_memory._signature() if guest_memory else None,frozenset(id(socket) for socket in ws_manager.connections))
+            if not ws_manager.connections or (checked and checked[0]==watch and time.monotonic()-checked[1]<MEMORY_RECHECK_SECONDS):
+                if int(time.time())%10==0:
+                    for socket in list(ws_manager.connections):await check_operation_notices(socket)
+                await asyncio.sleep(1);continue
+            checked=(watch,time.monotonic())
             snapshot=await asyncio.to_thread(state.live_memory.notification_snapshot)
             if previous is not None:
                 for rid in snapshot.keys() | previous.keys():
@@ -8868,6 +8895,13 @@ def _work_owner_only(request):
 install_work_routes(app,context_for=_learning_context,artifacts_for=get_research_services,jobs=action_jobs,orchestrator=get_work_orchestrator,owner_only=_work_owner_only,emit=workspace_service.emit)
 from astra_ai.ui.backend.research_api import register_research_api
 register_research_api(app,lambda:research_model,lambda:research_provider_settings,get_research_services,_learning_context,action_jobs,runtime_paths)
+
+from astra_ai.ui.backend.api.workspace_v21 import install as install_workspace_v21
+from task_backend.router import require_task_owner
+from astra_ai.core.work.isolated_workspace import IsolatedWorkspace
+workspace_notes, workspace_tasks = install_workspace_v21(app, state=state, task_store=task_store,
+    owner_only=_work_owner_only, task_owner=require_task_owner,
+    isolated=IsolatedWorkspace(runtime_paths.root, lambda name:_get_env_value(name)))
 
 if __name__ == "__main__":
     logger.info("="*70)

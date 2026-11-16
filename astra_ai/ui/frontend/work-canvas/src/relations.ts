@@ -281,31 +281,11 @@ export function organizeResearchStrands(links: readonly StrandLink[]): StrandLin
   });
   const contextTypes = new Set<RelationType>(["reads", "searches", "supports", "models", "illustrates"]);
   const contextOnly = (link: StrandLink) => link.strand.relations.every(row => contextTypes.has(row.type));
-  const main = grouped.filter(link => !link.strand.control && !contextOnly(link) &&
-    !link.strand.relations.every(row => row.detail?.summary_only === true));
-  const forward = new Map<string, string[]>();
-  for (const link of main) {
-    const destinations = forward.get(link.source) ?? [];
-    destinations.push(link.target);
-    forward.set(link.source, destinations);
-  }
-  function hasIntermediate(link: StrandLink) {
-    const queue = (forward.get(link.source) ?? []).filter(id => id !== link.target);
-    const visited = new Set([link.source]);
-    while (queue.length) {
-      const next = queue.pop()!;
-      if (visited.has(next)) continue;
-      if (next === link.target) return true;
-      visited.add(next);
-      queue.push(...(forward.get(next) ?? []));
-    }
-    return false;
-  }
-  // Delivery shortcuts are useful on inspection, but duplicate the staged workflow visually.
+  // Only explicitly recorded summaries may be hidden behind a visible chain.
+  // Reachability alone does not make a genuine direct delivery redundant.
+  const summaries = summaryStrandIds(grouped);
   const overview = grouped.map(link => {
-    const detail = contextOnly(link) ||
-      (link.strand.status !== "failed" && link.strand.status !== "contested" &&
-       link.strand.relations.every(row => row.type === "delivers") && hasIntermediate(link));
+    const detail = contextOnly(link) || summaries.has(link.id);
     return detail ? { ...link, strand: { ...link.strand, detailOnly: true } } : link;
   });
   const eligible = overview.filter(link => !link.strand.control && !link.strand.detailOnly && !link.strand.summaryOnly);

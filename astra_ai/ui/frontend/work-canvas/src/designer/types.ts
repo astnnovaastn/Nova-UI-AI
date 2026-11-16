@@ -16,6 +16,11 @@ export type LayoutNode = Rect & {
     title: string;
     group?: string;
     role?: string;
+    objectKind?: string;
+    status?: string;
+    /** Actual timestamp in minutes; absent means undated, never inferred from order. */
+    start?: number;
+    end?: number;
     parentId?: string;
     selected?: boolean;
     editing?: boolean;
@@ -78,6 +83,9 @@ export type Snapshot = {
 };
 export type LayoutInput = Snapshot & {
     topic?: string;
+    workflow?: string;
+    preferredFamily?: string;
+    previousFamily?: string;
     strategy: string;
     selectedOnly?: boolean;
     incremental?: boolean;

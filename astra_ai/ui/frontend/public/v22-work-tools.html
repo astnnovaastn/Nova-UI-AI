@@ -1,0 +1,12 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AEGIS · Local Work tools fixture</title><link rel="stylesheet" href="/work-canvas/aegis-work.css"><style>html,body{margin:0;height:100%;background:#141619}#canvas{position:fixed;inset:0}.fixture-label{position:fixed;top:12px;left:80px;z-index:9999;color:#ccd1d9;font:12px system-ui;pointer-events:none}</style></head><body><div id="canvas" class="aegis-work-root" data-theme="dark"></div><div id="portal" class="aegis-work-root" data-theme="dark"></div><div class="fixture-label">Local fixture · temporary Notes and Tasks · no AI execution</div><script type="module">
+if(!['localhost','127.0.0.1'].includes(location.hostname))throw Error('Local fixture only');
+const original=window.fetch;window.fetch=(input,init)=>{const u=new URL(input instanceof Request?input.url:String(input),location.href);if(u.origin!==location.origin||(u.pathname.startsWith('/api/')&&!u.pathname.startsWith('/api/workspace/v21/')&&!u.pathname.startsWith('/api/workspace/v22/')))return Promise.reject(Error('Fixture blocked request'));return original(input,init);};
+window.WebSocket=class{constructor(){throw Error('Fixture blocked WebSocket');}};
+const {mountCanvas}=await import('/work-canvas/aegis-work.js');
+const handle=mountCanvas(document.querySelector('#canvas'),document.querySelector('#portal'));
+const empty={schema_version:1,revision:0,strategy:'mixed-result',automatic:true,operation_id:'',positions:{},sizes:{},groups:[],constraints:{},previous:null};
+const noop=()=>{};
+handle.setActions({prompt:noop,stopJob:noop,retry:noop,microphone:noop,openView:noop,openSource:noop,openPanel:noop,newEntry:noop,attach:noop,setDepth:noop,navigate:noop,settings:noop,restart:noop,repair:noop,useClassic:noop,imageHeaders:()=>({}),renderMarkdown:()=>'',checkFrame:async()=>({embeddable:false,reason:'fixture'}),addWorkSource:async()=>{},startWork:(text,options)=>window.fixtureSubmission={text,options},askNodes:noop,answerRun:noop,saveCanvasView:noop,getCanvasLayout:async()=>empty,saveCanvasLayout:async()=>empty});
+handle.update({connected:true,run:null,theme:'dark'});
+window.fixtureHandle=handle;
+</script></body></html>

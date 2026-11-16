@@ -10,10 +10,16 @@
     "clean-start": "node kill-port.js && node server.js",
     "build": "tsc && vite build",
     "build:canvas": "cd work-canvas && npm run build",
+    "setup:previews": "playwright install chromium",
     "sync:canvas": "cd work-canvas && npm run sync",
     "test:calendar": "node --test src/components/Calendar/calendarUtils.test.mjs src/components/Calendar/calendarApi.test.mjs",
     "test:calendar:e2e": "playwright test tests/calendar-controls.spec.js",
     "preview": "vite preview",
+    "desktop": "electron desktop/main.cjs",
+    "desktop:build": "npm run build:canvas && npm run build",
+    "desktop:profile": "node tests/desktop-profile.cjs",
+    "desktop:shortcuts": "electron desktop/main.cjs --install-shortcuts",
+    "test:desktop": "node --test tests/desktop-resources.test.cjs && node tests/desktop.e2e.cjs && node tests/desktop-lifecycle.e2e.cjs",
     "test:memory-globe": "node tests/memory-globe/run.mjs"
   },
   "devDependencies": {
@@ -23,6 +29,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^4.3.3",
     "concurrently": "^8.2.2",
+    "electron": "^45.3.2",
     "typescript": "^5.7.0",
     "vite": "^6.0.0"
   },
@@ -42,6 +49,7 @@
     "marked": "^18.1.1",
     "onnxruntime-web": "^1.23.2",
     "pdfjs-dist": "^6.4.299",
+    "playwright": "1.61.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "three": "^0.183.2",

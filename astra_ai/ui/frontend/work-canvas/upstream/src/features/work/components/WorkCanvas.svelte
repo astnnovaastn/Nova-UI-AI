@@ -3,8 +3,6 @@
   import { pointerTool as currentTool, setPointerTool } from "../lib/pointer-tool.svelte";
   const pointerTool = $derived(currentTool());
   import { SvelteFlow, Background, type Edge, type useSvelteFlow } from "@xyflow/svelte";
-  import { RESEARCH_GRID_STEP } from "../../../../../src/layout-policy";
-  import { indexRoutingNodes, researchRoutingScene, type RoutingScene } from "../../../../../src/research-routing";
   import { NodeToolbar, Position, SelectionMode } from "@xyflow/svelte";
   import { untrack, setContext, tick } from "svelte";
   import { fade } from "svelte/transition";
@@ -36,7 +34,10 @@
   import AreaNode from "./AreaNode.svelte";
   import AgentMark from "./AgentMark.svelte";
   import WorkEdge from "./WorkEdge.svelte";
+  import RelayEdge from "../../../../../src/RelayEdge.svelte";
   import StrandEdge from "../../../../../src/StrandEdge.svelte";
+  import { routingContext, createRoutingService } from "../../../../../src/routing-service";
+  import { onDestroy } from "svelte";
   import { arrivals } from "../lib/arrival";
   import {
     followMove,
@@ -212,9 +213,10 @@
   let resizing = $state(false);
   setContext(canvasResize, (active: boolean) => { if(active)onmanual?.('resize'); resizing = active; });
   let nodes = $state.raw<WorkNode[]>([]);
-  let previousRouting:RoutingScene|undefined;
-  const routingScene = $derived.by(()=>previousRouting=indexRoutingNodes(nodes,previousRouting));
-  setContext(researchRoutingScene,()=>routingScene);
+  const router = createRoutingService();
+  const routing = $derived(router.update(nodes, edges));
+  setContext(routingContext, () => routing);
+  onDestroy(() => router.destroy());
   let canvasWidth = $state(0);
   let canvasHeight = $state(0);
   let host = $state<HTMLDivElement>();
@@ -352,7 +354,8 @@
   const scene = $derived(sanitizeScene(items, links));
   let valid = $derived(validScene(scene.items, scene.links));
   const nodeTypes = { work: CanvasNode, area: AreaNode, agent: AgentMark };
-  const edgeTypes = { work: WorkEdge, strand: StrandEdge };
+  const edgeTypes = { work: WorkEdge, strand: StrandEdge, relay: RelayEdge };
+  const renderedEdges = $derived.by(() => { void routing; return router.renderEdges(edges) as Edge[]; });
   let selection: string[] = [];
   let selectedIds = $state.raw<ReadonlySet<string>>(new Set());
   let hovered = $state<string | null>(null);
@@ -594,7 +597,7 @@
           return {id:n.id, ...pos, width:n.width ?? 280, height:n.height ?? 160,
             type:data.object?.kind ?? data.type ?? "group", title:data.title ?? n.id, parentId:n.parentId,
             group:data.node?.group ? "mapgroup:"+data.node.group : data.area ?? undefined,
-            role:data.branch?.role, selected:!!n.selected, dragging:!!n.dragging,
+            role:data.branch?.role, objectKind:(data as any).aegisObject?.kind, status:(data as any).aegisObject?.status, start:(data as any).aegisObject?.entries?.[0]?.start, selected:!!n.selected, dragging:!!n.dragging,
             editing:!!host?.querySelector('.svelte-flow__node[data-id="'+CSS.escape(n.id)+'"] [contenteditable="true"]:focus'),
             container:isAreaNode(n) || data.type === ("mapgroup" as string)};
         }),
@@ -960,7 +963,7 @@
   {#if valid}
     <SvelteFlow
       bind:nodes
-      {edges}
+      edges={renderedEdges}
       {nodeTypes}
       {edgeTypes}
       bind:viewport
@@ -1068,7 +1071,7 @@
       }}
     >
       <CanvasFlowHandle onready={(handle) => (flow = handle)} />
-      <Background patternColor="var(--work-canvas-dot)" gap={RESEARCH_GRID_STEP} size={1.5} />
+      <Background patternColor="var(--work-canvas-dot)" gap={20} size={1.5} />
       <CanvasControls bottomInset={fitBottomInset} onfit={() => (following = true)} />
       <NodeToolbar
         nodeId={selectedItems}
@@ -1130,7 +1133,7 @@
 
   /* While a person is at the canvas each card is a layer (see layers.ts). */
   /* stylelint-disable-next-line selector-class-pattern */
-  .work-canvas :global(.svelte-flow__viewport[data-held] .svelte-flow__node) {
+  .work-canvas :global(.svelte-flow__viewport[data-held] .svelte-flow__node.dragging) {
     will-change: transform;
   }
 

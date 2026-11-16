@@ -368,7 +368,10 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
       usedImages.add(image.id);
     }
   }
-  const lanes = [...sources].sort((a, b) => Number(imageFor.has(b.id)) - Number(imageFor.has(a.id))).slice(0, MAX_LANES);
+  const orderedSources = [...sources].sort((a, b) => Number(imageFor.has(b.id)) - Number(imageFor.has(a.id)));
+  const leadSources = orderedSources.slice(0, MAX_LANES);
+  const laneHosts = new Set(leadSources.map((source) => hostOf(source.url)));
+  const lanes = [...leadSources, ...orderedSources.slice(MAX_LANES).filter((source) => laneHosts.has(hostOf(source.url)))];
 
   const steps: WorkStepFact[] = [];
   const searching = live && phaseNow === "collecting_sources" && !sources.length;
@@ -385,12 +388,15 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
   });
 
   const previews = new Map<string, SitePreview>();
+  const reportText = [report.report ?? "", ...(report.extensions?.blocks ?? []).map((block) => block.text)].join("\n\n");
   const frameIds = new Map<string, string>();
   for (const source of sources) {
     previews.set(source.url, {
       title: source.title,
       ...(plainExcerpt(source.content) ? { excerpt: plainExcerpt(source.content) } : {}),
       ...(source.favicon?.startsWith("https://") ? { favicon: source.favicon } : {}),
+      retrieval: tracedByUrl.get(source.url)?.state ?? (source.retrieved_at ? "read" : "found"),
+      citations: saved.includes(source) ? citationSections(reportText, source.id).reduce((count, row) => count + row.count, 0) : 0,
     });
   }
   lanes.forEach((source, index) => {
@@ -436,9 +442,7 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
     // Zephium's own structure: the run's parts in rows by time, and what it drew on left of the request.
     const first = runs[0] as unknown as { parts: unknown[]; inputs: unknown[] };
     first.parts = zephiumParts(zephium, live, sources.length);
-    const flow = zephium.plan?.workflow || (zephium.plan?.mode === "deep" ? "Deep Research" : zephium.plan?.mode === "quick" ? "Quick Research" : "Research");
     first.inputs = [
-      { kind: "skill", label: flow, reference: (zephium.plan?.mode ?? "research").toLowerCase() },
       ...(Object.keys(zephium.usage?.parts ?? {}).length ? [{ kind: "connection", label: `${new Set(Object.values(zephium.usage?.parts ?? {}).map((row) => row.model).filter(Boolean)).size} AI models` }] : []),
     ];
   }
@@ -548,7 +552,6 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
 
   const activity = activityFor(phaseNow);
   const sourceInfo = new Map<string, SourceInfo>();
-  const reportText = [report.report ?? "", ...(report.extensions?.blocks ?? []).map((block) => block.text)].join("\n\n");
   for (const source of [...sources, ...allSources]) {
     if (sourceInfo.has(source.url)) continue;
     sourceInfo.set(source.url, {

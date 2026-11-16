@@ -2055,7 +2055,7 @@ function DocumentPreview({
         {/^https?:\/\//i.test(current.url) && document.body.classList.contains("research-canvas-open") && (
           <button
             className="research-source-workspace"
-            onClick={() => window.dispatchEvent(new CustomEvent("aegis-open-source-window", {detail: {url: current.url, title: current.title}}))}
+            onClick={(event) => window.dispatchEvent(new CustomEvent("aegis-open-source-window", {detail: {url: current.url, title: current.title, sourceId: current.id, activation: event.nativeEvent}}))}
           >
             Open in workspace
           </button>
