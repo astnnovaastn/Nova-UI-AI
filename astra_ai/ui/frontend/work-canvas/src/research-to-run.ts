@@ -17,6 +17,9 @@ import type {
 import { organizeExecution } from "$features/work/lib/organize";
 import type { TrailLine } from "$features/work/lib/board/trail";
 import { followupSections, type PaperData } from "./paper";
+import type { WorkspaceObject } from "./objects/registry";
+import type { KnowledgeMap } from "./work-run";
+import { mapWire, paragraphs, reportReply, wireOf } from "./zephium-wire";
 import { citationSections, traceLines, tracePhase, traceQueries, traceSources, type TraceEvent } from "./research-trace";
 import type { SitePreview } from "./preview-provider";
 
@@ -324,7 +327,21 @@ export function zephiumParts(run: ZephiumRun, live: boolean, sourceCount: number
   });
 }
 
-export function buildScene(report: ResearchReport, reason = "", trace: readonly TraceEvent[] = [], waitWords: (reason: string) => string = () => "", zephium: ZephiumRun | null = null): CanvasScene {
+/**
+ * What the Zephium design adds to a run so Zephium's pipeline lays out its results, as in the labs:
+ * the run's typed objects, its knowledge map, the finished report and the skills it loaded.
+ */
+export type ZephiumResults = {
+  objects: readonly WorkspaceObject[];
+  map: KnowledgeMap | null;
+  skills: readonly { name: string; title: string }[];
+  /** Videos the run found (its video search or the report's own links), drawn as Zephium media cards. */
+  videos?: readonly { url: string; title: string; poster: string; channel?: string }[];
+  /** The report's saved images, with addresses the canvas may draw. */
+  images?: readonly { id: string; src: string; caption: string }[];
+};
+
+export function buildScene(report: ResearchReport, reason = "", trace: readonly TraceEvent[] = [], waitWords: (reason: string) => string = () => "", zephium: ZephiumRun | null = null, results: ZephiumResults | null = null): CanvasScene {
   const name = report.research_id;
   const state = runState(report);
   // Sources the report holds, or while it is being written, those the backend has reported finding.
@@ -371,7 +388,15 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
   const orderedSources = [...sources].sort((a, b) => Number(imageFor.has(b.id)) - Number(imageFor.has(a.id)));
   const leadSources = orderedSources.slice(0, MAX_LANES);
   const laneHosts = new Set(leadSources.map((source) => hostOf(source.url)));
-  const lanes = [...leadSources, ...orderedSources.slice(MAX_LANES).filter((source) => laneHosts.has(hostOf(source.url)))];
+  // One lane per page: the same address cited twice (or with a #fragment or trailing slash) is one page.
+  const canonical = (url: string) => url.replace(/#.*$/, "").replace(/\/+$/, "").toLowerCase();
+  const seen = new Set<string>();
+  const lanes = [...leadSources, ...orderedSources.slice(MAX_LANES).filter((source) => laneHosts.has(hostOf(source.url)))].filter((source) => {
+    const key = canonical(source.url);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
   const steps: WorkStepFact[] = [];
   const searching = live && phaseNow === "collecting_sources" && !sources.length;
@@ -405,7 +430,8 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
       id: step,
       turn: 2,
       kind: { kind: "read", url: source.url },
-      ...(zephium ? { part: "part-worker_a" } : {}),
+      // Pages are the run's own reads, not one helper's: Zephium then gives each website its own row
+      // and stacks only pages of the same website (run/parts.ts, by registrable site).
       status: tracedByUrl.get(source.url)?.state === "failed" ? "failed" : tracedByUrl.get(source.url)?.state === "reading" && live ? "running" : "succeeded",
       ...(tracedByUrl.get(source.url)?.state === "failed" ? { note: "This page couldn't be opened" } : {}),
       local: { page_title: source.title },
@@ -429,6 +455,40 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
         sources.map((_, index) => index + 1),
       ),
     );
+  // The Zephium design: the run's results are Zephium artifacts, so its own board lays them out.
+  const placed: string[] = [];
+  if (results) {
+    const citedAs = new Map(sources.map((source, index) => [source.url, index + 1]));
+    const add = (id: string, title: string, data: Record<string, unknown> | null, urls: readonly (string | undefined)[] = []) => {
+      if (!data) return;
+      const evidence = [...new Set(urls.flatMap((url) => (url && citedAs.has(url) ? [citedAs.get(url)!] : [])))];
+      artifacts.push(artifact(runId, id, title, data as unknown as WorkArtifactDataV1, evidence));
+      placed.push(id);
+    };
+    const finished = state === "completed" && !!report.report?.trim();
+    if (finished) add(`${runId}-reply`, "", reportReply(reportTitle(report), report.report ?? ""));
+    if (finished) add(`${runId}-report`, reportTitle(report), { kind: "document", paragraphs: paragraphs(report.report ?? "") }, sources.map((source) => source.url));
+    // One of each: the run's own report object repeats the report, and its diagram object the map.
+    const objects = results.objects.filter((object) => !(finished && object.kind === "report"));
+    const drawn = objects.some((object) => ["diagram", "knowledge-graph"].includes(object.kind) && object.nodes?.length);
+    if (results.map && !drawn) add(`${runId}-map`, results.map.title || "Knowledge map", mapWire(results.map));
+    // The run's videos are one collection card: the first video, the rest beside it on hover.
+    const [first, ...rest] = results.videos ?? [];
+    if (first)
+      add(`${runId}-videos`, first.title || "Video", {
+        kind: "media",
+        medium: "video",
+        url: first.url,
+        ...(first.poster ? { poster: first.poster } : {}),
+        ...(first.channel ? { channel: first.channel } : {}),
+        ...(/youtu\.?be/.test(first.url) ? { provider: "youtube" } : {}),
+        ...(rest.length ? { more: rest.map((video) => ({ url: video.url, title: video.title, ...(video.poster ? { poster: video.poster } : {}), ...(video.channel ? { channel: video.channel } : {}) })) } : {}),
+      });
+    for (const image of results.images ?? [])
+      add(`${runId}-image-${image.id}`.slice(0, 120), image.caption.slice(0, 60) || "Image", { kind: "media", medium: "image", url: image.src, poster: image.src });
+    for (const object of objects) add(`${runId}-object-${object.id}`.slice(0, 120), object.title, wireOf(object), object.sources.map((source) => source.url));
+    if (placed.length) steps.push({ id: `${runId}-results`, turn: 3, kind: { kind: "publish" }, status: "succeeded", artifacts: placed, note: `Placed ${placed.length} ${placed.length === 1 ? "result" : "results"}` } as unknown as WorkStepFact);
+  }
   if (!live)
     steps.push({ id: `${runId}-publish`, turn: 3, kind: { kind: "publish" }, status: state === "failed" ? "failed" : "succeeded" } as unknown as WorkStepFact, {
       id: `${runId}-finish`,
@@ -443,6 +503,7 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
     const first = runs[0] as unknown as { parts: unknown[]; inputs: unknown[] };
     first.parts = zephiumParts(zephium, live, sources.length);
     first.inputs = [
+      ...(results?.skills ?? []).map((skill) => ({ kind: "skill", label: skill.title, reference: skill.name })),
       ...(Object.keys(zephium.usage?.parts ?? {}).length ? [{ kind: "connection", label: `${new Set(Object.values(zephium.usage?.parts ?? {}).map((row) => row.model).filter(Boolean)).size} AI models` }] : []),
     ];
   }
@@ -534,9 +595,23 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
   let count = 0;
   for (const run of runs) {
     const plan = organizeExecution(projection, run, { x: 0, y: 0 }, snapshot);
-    for (const add of plan.adds) elements.push({ id: `${name}-${count++}`, area: null, reference: add.reference } as unknown as WorkEnvironmentElement);
+    for (const add of plan.adds) {
+      // In Zephium's design a result's card is named by its artifact, not by its place in the list:
+      // results arrive at different times (pictures load later), and a card whose id moved to another
+      // result would be drawn with the wrong renderer. The AEGIS design keeps its saved numbering.
+      const artifactRef = (add.reference as { kind?: string; artifact?: string }).artifact;
+      const id = results && artifactRef ? `el-${artifactRef}`.slice(0, 120) : `${name}-${count++}`;
+      elements.push({ id, area: null, reference: add.reference } as unknown as WorkEnvironmentElement);
+    }
     snapshot = { ...snapshot, elements: [...elements] } as WorkEnvironmentSnapshot;
   }
+  // Each result stands as its own element, as the lab's runs place them (lab/src/agent/project.ts).
+  const referenced = new Set(elements.map((element) => (element.reference as { artifact?: string }).artifact).filter(Boolean));
+  for (const id of placed) {
+    if (referenced.has(id)) continue;
+    elements.push({ id: `el-${id}`.slice(0, 120), area: null, reference: { kind: "artifact", objective: workId, execution: runId, artifact: id } } as unknown as WorkEnvironmentElement);
+  }
+  snapshot = { ...snapshot, elements: [...elements] } as WorkEnvironmentSnapshot;
 
   const pages: WorkPageV1[] = [...frameIds.keys()].map(
     (step) =>

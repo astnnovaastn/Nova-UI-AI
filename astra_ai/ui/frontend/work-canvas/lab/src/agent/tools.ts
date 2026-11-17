@@ -1,0 +1,467 @@
+/*
+ * AEGIS Agent Execution Lab — the tool registry.
+ *
+ * Every tool the Zephium lead or one of its helpers can call, read from the reference clone
+ * (astra_ai/ui/zephium-source @ 9026a1f). Schemas are transcribed from the Rust that sends
+ * them to the model (`json!` blocks); `required` and enums are exact, descriptions are short
+ * summaries. Nothing here is invented: where the public source refuses a tool (bash, a
+ * Windows-only gap), the entry says so and the simulator refuses it the same way.
+ */
+import type { Permission } from "./types";
+
+export type Scope = "lead" | "browser" | "research" | "computer" | "connection" | "app";
+
+export type ToolDef = {
+  id: string;
+  scopes: Scope[];
+  summary: string;
+  /** JSON Schema of the arguments, as the model receives it. */
+  schema: { required: string[]; properties: Record<string, string> };
+  output: string;
+  /** Where the call is handled. */
+  handler: string;
+  /** Where its definition lives in the clone. */
+  source: string;
+  permission: Permission | null;
+  /** When the person must decide before it takes effect. */
+  approval: string | null;
+  /** The record it leaves. */
+  record: string;
+  /** Does it place an object on the canvas? */
+  creates: string | null;
+  errors: string;
+  /** What the public source allows today. */
+  availability: "available" | "limited" | "unavailable";
+  availabilityNote?: string;
+  /** Closest thing in AEGIS today. */
+  aegis: string;
+};
+
+const P = "crates/zephium-app/src/work_lead/";
+const C = "crates/zephium-app/src/work_computer/";
+
+export const TOOLS: ToolDef[] = [
+  {
+    id: "web_search",
+    scopes: ["lead", "research", "browser"],
+    summary: "Ranked results (title, address, the engine's snippet) with source keys. One question per search; several in one turn run in parallel.",
+    schema: { required: ["query"], properties: { query: "string ≤400", freshness: "day | week | month | year (lead only)" } },
+    output: "Result list with s-keys, or a short cited summary when the engine's page cannot be used",
+    handler: `${P}lead.rs Lead::execute → parts::step_request("web_search") → hands::Hands::run → WorkPublicSearchProvider`,
+    source: `${P}prompt.rs lead_tools(), search_tool()`,
+    permission: "web",
+    approval: null,
+    record: "WorkStepKindV1::Search { query } + WorkProviderSearchRecordV1",
+    creates: null,
+    errors: "Over the cap (lead 4, part 4) → \"You have searched enough\". A query that repeats private page text is not sent.",
+    availability: "available",
+    aegis: "orchestrator._fetch → research search (Tavily / Exa / SerpAPI chain)",
+  },
+  {
+    id: "web_fetch",
+    scopes: ["lead"],
+    summary: "Reads one identified public page: cited facts, or native rows with `records` (prices, photos).",
+    schema: { required: ["url"], properties: { url: "string", records: "{title, max_items 1–32, columns[{name, value{kind text|url|image_url|money}, required, extraction verbatim|generate}]}" } },
+    output: "Cited digest of the page, or record rows with r-keys",
+    handler: `${P}lead.rs → parts::step_request("read") → hands.rs run_admitted → WorkPartDriver (agent browser page)`,
+    source: `${P}prompt.rs lead_tools()`,
+    permission: "web",
+    approval: "Only an address the agent wrote itself after reading the person's own data (WorkAskPurposeV1::Address)",
+    record: "WorkStepKindV1::Read { url } + page frame + evidence",
+    creates: null,
+    errors: "Lead cap 8 reads. http:// is read at https://. Browser down → refused with a fix.",
+    availability: "available",
+    aegis: "orchestrator._read → readability fetch; the source browser and /api/work/reader",
+  },
+  {
+    id: "read",
+    scopes: ["browser", "research"],
+    summary: "A helper's page read: facts or records from one page.",
+    schema: { required: ["url"], properties: { url: "string", records: "as web_fetch" } },
+    output: "Cited digest or record rows",
+    handler: `${P}parts.rs step_request("read") → hands.rs`,
+    source: `${P}prompt.rs read_tool()`,
+    permission: "web",
+    approval: null,
+    record: "WorkStepKindV1::Read { url }",
+    creates: "Records may become the part's picks (parts.rs place_found)",
+    errors: "A site is read once per request; a failed site is retried once another way, then refused (parts.rs site_turn).",
+    availability: "available",
+    aegis: "orchestrator._read",
+  },
+  {
+    id: "browse",
+    scopes: ["browser"],
+    summary: "Hands one site to a page agent that searches, filters, opens items and fills forms, and returns records. `mine` works in the person's session.",
+    schema: { required: ["start", "goal"], properties: { start: "https page or bare site", goal: "≤600 bytes", draft: "canvas draft id", text: "exact words ≤3500 bytes", mine: "boolean", view: "boolean", records: "as web_fetch" } },
+    output: "Records with s-keys; a held Confirm for anything that commits",
+    handler: `${P}parts.rs step_request("browse") → hands.rs enter_sites (entry question) → work_agent.rs page task → zephium-agentic semantic_* runtime`,
+    source: `${P}prompt.rs browse_tool()`,
+    permission: "browser",
+    approval: "mine:true asks the entry question once per site (WorkAskPurposeV1::Entry). Send, pay, delete wait on WorkStepKindV1::Confirm.",
+    record: "WorkStepKindV1::Read { url, goal, verbatim } + Confirm steps",
+    creates: null,
+    errors: "Sign-in or human check → part need sign_in / check on its row. Three live pages at once, two per public site.",
+    availability: "limited",
+    availabilityNote: "Needs Zephium's native engine (WebView2 / WKWebView). Per docs/agentic-browsing.md, live-site qualification is separate from the protocol existing.",
+    aegis: "None. AEGIS reads pages over HTTP and shows them in an embedded source browser; it has no page agent.",
+  },
+  {
+    id: "start_part",
+    scopes: ["lead"],
+    summary: "Starts a helper for one purpose. Several in one turn run in parallel; at most four at once (PARALLEL_PARTS), sixteen per run (MAX_WORK_PARTS).",
+    schema: { required: ["title", "helper", "goal"], properties: { title: "≤24", helper: "browser | research | computer | connection", goal: "≤200", brief: "≤1200", service: "host or connection name", draft: "draft id", records: "field names", search: "typed site search" } },
+    output: "\"Part X done: summary\", its objects, native record catalog and digest",
+    handler: `${P}parts.rs Lead::part → route() → helper() loop → settle_need()`,
+    source: `${P}prompt.rs lead_tools()`,
+    permission: null,
+    approval: "A part about the person's own app asks how to reach it (route.rs question: connection or website).",
+    record: "WorkRuntimeUpdate::Part (WorkPartFactV1: planned → running → done | failed | stopped)",
+    creates: "At most one compact picks or sheet on its row",
+    errors: "A second part on a running site is refused; a site that needs the person is not retried.",
+    availability: "available",
+    aegis: "Fixed roles in orchestrator.choose_assignments (discovery, analysis, verification) with model slots worker_a–e",
+  },
+  {
+    id: "create",
+    scopes: ["lead", "browser", "research"],
+    summary: "Places one object. Lead: 13 kinds. A helper: picks or a sheet of ≤12 rows × 6 columns.",
+    schema: { required: ["kind", "title", "data"], properties: { kind: "reply | picks | plan | list | sheet | plot | diagram | code | diff | document | draft | media | subject", title: "≤60", data: "the kind's schema (schema.rs)", sources: "s-keys", part: "part id" } },
+    output: "\"Placed <kind> <id>\" or a fault naming the exact field",
+    handler: `${P}lead.rs Lead::create → objects::propose → objects::honest → objects::publish`,
+    source: `${P}prompt.rs create(); ${P}schema.rs data()`,
+    permission: null,
+    approval: null,
+    record: "WorkStepKindV1::Publish { artifacts } + WorkArtifactV1",
+    creates: "Yes: the object, rendered by ObjectView",
+    errors: "Unknown key, field over limit, source not of this run, picture without a source, an estimate dressed as a find, a duplicate → refused with the reason; the second try is lenient.",
+    availability: "available",
+    aegis: "card_objects.py create/revise (adapted from objects.rs); workspace_objects.project after the report",
+  },
+  {
+    id: "revise",
+    scopes: ["lead"],
+    summary: "Replaces an object with a newer version standing where it stood.",
+    schema: { required: ["id", "data"], properties: { id: "object id", data: "complete new data", title: "only when the subject changed", sources: "s-keys" } },
+    output: "\"Updated <kind>: <new> now stands in place of <old>\"",
+    handler: `${P}lead.rs Lead::revise → objects::publish(revises)`,
+    source: `${P}prompt.rs lead_tools()`,
+    permission: null,
+    approval: null,
+    record: "Publish step; WorkArtifactV1.revises",
+    creates: "A new version of the same object",
+    errors: "A part's diff and a project object cannot be revised by the lead.",
+    availability: "available",
+    aegis: "card_objects.py revise with optimistic revision",
+  },
+  {
+    id: "read_canvas",
+    scopes: ["lead"],
+    summary: "Lists the canvas's objects, or returns the full data of the ids given.",
+    schema: { required: [], properties: { ids: "string[]" } },
+    output: "id, kind, title, part, one line each; or JSON data",
+    handler: `${P}objects.rs view() / read()`,
+    source: `${P}prompt.rs lead_tools()`,
+    permission: null,
+    approval: null,
+    record: "None (read only)",
+    creates: null,
+    errors: "None",
+    availability: "available",
+    aegis: "Request `chosen` canvas nodes (contracts.WorkRequest.chosen)",
+  },
+  {
+    id: "ask",
+    scopes: ["lead"],
+    summary: "Asks the person one question with 2–4 options and waits. The deadline stands still meanwhile.",
+    schema: { required: ["question"], properties: { question: "≤240", options: "≤4 × ≤80" } },
+    output: "\"The person answered: …\"",
+    handler: `${P}lead.rs Lead::ask → run.rs LeadRun::ask (WAIT_PATIENCE 30 min)`,
+    source: `${P}prompt.rs lead_tools()`,
+    permission: null,
+    approval: "Is itself the person's turn",
+    record: "WorkStepKindV1::Ask { prompt, options, answer, purpose: question }",
+    creates: "An ask card on the canvas",
+    errors: "No answer in 30 minutes → the run suspends like a Stop.",
+    availability: "available",
+    aegis: "TaskPlan.clarification → run state needs_input → /answer",
+  },
+  {
+    id: "ask_folder",
+    scopes: ["lead"],
+    summary: "Asks for a folder the work needs, through the system folder picker.",
+    schema: { required: ["why"], properties: { folder: "only one the person named", why: "≤160" } },
+    output: "Granted or not",
+    handler: `${P}folders.rs request()`,
+    source: `${P}prompt.rs lead_tools()`,
+    permission: "folder_read",
+    approval: "The person chooses in the native picker",
+    record: "Ask { purpose: folder } + grant",
+    creates: null,
+    errors: "Declined → the computer part ends with need choose_folder.",
+    availability: "available",
+    aegis: "repository_inputs.py: pasted code and selected repository excerpts only",
+  },
+  {
+    id: "load_skill",
+    scopes: ["lead"],
+    summary: "Returns a skill's body by name. Only names and one-line descriptions sit in the prompt.",
+    schema: { required: ["name"], properties: { name: "a listed skill" } },
+    output: "The SKILL.md body",
+    handler: `${P}lead.rs Lead::load_skill`,
+    source: `${P}prompt.rs lead_tools(); ${P}skills.rs`,
+    permission: null,
+    approval: null,
+    record: "WorkInputFactV1 { kind: skill } (first load only) → drawn as an input mark left of the request",
+    creates: "The skill's input mark",
+    errors: "Unknown name → lists the known skills.",
+    availability: "available",
+    aegis: "SkillRegistry.snapshots: chosen before planning and passed to the lead's plan call",
+  },
+  {
+    id: "finish",
+    scopes: ["lead"],
+    summary: "Publishes the final reply (and selected records) and ends the run in the same call.",
+    schema: { required: ["say"], properties: { reply: "reply schema", reply_sources: "≤16 s-keys", records: "r-keys", layout: "picks | sheet", records_title: "≤60", say: "≤200", followups: "≤3 × ≤80", title: "≤48, first run only" } },
+    output: "\"Finished\"",
+    handler: `${P}lead.rs Lead::finish`,
+    source: `${P}prompt.rs lead_tools()`,
+    permission: null,
+    approval: null,
+    record: "WorkStepKindV1::Finish { followups, title } + the reply's Publish step",
+    creates: "The reply",
+    errors: "Without a reply → refused twice, then allowed. A failed call in the same turn → \"Not finished\".",
+    availability: "available",
+    aegis: "_write + _publish stages: one report, then workspace_objects.project",
+  },
+  {
+    id: "describe_project",
+    scopes: ["lead", "computer"],
+    summary: "Reads a granted folder exactly into a project object: stack from manifests, a bounded tree, scripts.",
+    schema: { required: [], properties: { path: "a granted folder" } },
+    output: "The project object's id",
+    handler: `${P}project.rs ProjectTools`,
+    source: `${P}project.rs`,
+    permission: "folder_read",
+    approval: null,
+    record: "Publish step with a project artifact",
+    creates: "Yes: project",
+    errors: "No granted folder → not offered at all.",
+    availability: "available",
+    availabilityNote: "Git state stays unavailable until a confined runner is qualified (project.rs header).",
+    aegis: "None (requires a manifest reader over configured repositories)",
+  },
+  {
+    id: "glob",
+    scopes: ["computer"],
+    summary: "Files by name pattern, newest first, ≤100; skips ignored, hidden and dependency folders.",
+    schema: { required: ["pattern"], properties: { pattern: "glob", path: "folder" } },
+    output: "Paths",
+    handler: `${C}tools.rs ComputerTools::call → find.rs`,
+    source: `${C}tools.rs definitions()`,
+    permission: "folder_read",
+    approval: null,
+    record: "WorkStepKindV1::List / file evidence",
+    creates: null,
+    errors: "Outside the granted folders → refused.",
+    availability: "available",
+    aegis: "None",
+  },
+  {
+    id: "grep",
+    scopes: ["computer"],
+    summary: "Regular-expression search in file contents; files, lines with context, or counts.",
+    schema: { required: ["pattern"], properties: { pattern: "Rust regex", path: "folder or file", glob: "string", output: "files | lines | count", context: "0–10", case_insensitive: "boolean", limit: "1–200" } },
+    output: "Matches",
+    handler: `${C}find.rs`,
+    source: `${C}tools.rs definitions()`,
+    permission: "folder_read",
+    approval: null,
+    record: "WorkStepKindV1::SearchFiles",
+    creates: null,
+    errors: "Bad regex → fault naming it.",
+    availability: "available",
+    aegis: "None",
+  },
+  {
+    id: "read_file",
+    scopes: ["computer"],
+    summary: "A text file as numbered lines; 400 lines unless offset and limit (≤2000).",
+    schema: { required: ["path"], properties: { path: "relative or absolute in a granted folder", offset: "≥1", limit: "1–2000" } },
+    output: "Numbered lines; the excerpt is citable",
+    handler: `${C}tools.rs (tool name \`read\`)`,
+    source: `${C}tools.rs definitions()`,
+    permission: "folder_read",
+    approval: null,
+    record: "WorkStepKindV1::ReadFile + WorkFileRecordV1 (evidence)",
+    creates: null,
+    errors: "Protected credential paths, symlinks and hard links are out of reach.",
+    availability: "available",
+    aegis: "repository_inputs.py excerpts the person selected",
+  },
+  {
+    id: "edit",
+    scopes: ["computer"],
+    summary: "Replaces an exact passage in a file already read. The person approves each change.",
+    schema: { required: ["path", "old", "new"], properties: { path: "string", old: "exact, once", new: "string", replace_all: "boolean" } },
+    output: "Approved and written, or declined",
+    handler: `${C}tools.rs → ComputerHost::decision (run.rs LeadRun::decision)`,
+    source: `${C}tools.rs definitions()`,
+    permission: "file_write",
+    approval: "Always: WorkStepKindV1::EditFile { decision } waits for ApproveStep",
+    record: "EditFile step; the part leaves a diff object per changed file (helper.rs objects())",
+    creates: "A diff on the part's row, from the change actually made",
+    errors: "Declined → not proposed again unchanged.",
+    availability: "available",
+    aegis: "None: AEGIS drafts patches as text only",
+  },
+  {
+    id: "write",
+    scopes: ["computer"],
+    summary: "Creates a file, or replaces one already read. Approved first.",
+    schema: { required: ["path", "text"], properties: { path: "string", text: "complete text" } },
+    output: "Approved and written, or declined",
+    handler: `${C}tools.rs → decision`,
+    source: `${C}tools.rs definitions()`,
+    permission: "file_write",
+    approval: "Always",
+    record: "WorkStepKindV1::WriteFile { decision }",
+    creates: "A diff",
+    errors: "As edit",
+    availability: "available",
+    aegis: "None",
+  },
+  {
+    id: "python_tests",
+    scopes: ["computer"],
+    summary: "Runs 1–64 stdlib unittest modules in a read-only copy: no dependencies, subprocesses or network; 15 s, 256 MiB.",
+    schema: { required: ["tests"], properties: { tests: "relative .py paths", files: "supporting text files" } },
+    output: "The runner's real summary, or a refusal",
+    handler: `${C}tools/python.rs`,
+    source: `${C}tools.rs definitions()`,
+    permission: "tests",
+    approval: null,
+    record: "WorkStepKindV1::RunCommand + WorkCommandRecordV1",
+    creates: null,
+    errors: "Any other runtime → refusal; never a claimed pass.",
+    availability: "limited",
+    availabilityNote: "Only on the qualified Apple Command Line Tools Python 3.9 runtime on macOS. Windows is unavailable.",
+    aegis: "None: AEGIS cannot run code (catalog.py NO_LOCAL)",
+  },
+  {
+    id: "git_changes",
+    scopes: ["computer"],
+    summary: "Working-tree content changes against the Git index for selected files, in a protected copy.",
+    schema: { required: ["paths", "operation"], properties: { paths: "1–64", operation: "diff | status | check" } },
+    output: "Patches, changed paths or whitespace errors",
+    handler: `${C}tools/git.rs`,
+    source: `${C}tools.rs definitions()`,
+    permission: "folder_read",
+    approval: null,
+    record: "File evidence",
+    creates: null,
+    errors: "Excludes staged-vs-HEAD, untracked files, modes and filters.",
+    availability: "limited",
+    availabilityNote: "Requires a qualified operating-system build.",
+    aegis: "None",
+  },
+  {
+    id: "bash",
+    scopes: ["computer"],
+    summary: "Shell commands.",
+    schema: { required: ["command"], properties: { command: "string", cwd: "string", timeout: "1–600 s" } },
+    output: "—",
+    handler: `${C}shell.rs`,
+    source: `${C}tools.rs SHELL_DESCRIPTION`,
+    permission: "commands",
+    approval: "Approval cannot enable it",
+    record: "—",
+    creates: null,
+    errors: "Always refused in this source: \"commands require an OS-enforced runner to confine file and network access\".",
+    availability: "unavailable",
+    availabilityNote: "Offered to the model with a description that says it is unavailable; the handler refuses.",
+    aegis: "None",
+  },
+  {
+    id: "connection",
+    scopes: ["connection"],
+    summary: "A call to GitHub through the qualified public gh broker, or to an MCP server the person added.",
+    schema: { required: ["(per tool)"], properties: { service: "github or an MCP server id", tool: "namespaced tool", "…": "the server's own schema" } },
+    output: "Compact facts (titles, states, numbers, links)",
+    handler: "crates/zephium-app/src/work_connections/helper.rs ConnectionToolSet; github_broker; mcp.rs",
+    source: "crates/zephium-app/src/work_connections/helper.rs PROMPT",
+    permission: "connections",
+    approval: "First use asks (route.rs). Writing as the person stops for confirmation with a preview.",
+    record: "WorkStepKindV1::Call (WorkConnectionCallV1 { service, tool, verb, target, title, count, url })",
+    creates: null,
+    errors: "Refused or signed out → part need use_connection or sign_in.",
+    availability: "limited",
+    availabilityNote: "The gh broker reads public repositories, issues and pull requests only: no credentials, private repositories or writes.",
+    aegis: "connections.py (read-only Google Calendar and Gmail summaries the person selects)",
+  },
+  {
+    id: "personal",
+    scopes: ["lead"],
+    summary: "remember, recall, search_history, search_notes, read_note, list_tasks, day_sources, list_tabs.",
+    schema: { required: ["(per tool)"], properties: { query: "string", fact: "string", view: "today | upcoming" } },
+    output: "The person's own data, briefly",
+    handler: "crates/zephium-app/src/work_personal/tools.rs PersonalTools",
+    source: "crates/zephium-app/src/work_personal/tools.rs",
+    permission: "personal",
+    approval: "Asked once per work (WorkAskPurposeV1::Context)",
+    record: "WorkInputFactV1 { kind: notes | history | tabs | memory }",
+    creates: "An input mark",
+    errors: "Declined → the tool answers that the person said no.",
+    availability: "available",
+    aegis: "Selected notes and the memory system, passed in by the person",
+  },
+];
+
+export const TOOL = Object.fromEntries(TOOLS.map((tool) => [tool.id, tool])) as Record<string, ToolDef>;
+
+/** Personal tools are one registry entry; the name the model uses maps to it. */
+export function toolOf(name: string): ToolDef | undefined {
+  if (["search_notes", "list_tasks", "day_sources", "list_tabs", "recall", "remember"].includes(name)) return TOOL.personal;
+  return TOOL[name];
+}
+
+/** The tools a scope is offered, as the model would see them. */
+export function offered(scope: Scope): ToolDef[] {
+  return TOOLS.filter((tool) => tool.scopes.includes(scope));
+}
+
+/** The lead's ten tools in the order prompt.rs lists them (its own test asserts this order). */
+export const LEAD_TOOL_ORDER = [
+  "web_search",
+  "web_fetch",
+  "start_part",
+  "create",
+  "revise",
+  "read_canvas",
+  "ask",
+  "ask_folder",
+  "load_skill",
+  "finish",
+];
+
+/** Kinds the lead may create (schema.rs KINDS) and the two a part may. */
+export const LEAD_KINDS = ["reply", "picks", "plan", "list", "sheet", "plot", "diagram", "code", "diff", "document", "draft", "media", "subject"];
+export const PART_KINDS = ["picks", "sheet"];
+
+/** Required fields per kind, from schema.rs data(). */
+export const REQUIRED: Record<string, string[]> = {
+  reply: ["headline", "text"],
+  picks: ["facet", "items"],
+  plan: ["steps"],
+  list: ["style", "items"],
+  sheet: ["columns", "rows"],
+  plot: ["style", "x", "y", "series", "basis"],
+  diagram: ["nodes", "edges"],
+  code: ["language", "text"],
+  diff: ["path", "language", "summary", "hunks"],
+  document: ["paragraphs"],
+  draft: ["destination", "body"],
+  media: ["medium", "url"],
+  subject: ["noun", "title", "url"],
+  project: ["name", "root"],
+};

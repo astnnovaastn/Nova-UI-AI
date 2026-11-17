@@ -1,0 +1,7 @@
+# Generated; rebuild with `npm run lab:build`.
+dist/
+node_modules/
+.i18n/
+project.inlang/cache/
+project.inlang/.gitignore
+project.inlang/README.md

@@ -44,6 +44,21 @@ def install(app, *, context_for, artifacts_for, jobs, orchestrator, owner_only, 
             raise HTTPException(403, 'Owner research required')
         return context
 
+    @app.get('/api/work/cards')
+    async def card_catalog(request: Request, query: str = '', workflow: str = ''):
+        owner(request)
+        from astra_ai.core.work.card_catalog import find
+        return {'version': 1, 'families': find(query[:500], workflow[:100])}
+
+    @app.get('/api/work/cards/{family}')
+    async def card_specification(family: str, request: Request, preset: str = ''):
+        owner(request)
+        from astra_ai.core.work.card_catalog import read
+        try:
+            return {'version': 1, 'specification': read(family, preset or None)}
+        except ValueError as error:
+            raise HTTPException(404, str(error)) from None
+
     @app.post('/api/work/runs')
     async def create_run(request: Request):
         context = owner(request)
@@ -99,6 +114,30 @@ def install(app, *, context_for, artifacts_for, jobs, orchestrator, owner_only, 
             'run': orchestrator().store.public(run) if run else None,
             'view': metadata.get('canvas_view') or {'chosen': [], 'hidden': []},
         }
+
+    @app.get('/api/work/runs/{identifier}/agent-events')
+    async def read_agent_events(identifier: str, request: Request):
+        """The run's recorded trace in the Agent Execution Lab's event schema. Read-only; never re-runs anything."""
+        context = owner(request)
+        run, _ = await _visible_run(identifier, context)
+        if not run:
+            raise HTTPException(404, 'Run unavailable')
+        from astra_ai.core.work.agent_events import project
+        artifacts, _ = artifacts_for()
+        rows = await asyncio.to_thread(artifacts.trace.read, identifier, 0)
+        public = orchestrator().store.public(run)
+        return {'version': 1, 'mode': 'live', 'run_id': identifier, 'request': public['request'],
+                'allocation': (run.plan or {}).get('allocation'), 'task_graph': run.task_graph, 'events': project(rows, public['request'])}
+
+    @app.get('/api/work/runs/{identifier}/cards')
+    async def read_cards(identifier: str, request: Request):
+        context = owner(request)
+        run, _ = await _visible_run(identifier, context)
+        if not run:
+            raise HTTPException(404, 'Run unavailable')
+        from astra_ai.core.work.card_objects import read_canvas
+        return {'objects': read_canvas(run), 'proposals': run.card_state.get('proposals', {}),
+                'incomplete': run.card_state.get('incomplete', {}), 'faults': run.card_state.get('faults', [])}
 
     @app.post('/api/work/runs/{identifier}/answer')
     async def answer(identifier: str, request: Request):
@@ -294,3 +333,4 @@ def install(app, *, context_for, artifacts_for, jobs, orchestrator, owner_only, 
             return JSONResponse({'status': 'unavailable', 'reason': str(error)}, status_code=200)
         except Exception as error:
             return JSONResponse({'status': 'unavailable', 'reason': type(error).__name__}, status_code=200)
+

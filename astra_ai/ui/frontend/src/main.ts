@@ -183,6 +183,9 @@ const audioPlayer = createAudioPlayer();
 orb.setAnalyser(audioPlayer.getAnalyser());
 soundWave.setAIAnalyser(audioPlayer.getAnalyser());
 window.addEventListener('nova-mic-analyser',e=>soundWave.setMicAnalyser((e as CustomEvent).detail));
+// The Work canvas's voice strip reads the same two analysers (no second audio graph) and the live transcripts.
+const aegisVoice=((window as any).__aegisVoice={ai:audioPlayer.getAnalyser(),mic:null as AnalyserNode|null});
+window.addEventListener('nova-mic-analyser',e=>{aegisVoice.mic=(e as CustomEvent).detail||null;});
 applyOrbTheme(selectedOrbTheme);
 window.addEventListener("themechange", ((event: CustomEvent) => {
   const detail = event.detail || {};
@@ -455,11 +458,13 @@ socket.onMessage((msg) => {
     userMessageId=String(msg.request_id||('user:'+String(msg.turn_id||'active')));
     if(userTranscript.trim())cue('voice','user:'+userMessageId);
     conversationMessage('user',userTranscript,msg.final?'completed':'streaming',userMessageId,String(msg.research_id||''),msg.context_cards as any[]);
+    window.dispatchEvent(new CustomEvent('aegis-voice-transcript',{detail:{who:'user',text:userTranscript,final:!!msg.final}}));
   }
   else if (type === 'live_output_transcript') {
     assistantTranscript=String(msg.full_text||((assistantTranscript?assistantTranscript+' ':'')+String(msg.text||'')));
     assistantMessageId='reply:'+String(msg.turn_id||'active');
     conversationMessage('assistant',assistantTranscript,'streaming',assistantMessageId,String(msg.research_id||''));
+    window.dispatchEvent(new CustomEvent('aegis-voice-transcript',{detail:{who:'ai',text:assistantTranscript,final:false}}));
   }
   else if (type === 'live_generation_complete') {
     const turn=String(msg.turn_id||'active');

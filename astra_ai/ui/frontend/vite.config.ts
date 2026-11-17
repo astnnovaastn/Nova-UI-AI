@@ -2,9 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import {readFileSync} from "node:fs";
 import {fileURLToPath} from "node:url";
+// Development only: adds /dev/work-layout-lab/ to the dev server; absent from production builds.
+import {workLayoutLab} from "./work-canvas/lab/dev-route";
 
 export default defineConfig({
-  plugins: [react(), {
+  plugins: [react(), workLayoutLab(), {
     name: "local-speech-runtime",
     configureServer(server) {
       // ONNX dynamically imports its runtime. Serve the vendored module as-is,

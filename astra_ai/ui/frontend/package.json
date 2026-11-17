@@ -15,12 +15,16 @@
     "test:calendar": "node --test src/components/Calendar/calendarUtils.test.mjs src/components/Calendar/calendarApi.test.mjs",
     "test:calendar:e2e": "playwright test tests/calendar-controls.spec.js",
     "preview": "vite preview",
+    "lab:build": "cd work-canvas && npm run lab:build",
+    "lab": "node tests/work-layout-lab-server.cjs",
+    "test:lab": "node tests/work-layout-lab.e2e.cjs",
     "desktop": "electron desktop/main.cjs",
     "desktop:build": "npm run build:canvas && npm run build",
     "desktop:profile": "node tests/desktop-profile.cjs",
     "desktop:shortcuts": "electron desktop/main.cjs --install-shortcuts",
     "test:desktop": "node --test tests/desktop-resources.test.cjs && node tests/desktop.e2e.cjs && node tests/desktop-lifecycle.e2e.cjs",
-    "test:memory-globe": "node tests/memory-globe/run.mjs"
+    "test:memory-globe": "node tests/memory-globe/run.mjs",
+    "test:agent-lab": "node tests/agent-execution-lab.e2e.cjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

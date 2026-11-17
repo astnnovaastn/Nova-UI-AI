@@ -2180,7 +2180,7 @@ body.research-canvas-open #transcription-dots{display:none!important}
   box-shadow:0 24px 70px rgb(0 0 0 / 45%);overflow:hidden}
 .research-workspace[data-surface=canvas][data-canvas-panel=conversation] .research-assistant:not([hidden]){
   display:flex;flex-direction:column;position:fixed;z-index:40;pointer-events:auto;
-  top:8px;bottom:8px;right:8px;left:auto;width:380px;max-width:calc(100vw - 72px);margin:0;padding:0;overflow:hidden;box-sizing:border-box;
+  top:8px;bottom:auto;height:min(80vh,calc(100vh - 16px));right:8px;left:auto;width:304px;max-width:calc(100vw - 72px);margin:0;padding:0;overflow:hidden;box-sizing:border-box;
   border:1px solid var(--r-edge);border-radius:14px;background:var(--r-panel);font-family:"Inter Variable",Inter,system-ui,sans-serif;font-size:14px;animation:rc-arrive .16s ease-out both}
 @keyframes rc-arrive{from{opacity:0;transform:translateX(6px)}}
 @media (prefers-reduced-motion:reduce){.research-workspace[data-surface=canvas] .research-assistant{animation:none!important}}
@@ -2238,3 +2238,14 @@ body.research-canvas-open [class^=aegis-enable]{bottom:76px!important}
   font-size: 12px;
   opacity: 0.7;
 }
+
+/* V26: the report editor on its own, opened from the new reader. */
+.research-document.edit-only > .research-document-tools{display:none}
+.report-edit-head{display:flex;align-items:center;gap:16px;padding:14px 18px;border-bottom:1px solid var(--r-edge,#ffffff1a);font-family:"Inter Variable",Inter,system-ui,sans-serif}
+.report-edit-head>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.report-edit-head strong{font-size:15px;font-weight:650;color:var(--r-fg,#eee)}
+.report-edit-head span{font-size:12px;color:color-mix(in srgb,var(--r-fg,#eee) 58%,transparent)}
+.report-edit-head small{margin-left:auto;font-size:12.5px;color:color-mix(in srgb,var(--r-fg,#eee) 62%,transparent)}
+.report-edit-back{width:36px;height:36px;border:0;border-radius:50%;background:color-mix(in srgb,var(--r-fg,#eee) 10%,transparent);color:var(--r-fg,#eee);font-size:18px;cursor:pointer}
+.report-edit-back:hover{background:color-mix(in srgb,var(--r-fg,#eee) 16%,transparent)}
+.report-edit-back:focus-visible{outline:2px solid var(--r-fg,#eee);outline-offset:2px}

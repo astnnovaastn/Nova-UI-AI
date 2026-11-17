@@ -1,0 +1,3 @@
+/* Zephium's own stylesheet chain (styles/global.css), read from the unmodified clone. */
+@import "@fontsource-variable/inter/index.css";
+@import "../../../../zephium-source/frame/src/styles/global.css";

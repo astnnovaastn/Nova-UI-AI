@@ -65,7 +65,7 @@
   let broken = $state<string | null>(null);
   /** Seen from far, a smaller copy of the photo is enough. */
   const scale = getContext<{ readonly far: boolean } | undefined>(canvasFar);
-  const photoWidth = $derived(scale?.far ? 240 : 640);
+  const photoWidth = $derived(pick.imageRegion ? 1600 : scale?.far ? 240 : 640);
   const failed = $derived(!!pick.picture && broken === pick.picture.src);
   const picture = $derived(pick.picture && !failed ? pick.picture : null);
   const logo = $derived(!picture && pick.logo && hasMark(pick.logo) ? pick.logo : null);
@@ -99,7 +99,8 @@
   class:pictured={!!picture}
 >
   {#if picture}
-    <div class="photo" class:video class:product>
+    <div class="photo" class:video class:product class:region={!!pick.imageRegion} style:--region-w={pick.imageRegion?.width||1} style:--region-h={pick.imageRegion?.height||1} style:--region-x={pick.imageRegion?.x||0} style:--region-y={pick.imageRegion?.y||0}>
+      {#if video && pick.url && actions.link}<button type="button" class="poster-open nodrag nopan" aria-label={'Watch '+pick.name} onclick={(event)=>{event.stopPropagation();actions.link?.(pick.url!);}}></button>{/if}
       <!-- The photo at the size its card shows it: the full-size picture isn't kept. -->
       <canvas
         data-picture={picture.src}
@@ -178,7 +179,7 @@
       </p>
     {/if}
   </div>
-  {#if actions.choose || actions.ask || onopen}
+  {#if false && (actions.choose || actions.ask || onopen)}
     <div class="actions">
       {#if actions.choose && pick.element}<button
           type="button"
@@ -203,6 +204,10 @@
 </article>
 
 <style>
+ .photo.region canvas{position:absolute;inline-size:calc(100% / var(--region-w));block-size:calc(100% / var(--region-h));inset-inline-start:calc(-100% * var(--region-x) / var(--region-w));inset-block-start:calc(-100% * var(--region-y) / var(--region-h));object-fit:fill}
+ .photo:not(.video):not(.region) canvas{object-fit:contain}
+  .poster-open{position:absolute;inset:0;z-index:3;width:100%;height:100%;border:0;background:transparent;cursor:pointer;border-radius:inherit}
+  .poster-open:focus-visible{outline:2px solid var(--color-ring);outline-offset:-4px}
   .pick {
     position: relative;
     display: flex;

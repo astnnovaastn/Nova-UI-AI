@@ -42,9 +42,15 @@
     ShapeCollectionIcon,
   } from "@hugeicons/core-free-icons";
   import WorkCanvas from "$features/work/components/WorkCanvas.svelte";
+  import Lift from "$features/work/components/Lift.svelte";
+  import LiftHeader from "$features/work/components/LiftHeader.svelte";
+  import ObjectCentre from "$features/work/components/objects/ObjectCentre.svelte";
+  import { objectIcon, objectLabel } from "$features/work/lib/object-kind";
+  import type { ObjectView } from "$features/work/lib/board/types";
   import {objectItems} from './objects/registry';
   import {planLayout} from './designer/planner';
   import {familyForWorkflow} from './designer/families';
+  import {objectQuestionContext} from './objects/question-context';
   import ObjectFocus from './objects/ObjectFocus.svelte';
   import WorkBar from "$features/work/components/bar/WorkBar.svelte";
   import BarTool from "$features/work/components/bar/BarTool.svelte";
@@ -85,6 +91,11 @@
   import { setCanvasPictures } from "./media";
   import { ACTIVE_JOBS, endedWords, setWaitingReason, wordsForWait } from "./waiting.svelte";
   import { pictureUrl } from "./report-images";
+  import ClarificationPanel from './ClarificationPanel.svelte';
+  import VoiceWave from './VoiceWave.svelte';
+  import ReportReader from './ReportReader.svelte';
+  import {clarificationPresentation} from './clarifications';
+  import {openWorkspaceObject} from './objects/open-object';
   import BrowserWindow from "./BrowserWindow.svelte";
   import { addressOf, browser } from "./browser-windows.svelte";
   import { normalizeAddress } from "./browser-address";
@@ -129,29 +140,18 @@
   let storedLayout = $state.raw<{page:string;record:LayoutRecord}|null>(null);
   const freshLayout = (() => { try { return new URLSearchParams(location.search).has("aegis-fresh-layout"); } catch { return false; } })();
   /**
-   * The design experiment: `?aegis-design=zephium` (or the toggle, kept in this browser) draws a run in
-   * Zephium's own structure, its parts in rows by time with its own lines and marks, and none of
-   * AEGIS's layout, strings or hand. It is a read-only view: no arrangement is read or saved in it.
+   * Zephium's design is the canvas layout: a run is drawn in Zephium's own structure, its parts in
+   * rows by time with its own lines and marks, and none of AEGIS's older layout, strings or hand.
+   * No arrangement is read or saved in it. The older AEGIS layout is kept only as a fallback
+   * reached with `?aegis-design=aegis`; no button or stored choice leads back to it.
    */
   const zephiumDesign = (() => {
     try {
-      const asked = new URLSearchParams(location.search).get("aegis-design");
-      // AEGIS's own design, unless the person chose to compare with Zephium's.
-      return asked ? asked === "zephium" : localStorage.getItem("aegis-canvas-design") === "zephium";
+      return new URLSearchParams(location.search).get("aegis-design") !== "aegis";
     } catch {
-      return false;
+      return true;
     }
   })();
-  function switchDesign() {
-    try {
-      localStorage.setItem("aegis-canvas-design", zephiumDesign ? "aegis" : "zephium");
-      const url = new URL(location.href);
-      url.searchParams.delete("aegis-design");
-      location.replace(url.toString());
-    } catch {
-      // Without storage the design stays as it is.
-    }
-  }
   const layoutRecord = $derived(!zephiumDesign && storedLayout && storedLayout.page === report?.research_id ? storedLayout.record : null);
   $effect(() => {
     const page = report?.research_id, api = canvasApi;
@@ -187,7 +187,55 @@
     report?.phase === "failed" ? endedWords(report.waiting_reason ?? "", "failed") : wordsForWait(report?.waiting_reason ?? ""),
   );
   $effect(() => setWaitingReason(report?.waiting_reason ?? ""));
-  const scene = $derived<CanvasScene | null>(report ? buildScene(report, reasonWords, state.trace, wordsForWait, zephiumDesign ? (state.run as unknown as ZephiumRun | null) : null) : null);
+  /** In Zephium's design the run's results are Zephium artifacts, laid out by its own board. */
+  /** The report's saved images, as picture addresses the canvas may draw (fetched with the owner's headers). */
+  const imageSources = new SvelteMap<string, string>();
+  $effect(() => {
+    const id = zephiumDesign ? report?.research_id : undefined;
+    const items = report?.image_items ?? [];
+    if (!id) return;
+    let live = true;
+    for (const image of items.slice(0, 8)) {
+      const key = `${id}:${image.id}`;
+      if (imageSources.has(key)) continue;
+      void pictureUrl(id, image.id).then((url) => { if (live && url) imageSources.set(key, url); });
+    }
+    return () => { live = false; };
+  });
+  const zephiumResults = $derived(zephiumDesign ? {
+    objects: objectItems(state.run?.canvas_objects).map((item) => item.aegisObject),
+    map: mapOf(state.run),
+    skills: loadedSkills(state.run, state.trace).map((skill) => ({ name: skill.name, title: skill.title })),
+    videos: (videoCollection(report)?.videos ?? []).slice(0, 12).map((video) => ({ url: video.url, title: video.title, poster: video.thumbnail, channel: video.channel })),
+    images: (report?.image_items ?? []).slice(0, 8).flatMap((image) => {
+      const src = imageSources.get(`${report?.research_id}:${image.id}`);
+      return src ? [{ id: image.id, src, caption: image.caption ?? "" }] : [];
+    }),
+  } : null);
+  /**
+   * The request the person just sent, drawn at once as a planning request (Zephium's own request
+   * card and activity line) until the backend's run arrives and replaces it. Nothing is invented:
+   * it shows only the words they typed and that AEGIS is starting.
+   */
+  let pending = $state<{ query: string; at: number } | null>(null);
+  let pendingBusy = false;
+  const pendingReport = $derived(pending ? { research_id: `pending-${pending.at}`, query: pending.query, phase: "queued", completeness: "pending", sources: [] } : null);
+  $effect(() => {
+    const busy = state.busy, failed = state.error;
+    if (!pending) return;
+    if (busy) pendingBusy = true;
+    else if (pendingBusy || failed) untrack(() => { pending = null; pendingBusy = false; });
+  });
+  $effect(() => {
+    if (!pending) return;
+    const timer = setTimeout(() => (pending = null), 20000);
+    return () => clearTimeout(timer);
+  });
+  function startNow(query: string) {
+    pending = { query, at: Date.now() };
+    pendingBusy = false;
+  }
+  const scene = $derived<CanvasScene | null>(pendingReport ? buildScene(pendingReport, "", [], wordsForWait, null, null) : report ? buildScene(report, reasonWords, state.trace, wordsForWait, zephiumDesign ? (state.run as unknown as ZephiumRun | null) : null, zephiumResults) : null);
   provideLeadLook(() => report?.research_id ?? "aegis");
 
   $effect(() => {
@@ -253,6 +301,7 @@
         })
       : [],
   );
+  const clarifications=$derived(clarificationPresentation(state.run,state.trace));
   const requests = $derived(environmentRequests(stages));
   const own = $derived(scene ? environmentView(scene.snapshot) : null);
   const agents = $derived(scene ? environmentAgents(scene.snapshot, scene.objectives, () => scene?.signals.at(-1)?.activity, stages) : { items: [], positions: {} });
@@ -337,8 +386,9 @@
   const planData = $derived(composedRun && report && scene ? planCard(report.research_id, relationRun ? (state.run as never) : null, scene.steps, scene.state === "running", report.query) : null);
   const PLAN_ID = "plan:ai";
   /** The lower track and the convergence, from the run's own stage events (stage-cards.ts). */
-  const pipelineData = $derived(relationRun ? evidencePipeline(state.trace, state.run) : null);
-  const compileData = $derived(relationRun ? collectResults(state.trace, state.run, { images: imagesData?.images.length ?? 0, videos: videosData?.videos.length ?? 0 }) : null);
+  // Only the composed AEGIS layout places these; Zephium's structure has no slot for them, so they overlapped there.
+  const pipelineData = $derived(relationRun && composedRun ? evidencePipeline(state.trace, state.run) : null);
+  const compileData = $derived(relationRun && composedRun ? collectResults(state.trace, state.run, { images: imagesData?.images.length ?? 0, videos: videosData?.videos.length ?? 0 }) : null);
   const stageItems = $derived(
     [[PIPELINE_ID, pipelineData] as const, [COMPILE_ID, compileData] as const].flatMap(([id, data]) =>
       data ? [{ id, type: "stagecard", kind: data.title, title: data.title, detail: "", status: "", size: stageCardSize(data), stages: data }] : [],
@@ -493,7 +543,7 @@
   const knowledge = $derived(mapOf(state.run));
   const mapPlan = $derived.by(() => {
     const first = stages[0];
-    if (!knowledge || !first) return null;
+    if (!knowledge || !first || zephiumDesign) return null;
     const left = Math.max(...stages.map(clearOf)) + gaps.column;
     const floor = Math.max(
       first.place.y + first.place.height,
@@ -558,7 +608,8 @@
 
   const paperPlan = $derived.by(() => {
     const placed: { paper: PaperData; x: number; y: number; stage: (typeof stages)[number] }[] = [];
-    if (!scene?.papers.length) return placed;
+    // In Zephium's design the report is the run's own document and reply, placed by its board.
+    if (!scene?.papers.length || zephiumDesign) return placed;
     const column = Math.max(...stages.map(rightOf), agentRight) + gaps.paper;
     let next = -Infinity;
     for (const paper of scene.papers) {
@@ -654,7 +705,7 @@
   const hidden = $derived(new Set(view.hidden));
   // The full report and subject map already have established Reader/canvas renderers.
   // Typed extracted objects supplement them without duplicating those same outputs.
-  const resultItems = $derived(objectItems(state.run?.canvas_objects).filter(item=>!['report','diagram','knowledge-graph'].includes(item.aegisObject.kind)));
+  const resultItems = $derived(zephiumDesign ? [] : objectItems(state.run?.canvas_objects).filter(item=>item.aegisObject.contract_version===26||!['report','diagram','knowledge-graph'].includes(item.aegisObject.kind)));
   const items = $derived.by(() => {
     void picturesReady;
     if (!scene) return [];
@@ -670,7 +721,7 @@
       ...[...baseItems.filter((item) => !folders.has(item.id)), ...requests.items].map((item) => {
         const present = dress.get(item.id);
         const skills = item.id === stages[0]?.card && promptSkills.length ? { aegisSkills: promptSkills } : {};
-        return { ...item, ...present, ...skills };
+        return { ...item, ...present, ...skills, ...(item.id===stages[0]?.card&&clarifications.exchange.length?{turns:{local:present?.turns?.local||[],exchange:clarifications.exchange}}:{}) };
       }),
       ...environmentBoards(stages),
       ...shownParts,
@@ -1049,6 +1100,7 @@
       else if (ref === "report") id = paper;
       else if (kind === "report") id = `paper:${rest}`;
       else if (kind === "map") id = `map:${rest}`;
+      else if (kind === "object") id = `object:${rest}`;
       return id && present.has(id) ? id : null;
     };
     const result = strandLinks(relations, resolve);
@@ -1236,6 +1288,8 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
 
   /** What may travel with a question or a new task: descriptive fields only. */
   function describe(id: string) {
+    const adaptive=objectItems(state.run?.canvas_objects).find(o=>o.id===id);
+    if(adaptive)return {...objectQuestionContext(adaptive.aegisObject),id};
     const item = itemOf(id);
     const url = urlOf(item);
     const info = url ? scene?.sourceInfo.get(url) : undefined;
@@ -1248,9 +1302,46 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     };
   }
 
-  function openItem(id: string) {
+  /** A Zephium result opened in the centre, the way the labs open it (Lift + ObjectCentre). */
+  let lifted = $state<string | null>(null);
+  const liftedItem = $derived(lifted ? (items.find((entry) => entry.id === lifted) as { id: string; title?: string; object?: { view: ObjectView } } | undefined) : undefined);
+  /** Only a different report closes what is open; the same report reloaded (after an edit) keeps it. */
+  const openReportId = $derived(report?.research_id ?? "");
+  $effect(() => { void openReportId; untrack(() => { lifted = null; }); });
+  /** The cards that stand for the report itself (its reply and document): they open the Reader. */
+  /** The report's document card: the new reader opens it in the centre. */
+  const reportCard = $derived((scene?.snapshot.elements ?? []).find((element) => /-report$/.test((element.reference as { artifact?: string }).artifact ?? ""))?.id ?? null);
+  function openReport() {
+    if (zephiumDesign && reportCard) lifted = reportCard;
+    else actions?.openView("reader");
+  }
+  // The editor's Back to report returns here, to the same report in reading mode.
+  $effect(() => {
+    const back = () => openReport();
+    window.addEventListener("aegis-open-report", back);
+    return () => window.removeEventListener("aegis-open-report", back);
+  });
+  const readerCards = $derived(new Set((scene?.snapshot.elements ?? []).flatMap((element) => {
+    const artifact = (element.reference as { artifact?: string }).artifact ?? "";
+    return /-(reply|report)$/.test(artifact) ? [element.id] : [];
+  })));
+
+  function openItem(id: string, event?:Event) {
+    if (zephiumDesign) {
+      const result = items.find((entry) => entry.id === id) as { object?: { view: ObjectView } } | undefined;
+      if (result?.object) {
+        // The report and its reply read in full in the Reader; every other result opens in the centre.
+        const shown = result.object.view as { kind: string; media?: string; url?: string };
+        if (readerCards.has(id)) openReport();
+        // A video plays where every page opens: the workspace browser.
+        else if (shown.kind === "media" && shown.media === "video" && shown.url) openSourceWindow(shown.url, "", "video-card", undefined, event);
+        else lifted = id;
+        return;
+      }
+    }
+    if(id === "collection:videos"){if(event?.isTrusted)window.dispatchEvent(new CustomEvent("aegis-video-open",{detail:{id,activation:event}}));return;}
     const adaptive=objectItems(state.run?.canvas_objects).find(o=>o.id===id);
-    if(adaptive){window.dispatchEvent(new CustomEvent('aegis-object-open',{detail:{object:adaptive.aegisObject}}));return;}
+    if(adaptive){openWorkspaceObject(adaptive.aegisObject,event);return;}
     const item = itemOf(id);
     if (!item) return;
     if (item.type === "agentcard" && item.branch) opened = { kind: "agent", id, agent: item.branch };
@@ -1313,7 +1404,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     const id = node?.dataset.id;
     if (!id || !(itemOf(id) as { orders?: boolean } | undefined)?.orders) return false;
     const key = event.key.toLowerCase();
-    if (key === "o") openItem(id);
+    if (key === "o") openItem(id,event);
     else if (key === "a") startAsk([id]);
     else if (key === "c") toggleChoice([id]);
     else if (key === "delete") pendingRemoval = [id];
@@ -1345,12 +1436,13 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     const about = asking.length ? asking : view.chosen;
     if (state.run?.state === "needs_input") actions?.answerRun(text);
     else if (accountInputs.length) {
+      startNow(text);
       actions?.startWork(text,{chosen:[...accountInputs,...about.map(describe)].slice(0,24),workflow:skill??'',fromResearch:report?.research_id??''});
       accountInputs=[];
     }
-    else if (about.length && useChosenIn === "task") actions?.startWork(text, { chosen: about.map(describe), fromResearch: report?.research_id ?? "" });
+    else if (about.length && useChosenIn === "task") { startNow(text); actions?.startWork(text, { chosen: about.map(describe), fromResearch: report?.research_id ?? "" }); }
     else if (about.length && report) actions?.askNodes(text, about.map(describe), state.run?.run_id ?? report.research_id);
-    else if (!report) actions?.startWork(text, { workflow: skill ?? "" });
+    else if (!report) { startNow(text); actions?.startWork(text, { workflow: skill ?? "" }); }
     else actions?.prompt(text);
     value = "";
     asking = [];
@@ -1405,10 +1497,23 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
 
   const activeJobs = $derived(state.jobs.filter((job) => ACTIVE_JOBS.has(job.state)));
   const live = $derived(scene?.state === "running" || scene?.state === "waiting");
-  const question = $derived.by(() => {
-    if (state.run?.state !== "needs_input") return "";
-    const event = [...state.trace].reverse().find((row) => row.kind === "stage" && row.stage === "question");
-    return typeof event?.question === "string" ? event.question : "";
+  const question=$derived(clarifications.question);
+  /** The microphone is on: the composer shows the live voice strip, and a question can be answered aloud. */
+  const voiceOn = $derived(!state.muted && state.connected && !state.guest);
+  /** While AEGIS waits on a question, the person's finished spoken sentence is their answer. */
+  let heardAnswer = $state("");
+  $effect(() => { void question?.step; untrack(() => { heardAnswer = ""; }); });
+  $effect(() => {
+    const open = question;
+    if (!open || !voiceOn) return;
+    const heard = (event: Event) => {
+      const detail = (event as CustomEvent<{ who: string; text: string; final: boolean }>).detail;
+      if (detail?.who !== "user" || !detail.text?.trim()) return;
+      heardAnswer = detail.text.trim();
+      if (detail.final) void actions?.answerRun(heardAnswer);
+    };
+    window.addEventListener("aegis-voice-transcript", heard);
+    return () => window.removeEventListener("aegis-voice-transcript", heard);
   });
   const ended = $derived(scene?.state === "failed" || scene?.state === "cancelled");
   let retrying = $state(false);
@@ -1496,11 +1601,12 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     }
     keydown(event);
   }}
+  onaegis-object-ask={(event:Event)=>{const {object,subject}=(event as CustomEvent).detail;actions?.askNodes("Ask about "+(subject||object.title),[objectQuestionContext(object,subject||object.title)],state.run?.run_id||"");}}
   onaegis-source-stack={sourceStack}
   onaegis-open-source-window={(event: Event) => {
     const detail = (event as CustomEvent<{ url: string; title?: string; sourceId?: string; activation?: Event }>).detail;
     if (!detail?.activation?.isTrusted) return;
-    openSourceWindow(detail.url, detail.title, "sources-panel", detail.sourceId, detail.activation);
+    openSourceWindow(detail.url, detail.title, detail.control || "sources-panel", detail.sourceId, detail.activation);
   }}
 />
 
@@ -1568,13 +1674,13 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
 </div>
 
 <BitsConfig defaultPortalTo={portal}>
-  <ObjectFocus onsource={(url,title,event)=>openSourceWindow(url,title,'object-provenance',undefined,event)} onask={object=>actions?.askNodes('Ask about '+object.title,[{id:object.id,kind:object.kind,title:object.title,summary:object.body||object.caption||''}],state.run?.run_id||'')}/>
+  <ObjectFocus onsource={(url,title,event)=>openSourceWindow(url,title,'object-provenance',undefined,event)} onask={object=>actions?.askNodes('Ask about '+object.title,[objectQuestionContext(object)],state.run?.run_id||'')}/>
   <div class="shell" data-state={scene?.state ?? "empty"} data-panel={state.panel}>
     <Rail />
     {#if workPanels.open === "skills"}<SkillsPanel />{:else if workPanels.open === "connections"}<ConnectionsPanel onAttach={attachAccount} />{/if}
     <div class="environment">
       <div class="canvas-card" class:strings={composedRun} bind:this={cardHost}>
-        {#if scene && state.run !== undefined}
+        {#if scene && (state.run !== undefined || pending)}
           {#key `${scene.name}:${camera}`}
             <WorkCanvas
               {items}
@@ -1614,9 +1720,33 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
               onviewchange={saveView}
             />
           {/key}
+          {#if liftedItem?.object}
+            {@const view = liftedItem.object.view}
+            <Lift origin={null} source={liftedItem.id} bounds={windowBounds} preferred={{ width: 980, height: 720 }} title={liftedItem.title ?? view.title ?? ""} onclose={() => (lifted = null)}>
+              <div class="lift-body">
+                <LiftHeader kind={liftedItem.id === reportCard ? "Report" : objectLabel(view.kind)} title={view.title ?? ""} icon={objectIcon(view.kind)} />
+                {#if liftedItem.id === reportCard}
+                  <div class="lift-actions">
+                    <button type="button" onclick={() => { lifted = null; actions?.openView("edit-report"); }}>Edit report</button>
+                  </div>
+                {/if}
+                {#if liftedItem.id === reportCard && scene?.papers[0]}
+                  <ReportReader paper={scene.papers[0]} draftHtml={(report as { draft?: { html?: string } } | null)?.draft?.html ?? ""} />
+                {:else}
+                <ObjectCentre
+                  object={view}
+                  actions={{
+                    ask: (subject: string) => actions?.askNodes(`Ask about ${subject}`, [describe(liftedItem.id)], state.run?.run_id ?? report?.research_id ?? ""),
+                    link: (url: string) => openSourceWindow(url, "", "object-link"),
+                    send: () => {},
+                  }}
+                />
+                {/if}
+              </div>
+            </Lift>
+          {/if}
           {#if designer}<DesignerOverlay {designer} version={designerVersion}/>{/if}
           {#if composedRun}<HandOverlay onreplay={replayBuild} />{/if}
-          {#if report}<button type="button" class="design-switch" data-design={zephiumDesign ? "zephium" : "aegis"} onclick={switchDesign} title="Compare how this run is laid out">{zephiumDesign ? "Zephium layout · switch to AEGIS" : "AEGIS layout · try Zephium"}</button>{/if}
           {#if sharedChoices.length}
             <aside class="relay-choices" aria-label="Shared connections" data-construction-control>
               <header><strong>{sharedChoices.length} connections share this string</strong><button aria-label="Close shared connections" onclick={() => chooseConnection(null)}>×</button></header>
@@ -1693,7 +1823,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
         </div>
       </div>
       {#if question}
-        <div class="question" style:--dock="{dockHeight}px" role="status"><strong>AEGIS asks</strong>{question}</div>
+        <div class="question-panel" style:--dock="{dockHeight}px"><ClarificationPanel {question} disabled={disabled} listening={voiceOn} heard={heardAnswer} onvoice={() => actions?.microphone()} onanswer={text=>actions?.answerRun(text)}/></div>
       {/if}
       {#if asking.length || view.chosen.length}
         <div class="context-row" style:--dock="{dockHeight}px" role="group" aria-label="Cards this message is about">
@@ -1727,6 +1857,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
           ondictate={() => actions?.microphone()}
           listening={!state.muted}
         />
+        {#if !value.trim()}<VoiceWave listening={voiceOn} speaking={state.voiceState === "speaking"} host={barDock} />{/if}
       </div>
     </div>
   </div>
@@ -1769,6 +1900,10 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
 
 {#snippet viewsPanel()}
   <div class="tool-panel">
+    {#if zephiumDesign}
+      <button type="button" onclick={() => { tool = null; openReport(); }}>Read report</button>
+      <button type="button" onclick={() => { tool = null; actions?.openView("edit-report"); }}>Edit report</button>
+    {:else}
     {#each VIEWS as view (view)}
       <button
         type="button"
@@ -1778,6 +1913,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
         }}>{view[0]!.toUpperCase() + view.slice(1)}</button
       >
     {/each}
+    {/if}
     {#if hidden.size}
       <button
         type="button"
@@ -1911,7 +2047,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     color: #fff;
   }
 
-  .question,
+  .question-panel{position:absolute;right:24px;top:80px;z-index:45;pointer-events:auto}
   .context-row {
     position: absolute;
     inset-block-end: calc(var(--dock, 64px) + 14px);
@@ -1923,24 +2059,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     font-size: var(--text-label);
   }
 
-  .question {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    inline-size: max-content;
-    padding: 12px 16px;
-    border-radius: 14px;
-    background: var(--color-float);
-    box-shadow: var(--shadow-popover);
-    font-size: var(--text-body);
-    line-height: 1.45;
-  }
 
-  .question strong {
-    color: var(--color-muted);
-    font-size: var(--text-label);
-    font-weight: 600;
-  }
 
   .context-row {
     display: flex;
@@ -2296,6 +2415,30 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     text-align: center;
   }
 
+  .lift-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .lift-actions button {
+    border: 0;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font: 600 12.5px var(--font-sans, Inter, sans-serif);
+    color: var(--color-text);
+    background: color-mix(in oklab, var(--color-text) 9%, transparent);
+    cursor: pointer;
+  }
+  .lift-actions button:focus-visible {
+    outline: 2px solid var(--color-text);
+    outline-offset: 2px;
+  }
+  .lift-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 24px 28px 28px;
+  }
+
   .welcome h1 {
     margin: 0;
     color: var(--color-text);
@@ -2486,29 +2629,5 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
       min-inline-size: 0;
       max-inline-size: calc(100% - 24px);
     }
-  }
-  .design-switch {
-    position: absolute;
-    inset-block-start: 60px;
-    inset-inline-start: 16px;
-    z-index: 5;
-    padding: 5px 12px;
-    border: 0;
-    border-radius: 999px;
-    background: color-mix(in oklab, var(--color-surface) 92%, transparent);
-    box-shadow: inset 0 0 0 1px var(--color-border);
-    color: var(--color-muted);
-    font: 11.5px var(--font-sans, Inter, sans-serif);
-    cursor: pointer;
-  }
-
-  .design-switch[data-design="zephium"] {
-    color: var(--color-text);
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--aegis-strand-green, #3fdc84) 60%, transparent);
-  }
-
-  .design-switch:focus-visible {
-    outline: 2px solid var(--color-text);
-    outline-offset: 1px;
   }
 </style>

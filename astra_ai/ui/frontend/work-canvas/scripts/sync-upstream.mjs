@@ -1,3 +1,8 @@
+import {v25Patches} from './v25-patches.mjs';
+import {compositionPatches} from './composition-patches.mjs';
+import {mediaCollectionPatches} from './media-collection-patches.mjs';
+import {siteRowPatches} from './site-row-patches.mjs';
+import {v24Patches} from './v24-patches.mjs';
 // Copies the Zephium Work files AEGIS uses out of the read-only reference clone, unchanged
 // except for the patches listed below, and writes the provenance manifest.
 // Usage: node scripts/sync-upstream.mjs
@@ -7,6 +12,7 @@ import {designerPatches} from "./designer-patches.mjs";
 import {v17Patches} from "./v17-patches.mjs";
 import {v20Patches} from "./v20-patches.mjs";
 import {v22Patches, runtimeSeams} from "./v22-patches.mjs";
+import {v23Patches} from "./v23-patches.mjs";
 import {v21Patches} from "./v21-patches.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -997,7 +1003,7 @@ patches.push(...[
 
 patches.push(...v17Patches);
 patches.push(...v20Patches);
-patches.push(...v21Patches, ...v22Patches);
+patches.push(...v21Patches, ...v22Patches, ...v23Patches, ...v24Patches, ...v25Patches, ...compositionPatches, ...mediaCollectionPatches, ...siteRowPatches);
 for (const patch of patches) {
   const target = path.join(dest, patch.file);
   const text = fs.readFileSync(target, "utf8").replace(/\r\n/g, "\n");

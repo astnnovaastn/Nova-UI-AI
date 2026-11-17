@@ -6,7 +6,8 @@
   "scripts": {
     "sync": "node scripts/sync-upstream.mjs",
     "build": "vite build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lab:build": "vite build --config vite.lab.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "5.2.8",

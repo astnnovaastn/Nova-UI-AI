@@ -88,7 +88,16 @@ export function imagesFor(text: string, images: readonly PaperImage[], placed: S
 }
 
 /** Sets sanitized report HTML as a paper: lead paragraph, inline figures, source chips, scrolling tables. */
-export function dressPaper(html: string, paper: PaperData): string {
+export type DressOptions = {
+  /** At most this many distinct images (the canvas sheet keeps 6). */
+  limit?: number;
+  /** Two images placed at one paragraph stand side by side as a pair. */
+  pairs?: boolean;
+  /** Images with no saved placement end the report as a small gallery instead of being left out. */
+  gallery?: boolean;
+};
+
+export function dressPaper(html: string, paper: PaperData, options: DressOptions = {}): string {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const body = doc.body;
   // The sheet shows the title itself. Pictures come only from the report's own validated images.
@@ -99,19 +108,40 @@ export function dressPaper(html: string, paper: PaperData): string {
   const placed = new Set<string>();
   const unique = paper.images
     .filter((image, index, all) => all.findIndex((other) => other.id === image.id || (!!image.content_hash && other.content_hash === image.content_hash)) === index)
-    .slice(0, 6);
-  for (const element of Array.from(body.querySelectorAll("p, li"))) {
-    for (const image of imagesFor(element.textContent ?? "", unique, placed)) {
-      const figure = doc.createElement("figure");
-      figure.dataset.image = image.id;
-      const caption = [image.caption, image.publication].filter(Boolean).join(" · ");
-      if (caption) {
-        const words = doc.createElement("figcaption");
-        words.textContent = caption;
-        figure.append(words);
-      }
-      (element.closest("ul, ol") ?? element).after(figure);
+    .slice(0, options.limit ?? 6);
+  const figureFor = (image: PaperImage) => {
+    const figure = doc.createElement("figure");
+    figure.dataset.image = image.id;
+    const caption = [image.caption, image.publication].filter(Boolean).join(" · ");
+    if (caption) {
+      const words = doc.createElement("figcaption");
+      words.textContent = caption;
+      figure.append(words);
     }
+    return figure;
+  };
+  for (const element of Array.from(body.querySelectorAll("p, li"))) {
+    const here = imagesFor(element.textContent ?? "", unique, placed);
+    if (!here.length) continue;
+    const anchorAt = element.closest("ul, ol") ?? element;
+    if (options.pairs && here.length >= 2) {
+      // Two pictures for one paragraph read best side by side; any more follow as their own figures.
+      const pair = doc.createElement("div");
+      pair.className = "figure-pair";
+      pair.append(figureFor(here[0]!), figureFor(here[1]!));
+      const rest = here.slice(2).map(figureFor);
+      anchorAt.after(pair, ...rest);
+    } else anchorAt.after(...here.map(figureFor));
+  }
+  // Images the report never placed: with no saved section, they are not guessed into the text.
+  const left = unique.filter((image) => !placed.has(image.id));
+  if (options.gallery && left.length) {
+    const section = doc.createElement("section");
+    section.className = "figure-gallery";
+    const heading = doc.createElement("h2");
+    heading.textContent = "Figures";
+    section.append(heading, ...left.map(figureFor));
+    body.append(section);
   }
 
   const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT);

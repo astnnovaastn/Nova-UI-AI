@@ -243,14 +243,11 @@
     if (!node) return;
     homed = false;
     const position = absolutePosition(node, nodes);
-    setCamera({
-      x: Math.max(24, (canvasWidth - (node.width ?? 480)) / 2) - position.x,
-      y:
-        fitTopInset +
-        Math.max(0, (canvasHeight - fitBottomInset - fitTopInset - (node.height ?? 360)) / 2) -
-        position.y,
-      zoom: 1,
-    });
+    const width=node.width ?? 480, height=node.height ?? 360;
+    const roomHeight=Math.max(1,canvasHeight-fitBottomInset-fitTopInset-64);
+    const zoom=Math.min(1,Math.max(0.05,Math.min((canvasWidth-64)/width,roomHeight/height)));
+    setCamera({x:(canvasWidth-width*zoom)/2-position.x*zoom,
+      y:fitTopInset+(roomHeight-height*zoom)/2+32-position.y*zoom,zoom});
   }
   setContext(canvasFocusResult, center);
   const AIR = 64;
@@ -1014,7 +1011,9 @@
           lastClick = { id: "", at: 0 };
           // An input that stands for something on the canvas opens that thing.
           const input = isItemNode(node as WorkNode) ? (node.data as CanvasItem).input : undefined;
-          onopen?.(input?.element ?? node.id);
+          if ((node.data as any).collection?.kind === "videos") window.dispatchEvent(new CustomEvent("aegis-video-open",{detail:{id:node.id,activation:event}}));
+          else if ((node.data as any).aegisObject) window.dispatchEvent(new CustomEvent("aegis-adaptive-open",{detail:{object:(node.data as any).aegisObject,activation:event}}));
+          else onopen?.(input?.element ?? node.id);
           return;
         }
         lastClick = { id: node.id, at: now };

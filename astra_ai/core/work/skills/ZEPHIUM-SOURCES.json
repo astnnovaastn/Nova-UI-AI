@@ -1,0 +1,21 @@
+{
+  "commit": "9026a1fffad74d6e201ef97fe8c02c1b01403cd2",
+  "license": "MPL-2.0",
+  "skills": [
+    {
+      "name": "map-a-project",
+      "upstream": "crates/zephium-app/skills/map-a-project/SKILL.md",
+      "sha256": "64ac01c2cf6fd12fa7ef367856eda5498d32f445f2065e8723531202e99807f6"
+    },
+    {
+      "name": "system-design",
+      "upstream": "crates/zephium-app/skills/system-design/SKILL.md",
+      "sha256": "ab864e5c12647d042b5dcda2bc5e16224da2b9aee6a131cc7a3ae06f0cd9403b"
+    },
+    {
+      "name": "pricing-research",
+      "upstream": "crates/zephium-app/skills/pricing-research/SKILL.md",
+      "sha256": "ac75716eb97bc62e009e102f5e34faa99fa74e05de736abb8fad346d32eabeb6"
+    }
+  ]
+}

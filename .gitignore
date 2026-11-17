@@ -248,3 +248,9 @@ astra_ai/memory/research_artifacts/
 # Research canvas: build tools and generated message files (the built bundle in public/work-canvas is kept)
 astra_ai/ui/frontend/work-canvas/node_modules/
 astra_ai/ui/frontend/work-canvas/upstream/src/shared/i18n/
+
+# Local Zephium reference and generated development lab files.
+/astra_ai/ui/zephium-source/
+/astra_ai/ui/frontend/work-canvas/lab/dist/
+/astra_ai/ui/frontend/work-canvas/lab/.i18n/
+/astra_ai/ui/frontend/*-lab-verification/

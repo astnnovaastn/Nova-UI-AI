@@ -112,7 +112,7 @@ function widths(row: readonly LayoutBlock[], width: number): number[] {
  * takes a row of its own at the board's width; a pinned block is the person's
  * and takes no room.
  */
-export function boardLayout(
+function rowLayout(
   blocks: readonly LayoutBlock[],
   { open, pinned = new Set() }: { open?: string; pinned?: ReadonlySet<string> } = {},
 ): BoardLayout {
@@ -149,3 +149,74 @@ export function boardLayout(
   }
   return { width, height: Math.max(0, y - BOARD.row), at };
 }
+
+/**
+ * AEGIS composition: a board with several results stands in balanced columns, not one long column.
+ * Each result keeps its own height (Zephium's measurement at its width); the column count is the one
+ * whose board is closest to a screen's proportions.
+ */
+export const COMPOSE = { columns: 4, gap: 32, column: 680, aspect: 1.6 } as const;
+
+const WIDE_KINDS = new Set(["diagram", "project"]);
+
+function composed(laid: readonly LayoutBlock[], columns: number, column: number): BoardLayout {
+  const gap = COMPOSE.gap;
+  const tops = Array.from({ length: columns }, () => 0);
+  const at: Record<string, Rect> = {};
+  for (const block of laid) {
+    // A picture that reads to the right, or anything whose own width is well over a column (a wide
+    // table, a row of picks), takes the columns it reads at; anything else, what it needs.
+    const wide = WIDE_KINDS.has(block.kind) || block.width.ideal > column * 1.3;
+    const need = wide ? Math.min(block.width.ideal, BOARD.reach) : block.width.min;
+    const span = clamp(Math.ceil((need + gap) / (column + gap)), 1, columns);
+    const room = span * column + (span - 1) * gap;
+    // Wider than every column together (a large diagram): a row of its own at the width it draws.
+    if (wide && need > room) {
+      const top = Math.max(...tops);
+      const width = Math.floor(Math.min(need, Math.max(block.width.max, need)));
+      const height = Math.max(1, Math.ceil(block.height(width)));
+      at[block.id] = { x: 0, y: top, width, height };
+      tops.fill(top + height + gap);
+      continue;
+    }
+    const width = Math.floor(Math.min(room, Math.max(block.width.max, Math.min(room, block.width.ideal))));
+    let start = 0;
+    let top = Infinity;
+    for (let index = 0; index + span <= columns; index++) {
+      const here = Math.max(...tops.slice(index, index + span));
+      if (here < top - 0.5) [start, top] = [index, here];
+    }
+    const height = Math.max(1, Math.ceil(block.height(width)));
+    at[block.id] = { x: start * (column + gap), y: top, width, height };
+    for (let index = start; index < start + span; index++) tops[index] = top + height + gap;
+  }
+  const used = Object.values(at);
+  const width = Math.max(...used.map((rect) => rect.x + rect.width));
+  const height = Math.max(...used.map((rect) => rect.y + rect.height));
+  return { width, height, at };
+}
+
+export function boardLayout(
+  blocks: readonly LayoutBlock[],
+  options: { open?: string; pinned?: ReadonlySet<string> } = {},
+): BoardLayout {
+  const pinned = options.pinned ?? new Set<string>();
+  const read = reading(blocks.filter((block) => !pinned.has(block.id)));
+  if (options.open || read.length < 3) return rowLayout(blocks, options);
+  // The run's written report stands right after the hero results, before pictures and supporting
+  // cards: it is what the person came for. Otherwise Zephium's reading order is kept.
+  const tier = (block: LayoutBlock) => (block.emphasis === "hero" ? 0 : block.kind === "document" ? 1 : block.emphasis === "primary" ? 2 : 3);
+  const laid = read.map((block, index) => ({ block, index })).sort((a, b) => tier(a.block) - tier(b.block) || a.index - b.index).map((entry) => entry.block);
+  // A column reads like one of Zephium's results: the typical result's own width, 640 to 760.
+  const ideals = laid.map((block) => Math.min(block.width.ideal, BOARD.max)).sort((a, b) => a - b);
+  const column = clamp(ideals[Math.floor(ideals.length / 2)] ?? COMPOSE.column, BOARD.min, 760);
+  let best: BoardLayout | null = null;
+  let score = Infinity;
+  for (let columns = 1; columns <= Math.min(COMPOSE.columns, laid.length); columns++) {
+    const board = composed(laid, columns, column);
+    const off = Math.abs(Math.log(board.width / Math.max(1, board.height) / COMPOSE.aspect));
+    if (off < score - 0.01) [best, score] = [board, off];
+  }
+  return best ?? rowLayout(blocks, options);
+}
+

@@ -37,8 +37,12 @@
     onsource,
     onmade,
     oncommand,
+    publicMeta,
+    publicSteps = [],
   }: {
     request: string;
+    publicMeta?: string;
+    publicSteps?: {key:string;what:string;glyph:"search"|"ask"|"said"|"page";where?:string;failure?:string;elapsed?:string;live?:boolean}[];
     trail: readonly TrailLine[];
     runs: readonly WorkExecutionFact[];
     /** What the request's runs put on the canvas, in the order they made it. */
@@ -70,7 +74,7 @@
   };
 
   const steps = $derived(
-    runs.flatMap((run) => runTimeline(run).map((row) => ({ run: run.id, row }))),
+    runs.length ? runs.flatMap((run) => runTimeline(run).map((row) => ({ run: run.id, row }))) : publicSteps.map(row=>({run:"recorded",row})),
   );
   const sources = $derived(
     runs
@@ -79,6 +83,7 @@
   );
   /** Where the latest run stands, and how far it went. */
   const meta = $derived.by(() => {
+    if(publicMeta)return publicMeta;
     const last = runs.at(-1);
     if (!last) return "";
     const state = ["running", "approved", "cancel_requested"].includes(last.status)

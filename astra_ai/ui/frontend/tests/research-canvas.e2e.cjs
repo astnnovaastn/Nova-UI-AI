@@ -822,7 +822,7 @@ const shot = (page, name) => page.screenshot({ path: path.join(out, name + ".png
         await p.waitForTimeout(500);
       }
       const added = `https://en.wikipedia.org/wiki/Tide?run=${Date.now()}`;
-      await p.evaluate((added) => window.dispatchEvent(new CustomEvent("aegis-open-source-window", { detail: { url: added, title: "Tide" } })), added);
+      await require("./source-browser-control.cjs").openSourceFromControl(p, added, "Tide");
       const pane = p.locator(".browser-layer .pane").first();
       await pane.waitFor({ timeout: 10000 });
       const add = pane.getByRole("button", { name: "Add to Work" });
@@ -841,7 +841,7 @@ const shot = (page, name) => page.screenshot({ path: path.join(out, name + ".png
       await p.waitForSelector(".canvas-top", { timeout: 20000 });
       await p.waitForTimeout(2500);
       await p.keyboard.press("Escape");
-      await p.evaluate((added) => window.dispatchEvent(new CustomEvent("aegis-open-source-window", { detail: { url: added, title: "Tide" } })), added);
+      await require("./source-browser-control.cjs").openSourceFromControl(p, added, "Tide");
       check("It is still in this Work after a reload", await until(async () => /In this Work/.test((await p.locator(".browser-layer .pane").first().textContent().catch(() => "")) || ""), 10000));
       check("Reopened research shows what was added", /You added Tide/.test((await p.locator('.trail[aria-label="Research steps"]').textContent().catch(() => "")) || ""));
     } else check("Own test entry available for Add to Work", false, "not found");

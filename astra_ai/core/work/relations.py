@@ -24,6 +24,8 @@ STATUSES = ('active', 'complete', 'verified', 'contested', 'failed')
 
 #: relation type -> (allowed source kinds, allowed target kinds, short label)
 TYPES = {
+    'produces': ({'agent'}, {'object'}, 'Result'),
+    'supports_object': ({'source'}, {'object'}, 'Source'),
     'plans': ({'request'}, {'agent'}, 'Plan'),
     'assigns': ({'agent'}, {'agent'}, 'Task'),
     'searches': ({'agent'}, {'query'}, 'Search'),
@@ -38,7 +40,7 @@ TYPES = {
     'relates': ({'map'}, {'map'}, ''),
     'models': ({'agent'}, {'map'}, 'Model'),
 }
-REF = re.compile(r'^(request|report|agent:(lead|discovery|analysis|verification)|query:\d{1,3}|source:S\d{1,3}|map:[^\s]{1,80})$')
+REF = re.compile(r'^(request|report|agent:(lead|discovery|analysis|verification)|query:\d{1,3}|source:S\d{1,3}|map:[^\s]{1,80}|object:[A-Za-z0-9_.:-]{1,160})$')
 
 
 class RelationError(ValueError):

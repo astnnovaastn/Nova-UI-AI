@@ -30,9 +30,12 @@
     onwait,
     fanState,
     reverseFan = false,
+    fanDown = false,
   }: {
     fanState?: "closed" | "open";
     reverseFan?: boolean;
+    /** AEGIS: the fanned windows stand one under another, straight down, instead of along the row. */
+    fanDown?: boolean;
     item: CanvasItem;
     selected: boolean;
     /** Opens one of the part's pages in the centre. */
@@ -79,7 +82,7 @@
   const placeOf = (index: number) =>
     `translate(${(reverseFan ? -1 : 1) * index * PART.behindX}px, ${index * PART.behindY}px)`;
   /** Fanned out on hover, the windows stand side by side along the row. */
-  const fanOf = (index: number) => `translate(${(reverseFan ? -1 : 1) * index * (windowWidth + 16)}px, 0)`;
+  const fanOf = (index: number) => fanDown ? `translate(0, ${index * ((windowWidth * 10) / 16 + PART.bar + 16)}px)` : `translate(${(reverseFan ? -1 : 1) * index * (windowWidth + 16)}px, 0)`;
   function stackGesture(event: Event, kind: "enter" | "leave" | "toggle") {
     if (!part.stack) return;
     const origin = event.currentTarget as HTMLElement;

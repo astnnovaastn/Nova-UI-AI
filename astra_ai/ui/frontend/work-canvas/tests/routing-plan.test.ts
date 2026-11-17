@@ -1,7 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {createRoutePlanner,type LogicalEdge} from '../src/routing-plan';
 import {routeResearchCorridorFan} from '../src/research-routing';
-import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 const card=(id:string,x:number,y:number)=>({id,position:{x,y},width:120,height:80});
 describe('shared routing service',()=>{
@@ -59,8 +58,7 @@ describe('shared routing service',()=>{
   it('sync installs the routing provider and uses unmodified upstream Skill artwork',()=>{
     const canvas=readFileSync(new URL('../upstream/src/features/work/components/WorkCanvas.svelte',import.meta.url),'utf8');
     expect(canvas).toContain('setContext(routingContext, () => routing)');
-    const artwork = readFileSync(new URL('../upstream/src/features/work/components/run/InputMark.svelte', import.meta.url), 'utf8').replaceAll('\r\n', '\n');
-    // InputMark.svelte at Zephium commit 9026a1fffad74d6e201ef97fe8c02c1b01403cd2.
-    expect(createHash('sha256').update(artwork).digest('hex')).toBe('5c7f85785a6277564e495c1ea3b456a280172d1c621d1fae13c444576c66f04e');
+    const original=readFileSync(new URL('../../../zephium-source/frame/src/features/work/components/run/InputMark.svelte',import.meta.url),'utf8').replaceAll('\r\n','\n');
+    expect(readFileSync(new URL('../upstream/src/features/work/components/run/InputMark.svelte',import.meta.url),'utf8').replaceAll('\r\n','\n')).toBe(original);
   });
 });

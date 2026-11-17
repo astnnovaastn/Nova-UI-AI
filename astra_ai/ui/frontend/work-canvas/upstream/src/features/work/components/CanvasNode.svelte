@@ -89,14 +89,7 @@
   const viewport = useViewport();
   // Only a selected card follows the zoom: the rest never re-render as the view moves.
   const scale = $derived(selected ? Math.max(0.5, Math.min(1, viewport.current.zoom)) : 1);
-  const tooled = $derived(
-    type !== "head" &&
-      type !== "trail" &&
-      (type !== "part" || !!data.orders) &&
-      type !== "mapgroup" &&
-      type !== "input" &&
-      (type !== "block" || opens),
-  );
+  const tooled = $derived(!["head", "trail", "mapgroup", "input"].includes(type));
   const activeToolbar = getContext<(() => string | null) | undefined>(canvasToolbar);
 </script>
 
@@ -120,47 +113,11 @@
 />
 <NodeToolbar isVisible={selected && tooled && activeToolbar?.() === id} position={selected && positionAbsoluteY * viewport.current.zoom + viewport.current.y < 100 * scale ? Position.Bottom : Position.Top} offset={10 * scale}>
   <div class="bar nopan nodrag" role="toolbar" aria-label={data.title} style:--scale={scale}>
-    <button type="button" onclick={() => (waiting ? action(id, "help") : open(id))}>
-      <Icon icon={ArrowUpRight01Icon} size={14} />{waiting
-        ? m.work_human_open()
-        : type === "block" && data.block?.open
-          ? m.work_board_close()
-          : m.work_env_open()}
-    </button>
-    {#if type === "adaptive"}<button type="button" onclick={() => window.dispatchEvent(new CustomEvent('aegis-object-save',{detail:{id:(data as any).aegisObject.id,action:'note'}}))}>Save as note</button><button type="button" onclick={() => window.dispatchEvent(new CustomEvent('aegis-object-save',{detail:{id:(data as any).aegisObject.id,action:'task'}}))}>Make task</button>{/if}
-    {#if data.artifact && !inert}<button
-        type="button"
-        onclick={async () => {
-          focusResult(id);
-          await tick();
-          root?.querySelector<HTMLElement>(".artifact-body")?.focus({ preventScroll: true });
-        }}
-      >
-        <Icon icon={Target01Icon} size={14} />{m.work_env_focus_result()}
-      </button>{/if}
-    {#if !inert}<button type="button" onclick={() => action(id, "ask")}>{m.work_env_ask()}</button
-      >{/if}
-    {#if !inert && !data.actionLabel}<button
-        type="button"
-        class:on={!!data.decision}
-        onclick={() => action(id, data.decision ? "unchoose" : "choose")}
-        >{data.decision ? m.work_env_unchoose() : m.work_env_choose()}</button
-      ><button type="button" onclick={() => action(id, "pin")}>{data.positionPinned ? "Unpin" : "Pin position"}</button><button type="button" onclick={() => action(id, "lock-size")}>{data.sizeLocked ? "Unlock size" : "Lock size"}</button><button type="button" onclick={() => action(id, "release-position")}>Release position</button>{#if areas?.list.length}<select
-          class="area nodrag nopan"
-          aria-label={m.work_env_area_select()}
-          value={data.area ?? ""}
-          onchange={(event) => action(id, `area:${event.currentTarget.value}`)}
-        >
-          <option value="">{m.work_env_no_area()}</option>
-          {#each areas.list as area (area.id)}<option value={area.id}>{area.title}</option>{/each}
-        </select>{/if}{/if}
-    {#if !inert && !data.actionLabel}<span class="separator"></span><button
-        type="button"
-        class="danger"
-        onclick={() => action(id, "remove")}
-      >
-        <Icon icon={MinusSignIcon} size={14} />{m.work_env_remove()}
-      </button>{/if}
+    <button type="button" onclick={(event) => type === "collection" && (data as any).collection?.kind === "videos" ? window.dispatchEvent(new CustomEvent("aegis-video-open",{detail:{id,activation:event}})) : type === "adaptive" ? window.dispatchEvent(new CustomEvent("aegis-adaptive-open",{detail:{object:(data as any).aegisObject,activation:event}})) : (waiting ? action(id, "help") : open(id))}><Icon icon={ArrowUpRight01Icon} size={14} />{m.work_env_open()}</button>
+    <button type="button" onclick={() => focusResult(id)}><Icon icon={Target01Icon} size={14} />{m.work_env_focus_result()}</button>
+    <button type="button" onclick={() => action(id, "ask")}>{m.work_env_ask()}</button>
+    <button type="button" class:on={!!data.decision} aria-pressed={!!data.decision} onclick={() => action(id, data.decision ? "unchoose" : "choose")}>{m.work_env_choose()}</button>
+    <span class="separator"></span><button type="button" class="danger" onclick={() => action(id, "remove")}><Icon icon={MinusSignIcon} size={14} />{m.work_env_remove()}</button>
   </div>
 </NodeToolbar>
 <div class="node-root" bind:this={root}>
@@ -266,7 +223,7 @@
   .bar {
     flex-wrap: wrap;
     inline-size: max-content;
-    max-inline-size: min(360px, calc(100vw - 32px));
+    max-inline-size: min(440px, calc(100vw - 24px));
     transform: scale(var(--scale, 1));
     transform-origin: 50% 100%;
     display: flex;
@@ -305,22 +262,6 @@
 
   .bar button.on {
     color: var(--color-success);
-  }
-
-  .bar .area {
-    block-size: 28px;
-    max-inline-size: 140px;
-    padding: 0 8px;
-    border: 0;
-    border-radius: var(--radius-control-compact);
-    background: transparent;
-    color: var(--color-text);
-    font: inherit;
-    font-size: var(--text-label);
-  }
-
-  .bar .area:hover {
-    background: var(--color-control-hover);
   }
 
   .separator {

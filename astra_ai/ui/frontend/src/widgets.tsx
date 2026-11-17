@@ -433,7 +433,7 @@ const WidgetContainer = () => {
   const [searchState, setSearchState] = useState<SearchWidgetState>(defaultSearchState);
   const [searchAiConnected, setSearchAiConnected] = useState(false);
   const [notesCommand, setNotesCommand] = useState<NotesWidgetCommand | null>(null);
-  useEffect(()=>{const open=(event:Event)=>{const d=(event as CustomEvent).detail;if(d?.kind==='notes'){if(d.create)setNotesCommand({command:'show_add',issuedAt:Date.now()});openWidget('notes');}else if(d?.kind==='tasks')openWidget('task');};window.addEventListener('aegis-open-tools',open);return()=>window.removeEventListener('aegis-open-tools',open);},[]);
+  useEffect(()=>{const open=(event:Event)=>{const d=(event as CustomEvent).detail;if(d?.kind==='notes'){if(d.create)setNotesCommand({command:'show_add',issuedAt:Date.now()});else if(typeof d.noteId==='string')setNotesCommand({command:'show_note',note_id:d.noteId,issuedAt:Date.now()});openWidget('notes');}else if(d?.kind==='tasks')openWidget('task');};window.addEventListener('aegis-open-tools',open);return()=>window.removeEventListener('aegis-open-tools',open);},[]);
 
   const [notesAiConnected, setNotesAiConnected] = useState(false);
   const [weatherCommand, setWeatherCommand] = useState<WeatherWidgetCommand | null>(null);

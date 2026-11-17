@@ -276,8 +276,32 @@ function factParts(
       lead?.pages.some((page) =>
         searched.sources.some((row) => samePage(row.url) === samePage(page.url)),
       );
-    if (lead)
-      parts.push({ ...lead, order: parts.length, ...(opened ? { follows: searched.id } : {}) });
+    if (lead) {
+      const bySite = new Map<string, typeof lead.pages>();
+      for (const page of lead.pages) {
+        const site = registrableSite(hostOf(page.url)) || page.url;
+        bySite.set(site, [...(bySite.get(site) ?? []), page]);
+      }
+      const follows = opened ? { follows: searched.id } : {};
+      if (bySite.size <= 1) parts.push({ ...lead, order: parts.length, ...follows });
+      else
+        for (const [site, pages] of bySite)
+          parts.push({
+            ...lead,
+            id: `${lead.id}:${site}`,
+            key: `${lead.key}:${site}`,
+            title: siteName(site, pages.flatMap((page) => [
+              ...page.steps.flatMap((step) => (step.local?.page_title ? [step.local.page_title] : [])),
+              ...(page.page?.title ? [page.page.title] : []),
+            ])),
+            host: site,
+            pages,
+            unread: lead.unread.filter((page) => registrableSite(hostOf(page.url)) === site),
+            state: pages.some((page) => page.steps.some((step) => step.status === "running")) ? "running" : "done",
+            order: parts.length,
+            ...follows,
+          });
+    }
   }
   return parts;
 }

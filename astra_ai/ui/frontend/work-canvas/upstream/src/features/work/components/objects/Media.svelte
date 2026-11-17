@@ -11,13 +11,22 @@
    */
   let { object, actions = {} }: { object: MediaView; actions?: ObjectActions } = $props();
   const youtube = $derived(object.media === "video" && !!youtubeId(object.url));
+  /** AEGIS: the collection opens to whichever side has room in the window, never off-screen. */
+  let stripSide = $state<"right" | "left">("right");
+  function placeStrip(figure: HTMLElement) {
+    if (!object.more?.length) return;
+    const box = figure.getBoundingClientRect();
+    const scale = box.width / Math.max(1, figure.offsetWidth);
+    const need = Math.min(object.more.length, 3) * 252 * scale + 16 * scale;
+    stripSide = box.right + need > window.innerWidth && box.left - need > 0 ? "left" : "right";
+  }
   const poster = $derived(object.poster ?? object.picture);
   /** The address that would not load; a new poster gets its own chance. */
   let broken = $state<string | null>(null);
   const failed = $derived(!!poster && broken === poster.src);
 </script>
 
-<figure class="media {object.media}" aria-label={object.title}>
+<figure class="media {object.media}" class:collection={!!object.more?.length} data-side={stripSide} aria-label={object.title} onpointerenter={(event) => placeStrip(event.currentTarget)} onfocusin={(event) => placeStrip(event.currentTarget)}>
   {#if object.media === "image"}
     {#if poster && !failed}<img
         class="image"
@@ -63,6 +72,21 @@
           {#if object.title && object.channel}<span class="channel">{object.channel}</span>{/if}
         </span>
       </figcaption>
+    {/if}
+    {#if object.more?.length}
+      <span class="collection-label">Video collection · {object.more.length + 1} videos</span>
+      <div class="strip nodrag nopan nowheel" role="list" aria-label="More videos in this collection">
+        {#each object.more as video, index (video.url)}
+          <div role="listitem" class="clip-item" style:--i={index + 1}>
+            <button type="button" class="clip" aria-label={`Play ${video.title || "video"}`} onclick={() => actions.link?.(video.url)}>
+              {#if video.poster}<img src={video.poster} alt="" loading="lazy" decoding="async" draggable="false" />{/if}
+              <span class="play"><PlayMark size={34} youtube={!!youtubeId(video.url)} /></span>
+            </button>
+            <span class="clip-title">{video.title || "Video"}</span>
+            {#if video.channel}<span class="clip-channel">{video.channel}</span>{/if}
+          </div>
+        {/each}
+      </div>
     {/if}
   {:else}
     <div class="player">
@@ -263,5 +287,108 @@
     flex: 1;
     border-radius: var(--radius-capsule);
     background: var(--color-fill-strong);
+  }
+  /* AEGIS video collection: layers behind the first video, the rest beside it on hover. */
+  .media.collection { position: relative; }
+  .media.collection .screen {
+    box-shadow:
+      var(--shadow-raised),
+      10px -10px 0 -3px color-mix(in srgb, var(--color-text) 14%, var(--color-surface)),
+      20px -20px 0 -6px color-mix(in srgb, var(--color-text) 8%, var(--color-surface));
+  }
+  .collection-label {
+    position: absolute;
+    inset-block-start: 10px;
+    inset-inline-start: 10px;
+    z-index: 2;
+    padding: 2px 10px;
+    border-radius: var(--radius-capsule);
+    background: color-mix(in srgb, #000 62%, transparent);
+    color: #fff;
+    font-size: var(--text-caption);
+    font-weight: 600;
+    pointer-events: none;
+  }
+  .strip {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 100%;
+    z-index: 5;
+    display: flex;
+    gap: 12px;
+    padding-inline-start: 16px;
+    max-inline-size: calc(3 * 252px + 16px);
+    overflow-x: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-24px);
+    transition:
+      opacity var(--motion-slow) var(--ease-emphasized),
+      transform var(--motion-slow) var(--ease-emphasized);
+  }
+  .strip::-webkit-scrollbar { display: none; }
+  .media.collection[data-side="left"] .strip {
+    inset-inline-start: auto;
+    inset-inline-end: 100%;
+    flex-direction: row-reverse;
+    padding-inline: 0 16px;
+    transform: translateX(24px);
+  }
+  .media.collection:hover .strip,
+  .media.collection:focus-within .strip {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+  .clip-item {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 6px;
+    inline-size: 240px;
+    opacity: 0;
+    transform: translateX(-12px);
+    transition:
+      opacity var(--motion-slow) var(--ease-emphasized) calc(var(--i) * 40ms),
+      transform var(--motion-slow) var(--ease-emphasized) calc(var(--i) * 40ms);
+  }
+  .media.collection:hover .clip-item,
+  .media.collection:focus-within .clip-item {
+    opacity: 1;
+    transform: none;
+  }
+  .clip {
+    position: relative;
+    display: block;
+    aspect-ratio: 16 / 9;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-raised);
+    cursor: default;
+  }
+  .clip img { display: block; inline-size: 100%; block-size: 100%; object-fit: cover; }
+  .clip .play { position: absolute; inset: 0; display: grid; place-items: center; }
+  .clip:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+  .clip-title {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--color-text);
+    font-size: var(--text-caption);
+    font-weight: 600;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+  .clip-channel { color: var(--color-muted); font-size: var(--text-caption); }
+  :global(.svelte-flow__node:has(.media.collection:hover)),
+  :global(.svelte-flow__node:has(.media.collection:focus-within)) { z-index: 1000 !important; }
+  @media (prefers-reduced-motion: reduce) {
+    .strip, .clip-item { transition: none; transform: none; }
   }
 </style>

@@ -11,6 +11,28 @@ TASK_TYPES = {
 }
 
 
+#: Engine v2 names each task by what it does for the workflow. Labels describe; handlers and tools stay the same.
+WORKFLOW_LABELS = {
+    'explain-code': {'discover': 'Read public documentation', 'analyze': 'Trace the supplied code', 'verify': 'Check the explanation against the code', 'write': 'Explain the code'},
+    'map-a-project': {'discover': 'Read the repository and docs', 'analyze': 'Map modules and dependencies', 'write': 'Write the architecture guide'},
+    'review-a-change': {'discover': 'Read referenced sources', 'analyze': 'Review the change', 'verify': 'Check each finding', 'write': 'Draft the review'},
+    'fix-a-bug': {'discover': 'Read referenced sources', 'analyze': 'Trace the failure', 'verify': 'Check the proposed fix', 'write': 'Draft the patch'},
+    'ui-teardown': {'discover': 'Collect screens and write-ups', 'analyze': 'Extract interface patterns', 'write': 'Write the teardown'},
+    'moodboard': {'discover': 'Gather visual references', 'analyze': 'Group the references', 'write': 'Describe the direction'},
+    'competitor-landscape': {'discover': 'Find competitors and pricing pages', 'analyze': 'Compare positioning and prices', 'verify': 'Check dated prices and claims', 'write': 'Write the landscape'},
+    'campaign-plan': {'discover': 'Research audience and channels', 'analyze': 'Sequence the campaign', 'write': 'Write the plan and drafts'},
+    'plan-my-day': {'analyze': 'Order the supplied events and tasks', 'write': 'Lay out the day'},
+    'weekly-status': {'analyze': 'Group the supplied notes', 'write': 'Write the status'},
+    'learning-path': {'discover': 'Find courses and references', 'analyze': 'Order topics by prerequisite', 'write': 'Write the weekly path'},
+    'exam-prep': {'discover': 'Find the exam format', 'analyze': 'Rank what matters', 'write': 'Write the plan and questions'},
+    'inbox-triage': {'analyze': 'Sort the supplied messages', 'write': 'Draft the replies'},
+    'meeting-prep': {'discover': 'Research the people and companies', 'analyze': 'Pick talking points', 'write': 'Write the brief'},
+    'market-map': {'discover': 'Find companies by segment', 'analyze': 'Group the market', 'write': 'Write the market map'},
+    'pricing-research': {'discover': 'Read official pricing pages', 'analyze': 'Normalise plans and prices', 'verify': 'Check units, currency and dates', 'write': 'Recommend a position'},
+    'investor-list': {'discover': 'Find investors and recent deals', 'analyze': 'Score fit', 'verify': 'Check each deal', 'write': 'Write the shortlist'},
+}
+
+
 def validate(graph):
     if not isinstance(graph, dict) or graph.get('version') != 2:
         raise ValueError('unsupported_task_graph')
@@ -55,8 +77,10 @@ def compile_plan(plan, workflow='', skills=()):
             kinds.append('fill_gaps')
     kinds += ['write', 'publish']
     nodes = []
+    labels = WORKFLOW_LABELS.get(workflow, {}) if plan.get('engine') == 'v2' else {}
     for kind in kinds:
         title, capabilities, outputs = TASK_TYPES[kind]
+        title = labels.get(kind, title)
         nodes.append(dict(id=kind, type=kind, label=title, depends_on=[nodes[-1]['id']] if nodes else [],
                           inputs=[nodes[-1]['id']] if nodes else ['request'], output_kinds=list(outputs),
                           capabilities=list(capabilities), status='queued',

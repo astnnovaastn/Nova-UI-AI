@@ -4,18 +4,17 @@
   report's validated images, fetched with the app's headers; videos are what the video search found.
 -->
 <script lang="ts">
-  import { getContext } from "svelte";
+  import VideoStack from "./VideoStack.svelte";
   import Icon from "$shared/ui/Icon";
-  import { ArrowUpRight01Icon, Image02Icon, PlayIcon, Video01Icon } from "@hugeicons/core-free-icons";
+  import { ArrowUpRight01Icon, Image02Icon, Video01Icon } from "@hugeicons/core-free-icons";
   import { SHOWN_IMAGES, SHOWN_VIDEOS, type CollectionData } from "./collections";
   import { pictureUrl } from "./report-images";
   import { store } from "./store.svelte";
 
-  let { item }: { id: string; item: { collection: CollectionData }; selected?: boolean } = $props();
+  let { item, id }: { id: string; item: { collection: CollectionData }; selected?: boolean } = $props();
   const data = $derived(item.collection);
   const actions = $derived(store.actions);
   const shownImages = $derived(data.images.slice(0, SHOWN_IMAGES));
-  const shownVideos = $derived(data.videos.slice(0, SHOWN_VIDEOS));
   const count = $derived(data.kind === "images" ? data.images.length : data.videos.length);
   const hosts = $derived(new Set(data.images.map((image) => image.host).filter(Boolean)).size);
   /** Picture URLs as they arrive; one that fails leaves its tile out. */
@@ -36,6 +35,7 @@
   }
 </script>
 
+{#if data.kind === "videos" && data.videos.length}<VideoStack {id} runId={data.researchId} videos={data.videos}/>{:else}
 <article class="sheet-card" data-collection={data.kind} data-state={data.state} aria-label={`${data.title}: ${count}`}>
   <header class="work-drag-handle">
     <span class="label"><Icon icon={data.kind === "images" ? Image02Icon : Video01Icon} size={13} />{data.kind === "images" ? "Images collection" : "Video collection"}</span>
@@ -69,17 +69,6 @@
           {/if}
         {/each}
       </ul>
-    {:else if shownVideos.length}
-      <ul class="videos">
-        {#each shownVideos as video (video.videoId)}
-          <li>
-            <button type="button" class="video nodrag nopan" title={video.title} onclick={() => actions?.openSource(video.url)}>
-              <span class="thumb"><img src={video.thumbnail} alt="" loading="lazy" referrerpolicy="no-referrer" /><span class="play"><Icon icon={PlayIcon} size={12} /></span></span>
-              <span class="words"><strong>{video.title}</strong>{#if video.channel}<span>{video.channel}</span>{/if}</span>
-            </button>
-          </li>
-        {/each}
-      </ul>
     {:else if data.state === "unavailable" && actions?.findVideos}
       <button type="button" class="find nodrag nopan" disabled={searching} onclick={findVideos}>{searching ? "Searching…" : "Search for videos again"}</button>
     {/if}
@@ -91,6 +80,7 @@
     {#if data.kind === "videos" && data.videos[0]?.provider}<span class="via">via {data.videos[0].provider === "serpapi" ? "YouTube search" : data.videos[0].provider === "tavily" ? "Tavily" : "Exa"}</span>{/if}
   </footer>
 </article>
+{/if}
 
 <style>
   .sheet-card {
@@ -230,80 +220,6 @@
     color: var(--color-text);
     text-decoration: underline;
     text-underline-offset: 3px;
-  }
-
-  .videos {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .video {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    inline-size: 100%;
-    padding: 4px;
-    border-radius: 9px;
-    text-align: start;
-  }
-
-  .video:hover {
-    background: color-mix(in srgb, var(--color-text) 7%, transparent);
-  }
-
-  .thumb {
-    position: relative;
-    flex: none;
-    inline-size: 112px;
-    aspect-ratio: 16 / 9;
-    overflow: hidden;
-    border-radius: 7px;
-    background: color-mix(in srgb, var(--color-text) 8%, transparent);
-  }
-
-  .thumb img {
-    inline-size: 100%;
-    block-size: 100%;
-    object-fit: cover;
-  }
-
-  .play {
-    position: absolute;
-    inset-block-end: 5px;
-    inset-inline-start: 5px;
-    display: grid;
-    place-items: center;
-    inline-size: 20px;
-    block-size: 20px;
-    border-radius: 999px;
-    background: rgb(0 0 0 / 0.62);
-    color: #fff;
-  }
-
-  .words {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-inline-size: 0;
-    font-size: 12px;
-    line-height: 1.35;
-  }
-
-  .words strong {
-    display: -webkit-box;
-    overflow: hidden;
-    font-weight: 600;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-
-  .words span {
-    overflow: hidden;
-    color: var(--color-muted);
-    font-size: 11px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .find {

@@ -681,6 +681,35 @@ const paperExtensions=[StarterKit.configure({undoRedo:false}),TableKit,ScopedIma
 const encodeBytes=(bytes:Uint8Array)=>btoa(Array.from(bytes,b=>String.fromCharCode(b)).join(''));
 const decodeBytes=(text:string)=>Uint8Array.from(atob(text),c=>c.charCodeAt(0));
 type SharedPaper={document:Y.Doc;provider:WebsocketProvider;cache:IndexeddbPersistence;epoch:string};
+/**
+ * The report editor's own header (edit mode opened from the new reader): what is being edited, whether
+ * it is saved, and the way back. Back waits for a pending save; nothing unsaved is dropped.
+ */
+function ReportEditHeader(props:{onBack:()=>void}){
+  const [status,setStatus]=useState("All changes saved");
+  const [leaving,setLeaving]=useState(false);
+  useEffect(()=>{
+    const read=()=>setStatus(document.querySelector('[data-draft-dirty="true"]')?"Saving…":"All changes saved");
+    read();const timer=window.setInterval(read,400);return()=>window.clearInterval(timer);
+  },[]);
+  function back(){
+    if(leaving)return;
+    setLeaving(true);
+    const started=Date.now();
+    const wait=()=>{
+      if(!document.querySelector('[data-draft-dirty="true"]')){setLeaving(false);props.onBack();return;}
+      if(Date.now()-started>8000){setLeaving(false);setStatus("Still saving: your changes are kept here. Try again in a moment.");return;}
+      window.setTimeout(wait,250);
+    };
+    wait();
+  }
+  return <header className="report-edit-head" aria-label="Report editor">
+    <div><strong>Research Report</strong><span>Edit mode</span></div>
+    <small role="status" aria-live="polite">{leaving?"Saving before returning…":status}</small>
+    <button type="button" className="report-edit-back" aria-label="Back to report" title="Back to report" onClick={back}>→</button>
+  </header>;
+}
+
 function DraftEditor(props:{report:Report;onSaved:(draft:any)=>void}){
  const [shared,setShared]=useState<SharedPaper|null>(null),[error,setError]=useState('');
  useEffect(()=>{let gone=false,connection:SharedPaper|null=null;
@@ -2668,6 +2697,9 @@ function Workspace() {
   // The canvas surface. "classic" keeps the original three-column screen as a rollback.
   const [surface, setSurfaceState] = useState<ResearchSurface>(researchSurface);
   const [canvasPanel, setCanvasPanel] = useState<""|"document"|"history"|"conversation">("");
+  /** The editor opened on its own from the new reader: no Reader / Sources / Media tabs, a way back. */
+  const [editOnly, setEditOnly] = useState(false);
+  useEffect(() => { if (canvasPanel !== "document") setEditOnly(false); }, [canvasPanel]);
   const [researchJobs, setResearchJobs] = useState<Record<string,string>>({});
   const [listRevision, setListRevision] = useState(0);
   const [libraryPage, setLibraryPage] = useState<{ client: string; page: LibraryPage }>();
@@ -3949,11 +3981,17 @@ function Workspace() {
       !conversationSnapshot().guest && lastSelection.current === traceFor;
     let last = 0, reading = false, readAgain = false, followUps = 0;
     let followUp: ReturnType<typeof setTimeout> | 0 = 0;
+    // A burst of live hints becomes at most one read every READ_GAP ms, and an unchanged run record
+    // is not stored again: each stored record rebuilds the whole canvas.
+    const READ_GAP = 350;
+    let lastRead = 0, lastRun = "";
+    let hintTimer: ReturnType<typeof setTimeout> | 0 = 0;
     setTrace(old => old.research === traceFor ? old : {research: traceFor, events: [], workSources: []});
     const read = async () => {
       if (!active()) return;
       if (reading) { readAgain = true; return; }
       reading = true;
+      lastRead = Date.now();
       const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]);
       const path = "/" + encodeURIComponent(traceFor);
       try {
@@ -3979,9 +4017,13 @@ function Workspace() {
           }),
           workApi("/runs" + path, { signal }).then(work => {
             if (!active()) return;
-            setTrace(old => old.research === traceFor
-              ? { ...old, run: work?.run ?? null, view: work?.view ?? old.view }
-              : old);
+            const record = JSON.stringify([work?.run ?? null, work?.view ?? null]);
+            if (record !== lastRun) {
+              lastRun = record;
+              setTrace(old => old.research === traceFor
+                ? { ...old, run: work?.run ?? null, view: work?.view ?? old.view }
+                : old);
+            }
             // A run can save its final relations after the report and last event have published.
             if (["queued", "running", "waiting"].includes(work?.run?.state) && followUps < 40 && !followUp) {
               followUps++;
@@ -3999,7 +4041,10 @@ function Workspace() {
     };
     void read();
     const hinted = (e: Event) => {
-      if ((e as CustomEvent).detail?.research_id === traceFor) void read();
+      if ((e as CustomEvent).detail?.research_id !== traceFor) return;
+      const wait = READ_GAP - (Date.now() - lastRead);
+      if (wait <= 0 && !hintTimer) { void read(); return; }
+      if (!hintTimer) hintTimer = setTimeout(() => { hintTimer = 0; void read(); }, Math.max(0, wait));
     };
     window.addEventListener("nova-research-trace", hinted);
     const poll = traceLive ? setInterval(() => void read(), 3000) : 0;
@@ -4012,6 +4057,7 @@ function Workspace() {
       if (poll) clearInterval(poll);
       settle.forEach(clearTimeout);
       if (followUp) clearTimeout(followUp);
+      if (hintTimer) clearTimeout(hintTimer);
     };
   }, [traceFor, traceLive, chat.clientId]);
   function startWorkRun(text: string, options: {workflow?: string; chosen?: unknown[]; fromResearch?: string} = {}) {
@@ -4069,12 +4115,12 @@ function Workspace() {
     answerRun(text: string) {
       const id = reportRef.current?.research_id;
       if (!id) return;
-      void workApi("/runs/" + id + "/answer", {method: "POST", body: JSON.stringify({text})})
+      return workApi("/runs/" + id + "/answer", {method: "POST", body: JSON.stringify({text})})
         .then(() => {
           reportCache.current.delete(conversationSnapshot().clientId + ":" + id);
           return reloadReport(id);
         })
-        .catch(e => setError(e.message));
+        .catch(e => {setError(e.message);throw e;});
     },
     saveCanvasView(view: {chosen: string[]; hidden: string[]}) {
       const id = reportRef.current?.research_id;
@@ -4118,6 +4164,13 @@ function Workspace() {
     },
     microphone: requestMicrophone,
     openView(view: string) {
+      if (view === "edit-report") {
+        selectTab("edit");
+        setEditOpened(true);
+        setEditOnly(true);
+        return;
+      }
+      setEditOnly(false);
       selectTab(view);
       if (view === "edit") setEditOpened(true);
     },
@@ -4158,6 +4211,7 @@ function Workspace() {
     },
     imageHeaders: () => ({"X-Nova-Client": conversationSnapshot().clientId}),
     renderMarkdown: markdown,
+    renderHtml: clean,
     checkFrame: (url: string, signal?: AbortSignal) => api("/frame-check?url=" + encodeURIComponent(url), {signal}),
     async addWorkSource(url: string, title: string) {
       const id = reportRef.current?.research_id;
@@ -4430,7 +4484,13 @@ function Workspace() {
             </>
           )}
         </aside>}
-        <main className="research-document">
+        <main className={"research-document" + (editOnly && tab === "edit" ? " edit-only" : "")}>
+          {editOnly && tab === "edit" && <ReportEditHeader onBack={() => {
+            setEditOnly(false);
+            setCanvasPanel("");
+            if (report) { reportCache.current.delete(conversationSnapshot().clientId + ":" + report.research_id); void reloadReport(report.research_id).catch(() => {}); }
+            window.dispatchEvent(new CustomEvent("aegis-open-report"));
+          }} />}
           <header className="research-document-tools">
             <div className="research-panel-toggles">
               <button className="research-history-toggle" aria-controls="research-history-panel" aria-expanded={narrowPanel === "history"} onClick={() => setNarrowPanel(narrowPanel === "history" ? "" : "history")}>History</button>

@@ -9,7 +9,7 @@
 
 <section class="diagram" aria-label={object.title} bind:clientWidth={width}>
   {#if object.title}<Title text={object.title} />{/if}
-  {#if width}<BoardDiagram diagram={object.diagram} {width} ask={actions.ask} />{/if}
+  {#if width}<BoardDiagram diagram={object.diagram} {width} way={object.way} ask={actions.ask} />{/if}
 </section>
 
 <style>

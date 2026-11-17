@@ -1,0 +1,6 @@
+{
+  "name": "aegis-work-layout-lab-deps",
+  "private": true,
+  "description": "Development-only dependency of the Work Layout Lab. elkjs lays out Zephium's diagrams; the production canvas does not ship it.",
+  "dependencies": { "elkjs": "0.12.0" }
+}

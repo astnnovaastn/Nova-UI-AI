@@ -228,6 +228,7 @@ type RouteView = {
   carrierHost?: string;
 };
 export type PickView = Likeness & {
+  imageRegion?: {x:number;y:number;width:number;height:number};
   /** Its canvas element, when it stands as one: choose and ask act on it. */
   element?: string;
   name: string;
@@ -342,7 +343,7 @@ export type PlotView = ObjectBase & {
   spec: ChartSpec;
 };
 
-export type DiagramView = ObjectBase & { kind: "diagram"; diagram: Diagram };
+export type DiagramView = ObjectBase & { kind: "diagram"; way?: "right" | "down"; diagram: Diagram };
 
 export type CodeView = ObjectBase & {
   kind: "code";
@@ -402,6 +403,8 @@ export type MediaView = ObjectBase & {
   startSecs?: number;
   /** The channel a video was published on, when its page said. */
   channel?: string;
+  /** AEGIS: the rest of a video collection, beside the first video. */
+  more?: { url: string; title?: string; poster?: string; channel?: string }[];
 };
 
 export type PageObjectView = ObjectBase & {

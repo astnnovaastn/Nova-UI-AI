@@ -145,3 +145,14 @@ describe("the eight categories", () => {
     expect(new Set(WORKFLOWS.filter((row) => row.persona === "research").map((row) => row.shape)).size).toBe(3);
   });
 });
+
+describe("engine v2 allocation stage", () => {
+  it("shows the complexity and why roles were left out, owned by the lead", async () => {
+    const { stageLine } = await import("../src/work-run");
+    const line = stageLine({ seq: 1, at: 1, kind: "stage", stage: "allocated", status: "done", label: "Chose 1 worker role on 2 models", complexity: "simple", skipped: [{ role: "verification", reason: "mode budget allows 1 worker roles" }] } as unknown as TraceEvent, "");
+    expect(line.text).toBe("Chose 1 worker role on 2 models");
+    expect(line.icon).toBe("steer");
+    expect(line.detail).toContain("simple request");
+    expect(line.detail).toContain("no verification: mode budget allows 1 worker roles");
+  });
+});

@@ -37,8 +37,8 @@ const hostOf = (url: string) => {
   }
 };
 
-const YOUTUBE = /^(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/;
-export const videoIdOf = (url: string) => YOUTUBE.exec(url)?.[1] ?? "";
+import {youtubeVideoId} from './video-player';
+export const videoIdOf = youtubeVideoId;
 
 const VIDEO_REASONS: Record<string, string> = {
   video_provider_quota: "The video search is out of quota.",
@@ -69,7 +69,7 @@ export function videoCollection(report: ResearchReport | null): CollectionData |
   const seen = new Set<string>();
   const videos: CollectedVideo[] = [];
   for (const row of report.media ?? []) {
-    const videoId = row.video_id || videoIdOf(row.url);
+    const videoId = videoIdOf(row.url);
     if (!videoId || seen.has(videoId)) continue;
     seen.add(videoId);
     videos.push({
@@ -131,6 +131,7 @@ export function collectionSize(data: CollectionData): { width: number; height: n
     const rows = Math.ceil(Math.min(SHOWN_IMAGES, data.images.length) / 3);
     return { width, height: chrome + rows * 116 + 12 };
   }
+  if(data.videos.length)return {width:404,height:312};
   const rows = Math.max(1, Math.min(SHOWN_VIDEOS, data.videos.length));
   return { width, height: chrome + (data.videos.length ? rows * 78 : 64) + 12 };
 }

@@ -53,6 +53,7 @@ class TaskPlan:
     constraints: list = field(default_factory=list)
     mode: str = 'quick'
     clarification: str = ''
+    clarification_options: list = field(default_factory=list)
     needs_web: bool = True
     queries: list = field(default_factory=list)
     sections: list = field(default_factory=list)
@@ -127,6 +128,7 @@ class RunState:
     schema_version: int = 1
     task_graph: dict = field(default_factory=dict)
     canvas_objects: list = field(default_factory=list)
+    card_state: dict = field(default_factory=dict)
     coverage: dict = field(default_factory=dict)
     state: str = 'queued'
     stage: str = ''
@@ -166,6 +168,7 @@ LEAD_PLAN = _object({
     'constraints': TEXTS,
     'mode': {'type': 'string', 'enum': list(MODES)},
     'clarification': TEXT,
+    'clarification_options': TEXTS,
     'needs_web': {'type': 'boolean'},
     'queries': TEXTS,
     'sections': TEXTS,

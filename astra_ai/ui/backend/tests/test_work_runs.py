@@ -40,7 +40,7 @@ class FakeAdapter:
 
     def answer(self, schema, payload):
         if schema is LEAD_PLAN:
-            return {'title': 'Test title', 'acknowledgement': 'On it.', 'intent': 'answer it', 'constraints': [], 'mode': 'quick', 'clarification': '', 'needs_web': True,
+            return {'title': 'Test title', 'acknowledgement': 'On it.', 'intent': 'answer it', 'constraints': [], 'mode': 'quick', 'clarification': '', 'clarification_options': [], 'needs_web': True,
                     'queries': ['alpha query', 'beta query'], 'sections': ['Answer'], 'assignments': [], 'reasoning_summary': 'A short answer is enough.', **self.plan}
         if schema is SOURCE_ASSESSMENT:
             return {'ranked': [{'id': row['id'], 'relevance': 4, 'credibility': 4, 'reason': 'good'} for row in payload['candidates']], 'follow_up_queries': [], 'summary': 'Good sources.'}

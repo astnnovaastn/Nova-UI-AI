@@ -75,7 +75,8 @@
   </div>
 </div>
 <style>
-  .source-stack-fan { position: fixed; z-index: 34; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; pointer-events: auto; }
+  .source-stack-fan { position: fixed; z-index: 34; overflow-x: auto; overflow-y: hidden; overscroll-behavior: contain; scrollbar-width: none; pointer-events: auto; }
+  .source-stack-fan::-webkit-scrollbar { display: none; }
   .scroll-extent { position: relative; height: 100%; }
   .upstream-stack { position: absolute; top: 0; left: 0; transform: scale(var(--scale)); transform-origin: top left; }
   .reverse { direction: rtl; }

@@ -199,7 +199,8 @@ function columnLayout(shape: DiagramShape, rows: DiagramRows): DiagramLayout {
   rows.rows.forEach((row, index) => {
     if (index && rows.tierStart.has(index)) x += DIAGRAM.tier;
     starts.push(x);
-    stack(row).forEach((id, place) => (at[id] = { x, y: top + place * (H + DIAGRAM.column) }));
+    const center = shape.flows.length ? 0 : (tallest - stack(row).length) * (H + DIAGRAM.column) / 2;
+    stack(row).forEach((id, place) => (at[id] = { x, y: top + center + place * (H + DIAGRAM.column) }));
     x += W + apart;
   });
   const flows: Record<number, DiagramFlow> = {};

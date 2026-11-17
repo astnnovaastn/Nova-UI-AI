@@ -50,7 +50,7 @@
 </div>
 
 <style>
-  .skill-marks { position: absolute; inset-inline-end: calc(100% + 56px); inset-block-start: 50%; transform: translateY(-50%); display: grid; grid-auto-rows: 36px; gap: 12px; width: 200px; height: var(--skill-height); }
+  .skill-marks { position: absolute; inset-inline-end: calc(100% + 56px); inset-block-start: 36px; transform: translateY(-50%); display: grid; grid-auto-rows: 36px; gap: 12px; width: 200px; height: var(--skill-height); }
   .skill { display: block; width: 200px; height: 36px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
   .skill:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 3px; border-radius: var(--radius-inset); }
   .skill-strings { position: absolute; left: 100%; top: 0; width: 56px; height: var(--skill-height); overflow: visible; pointer-events: none; }

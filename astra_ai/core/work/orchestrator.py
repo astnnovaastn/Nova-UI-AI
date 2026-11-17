@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import json
 import re
 import threading
 import time
@@ -27,7 +28,8 @@ from .contracts import (
 )
 from .providers import BudgetExhausted, ProviderError, WorkPaused, estimate_tokens
 from . import relations as rel
-from . import task_graph, workspace_objects
+from . import task_graph, workspace_objects, card_objects
+from . import allocation as adaptive
 
 log = logging.getLogger('work.orchestrator')
 
@@ -158,7 +160,8 @@ class WorkOrchestrator:
         self.settings = settings
 
     def create(self, research_id, request, context):
-        run = RunState(run_id=research_id, research_id=research_id, request=as_dict(request), schema_version=2)
+        # The engine is fixed when the run is made, so a retry or restart never changes its path.
+        run = RunState(run_id=research_id, research_id=research_id, request={**as_dict(request), 'engine': adaptive.engine(self.settings)}, schema_version=2)
         return self.store.create(run)
 
     async def run(self, research_id, context):
@@ -178,7 +181,17 @@ class WorkOrchestrator:
         run = await asyncio.to_thread(self.store.get, research_id)
         if not run or run.state != 'needs_input':
             return {'status': 'unchanged', 'research_id': research_id}
-        run.request['answer'] = safe(str(text))[:4000]
+        answer = safe(str(text)).strip()[:4000]
+        if not answer:
+            return {'status': 'unchanged', 'research_id': research_id}
+        history = run.request.setdefault('clarifications', [])
+        pending = next((item for item in reversed(history) if not item.get('answer')), None)
+        if pending is None and run.plan.get('clarification'):
+            pending = {'id': str(len(history) + 1), 'question': safe(run.plan['clarification'])[:500], 'options': run.plan.get('clarification_options', [])[:6]}
+            history.append(pending)
+        if pending is not None:
+            pending['answer'] = answer
+        run.request['answer'] = answer
         run.done.pop('plan', None)
         run.state = 'queued'
         await asyncio.to_thread(self.store.save, run)
@@ -238,6 +251,25 @@ class _Run:
         stored = rel.upsert(self.run.relations, row)
         self._emit('relation', relation=stored['id'], type=kind, source=source, target=target, state=stored['status'])
         return stored
+
+    @property
+    def adaptive(self):
+        """Engine v2 runs carry their allocation in the plan; v1 runs (and old runs) have none."""
+        return self.run.request.get('engine') == 'v2'
+
+    def _allocation(self):
+        data = (self.run.plan or {}).get('allocation')
+        return load(adaptive.Allocation, data) if self.adaptive and data else None
+
+    def _route(self, role):
+        """The model serving a role. v2 uses the slot its allocation chose while it is healthy."""
+        chosen = self._allocation()
+        name = chosen.slot_for(role) if chosen else ''
+        if name:
+            slot = self.owner.router.slots().get(name)
+            if slot and self.owner.router.guard.available(slot):
+                return slot
+        return self.owner.router.route(role)
 
     def _owner(self, role):
         """The agent that did a role's work: its worker when one was assigned, else the lead."""
@@ -401,6 +433,8 @@ class _Run:
                     task_graph.set_status(self.run.task_graph,name,'blocked')
                     await self._save()
                     return outcome
+                if name == "analyze":
+                    await self._compose_cards("analysis")
                 self.run.done[name] = True
                 task_graph.set_status(self.run.task_graph,name,'done')
                 if self.run.schema_version == 2 and name != 'plan':
@@ -471,6 +505,7 @@ class _Run:
         instruction = (
             'You are the AEGIS lead. Understand the request and plan the work. Modes: direct answers from general knowledge or the pasted text with no web use;'
             ' quick is a short sourced answer; deep is thorough multi-query research; structured produces a connected knowledge map or blueprint plus a document.'
+            ' Provide up to four concise clarification_options only when asking a question; otherwise an empty list.'
             ' Pick the smallest mode that does the job, unless required_mode is set. Ask a clarification only when the work cannot start without it, as one short question; otherwise leave it empty.'
             ' Queries are short, distinct web searches. Sections are report headings that fit this request; for deep, five to eight body headings that together cover every part of it. acknowledgement is one friendly sentence to the person.'
             ' reasoning_summary is one plain sentence on why this approach, for the person to read.'
@@ -482,13 +517,17 @@ class _Run:
         if mode not in MODES:
             mode = 'quick'
         plan = TaskPlan(**{**result, 'mode': mode})
-        plan.needs_web = mode != 'direct' and (mode == 'deep' or plan.needs_web or pricing_evidence or bool(workflow and workflow.needs_web))
+        # v2: for work on supplied material (code, notes, messages) the lead decides whether the web helps.
+        forced = bool(workflow and workflow.needs_web) and not (self.adaptive and self.request.workflow in adaptive.ANALYSE_SUPPLIED)
+        plan.needs_web = mode != 'direct' and (mode == 'deep' or plan.needs_web or pricing_evidence or forced)
         if not plan.needs_web:
             plan.queries = []
         plan.title = safe(plan.title)[:120]
         self.plan = plan
         self.run.plan = {**as_dict(plan), 'skills': facts, **({'skill': facts[0]} if facts else {})}
         self.budget = budget_for(mode, self.owner.settings)
+        if self.adaptive:
+            self.budget = adaptive.budget_for_workflow(self.budget, mode, self.request.workflow)
         self.run.budget = as_dict(self.budget)
         self.run.results['lead'] = as_dict(AgentResult('lead', 'lead', 'running', provider=record['provider'], model=record['model']))
         self._stage('intent', 'Understood the request', detail=safe(plan.intent)[:400], constraints=[safe(item)[:160] for item in plan.constraints[:6]])
@@ -496,14 +535,30 @@ class _Run:
         clarification = safe(plan.clarification).strip()
         if clarification and not self.run.request.get('answer'):
             self.run.state = 'needs_input'
-            self._stage('question', 'AEGIS has one question', 'queued', question=clarification[:500])
+            options = list(dict.fromkeys(safe(str(v)).strip()[:160] for v in plan.clarification_options if isinstance(v, str) and v.strip()))[:6]
+            history = self.run.request.setdefault('clarifications', [])
+            if not history or history[-1].get('answer') or history[-1].get('question') != clarification[:500]:
+                history.append({'id': str(len(history) + 1), 'question': clarification[:500], 'options': options})
+            self._stage('question', 'AEGIS has one question', 'queued', question=clarification[:500], options=options)
             await self._state(phase='waiting_for_report', waiting_reason='work_needs_input')
             return {'status': 'completed', 'needs_input': True, 'question': clarification, 'research_id': self.id}
         planned = self._stage('planned', 'Plan created', detail=safe(plan.reasoning_summary)[:400], acknowledgement=safe(plan.acknowledgement)[:300], sections=[safe(item)[:120] for item in plan.sections[:12]])
         self._relate('plans', 'request', 'agent:lead', planned, note=safe(plan.intent)[:300], detail={'mode': mode})
         self.run.assignments = []
-        for role, task in choose_assignments(mode, plan, self.budget):
-            slot = self.owner.router.route(role)
+        if self.adaptive:
+            chosen = adaptive.allocate(self.request.query, mode, self.request.workflow, {**as_dict(plan), 'chosen': self.request.chosen},
+                                       self.owner.router.slots(), self.owner.settings, self.budget.workers, self.owner.router.guard, self.request.chosen)
+            self.run.plan['allocation'] = as_dict(chosen)
+            self.run.plan['engine'] = 'v2'
+            self._stage('allocated', 'Chose ' + (str(len(chosen.roles)) + ' worker role' + ('s' if len(chosen.roles) != 1 else '') if chosen.roles else 'no workers')
+                        + ' on ' + str(chosen.distinct_models) + ' model' + ('s' if chosen.distinct_models != 1 else ''),
+                        complexity=chosen.complexity, signals=chosen.signals[:6], skipped=chosen.skipped[:6],
+                        second_analyst=chosen.second_analyst, writer=chosen.writer, max_active_workers=chosen.max_active_workers)
+            assignments = adaptive.as_assignments(chosen, plan.assignments, plan.intent)
+        else:
+            assignments = choose_assignments(mode, plan, self.budget)
+        for role, task in assignments:
+            slot = self._route(role)
             if not slot:
                 continue
             row = AgentAssignment(ROLE_SLOT[role], role, task, slot.provider, slot.model)
@@ -699,7 +754,7 @@ class _Run:
 
     async def _screen(self, candidates):
         """The discovery worker ranks candidates. If it can't, the search order stands, and the log says so."""
-        slot = self.owner.router.route('discovery')
+        slot = self._route('discovery')
         rows = [{'id': 'C' + str(index), 'title': row.get('title', '')[:140], 'domain': domain_of(row['url']), 'excerpt': evidence_excerpt(row, 420)} for index, (_, row) in enumerate(candidates)]
         record, summary = {}, ''
         limit = self.budget.sources
@@ -819,10 +874,10 @@ class _Run:
         batches = [self.run.evidence[index:index + 6] for index in range(0, len(self.run.evidence), 6)][:3] or [[]]
         self._stage('analysis', 'Analysing the evidence', 'running', branches=len(batches))
         gate = asyncio.Semaphore(self.budget.concurrency)
-        slot = self.owner.router.route('analysis')
+        slot = self._route('analysis')
         # A configured second analyst takes every other branch, so branches really run side by side.
         second = self.owner.router.slots().get('worker_d')
-        lanes = [slot] + ([second] if second and slot and second.model != slot.model and self.owner.router.guard.available(second) and len(batches) > 1 else [])
+        lanes = [slot] + ([second] if (not self.adaptive or (self._allocation() and self._allocation().second_analyst)) and second and slot and second.model != slot.model and self.owner.router.guard.available(second) and len(batches) > 1 else [])
 
         async def branch(batch, slot):
             numbers = {row['id'] for row in batch}
@@ -875,7 +930,7 @@ class _Run:
                 self._relate('evidence', 'source:' + name, 'agent:analysis', event, evidence_id=name, url=urls[name], detail={'findings': count})
 
     async def _build_map(self, sources):
-        slot = self.owner.router.route('analysis')
+        slot = self._route('analysis')
         allowed = {row['id'] for row in self.run.evidence}
         findings = self.run.results.get('analysis_data', {}).get('findings', [])
         self._stage('map', 'Building the knowledge map', 'running')
@@ -920,7 +975,7 @@ class _Run:
         started = time.monotonic()
         self._agent('verification', 'running')
         self._stage('verifying', 'Cross-checking the claims', 'running', count=len(findings))
-        slot = self.owner.router.route('verification')
+        slot = self._route('verification')
         allowed = {row['id'] for row in self.run.evidence}
         try:
             result, record = await self._model(
@@ -979,7 +1034,7 @@ class _Run:
         await self._state(sources=sources)
         added = self._stage('gaps', 'Added ' + str(len(fresh)) + ' sources for the gaps', count=len(fresh))
         self._relate_sources(self.run.evidence[number:], added)
-        slot = self.owner.router.route('analysis')
+        slot = self._route('analysis')
         allowed = {row['id'] for row in self.run.evidence}
         numbers = {'S' + str(number + offset) for offset in range(1, len(fresh) + 1)}
         try:
@@ -1150,7 +1205,8 @@ class _Run:
 
     async def _write_sections(self, lead, sources, outline, payload, cite, allowed):
         # The synthesis worker writes the body when one is configured; the lead always writes the frame.
-        writer = self.owner.router.route('synthesis') or lead
+        chosen = self._allocation()
+        writer = lead if chosen and chosen.writer == 'lead' else (self.owner.router.route('synthesis') or lead)
         draft = self.run.results.setdefault('draft', {'sections': {}, 'tokens': 0, 'seconds': 0})
         if draft.get('outline') != [row['heading'] for row in outline]:
             draft.update(outline=[row['heading'] for row in outline], sections={}, frame=None)
@@ -1323,10 +1379,86 @@ class _Run:
             'words': len(report.split()),
         }
 
+    async def _compose_cards(self, phase):
+        """Optional bounded presentation pass. It never spends the report reserve.
+
+        Release-gated until the complete preset gallery passes visual review.
+        Existing runs and zero-provider fixtures keep their original behavior.
+        """
+        if str(self.owner.settings('AEGIS_WORK_ADAPTIVE_CARDS') or '') != '1':
+            return
+        marker = 'cards_' + phase
+        if self.run.done.get(marker):
+            return
+        usage = self.run.usage
+        reserved_calls = 2 if phase == 'analysis' else 0
+        if usage.get('calls', 0) >= self.budget.model_calls - reserved_calls:
+            self.run.card_state.setdefault('incomplete', {})[phase] = 'model_call_budget'
+            return
+        families = card_objects.find(self.request.query, self.request.workflow)[:6]
+        payload = {
+            'request': self.request.query, 'phase': phase,
+            'cards': families,
+            'specifications': [card_objects.read(f['id']) for f in families],
+            'current_objects': card_objects.read_canvas(self.run),
+            'evidence': self.run.evidence,
+            'analysis': self.run.results.get('analysis_data', {}),
+            'report': self.run.results.get('report_text', ''),
+            'supplied_context': self.request.chosen,
+            'recorded_media': self.run.results.get('card_media', []),
+        }
+        # Only admitted presets belong in model context; unreleased designs stay in the library specification.
+        payload['specifications'] = [{k:v for k,v in f.items() if k != 'presets'} | {
+            'presets':[{k:p[k] for k in ('id','label','requires')} for p in f['presets'] if p['available']]} for f in payload['specifications']]
+        instruction = (
+            'Choose useful approved cards for this request, not every card. Emit up to four create/revise commands. '
+            'Read current IDs and revisions. Revise an existing result instead of duplicating it. '
+            'All payload_json values are inert JSON objects. Required: title, sources (recorded source IDs only). '
+            'Supported content: body, caption, columns, rows, row_ids, entries, nodes, edges, recommendations, '
+            'media, blocks, series, provenance. Every collection item needs a stable id; table rows need row_ids. '
+            'Entries use label/detail/value/unit/date; nodes use label/detail/group; edges use source/target/label. '
+            'Use existing kinds and field names from current objects. Do not invent schemas, facts, metrics or URLs. '
+            'Provenance records use path (JSON pointer), basis (sourced/supplied/calculated/proposal/unknown), source_ids. '
+            'Dates and budgets not in evidence are proposals, not facts. Unknown numbers are omitted or null, never zero. '
+            'Use partial during analysis. Complete only supported final content. Never claim tests ran. '
+            'No HTML, JavaScript, CSS or execution instructions. An empty commands array is valid when no card helps.'
+        )
+        reserve = self.budget.lead_reserve if phase == 'analysis' else 0
+        estimate = estimate_tokens(instruction, payload, card_objects.COMMAND_SCHEMA) + 5000
+        if usage.get('tokens', 0) + estimate > self.budget.tokens - reserve:
+            self.run.card_state.setdefault('incomplete', {})[phase] = 'token_budget'
+            return
+        try:
+            result, _ = await self._model(self.owner.router.route('lead'), instruction, payload,
+                                          card_objects.COMMAND_SCHEMA, 5000, lead=phase=='publication')
+        except (BudgetExhausted, ProviderError, WorkPaused) as error:
+            self.run.card_state.setdefault('incomplete', {})[phase] = type(error).__name__
+            await self._save()
+            return
+        for raw in result.get('commands', [])[:4]:
+            try:
+                command = dict(raw)
+                command['payload'] = json.loads(command.pop('payload_json'))
+                admitted = card_objects.apply(self.run, command)
+                await self._save()
+                event = self._emit('canvas_object', status=admitted['status'], object_id=admitted['object_id'],
+                                   revision=admitted['revision'])
+                if admitted['status']=='accepted' and not admitted.get('replayed'):
+                    target='object:'+admitted['object_id']
+                    self._relate('produces','agent:lead',target,event)
+                    for source in command['payload'].get('sources',[]):
+                        if re.fullmatch(r'S\d{1,3}',source['id']):
+                            self._relate('supports_object','source:'+source['id'],target,event)
+                    await self._save()
+            except (ValueError, TypeError, KeyError) as error:
+                self.run.card_state.setdefault('faults', []).append({'phase':phase,'reason':str(error)[:500]})
+        self.run.done[marker] = True
+        await self._save()
+
     async def _publish(self):
         report = self.run.results['report_text']
         if self.run.schema_version == 2:
-            self.run.canvas_objects = workspace_objects.project(self.run,report)
+            self.run.canvas_objects = card_objects.merge_projection(self.run.canvas_objects, workspace_objects.project(self.run,report))
             self.run.coverage = task_graph.coverage(self.run.plan,self.run.evidence,report)
             if self.plan.mode in ('deep','structured') and self.run.coverage.get('requirements'):
                 self.run.canvas_objects.append(workspace_objects.coverage_object(self.run.coverage,self.run.evidence))
@@ -1342,6 +1474,7 @@ class _Run:
                 from astra_ai.core.research_illustrations import place_images, prepare_images
                 self._emit('images', 'comparing_evidence', 'running')
                 images = await prepare_images(self.search, self.id, self.context, sources, display_title(self.request.query))
+                self.run.results['card_media'] = [{k:r.get(k) for k in ('id','url','caption','source_id','source_url')} for r in images]
                 self._emit('images', 'comparing_evidence', 'done', count=len(images))
                 await self._state(selected_images=place_images(images, report, self.request.query))
             except Exception as error:
@@ -1351,6 +1484,7 @@ class _Run:
         item = await asyncio.to_thread(self.artifacts.save, state['query'], state['mode'], report, sources, failures, {**self.context, 'prepare_publication': True}, state['operation_id'])
         if self.search.prepare_media:
             await self.search.enrich_media(item['id'], self.context, item['revision'])
+        await self._compose_cards('publication')
         await asyncio.to_thread(self.artifacts.publish_prepared, item['id'], self.context)
         self.run.artifacts = [row for row in self.run.artifacts if row['kind'] != 'report']
         self.run.artifacts.append(as_dict(Artifact('report-' + self.id[:12], 'report', title.group(1)[:120] if title else self.request.query[:120], self.id, item['revision'], {'mode': mode})))

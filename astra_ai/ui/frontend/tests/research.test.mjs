@@ -23,7 +23,6 @@ const names = [
   "previewPlacement",
   "videoTimestamp",
   "researchProgress",
-  "researchWaitMessage",
   "mergeMedia",
   "pausePlayers",
   "researchDestination",
@@ -125,7 +124,7 @@ test("a removed saved selection clears cleanly while an unknown entry remains re
   function visit(node) { if(ts.isFunctionDeclaration(node) && node.name?.text==="select") declaration=node.getText(tree); ts.forEachChild(node,visit); }
   visit(tree);
   const noop=()=>{};
-  const run={AbortSignal,setCanvasPanel:noop,reportRef:{current:null},pageViews:{current:new Map()},tabRef:{current:"reader"},revealStop:{current:noop},revealFollow:{current:true},setConversationSession:noop,publicationWorking:()=>false,setEditorGeneration:noop,setMessage:noop,reportCache:{current:new Map()},report:null,loadEpoch:{current:0},lastSelection:{current:"removed"},reader:{current:null},location:{hash:""},researchDestination:()=>null,conversationSnapshot:()=>({clientId:"owner",guest:false}),setTab:noop,setError:message=>{run.error=message;},setSelectionLoading:noop,setFailedSelection:value=>{run.failed=value;},setPreview:noop,setImageView:noop,setAttachment:noop,setDocumentEdit:noop,setReport:value=>{run.report=value;},updateUiContext:noop,api:async()=>null,loadReport:async()=>{throw {status:410,message:"Removed"};},sessionStorage:{removeItem:()=>{run.cleared=true;}},refresh:async()=>{}};
+  const run={setEditorGeneration:noop,setMessage:noop,reportCache:{current:new Map()},report:null,loadEpoch:{current:0},lastSelection:{current:"removed"},reader:{current:null},location:{hash:""},researchDestination:()=>null,conversationSnapshot:()=>({clientId:"owner",guest:false}),setTab:noop,setError:message=>{run.error=message;},setSelectionLoading:noop,setFailedSelection:value=>{run.failed=value;},setPreview:noop,setImageView:noop,setAttachment:noop,setDocumentEdit:noop,setReport:value=>{run.report=value;},updateUiContext:noop,api:async()=>null,loadReport:async()=>{throw {status:410,message:"Removed"};},sessionStorage:{removeItem:()=>{run.cleared=true;}},refresh:async()=>{}};
   vm.createContext(run);vm.runInContext(ts.transpileModule(declaration,{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText,run);
   await run.select("removed");
   assert.equal(run.error,"");assert.equal(run.failed,"");assert.equal(run.lastSelection.current,"");assert.equal(run.cleared,true);
@@ -280,7 +279,7 @@ test("working timer and skeleton reflect real processing, never a quota pause", 
   );
   assert.equal(active.time, "00:07");
   assert.equal(active.skeleton, true);
-  assert.equal(active.label, "Collecting evidence");
+  assert.equal(active.label, "Working");
   assert.equal(
     context.researchProgress("collecting_sources", 0, 100, 100500, 0).skeleton,
     false,
@@ -299,40 +298,11 @@ test("working timer and skeleton reflect real processing, never a quota pause", 
   assert.equal(waiting.time, "00:07");
   assert.equal(waiting.active, false);
   assert.equal(waiting.skeleton, false);
-  assert.equal(waiting.label, "Report writing paused");
+  assert.equal(waiting.label, "Summary pending");
   assert.equal(
     context.researchProgress("queued", 0, null, 9999999, 0).label,
     "Queued",
   );
-});
-
-test("quota messages distinguish Google limits from the app allowance", () => {
-  assert.match(context.researchWaitMessage("gemini_service_unavailable"), /temporarily unavailable.*saved writing/);
-  assert.match(context.researchWaitMessage("gemini_daily_quota"), /Gemini.*daily quota/);
-  assert.match(context.researchWaitMessage("background_daily_budget"), /app’s remaining daily writing allowance/);
-  assert.match(context.researchWaitMessage("gemini_quota_unavailable"), /no quota/);
-  assert.match(context.researchWaitMessage("gemini_rate_limit"), /retry from the saved evidence/);
-  assert.match(context.researchWaitMessage("background_daily_budget", "openai"), /allowance for OpenAI/);
-  assert.match(context.researchWaitMessage("openai_quota_unavailable"), /OpenAI project.*no quota/);
-});
-
-test("unpublished research never looks like a finished images-only report", () => {
-  const pending = tree.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === "PendingResearch");
-  const render = vm.createContext({
-    exports: {}, React: { createElement: (type, props, ...children) => ({ type, props, children }) },
-    Icon: "icon", useState: value => [value, () => {}], useEffect: () => {},
-    researchProgress: context.researchProgress, researchWaitMessage: context.researchWaitMessage,
-  });
-  vm.runInContext(ts.transpileModule(pending.getText(tree), {compilerOptions: {target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React}}).outputText, render);
-  const result = render.PendingResearch({
-    report: {display_title: "New UI research", phase: "waiting_for_quota", sources: [{id: "S1"}],
-      writing_provider: "openai", waiting_reason: "background_daily_budget", image_items: [{caption: "Pending image", id: "I1"}]},
-    onBrowse() {}, onImage() {},
-  });
-  const text = JSON.stringify(result);
-  assert.match(text, /saved work is queued/);
-  assert.doesNotMatch(text, /Browse collected sources|source-S1/);
-  assert.doesNotMatch(text, /Pending image|EvidenceGallery/);
 });
 
 test("media inventory excludes malformed results and deduplicates native player IDs", () => {
@@ -386,15 +356,4 @@ test("exported attachment links accept only opaque report and real source identi
     "#source=S1",
   ])
     assert.equal(context.researchDestination(hash), null);
-});
-
-test("short pacing and occupied writer waits never claim the daily allowance is exhausted",()=>{
- assert.match(context.researchWaitMessage('background_model_busy'),/Another writing request/);
- assert.match(context.researchWaitMessage('background_quota_paused'),/briefly between writing/);
- assert.doesNotMatch(context.researchWaitMessage('background_quota_paused'),/daily|quota|allowance/);
-});
-
-test("local request pacing has its own message and never claims a daily provider quota",()=>{
- assert.match(context.researchWaitMessage('background_request_interval'),/briefly between writing requests/);
- assert.doesNotMatch(context.researchWaitMessage('background_request_interval'),/daily|quota|allowance/);
 });

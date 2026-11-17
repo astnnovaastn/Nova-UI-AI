@@ -64,11 +64,13 @@ export type CanvasBridgeActions = {
   useClassic(): void;
   imageHeaders(): Record<string, string>;
   renderMarkdown(text: string): string;
+  /** The editor's saved HTML, through the same sanitizer the Reader uses. */
+  renderHtml?(html: string): string;
   checkFrame(url: string, signal?: AbortSignal): Promise<{embeddable: boolean | null; reason: string}>;
   addWorkSource(url: string, title: string): Promise<void>;
   startWork(text: string, options?: {workflow?: string; chosen?: unknown[]; fromResearch?: string}): void;
   askNodes(question: string, nodes: {id: string; kind: string; title: string; url?: string; summary: string}[], runId: string): void;
-  answerRun(text: string): void;
+  answerRun(text: string): void | Promise<void>;
   saveCanvasView(view: {chosen: string[]; hidden: string[]}): void;
   getCanvasLayout(page: string): Promise<import('../../../work-canvas/src/designer/types').LayoutRecord>;
   saveCanvasLayout(page: string, payload: import('../../../work-canvas/src/designer/types').LayoutSave): Promise<import('../../../work-canvas/src/designer/types').LayoutRecord>;

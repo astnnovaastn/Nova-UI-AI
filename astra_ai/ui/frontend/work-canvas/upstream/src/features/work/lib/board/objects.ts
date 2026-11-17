@@ -845,6 +845,9 @@ function leadView(
         ...(data.start_secs !== null && data.start_secs !== undefined
           ? { startSecs: data.start_secs }
           : {}),
+        ...((data as unknown as { title?: string }).title ? { title: (data as unknown as { title: string }).title } : {}),
+        ...((data as unknown as { channel?: string }).channel ? { channel: (data as unknown as { channel: string }).channel } : {}),
+        ...((data as unknown as { more?: unknown[] }).more?.length ? { more: (data as unknown as { more: { url: string; title?: string; poster?: string; channel?: string }[] }).more } : {}),
       };
     case "project":
       return {

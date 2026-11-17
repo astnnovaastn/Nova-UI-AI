@@ -99,7 +99,7 @@ def install(app, *, state, task_store, owner_only, task_owner, isolated=None):
         if not isinstance(obj, dict) or not obj.get('id') or not obj.get('title'): raise HTTPException(422, 'Result identity required')
         # Explicit click saves public output only. It never starts a task or agent.
         body = '# ' + str(obj['title']) + '\n\n' + str(obj.get('body') or obj.get('caption') or '')
-        structured = {k:obj[k] for k in ('columns','rows','entries','nodes','edges','url','language') if obj.get(k)}
+        structured = {k:obj[k] for k in ('columns','rows','entries','nodes','edges','url','language','recommendations','recommendationKind','planTotal') if obj.get(k)}
         if structured:
             body += '\n\n```json\n' + json.dumps(structured, ensure_ascii=False, indent=2) + '\n```'
         for source in obj.get('sources', [])[:100]:

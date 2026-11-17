@@ -1,0 +1,14 @@
+<script lang="ts">
+ import {CATALOG} from './catalog';
+ let {selected='',onclose}:{selected?:string;onclose:()=>void}=$props();
+ let search=$state('');
+ const visible=$derived(CATALOG.filter(c=>(c.label+' '+c.description+' '+c.group).toLowerCase().includes(search.toLowerCase())));
+ const href=(id:string)=>id==='source-stack'?'?aegisFixture=mixed-result&panel=stack':id==='questions'?'?aegisFixture=mixed-result&panel=questions':'?aegisFixture=mixed-result&panel=catalog&example='+encodeURIComponent(id);
+</script>
+<svelte:window onkeydown={e=>{if(e.key==='Escape')onclose()}}/>
+<aside class="catalog" aria-label="Design library">
+ <header><div><h2>Design library</h2><p>{CATALOG.length} layouts and card presentations</p></div><button onclick={onclose} aria-label="Close design library">×</button></header>
+ <input type="search" aria-label="Search designs" placeholder="Search cards, layouts, interactions…" bind:value={search}/>
+ <nav>{#each ['Reference presentations','Core cards','Workspace layouts'] as group}{@const entries=visible.filter(c=>c.group===group)}{#if entries.length}<h3>{group} <span>{entries.length}</span></h3>{#each entries as entry}<a href={href(entry.id)} aria-current={entry.id===selected?'page':undefined}><strong>{entry.label}</strong><small>{entry.description}</small></a>{/each}{/if}{/each}{#if !visible.length}<p>No matching designs. Try “table”, “calendar” or “diagram”.</p>{/if}</nav>
+</aside>
+<style>.catalog{position:absolute;top:92px;bottom:16px;left:16px;z-index:1200;width:min(390px,calc(100vw - 32px));display:flex;flex-direction:column;background:var(--color-raised);border:1px solid var(--color-border);border-radius:20px;box-shadow:0 12px 32px #0004;padding:20px;color:var(--color-text);box-sizing:border-box;font-family:var(--font-sans)}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px}h2{font-size:20px;margin:0 0 5px}p{font-size:12px;color:var(--color-muted);margin:0}button{border:0;background:var(--color-control);border-radius:50%;color:var(--color-text);font-size:20px;width:32px;height:32px;cursor:pointer}input{border:1px solid var(--color-border);background:var(--color-control);color:var(--color-text);border-radius:10px;padding:10px;font:13px var(--font-sans);width:100%;box-sizing:border-box}nav{overflow:auto;margin-top:12px;scrollbar-width:thin}h3{font-size:12px;color:var(--color-muted);display:flex;justify-content:space-between;margin:20px 6px 8px}a{display:flex;flex-direction:column;gap:4px;padding:10px;border-radius:10px;color:inherit;text-decoration:none}a:hover,a[aria-current=page]{background:var(--color-control)}strong{font-size:14px;font-weight:600}small{font-size:12px;line-height:1.45;color:var(--color-muted)}a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--color-ring);outline-offset:2px}</style>

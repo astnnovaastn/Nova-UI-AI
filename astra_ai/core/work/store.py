@@ -53,7 +53,8 @@ class WorkStore:
         """What the page may read. Full worker data and evidence text stay on the server."""
         data = as_dict(run)
         row = {key: data[key] for key in PUBLIC_FIELDS}
-        row['request'] = {key: data['request'].get(key) for key in ('query', 'workflow', 'mode')}
+        row['request'] = {key: data['request'].get(key) for key in ('query', 'workflow', 'mode', 'answer', 'engine')}
+        row['request']['clarifications'] = [{key: item.get(key) for key in ('id', 'question', 'answer', 'options')} for item in data['request'].get('clarifications', []) if isinstance(item, dict)]
         row['evidence'] = [{key: item.get(key) for key in ('id', 'url', 'title', 'domain', 'retrieved_at', 'relevance', 'credibility', 'assessment', 'fetched', 'query')} for item in data['evidence']]
         row['results'] = {name: {key: value.get(key) for key in ('agent', 'role', 'state', 'summary', 'provider', 'model', 'tokens', 'seconds', 'failure')} for name, value in data['results'].items() if isinstance(value, dict) and value.get('agent')}
         return row

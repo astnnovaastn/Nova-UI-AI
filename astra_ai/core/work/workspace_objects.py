@@ -21,7 +21,22 @@ def validate(value):
         if key in value and value[key] not in options:raise ValueError('invalid_'+key)
     if 'columnKinds' in value:
         if not isinstance(value['columnKinds'],list) or any(k not in {'text','number','money','percent','date','duration','yes_no','rating','link','entity','tag'} for k in value['columnKinds']):raise ValueError('invalid_column_kinds')
-    allowed = {'orientation','chartKind','columnKinds','id','kind','title','revision','task_id','status','body','language','url','caption','columns','rows','entries','nodes','edges','sources'}
+    if 'recommendationKind' in value and value['recommendationKind'] not in ('article','video','course'):
+        raise ValueError('invalid_recommendation_kind')
+    if 'recommendations' in value:
+        picks=value['recommendations']
+        if not isinstance(picks,list) or len(picks)>24:raise ValueError('invalid_recommendations')
+        for pick in picks:
+            if not isinstance(pick,dict) or not isinstance(pick.get('title'),str) or not pick['title']:raise ValueError('invalid_recommendation')
+            for key in ('url','image'):
+                if pick.get(key):
+                    url=urlsplit(pick[key])
+                    if url.scheme not in ('http','https') or not url.hostname or url.username or url.password:raise ValueError('invalid_recommendation_url')
+            if not isinstance(pick.get('facts',[]),list) or len(pick.get('facts',[]))>12:raise ValueError('invalid_recommendation_facts')
+            if any(not isinstance(f,dict) or not isinstance(f.get('label'),str) or not isinstance(f.get('value'),str) for f in pick.get('facts',[])):raise ValueError('invalid_recommendation_fact')
+    if 'planTotal' in value and (not isinstance(value['planTotal'],dict) or not all(isinstance(value['planTotal'].get(k),str) for k in ('label','value'))):
+        raise ValueError('invalid_plan_total')
+    allowed = {'contract_version','family','preset','media','blocks','series','provenance','row_ids','planMode','diagramDirection','metricPanels','groups','recommendations','recommendationKind','planTotal','orientation','chartKind','columnKinds','id','kind','title','revision','task_id','status','body','language','url','caption','columns','rows','entries','nodes','edges','sources'}
     return {k:v for k,v in value.items() if k in allowed}
 
 

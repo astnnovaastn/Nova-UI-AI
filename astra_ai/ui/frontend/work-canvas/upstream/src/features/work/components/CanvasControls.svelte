@@ -41,8 +41,22 @@
   /** The canvas the pointer last pressed in, so a key reaches it while nothing else has focus. */
   let engaged = false;
   const travel = (name: "fast" | "slow") => (reducedMotion() ? 0 : duration(name));
+  /** AEGIS: Fit view never goes below a reading zoom; a run too large to fit opens at its start instead. */
+  const READABLE = 0.58;
   function fit() {
     onfit?.();
+    const nodes = flow.getNodes();
+    const pane = anchor?.closest(".svelte-flow")?.getBoundingClientRect();
+    if (nodes.length && pane) {
+      const box = flow.getNodesBounds(nodes);
+      const top = bottomInset > 0 ? 110 : 40;
+      const bottom = bottomInset > 0 ? bottomInset + 32 : 40;
+      const zoom = Math.min((pane.width - 80) / Math.max(1, box.width), (pane.height - top - bottom) / Math.max(1, box.height));
+      if (zoom < READABLE) {
+        void flow.setViewport({ x: 40 - box.x * READABLE, y: top - box.y * READABLE, zoom: READABLE }, { duration: travel("slow") });
+        return;
+      }
+    }
     void flow.fitView({
       duration: travel("slow"),
       padding:

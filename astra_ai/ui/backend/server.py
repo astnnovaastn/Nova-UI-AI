@@ -5771,9 +5771,21 @@ async def _dispatch_aegis_tool(name,arguments,context,operation_id):
         # Only the durable queue starts a work run; it is not a tool offered to the live model.
         if name=='work_run':
             if context.get('guest') or not context.get('job_id'):return {'status':'rejected','reason':'owner_job_required'}
-            return await get_work_orchestrator().run(str(arguments.get('research_id','')),context)
+            result=await get_work_orchestrator().run(str(arguments.get('research_id','')),context)
+            if isinstance(result,dict) and result.get('needs_input') and result.get('question'):await _announce_work_question(result,context)
+            return result
         return await _dispatch_scoped_aegis_tool(name,arguments,context,operation_id)
     finally:CURRENT_OPERATION.reset(token)
+
+async def _announce_work_question(result,context):
+    """A Work run paused on a question: a spoken notice (the live model words it), and the canvas is told."""
+    question=str(result.get('question','')).strip()[:500];research=str(result.get('research_id',''))
+    try:
+        run=await asyncio.to_thread(get_work_orchestrator().store.get,research)
+        options=((getattr(run,'plan',None) or {}).get('clarification_options') or [])[:6] if run else []
+        notice_id=await asyncio.to_thread(notice_store.enqueue,'question',research,question[:120],{'title':'AEGIS has a question: '+question,'question':question,'options':options,'research_id':research,'answer_with':'The person answers in the question panel, by choosing an option, typing, or speaking; their spoken answer is sent to the run.'},context)
+        if context.get('client_id'):await ws_manager.send_to_client_id(context['client_id'],{'type':'work_question','notice_id':notice_id,'research_id':research,'question':question,'options':options})
+    except Exception as error:logger.warning('Work question notice failed: %s',error)
 
 async def _dispatch_scoped_aegis_tool(name,arguments,context,operation_id):
     client_id=context.get("client_id","");sid=context.get("session_id","")

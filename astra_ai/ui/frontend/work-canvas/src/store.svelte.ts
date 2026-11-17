@@ -30,6 +30,8 @@ export type CanvasActions = {
   imageHeaders(): Record<string, string>;
   /** The Reader's sanitizer: report Markdown to safe HTML. */
   renderMarkdown(text: string): string;
+  /** The editor's saved HTML, through the same sanitizer the Reader uses. */
+  renderHtml?(html: string): string;
   /** Whether a public page allows being shown here. Only a verdict comes back, never the page. */
   checkFrame(url: string, signal?: AbortSignal): Promise<{ embeddable: boolean | null; reason: string }>;
   /** Saves a reference to this page on the open research. */
@@ -39,7 +41,7 @@ export type CanvasActions = {
   /** Asks AEGIS about canvas cards; the reply appears in the conversation. */
   askNodes(question: string, nodes: { id: string; kind: string; title: string; url?: string; summary: string }[], runId: string): void;
   /** Answers the question the lead asked before starting. */
-  answerRun(text: string): void;
+  answerRun(text: string): void | Promise<void>;
   /** Saves which cards are chosen and removed. Saved research is never touched. */
   saveCanvasView(view: CanvasView): void;
   getCanvasLayout(page: string): Promise<LayoutRecord>;

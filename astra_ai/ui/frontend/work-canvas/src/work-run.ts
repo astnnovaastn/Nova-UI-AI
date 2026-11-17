@@ -40,8 +40,8 @@ export type WorkRun = {
   state: string;
   stage: string;
   failure: string;
-  request: { query: string; workflow?: string; mode?: string };
-  plan: { title?: string; acknowledgement?: string; intent?: string; mode?: string; clarification?: string; sections?: string[]; reasoning_summary?: string; skills?: LoadedSkill[]; skill?: LoadedSkill };
+  request: { answer?:string; clarifications?:import('./clarifications').ClarificationRecord[]; query: string; workflow?: string; mode?: string };
+  plan: { title?: string; acknowledgement?: string; intent?: string; mode?: string; clarification?: string; clarification_options?:string[]; sections?: string[]; reasoning_summary?: string; skills?: LoadedSkill[]; skill?: LoadedSkill };
   assignments: { agent: string; role: string; task: string; provider: string; model: string; state: string }[];
   results: Record<string, { agent: string; role: string; state: string; summary: string; provider: string; model: string; tokens: number; seconds: number; failure: string }>;
   evidence: { id: string; url: string; title: string; domain: string; retrieved_at: string; relevance: number; credibility: number; assessment: string; query: string }[];
@@ -90,6 +90,7 @@ const STAGE_OWNER: Record<string, string> = {
   intent: "lead",
   classified: "lead",
   planned: "lead",
+  allocated: "lead",
   assigned: "lead",
   question: "lead",
   search_strategy: "discovery",
@@ -116,6 +117,11 @@ function stageDetail(event: TraceEvent): string {
   if (event.stage === "finished") parts.push(`${count(event.calls)} model calls · ${count(event.tokens).toLocaleString("en")} tokens`);
   if (event.stage === "map" && typeof event.edges === "number") parts.push(`${count(event.groups)} groups · ${count(event.edges)} connections`);
   if (event.stage === "evidence") parts.push(`From ${count(event.domains)} sites`);
+  if (event.stage === "allocated") {
+    // Engine v2: why these roles, and what was left out and why.
+    if (text(event.complexity)) parts.push(`${text(event.complexity)} request`);
+    if (Array.isArray(event.skipped)) parts.push(...(event.skipped as { role?: unknown; reason?: unknown }[]).slice(0, 3).map((row) => `no ${text(row?.role)}: ${text(row?.reason)}`));
+  }
   if (Array.isArray(event.queries)) parts.push((event.queries as unknown[]).map(text).join(" · "));
   if (Array.isArray(event.gaps)) parts.push((event.gaps as unknown[]).map(text).join(" · "));
   return parts.filter(Boolean).join(" · ");
@@ -182,6 +188,7 @@ const ICONS: Record<string, TrailLine["icon"]> = {
   intent: "knowledge",
   classified: "knowledge",
   planned: "knowledge",
+  allocated: "steer",
   assigned: "steer",
   question: "ask",
   search_strategy: "search",
