@@ -64,6 +64,7 @@ async function openRun(page, search) {
     await page.waitForTimeout(800);
     result.videoStripVisible = await page.locator(".strip").first().evaluate((s) => getComputedStyle(s).opacity === "1");
     result.videoClips = await page.locator(".strip .clip").count();
+    result.clipWidthVsPrimary = await page.evaluate(() => { const f = document.querySelector(".media.collection .screen"); const c = document.querySelector(".strip .clip"); return f && c ? +(c.getBoundingClientRect().width / f.getBoundingClientRect().width).toFixed(2) : null; });
     await page.screenshot({ path: path.join(out, "v26-videos.png") });
     await page.mouse.move(5, 500);
   }

@@ -11,8 +11,10 @@ function Q(e, o) {
 	let c = S(o, "actions", 19, () => ({})), E = T(() => o.object.media === "video" && !!D(o.object.url)), A = h("right");
 	function M(e) {
 		if (!o.object.more?.length) return;
-		let t = e.getBoundingClientRect(), n = t.width / Math.max(1, e.offsetWidth), r = Math.min(o.object.more.length, 3) * 252 * n + 16 * n;
-		y(A, t.right + r > window.innerWidth && t.left - r > 0 ? "left" : "right", !0);
+		let t = e.getBoundingClientRect(), n = Math.max(240, e.offsetWidth);
+		e.style.setProperty("--clip-w", `${n}px`);
+		let r = t.width / Math.max(1, e.offsetWidth), i = (Math.min(o.object.more.length, 3) * (n + 16) + 16) * r;
+		y(A, t.right + i > window.innerWidth && t.left - i > 0 ? "left" : "right", !0);
 	}
 	let P = T(() => o.object.poster ?? o.object.picture), I = h(null), R = T(() => !!t(P) && t(I) === t(P).src);
 	var Q = te();

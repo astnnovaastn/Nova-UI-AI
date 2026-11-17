@@ -16,8 +16,11 @@
   function placeStrip(figure: HTMLElement) {
     if (!object.more?.length) return;
     const box = figure.getBoundingClientRect();
+    // Every video in the collection stands at the first one's size.
+    const width = Math.max(240, figure.offsetWidth);
+    figure.style.setProperty("--clip-w", `${width}px`);
     const scale = box.width / Math.max(1, figure.offsetWidth);
-    const need = Math.min(object.more.length, 3) * 252 * scale + 16 * scale;
+    const need = (Math.min(object.more.length, 3) * (width + 16) + 16) * scale;
     stripSide = box.right + need > window.innerWidth && box.left - need > 0 ? "left" : "right";
   }
   const poster = $derived(object.poster ?? object.picture);
@@ -317,7 +320,8 @@
     display: flex;
     gap: 12px;
     padding-inline-start: 16px;
-    max-inline-size: calc(3 * 252px + 16px);
+    gap: 16px;
+    max-inline-size: calc(3 * (var(--clip-w, 320px) + 16px) + 16px);
     overflow-x: auto;
     overscroll-behavior: contain;
     scrollbar-width: none;
@@ -347,7 +351,7 @@
     flex: none;
     flex-direction: column;
     gap: 6px;
-    inline-size: 240px;
+    inline-size: var(--clip-w, 320px);
     opacity: 0;
     transform: translateX(-12px);
     transition:
@@ -378,7 +382,7 @@
     display: -webkit-box;
     overflow: hidden;
     color: var(--color-text);
-    font-size: var(--text-caption);
+    font-size: var(--text-label, 14px);
     font-weight: 600;
     line-height: 1.35;
     -webkit-box-orient: vertical;

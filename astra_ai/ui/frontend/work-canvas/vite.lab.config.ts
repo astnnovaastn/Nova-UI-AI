@@ -7,7 +7,6 @@
  *
  *   npm run lab:build      (from work-canvas)
  */
-import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { defineConfig, type Plugin } from "vite";
@@ -18,7 +17,7 @@ import { paraglideVitePlugin } from "@inlang/paraglide-js";
 const at = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
 const clone = at("../../zephium-source/frame/src");
 const norm = (id: string) => id.replace(/\\/g, "/");
-const cloneRoot = norm(realpathSync(at("../../zephium-source")));
+const cloneRoot = norm(at("../../zephium-source"));
 
 const alias = [
   // Generated messages live in the lab, so nothing is ever written into the clone.

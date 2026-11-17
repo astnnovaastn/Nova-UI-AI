@@ -327,6 +327,10 @@ export function partShape(part: RunPart, projection?: WorkRuntimeProjection): Pa
       rows: Math.max(rows, Math.min(PART.helperLines, part.lines?.length ?? 0)),
     };
   }
+  // AEGIS: a helper that read nothing and searched nothing is its name and one line, drawn as a
+  // label, so its box (and the strings that meet it) ends where its words end.
+  if (part.helper === "research" && !part.pages.length && !part.sources.length && !searchPart(part))
+    return { kind: "label" };
   if (part.helper === "research" && !part.pages.length) {
     const search = searchPart(part);
     const cap = search ? PART.searchRows : PART.sourceRows;

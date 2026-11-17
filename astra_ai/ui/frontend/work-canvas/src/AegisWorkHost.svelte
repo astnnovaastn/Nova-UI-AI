@@ -188,29 +188,14 @@
   );
   $effect(() => setWaitingReason(report?.waiting_reason ?? ""));
   /** In Zephium's design the run's results are Zephium artifacts, laid out by its own board. */
-  /** The report's saved images, as picture addresses the canvas may draw (fetched with the owner's headers). */
-  const imageSources = new SvelteMap<string, string>();
-  $effect(() => {
-    const id = zephiumDesign ? report?.research_id : undefined;
-    const items = report?.image_items ?? [];
-    if (!id) return;
-    let live = true;
-    for (const image of items.slice(0, 8)) {
-      const key = `${id}:${image.id}`;
-      if (imageSources.has(key)) continue;
-      void pictureUrl(id, image.id).then((url) => { if (live && url) imageSources.set(key, url); });
-    }
-    return () => { live = false; };
-  });
   const zephiumResults = $derived(zephiumDesign ? {
     objects: objectItems(state.run?.canvas_objects).map((item) => item.aegisObject),
     map: mapOf(state.run),
     skills: loadedSkills(state.run, state.trace).map((skill) => ({ name: skill.name, title: skill.title })),
     videos: (videoCollection(report)?.videos ?? []).slice(0, 12).map((video) => ({ url: video.url, title: video.title, poster: video.thumbnail, channel: video.channel })),
-    images: (report?.image_items ?? []).slice(0, 8).flatMap((image) => {
-      const src = imageSources.get(`${report?.research_id}:${image.id}`);
-      return src ? [{ id: image.id, src, caption: image.caption ?? "" }] : [];
-    }),
+    // The report's own images read inside the report (ReportReader), beside the text they illustrate;
+    // they are not repeated as loose cards. Images a workflow makes as results (a moodboard's picks)
+    // arrive as its own objects and stay on the canvas.
   } : null);
   /**
    * The request the person just sent, drawn at once as a planning request (Zephium's own request
@@ -720,7 +705,9 @@
       ...(trailItem ? [trailItem] : []),
       ...[...baseItems.filter((item) => !folders.has(item.id)), ...requests.items].map((item) => {
         const present = dress.get(item.id);
-        const skills = item.id === stages[0]?.card && promptSkills.length ? { aegisSkills: promptSkills } : {};
+        // Zephium's design draws the run's skills as its own inputs beside the request; the AEGIS badge
+        // would draw them a second time over those rows.
+        const skills = !zephiumDesign && item.id === stages[0]?.card && promptSkills.length ? { aegisSkills: promptSkills } : {};
         return { ...item, ...present, ...skills, ...(item.id===stages[0]?.card&&clarifications.exchange.length?{turns:{local:present?.turns?.local||[],exchange:clarifications.exchange}}:{}) };
       }),
       ...environmentBoards(stages),
@@ -1338,6 +1325,12 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
         else lifted = id;
         return;
       }
+    }
+    // A helper's row opens its record: model, task, state and what it did, as the run recorded them.
+    const helper = zephiumDesign ? /:part-(worker_[a-e])$/.exec(id)?.[1] : undefined;
+    if (helper) {
+      const branch = agentBranches(state.run, state.trace).find((row) => row.agent === helper);
+      if (branch) { opened = { kind: "agent", id, agent: branch }; return; }
     }
     if(id === "collection:videos"){if(event?.isTrusted)window.dispatchEvent(new CustomEvent("aegis-video-open",{detail:{id,activation:event}}));return;}
     const adaptive=objectItems(state.run?.canvas_objects).find(o=>o.id===id);

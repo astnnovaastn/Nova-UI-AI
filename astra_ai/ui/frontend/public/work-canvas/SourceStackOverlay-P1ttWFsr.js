@@ -29,7 +29,7 @@ import { a as St, i as Ct } from "./diagram-Bg4vYWtj.js";
 import { c as wt, i as Tt, n as Et, o as Dt, r as Ot, s as kt, t as At } from "./text-DVq3CuCv.js";
 import { t as jt } from "./work_env_open-CZM6S6RQ.js";
 import { n as Mt, t as Nt } from "./MakeTasks-D9lKyDbj.js";
-import { r as Pt, t as Ft } from "./Media-BCmGv68U.js";
+import { r as Pt, t as Ft } from "./Media-Dm323eqC.js";
 import { n as It, t as Lt } from "./index-client-RfUBbaI1.js";
 import { t as Rt } from "./bindings-CWWuBYk9.js";
 import { n as zt, r as Bt } from "./FavIcon-CMLLDqJA.js";
@@ -16002,6 +16002,7 @@ function uL(e, t) {
 			rows: Math.max(r, Math.min(vI.helperLines, e.lines?.length ?? 0))
 		};
 	}
+	if (e.helper === "research" && !e.pages.length && !e.sources.length && !lL(e)) return { kind: "label" };
 	if (e.helper === "research" && !e.pages.length) {
 		let t = lL(e), n = t ? vI.searchRows : vI.sourceRows;
 		return {
@@ -16526,7 +16527,7 @@ function zL(t, r) {
 }
 h(["click"]);
 // upstream/src/features/work/components/run/slots.ts
-var BL = /* #__PURE__ */ Object.assign({}), VL = /* #__PURE__ */ Object.assign({ "../asks/AskCard.svelte": () => import("./entry-CvGQ1N4Q.js").then((e) => e.r) }), HL = {
+var BL = /* #__PURE__ */ Object.assign({}), VL = /* #__PURE__ */ Object.assign({ "../asks/AskCard.svelte": () => import("./entry-CmEBgCih.js").then((e) => e.r) }), HL = {
 	computer: "../parts/ComputerPart.svelte",
 	connection: "../parts/ConnectionPart.svelte"
 };
@@ -17317,7 +17318,7 @@ var RR = {
 	diff: () => import("./Diff-Dnup6utX.js"),
 	document: () => import("./Document-Ci0WgBHN.js"),
 	draft: () => import("./Draft-Cz8yRM9y.js"),
-	media: () => import("./Media-BCmGv68U.js").then((e) => e.n),
+	media: () => import("./Media-Dm323eqC.js").then((e) => e.n),
 	page: () => import("./Page-DTtKU3wo.js"),
 	note: () => import("./Note-UjOAlop6.js"),
 	file: () => import("./File-BlQ7tOP0.js"),

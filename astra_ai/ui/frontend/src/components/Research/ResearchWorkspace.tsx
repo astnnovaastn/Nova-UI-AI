@@ -681,6 +681,34 @@ const paperExtensions=[StarterKit.configure({undoRedo:false}),TableKit,ScopedIma
 const encodeBytes=(bytes:Uint8Array)=>btoa(Array.from(bytes,b=>String.fromCharCode(b)).join(''));
 const decodeBytes=(text:string)=>Uint8Array.from(atob(text),c=>c.charCodeAt(0));
 type SharedPaper={document:Y.Doc;provider:WebsocketProvider;cache:IndexeddbPersistence;epoch:string};
+/** Copy a message's words; a check confirms it for a moment. (Zephium Assist: Reply's copy.) */
+function CopyMessage(props:{text:string}){
+  const [done,setDone]=useState(false);
+  return <button type="button" className="chat-tool" onClick={()=>{void navigator.clipboard?.writeText(props.text).then(()=>{setDone(true);window.setTimeout(()=>setDone(false),1400);}).catch(()=>{});}}>{done?"Copied":"Copy"}</button>;
+}
+
+/** The conversation header's menu: only what this panel can do. */
+function ConversationMenu(props:{messages:{role:string;text:string}[];onEnd:()=>void}){
+  const [open,setOpen]=useState(false);
+  const box=useRef<HTMLDivElement>(null);
+  useEffect(()=>{
+    if(!open)return;
+    const away=(e:Event)=>{if(!box.current?.contains(e.target as Node))setOpen(false);};
+    const keys=(e:KeyboardEvent)=>{if(e.key==="Escape"){setOpen(false);(box.current?.querySelector("button") as HTMLButtonElement|null)?.focus();}};
+    document.addEventListener("pointerdown",away);document.addEventListener("keydown",keys);
+    window.requestAnimationFrame(()=>(box.current?.querySelector('[role="menuitem"]') as HTMLButtonElement|null)?.focus());
+    return()=>{document.removeEventListener("pointerdown",away);document.removeEventListener("keydown",keys);};
+  },[open]);
+  const all=props.messages.map(m=>(m.role==="user"?"You: ":"Aegis: ")+m.text).join(String.fromCharCode(10, 10));
+  return <div className="chat-menu" ref={box}>
+    <button type="button" className="chat-menu-button" aria-label="Conversation actions" aria-haspopup="menu" aria-expanded={open} onClick={()=>setOpen(!open)}>⋯</button>
+    {open&&<div role="menu" aria-label="Conversation actions" onKeyDown={(e)=>{const items=[...e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];const at=items.indexOf(document.activeElement as HTMLButtonElement);if(e.key==="ArrowDown"){e.preventDefault();items[(at+1)%items.length]?.focus();}if(e.key==="ArrowUp"){e.preventDefault();items[(at-1+items.length)%items.length]?.focus();}}}>
+      <button type="button" role="menuitem" disabled={!props.messages.length} onClick={()=>{void navigator.clipboard?.writeText(all).catch(()=>{});setOpen(false);}}>Copy conversation</button>
+      <button type="button" role="menuitem" disabled={!props.messages.length} onClick={()=>{props.onEnd();setOpen(false);}}>Jump to latest</button>
+    </div>}
+  </div>;
+}
+
 /**
  * The report editor's own header (edit mode opened from the new reader): what is being edited, whether
  * it is saved, and the way back. Back waits for a pending save; nothing unsaved is dropped.
@@ -2699,6 +2727,8 @@ function Workspace() {
   const [canvasPanel, setCanvasPanel] = useState<""|"document"|"history"|"conversation">("");
   /** The editor opened on its own from the new reader: no Reader / Sources / Media tabs, a way back. */
   const [editOnly, setEditOnly] = useState(false);
+  /** The reader scrolled up from the conversation's end: a way back to the latest message shows. */
+  const [chatAway, setChatAway] = useState(false);
   useEffect(() => { if (canvasPanel !== "document") setEditOnly(false); }, [canvasPanel]);
   const [researchJobs, setResearchJobs] = useState<Record<string,string>>({});
   const [listRevision, setListRevision] = useState(0);
@@ -5100,8 +5130,9 @@ function Workspace() {
         <aside className="research-assistant" id="research-conversation-panel" aria-label="Research conversation" hidden={report?.kind === "chat"}>
           <button className="research-panel-close" aria-label="Close research conversation" onClick={() => {setNarrowPanel("");setCanvasPanel("");}}><Icon name="close" /></button>
           <header>
-            <span className="research-eyebrow">{onCanvas ? "Conversation" : "AEGIS"}</span>
+            <span className="research-eyebrow">{onCanvas ? "Conversation" : "AEGIS"}{onCanvas && conversationSession && (chat.researchMessages[conversationSession]?.length || 0) > 0 ? ` · ${chat.researchMessages[conversationSession]!.length} ${chat.researchMessages[conversationSession]!.length === 1 ? "message" : "messages"}` : ""}</span>
             <span className="research-chat-label" title={onCanvas ? report?.display_title : undefined}>{onCanvas ? (report?.display_title || "No research open") : "Research conversation"}</span>
+            {onCanvas && <ConversationMenu messages={conversationSession ? chat.researchMessages[conversationSession] || [] : []} onEnd={() => { const el = chatReader.current; if (el) { el.scrollTo({ top: el.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); chatNearEnd.current = true; setChatAway(false); } }} />}
           </header>
           <div
             className="research-chat"
@@ -5112,6 +5143,7 @@ function Workspace() {
               const el = e.currentTarget;
               chatNearEnd.current =
                 el.scrollHeight - el.scrollTop - el.clientHeight < 70;
+              setChatAway(!chatNearEnd.current);
             }}
           >
             {(conversationSession
@@ -5119,7 +5151,7 @@ function Workspace() {
               : []
             ).map((m) => (
               <article key={m.id} data-speaker={m.role}>
-                <small>{m.role === "user" ? "You" : "Aegis"}</small>
+                {(!onCanvas || m.role !== "user") && <small>{m.role === "user" ? "You" : "Aegis"}</small>}
                 {m.context_cards?.map((card:any)=><PassageCard key={card.id} card={card}/>)}
                 {onCanvas && m.role !== "user"
                   ? <ConversationText text={m.text} sources={readerSources} onOpen={openSource} />
@@ -5130,6 +5162,7 @@ function Workspace() {
                         {about.length > 0 && <p className="research-chat-about">About {about.join(", ")}</p>}
                       </>;
                     })()}
+                {onCanvas && m.text && <footer className="chat-foot"><CopyMessage text={m.text} /></footer>}
               </article>
             ))}
             {onCanvas && !(conversationSession && chat.researchMessages[conversationSession]?.length) && !chat.textBusy && (
@@ -5163,6 +5196,7 @@ function Workspace() {
             ))}
           </div>
 
+          {onCanvas && chatAway && <button type="button" className="chat-to-end" aria-label="Jump to latest message" title="Jump to latest message" onClick={() => { const el = chatReader.current; if (el) { el.scrollTo({ top: el.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); chatNearEnd.current = true; setChatAway(false); } }}>↓</button>}
           {!onCanvas && <small>{chat.status || chat.state}</small>}
         </aside>
       </div>

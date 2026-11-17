@@ -2180,7 +2180,7 @@ body.research-canvas-open #transcription-dots{display:none!important}
   box-shadow:0 24px 70px rgb(0 0 0 / 45%);overflow:hidden}
 .research-workspace[data-surface=canvas][data-canvas-panel=conversation] .research-assistant:not([hidden]){
   display:flex;flex-direction:column;position:fixed;z-index:40;pointer-events:auto;
-  top:8px;bottom:auto;height:min(80vh,calc(100vh - 16px));right:8px;left:auto;width:304px;max-width:calc(100vw - 72px);margin:0;padding:0;overflow:hidden;box-sizing:border-box;
+  top:8px;bottom:auto;height:auto;min-height:180px;max-height:min(80vh,calc(100vh - 16px));right:8px;left:auto;width:304px;max-width:calc(100vw - 72px);margin:0;padding:0;overflow:hidden;box-sizing:border-box;
   border:1px solid var(--r-edge);border-radius:14px;background:var(--r-panel);font-family:"Inter Variable",Inter,system-ui,sans-serif;font-size:14px;animation:rc-arrive .16s ease-out both}
 @keyframes rc-arrive{from{opacity:0;transform:translateX(6px)}}
 @media (prefers-reduced-motion:reduce){.research-workspace[data-surface=canvas] .research-assistant{animation:none!important}}
@@ -2249,3 +2249,32 @@ body.research-canvas-open [class^=aegis-enable]{bottom:76px!important}
 .report-edit-back{width:36px;height:36px;border:0;border-radius:50%;background:color-mix(in srgb,var(--r-fg,#eee) 10%,transparent);color:var(--r-fg,#eee);font-size:18px;cursor:pointer}
 .report-edit-back:hover{background:color-mix(in srgb,var(--r-fg,#eee) 16%,transparent)}
 .report-edit-back:focus-visible{outline:2px solid var(--r-fg,#eee);outline-offset:2px}
+
+/* V27: the research conversation, after Zephium Assist (features/assist: Thread, PersonMessage, Reply).
+   The panel is as tall as its conversation (up to 80% of the window), so a short one leaves no empty
+   block; it scrolls inside. Your words are right-aligned bubbles; Aegis's read as plain text, with Copy
+   on hover. */
+.research-workspace[data-surface=canvas] .research-assistant>header{position:relative;padding-right:84px}
+.research-workspace[data-surface=canvas] .research-assistant .research-chat{flex:0 1 auto;gap:22px;padding:14px 14px 18px 16px}
+.research-workspace[data-surface=canvas] .research-assistant .research-chat article{gap:6px}
+.research-workspace[data-surface=canvas] .research-assistant .research-chat article[data-speaker=user]{padding-left:18%;max-width:none;align-self:stretch;align-items:flex-end}
+.research-workspace[data-surface=canvas] .research-assistant .research-chat article[data-speaker=user]>p{padding:8px 13px;border-radius:18px;font-size:13.5px;line-height:20px;white-space:pre-wrap;user-select:text}
+.research-workspace[data-surface=canvas] .research-assistant .research-chat article[data-speaker=assistant]>small,
+.research-workspace[data-surface=canvas] .research-assistant .research-chat article:not([data-speaker=user])>small{font-size:11px;letter-spacing:.01em}
+.research-workspace[data-surface=canvas] .research-assistant .research-chat-text{font-size:13.5px;line-height:1.6;user-select:text}
+.research-workspace[data-surface=canvas] .research-assistant .chat-foot{display:flex;gap:2px;height:22px;margin-top:-2px;opacity:0;transition:opacity .12s ease-out}
+.research-workspace[data-surface=canvas] .research-assistant article[data-speaker=user] .chat-foot{justify-content:flex-end}
+.research-workspace[data-surface=canvas] .research-assistant article:hover .chat-foot,
+.research-workspace[data-surface=canvas] .research-assistant .chat-foot:focus-within{opacity:1}
+@media (hover:none){.research-workspace[data-surface=canvas] .research-assistant .chat-foot{opacity:1}}
+.research-workspace[data-surface=canvas] .research-assistant .chat-tool{height:22px;padding:0 8px;border:0;border-radius:999px;background:transparent;color:color-mix(in srgb,var(--r-fg,#eee) 56%,transparent);font:500 11.5px "Inter Variable",Inter,system-ui,sans-serif;cursor:pointer}
+.research-workspace[data-surface=canvas] .research-assistant .chat-tool:hover{background:color-mix(in srgb,var(--r-fg,#eee) 9%,transparent);color:var(--r-fg,#eee)}
+.research-workspace[data-surface=canvas] .research-assistant .chat-tool:focus-visible,.research-workspace[data-surface=canvas] .research-assistant .chat-menu-button:focus-visible,.research-workspace[data-surface=canvas] .research-assistant .chat-menu [role=menuitem]:focus-visible,.research-workspace[data-surface=canvas] .research-assistant .chat-to-end:focus-visible{outline:2px solid var(--r-fg,#eee);outline-offset:1px}
+.research-workspace[data-surface=canvas] .research-assistant .chat-menu{position:absolute;top:10px;right:44px}
+.research-workspace[data-surface=canvas] .research-assistant .chat-menu-button{width:28px;height:28px;border:0;border-radius:8px;background:transparent;color:color-mix(in srgb,var(--r-fg,#eee) 70%,transparent);font-size:17px;line-height:1;cursor:pointer}
+.research-workspace[data-surface=canvas] .research-assistant .chat-menu-button:hover,.research-workspace[data-surface=canvas] .research-assistant .chat-menu-button[aria-expanded=true]{background:color-mix(in srgb,var(--r-fg,#eee) 10%,transparent)}
+.research-workspace[data-surface=canvas] .research-assistant .chat-menu [role=menu]{position:absolute;top:32px;right:0;z-index:5;display:flex;flex-direction:column;min-width:180px;padding:4px;border:1px solid var(--r-edge,#ffffff1a);border-radius:12px;background:var(--r-panel,#1f1f22);box-shadow:0 12px 32px #0006}
+.research-workspace[data-surface=canvas] .research-assistant .chat-menu [role=menuitem]{height:32px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:var(--r-fg,#eee);font:500 13px "Inter Variable",Inter,system-ui,sans-serif;text-align:left;cursor:pointer}
+.research-workspace[data-surface=canvas] .research-assistant .chat-menu [role=menuitem]:hover:not(:disabled){background:color-mix(in srgb,var(--r-fg,#eee) 9%,transparent)}
+.research-workspace[data-surface=canvas] .research-assistant .chat-menu [role=menuitem]:disabled{opacity:.45;cursor:default}
+.research-workspace[data-surface=canvas] .research-assistant .chat-to-end{position:absolute;left:50%;bottom:12px;translate:-50% 0;width:30px;height:30px;border:0;border-radius:50%;background:var(--r-panel,#2a2a2e);box-shadow:0 6px 18px #0006,inset 0 0 0 1px var(--r-edge,#ffffff1a);color:var(--r-fg,#eee);font-size:14px;cursor:pointer}

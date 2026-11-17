@@ -36,4 +36,16 @@ export const siteRowPatches = [
     replace: SPLIT,
     why: "The pages a run read itself stand one row per website; only pages of one website stack.",
   },
+  {
+    file: "features/work/lib/project-environment-board.ts",
+    find: `  if (part.helper === "research" && !part.pages.length) {
+    const search = searchPart(part);`,
+    replace: `  // AEGIS: a helper that read nothing and searched nothing is its name and one line, drawn as a
+  // label, so its box (and the strings that meet it) ends where its words end.
+  if (part.helper === "research" && !part.pages.length && !part.sources.length && !searchPart(part))
+    return { kind: "label" };
+  if (part.helper === "research" && !part.pages.length) {
+    const search = searchPart(part);`,
+    why: "A helper with no pages, sources or search is a compact label, not an empty 488 px box.",
+  },
 ];
