@@ -1,0 +1,465 @@
+{
+  "schema_version": 1,
+  "feature": "Zephium browser Ask panel",
+  "commit": "9026a1fffad74d6e201ef97fe8c02c1b01403cd2",
+  "repository": "https://github.com/zephium-browser/Zephium",
+  "evidence": "Static local source inspection. Runtime behavior was not tested.",
+  "guide": "index.html",
+  "canvas": "Zephium Chat.canvas",
+  "sections": [
+    {
+      "title": "Interface and visual design",
+      "description": "The Ask panel is lazy loaded in the browser tool rail. A shared ToolFrame supplies the surrounding panel. New chat and the menu sit in the header. The central area displays the thread, history, or saved site styles, and the composer stays in the footer. The panel dims the neighboring sidebar column while a menu is open.",
+      "references": [
+        {
+          "path": "frame/src/features/tools/components/tool-views.ts",
+          "line": 32,
+          "role": "Tool registration",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/tools/components/tool-views.ts#L32"
+        },
+        {
+          "path": "frame/src/features/tools/components/previews/ChatView.svelte",
+          "line": 1,
+          "role": "Lazy panel host",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/tools/components/previews/ChatView.svelte#L1"
+        },
+        {
+          "path": "frame/src/features/assist/components/AssistPanel.svelte",
+          "line": 155,
+          "role": "Frame, header, views and footer",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/AssistPanel.svelte#L155"
+        },
+        {
+          "path": "frame/src/features/assist/components/assist.css",
+          "line": 7,
+          "role": "Shared animation and reduced-motion rules",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/assist.css#L7"
+        }
+      ]
+    },
+    {
+      "title": "Composer and page context",
+      "description": "The user can type a question or choose an empty-state suggestion. Composer grows with the text. Its context chips represent the active page, a text selection, or an element picked on the page. The end control switches among microphone, Send, and Stop based on state. Attachments and draft handling belong to the session and composer.",
+      "references": [
+        {
+          "path": "frame/src/features/assist/components/Composer.svelte",
+          "line": 87,
+          "role": "Send and keyboard input",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/Composer.svelte#L87"
+        },
+        {
+          "path": "frame/src/features/assist/components/Composer.svelte",
+          "line": 148,
+          "role": "Context chips",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/Composer.svelte#L148"
+        },
+        {
+          "path": "frame/src/features/assist/components/Composer.svelte",
+          "line": 235,
+          "role": "Add menu and end controls",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/Composer.svelte#L235"
+        },
+        {
+          "path": "frame/src/features/assist/components/AddMenu.svelte",
+          "line": 1,
+          "role": "Context menu",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/AddMenu.svelte#L1"
+        },
+        {
+          "path": "frame/src/features/assist/components/Empty.svelte",
+          "line": 1,
+          "role": "Suggestions",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/Empty.svelte#L1"
+        },
+        {
+          "path": "frame/src/features/assist/lib/assist-session.svelte.ts",
+          "line": 247,
+          "role": "Ask, retry and transport",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/lib/assist-session.svelte.ts#L247"
+        }
+      ]
+    },
+    {
+      "title": "Request and streaming",
+      "description": "AssistSession subscribes before loading the snapshot, queues updates while loading, and folds events scoped to its Space. The frontend sends pageAssistAsk through generated IPC. The desktop command checks the caller and delegates to the Rust service. The service admits the request, creates a reply and dispatches the agent. Rust events update the same reply as text and tool results arrive.",
+      "references": [
+        {
+          "path": "frame/src/features/assist/lib/assist-session.svelte.ts",
+          "line": 99,
+          "role": "Subscribe before snapshot",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/lib/assist-session.svelte.ts#L99"
+        },
+        {
+          "path": "frame/src/features/assist/lib/assist-session.svelte.ts",
+          "line": 190,
+          "role": "Event reconciliation",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/lib/assist-session.svelte.ts#L190"
+        },
+        {
+          "path": "frame/src/features/assist/lib/conversation.ts",
+          "line": 1,
+          "role": "Conversation reducer",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/lib/conversation.ts#L1"
+        },
+        {
+          "path": "crates/zephium-ipc/src/page_assist.rs",
+          "line": 514,
+          "role": "Ask contract",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-ipc/src/page_assist.rs#L514"
+        },
+        {
+          "path": "crates/zephium-ipc/src/page_assist.rs",
+          "line": 658,
+          "role": "Changed event",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-ipc/src/page_assist.rs#L658"
+        },
+        {
+          "path": "desktop/src/page_assist.rs",
+          "line": 1205,
+          "role": "Desktop command",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/desktop/src/page_assist.rs#L1205"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/mod.rs",
+          "line": 546,
+          "role": "Admission",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/mod.rs#L546"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/mod.rs",
+          "line": 633,
+          "role": "Create and dispatch reply",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/mod.rs#L633"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/agent.rs",
+          "line": 608,
+          "role": "Agent loop",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/agent.rs#L608"
+        }
+      ]
+    },
+    {
+      "title": "Response design",
+      "description": "The thread follows new content while the reader remains near the bottom and offers a jump-to-end button when they scroll away. PersonMessage represents the user turn. Reply renders typed blocks for prose, cited items, opened tabs, search, steps, site styles, and Work handoff. It also exposes progress, faults, copy, and the cost display when applicable. Inline citations bind to page passages. CSS and the thread both account for reduced motion.",
+      "references": [
+        {
+          "path": "frame/src/features/assist/components/Thread.svelte",
+          "line": 30,
+          "role": "Follow and jump behavior",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/Thread.svelte#L30"
+        },
+        {
+          "path": "frame/src/features/assist/components/PersonMessage.svelte",
+          "line": 1,
+          "role": "User message",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/PersonMessage.svelte#L1"
+        },
+        {
+          "path": "frame/src/features/assist/components/Reply.svelte",
+          "line": 75,
+          "role": "Block dispatch",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/Reply.svelte#L75"
+        },
+        {
+          "path": "frame/src/features/assist/components/blocks/TextBlock.svelte",
+          "line": 1,
+          "role": "Text rendering",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/blocks/TextBlock.svelte#L1"
+        },
+        {
+          "path": "frame/src/features/assist/lib/markdown.ts",
+          "line": 1,
+          "role": "Markdown parsing",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/lib/markdown.ts#L1"
+        },
+        {
+          "path": "frame/src/features/assist/components/WorkingLine.svelte",
+          "line": 1,
+          "role": "Progress display",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/WorkingLine.svelte#L1"
+        },
+        {
+          "path": "frame/src/features/assist/components/FaultNote.svelte",
+          "line": 1,
+          "role": "Fault display",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/FaultNote.svelte#L1"
+        },
+        {
+          "path": "crates/zephium-page-assist/src/stream.rs",
+          "line": 1,
+          "role": "Citation rewriting during streaming",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-page-assist/src/stream.rs#L1"
+        },
+        {
+          "path": "crates/zephium-page-assist/src/citations.rs",
+          "line": 1,
+          "role": "Citation bookkeeping",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-page-assist/src/citations.rs#L1"
+        }
+      ]
+    },
+    {
+      "title": "Page reader and model",
+      "description": "The desktop adapter supplies tab facts and the configured Page model. The engine reads a live document through closed calls in a private execution world. It can return page text, selection, element picks and a style outline. The agent builds bounded page records, gives passages stable references within the reply, and puts page-derived text in untrusted prompt blocks. The local source configures live tab reading for macOS and Windows.",
+      "references": [
+        {
+          "path": "desktop/src/page_assist.rs",
+          "line": 409,
+          "role": "Supported platforms and tab read",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/desktop/src/page_assist.rs#L409"
+        },
+        {
+          "path": "desktop/src/page_assist.rs",
+          "line": 640,
+          "role": "Page model adapter",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/desktop/src/page_assist.rs#L640"
+        },
+        {
+          "path": "crates/zephium-engine/src/page_reader.rs",
+          "line": 1,
+          "role": "Reader contract",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-engine/src/page_reader.rs#L1"
+        },
+        {
+          "path": "crates/zephium-engine/src/host/page_reader.rs",
+          "line": 1,
+          "role": "Host dispatch",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-engine/src/host/page_reader.rs#L1"
+        },
+        {
+          "path": "crates/zephium-engine/src/platform/page_reader_bootstrap.js",
+          "line": 1,
+          "role": "In-page reader bootstrap",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-engine/src/platform/page_reader_bootstrap.js#L1"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/readout.rs",
+          "line": 1,
+          "role": "Normalize browser readout",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/readout.rs#L1"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/agent.rs",
+          "line": 274,
+          "role": "Read and record page",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/agent.rs#L274"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/agent.rs",
+          "line": 392,
+          "role": "Assemble context",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/agent.rs#L392"
+        },
+        {
+          "path": "crates/zephium-page-assist/src/prompt.rs",
+          "line": 1,
+          "role": "Prompt and data boundaries",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-page-assist/src/prompt.rs#L1"
+        },
+        {
+          "path": "crates/zephium-page-assist/src/refs.rs",
+          "line": 1,
+          "role": "Passage references",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-page-assist/src/refs.rs#L1"
+        }
+      ]
+    },
+    {
+      "title": "Tools, approvals and Work handoff",
+      "description": "The tool schemas cover tab listing, reading, item presentation, navigation, semantic actions, style inspection and changes, and Work handoff. The agent allows navigation through admitted targets and checks actions against page records. When approval is required, the panel surfaces the step or asks the person to take over. Style proposals pass a CSS allow-list. The handoff card offers a separate Continue into Work action.",
+      "references": [
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/tools.rs",
+          "line": 69,
+          "role": "Tool schemas",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/tools.rs#L69"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/agent.rs",
+          "line": 759,
+          "role": "Tool dispatch",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/agent.rs#L759"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/agent.rs",
+          "line": 1024,
+          "role": "Navigation",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/agent.rs#L1024"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/agent.rs",
+          "line": 1329,
+          "role": "Prepare handoff",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/agent.rs#L1329"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/agent.rs",
+          "line": 1399,
+          "role": "Step admission",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/agent.rs#L1399"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/agent.rs",
+          "line": 1640,
+          "role": "Plan and approval",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/agent.rs#L1640"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/steps.rs",
+          "line": 1,
+          "role": "Action execution adapter",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/steps.rs#L1"
+        },
+        {
+          "path": "crates/zephium-page-assist/src/css.rs",
+          "line": 1,
+          "role": "CSS validator",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-page-assist/src/css.rs#L1"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/mod.rs",
+          "line": 938,
+          "role": "Continue into Work",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/mod.rs#L938"
+        },
+        {
+          "path": "frame/src/features/assist/components/blocks/HandoffCard.svelte",
+          "line": 1,
+          "role": "Handoff UI",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/blocks/HandoffCard.svelte#L1"
+        }
+      ]
+    },
+    {
+      "title": "Availability, history and storage",
+      "description": "The policy gates AI-disabled, private, unsupported, internal/viewer, sensitive, unconfigured, and loading tabs. Conversation operations include stop, new, open and delete. The desktop adapter saves conversations by browser profile through the chat store. The notes here describe static source. Live behavior still depends on platform, provider configuration, permissions and the current page.",
+      "references": [
+        {
+          "path": "crates/zephium-page-assist/src/policy.rs",
+          "line": 43,
+          "role": "Availability rules",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-page-assist/src/policy.rs#L43"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/mod.rs",
+          "line": 753,
+          "role": "Stop",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/mod.rs#L753"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/mod.rs",
+          "line": 1080,
+          "role": "New conversation and history",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/mod.rs#L1080"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/mod.rs",
+          "line": 1186,
+          "role": "Persistence",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/mod.rs#L1186"
+        },
+        {
+          "path": "desktop/src/page_assist.rs",
+          "line": 961,
+          "role": "Profile storage adapter",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/desktop/src/page_assist.rs#L961"
+        },
+        {
+          "path": "crates/zephium-store/src/hub/chats.rs",
+          "line": 23,
+          "role": "Chat store",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-store/src/hub/chats.rs#L23"
+        },
+        {
+          "path": "frame/src/features/assist/components/HistoryView.svelte",
+          "line": 1,
+          "role": "History UI",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/components/HistoryView.svelte#L1"
+        },
+        {
+          "path": "crates/zephium-work-composition/src/page_assist/tests.rs",
+          "line": 1,
+          "role": "Service coverage",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/crates/zephium-work-composition/src/page_assist/tests.rs#L1"
+        },
+        {
+          "path": "frame/src/features/assist/tests/AssistInteraction.component.test.ts",
+          "line": 1,
+          "role": "UI behavior fixtures",
+          "url": "https://github.com/zephium-browser/Zephium/blob/9026a1fffad74d6e201ef97fe8c02c1b01403cd2/frame/src/features/assist/tests/AssistInteraction.component.test.ts#L1"
+        }
+      ]
+    }
+  ],
+  "module_inventory": [
+    "crates/zephium-page-assist/Cargo.toml",
+    "crates/zephium-page-assist/src/actions.rs",
+    "crates/zephium-page-assist/src/citations.rs",
+    "crates/zephium-page-assist/src/conversation.rs",
+    "crates/zephium-page-assist/src/cost.rs",
+    "crates/zephium-page-assist/src/css.rs",
+    "crates/zephium-page-assist/src/fixtures.rs",
+    "crates/zephium-page-assist/src/guard.rs",
+    "crates/zephium-page-assist/src/lib.rs",
+    "crates/zephium-page-assist/src/outline.rs",
+    "crates/zephium-page-assist/src/pacer.rs",
+    "crates/zephium-page-assist/src/page.rs",
+    "crates/zephium-page-assist/src/policy.rs",
+    "crates/zephium-page-assist/src/prompt.rs",
+    "crates/zephium-page-assist/src/refs.rs",
+    "crates/zephium-page-assist/src/stream.rs",
+    "crates/zephium-page-assist/src/suggest.rs",
+    "crates/zephium-page-assist/src/text.rs",
+    "crates/zephium-work-composition/src/page_assist/agent.rs",
+    "crates/zephium-work-composition/src/page_assist/fault.rs",
+    "crates/zephium-work-composition/src/page_assist/mod.rs",
+    "crates/zephium-work-composition/src/page_assist/port.rs",
+    "crates/zephium-work-composition/src/page_assist/readout.rs",
+    "crates/zephium-work-composition/src/page_assist/steps.rs",
+    "crates/zephium-work-composition/src/page_assist/tests.rs",
+    "crates/zephium-work-composition/src/page_assist/tools.rs",
+    "frame/src/features/assist/components/AddMenu.svelte",
+    "frame/src/features/assist/components/assist.css",
+    "frame/src/features/assist/components/AssistPanel.svelte",
+    "frame/src/features/assist/components/blocks/HandoffCard.svelte",
+    "frame/src/features/assist/components/blocks/ItemsBlock.svelte",
+    "frame/src/features/assist/components/blocks/OpenedBlock.svelte",
+    "frame/src/features/assist/components/blocks/SearchBlock.svelte",
+    "frame/src/features/assist/components/blocks/StepsBlock.svelte",
+    "frame/src/features/assist/components/blocks/StyleBlock.svelte",
+    "frame/src/features/assist/components/blocks/TextBlock.svelte",
+    "frame/src/features/assist/components/Composer.svelte",
+    "frame/src/features/assist/components/Empty.svelte",
+    "frame/src/features/assist/components/FaultNote.svelte",
+    "frame/src/features/assist/components/HistoryView.svelte",
+    "frame/src/features/assist/components/PageStyles.svelte",
+    "frame/src/features/assist/components/PersonMessage.svelte",
+    "frame/src/features/assist/components/Reply.svelte",
+    "frame/src/features/assist/components/SiteStyles.svelte",
+    "frame/src/features/assist/components/Thread.svelte",
+    "frame/src/features/assist/components/WorkingLine.svelte",
+    "frame/src/features/assist/index.ts",
+    "frame/src/features/assist/lib/assist-session.svelte.ts",
+    "frame/src/features/assist/lib/conversation.ts",
+    "frame/src/features/assist/lib/faults.ts",
+    "frame/src/features/assist/lib/format.ts",
+    "frame/src/features/assist/lib/icons.ts",
+    "frame/src/features/assist/lib/markdown.ts",
+    "frame/src/features/assist/lib/suggestions.ts",
+    "frame/src/features/assist/tests/AssistInteraction.component.test.ts",
+    "frame/src/features/assist/tests/AssistLook.component.test.ts",
+    "frame/src/features/assist/tests/AssistSelection.component.test.ts",
+    "frame/src/features/assist/tests/ClipboardPolicy.component.test.ts",
+    "frame/src/features/assist/tests/conversation.test.ts",
+    "frame/src/features/assist/tests/faults.test.ts",
+    "frame/src/features/assist/tests/fixtures.ts",
+    "frame/src/features/assist/tests/FrameStub.svelte",
+    "frame/src/features/assist/tests/HistoryView.test.ts",
+    "frame/src/features/assist/tests/PageStylesLook.component.test.ts",
+    "frame/src/features/assist/tests/PanelStage.svelte",
+    "frame/src/features/assist/tests/SearchBlock.component.test.ts",
+    "frame/src/features/assist/tests/starts.test.ts",
+    "frame/src/features/assist/tests/tabs-stub.svelte.ts"
+  ]
+}
