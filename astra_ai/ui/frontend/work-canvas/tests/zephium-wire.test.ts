@@ -74,3 +74,25 @@ describe("the Zephium design's scene", () => {
     expect(run.artifacts.map((artifact) => artifact.data.kind)).toEqual(["evidence_collection"]);
   });
 });
+
+describe("V28: the lead's adaptive cards", () => {
+  const v26 = (value: Record<string, unknown>) => parseObject({ id: "c1", title: "T", revision: 1, sources: [], contract_version: 26, family: value.kind, preset: `${value.kind}.1.reading`, ...value })!;
+  it("a calendar card becomes a Zephium calendar plan", () => {
+    const wire = wireOf(v26({ kind: "calendar", entries: [{ id: "e1", label: "Standup", date: "2026-11-18", when: "09:30" }] }));
+    expect(wire).toMatchObject({ kind: "plan", calendar: true, steps: [{ title: "Standup", when: "09:30", date: "2026-11-18" }] });
+  });
+  it("a chart card becomes a plot", () => {
+    expect(wireOf(v26({ kind: "chart", chartKind: "bars", entries: [{ id: "a", label: "Alpha", value: 4 }] }))).toMatchObject({ kind: "plot", series: [{ points: [{ x: "Alpha", y: "4" }] }] });
+  });
+  it("a document written as blocks keeps its headings, lists and text", () => {
+    const wire = wireOf(v26({ kind: "report", blocks: [{ id: "b1", kind: "heading", text: "Plan" }, { id: "b2", kind: "bullets", items: ["One", "Two"] }, { id: "b3", kind: "paragraph", text: "Done." }] }));
+    expect(wire).toEqual({ kind: "document", paragraphs: ["## Plan", "- One\n- Two", "Done."] });
+  });
+  it("an image card carries its first recorded picture", () => {
+    expect(wireOf(v26({ kind: "image", media: [{ id: "m1", kind: "image", url: "https://example.org/a.png", title: "A" }] }))).toMatchObject({ kind: "media", medium: "image", url: "https://example.org/a.png", poster: "https://example.org/a.png" });
+  });
+  it("an empty card is not drawn", () => {
+    expect(wireOf(v26({ kind: "report", blocks: [] }))).toBeNull();
+    expect(wireOf(v26({ kind: "draft" }))).toBeNull();
+  });
+});

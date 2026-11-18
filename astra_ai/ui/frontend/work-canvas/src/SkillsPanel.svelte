@@ -7,7 +7,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { store } from "./store.svelte";
-  import { workApi, workPanels } from "./work-panels.svelte";
+  import { workApi } from "./work-panels.svelte";
+  import WorkLibraryDrawer from "./WorkLibraryDrawer.svelte";
 
   type SkillRow = { name: string; title: string; description: string; category: string; source: string; origin: string; enabled: boolean; version: string; triggers: string[] };
   let skills = $state<SkillRow[]>([]);
@@ -115,12 +116,10 @@
   }
 </script>
 
-<section class="work-panel" aria-label="Skills">
-  <header>
-    <h2>Skills</h2>
-    <button type="button" class="ghost" onclick={create}>New skill</button>
-    <button type="button" class="close" aria-label="Close skills" onclick={() => (workPanels.open = "")}>×</button>
-  </header>
+<WorkLibraryDrawer panel="skills" title="Skills">
+  {#snippet headerAction()}
+    <button type="button" class="rl-text-button" onclick={create}>New skill</button>
+  {/snippet}
   <p class="lede">Instructions AEGIS follows for a kind of research. A skill shapes what is gathered and how the report is built; it never adds a model or a tool.</p>
   {#if used}
     <p class="used" data-used={used.name}>This research used <strong>{skills.find((row) => row.name === used.name)?.title ?? used.name}</strong> · v{used.version} · {used.chosen === "workflow" ? "from the workflow you chose" : "matched your request"}</p>
@@ -154,7 +153,12 @@
       </div>
     </div>
   {:else}
-    <input class="search" type="search" placeholder="Search skills" aria-label="Search skills" bind:value={query} />
+    <label class="rl-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+        <circle cx="10.8" cy="10.8" r="5.8" /><path d="m15 15 4 4" />
+      </svg>
+      <input type="search" placeholder="Search skills" aria-label="Search skills" bind:value={query} />
+    </label>
     {#if loading}<p class="meta">Loading…</p>{/if}
     {#each groups as [category, rows] (category)}
       <h4>{category}</h4>
@@ -175,37 +179,9 @@
       </ul>
     {/each}
   {/if}
-</section>
+</WorkLibraryDrawer>
 
 <style>
-  .work-panel {
-    position: absolute;
-    inset-block: 12px;
-    inset-inline-start: 64px;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    inline-size: min(380px, calc(100vw - 96px));
-    padding: 14px 14px 12px;
-    overflow-y: auto;
-    border-radius: 14px;
-    background: var(--color-raised);
-    box-shadow: 0 0 0 1px var(--color-border), var(--shadow-float);
-    color: var(--color-text);
-    font: 13px/1.45 var(--font-sans, Inter, sans-serif);
-  }
-  header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  h2 {
-    flex: 1;
-    margin: 0;
-    font-size: 16px;
-    font-weight: 650;
-  }
   h3 {
     margin: 4px 0 0;
     font-size: 15px;
@@ -249,13 +225,6 @@
     outline: 2px solid var(--color-ring, var(--color-text));
     outline-offset: 1px;
   }
-  .close {
-    inline-size: 26px;
-    block-size: 26px;
-    border-radius: 8px;
-    font-size: 18px;
-    line-height: 1;
-  }
   .ghost,
   .primary,
   .danger,
@@ -274,14 +243,6 @@
   }
   .back {
     align-self: flex-start;
-  }
-  .search {
-    padding: 7px 10px;
-    border: 1px solid var(--color-border);
-    border-radius: 9px;
-    background: transparent;
-    color: inherit;
-    font: inherit;
   }
   ul {
     display: flex;

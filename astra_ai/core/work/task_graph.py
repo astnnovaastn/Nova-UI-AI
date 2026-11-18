@@ -8,6 +8,33 @@ TASK_TYPES = {
     'fill_gaps': ('Resolve evidence gaps', ('web_search', 'web_fetch'), ('source',)),
     'write': ('Compose the result', (), ('document',)),
     'publish': ('Publish recorded results', (), ('report',)),
+    # V29 Work tasks (AEGIS_WORK_ROUTER=1). Each names the capability its handler uses; nothing else is granted.
+    'read_repo': ('Read the repository', ('repo_read',), ('code',)),
+    'read_account': ('Read connected accounts', ('account_read',), ('messages',)),
+    'browse': ('Gather references from the web', ('free_search', 'web_read'), ('source',)),
+    'run_check': ('Prepare a sandboxed check', ('sandbox',), ('test',)),
+    'compose': ('Create the results', (), ('objects',)),
+}
+
+#: V29 labels per workflow for the Work tasks.
+WORK_LABELS = {
+    'map-a-project': {'read_repo': 'Read the project files', 'compose': 'Build the architecture map'},
+    'explain-code': {'read_repo': 'Read the code', 'compose': 'Explain the code'},
+    'review-a-change': {'read_repo': 'Read the changed files', 'run_check': 'Prepare the checks', 'compose': 'Review the change'},
+    'fix-a-bug': {'read_repo': 'Read the failing code', 'run_check': 'Prepare the test run', 'compose': 'Draft the fix'},
+    'moodboard': {'browse': 'Gather visual references', 'compose': 'Compose the boards'},
+    'ui-teardown': {'browse': 'Read the interface', 'compose': 'Write the teardown'},
+    'plan-my-day': {'read_account': 'Read your calendar and mail', 'compose': 'Lay out the day'},
+    'inbox-triage': {'read_account': 'Read your inbox', 'compose': 'Sort and draft replies'},
+    'weekly-status': {'read_account': 'Read recent messages', 'compose': 'Write the status'},
+    'meeting-prep': {'read_account': 'Read the meeting', 'browse': 'Look up the people and companies', 'compose': 'Write the brief'},
+    'campaign-plan': {'browse': 'Check the audience and channels', 'compose': 'Plan the campaign and drafts'},
+    'learning-path': {'browse': 'Find courses and references', 'compose': 'Lay out the path'},
+    'exam-prep': {'browse': 'Find the exam format', 'compose': 'Plan and write questions'},
+    'competitor-landscape': {'browse': 'Read competitor pages', 'compose': 'Compare the competitors'},
+    'market-map': {'browse': 'Find companies by segment', 'compose': 'Map the market'},
+    'pricing-research': {'browse': 'Read pricing pages', 'compose': 'Compare the plans'},
+    'investor-list': {'browse': 'Find investors and deals', 'compose': 'Shortlist investors'},
 }
 
 
@@ -64,6 +91,10 @@ def validate(graph):
 
 def compile_plan(plan, workflow='', skills=()):
     """Compile the admitted lead plan into existing registered execution capabilities."""
+    from .router import tasks_for
+    work = tasks_for(plan.get('route'))
+    if work:
+        return compile_work(plan, work, workflow, skills)
     mode = plan.get('mode', 'quick')
     roles = {row.get('role') for row in plan.get('assignments', []) if isinstance(row, dict)}
     kinds = []
@@ -87,6 +118,22 @@ def compile_plan(plan, workflow='', skills=()):
                           acceptance='Recorded output exists; failures remain explicit.'))
     return validate(dict(version=2, workflow=workflow, nodes=nodes,
                          requirements=list(dict.fromkeys(str(s).strip() for s in plan.get('sections', []) if str(s).strip())),
+                         skills=[dict(name=s.get('name'), version=s.get('version')) for s in skills], planning_agents=1))
+
+
+def compile_work(plan, kinds, workflow='', skills=()):
+    """A routed Work graph: gather tasks run independently, compose waits for all of them."""
+    labels = WORK_LABELS.get(workflow, {})
+    gather = [k for k in kinds if k not in ('compose', 'write', 'publish')]
+    nodes = []
+    for kind in kinds:
+        title, capabilities, outputs = TASK_TYPES[kind]
+        depends = [] if kind in gather else (gather if kind == 'compose' else [nodes[-1]['id']])
+        nodes.append(dict(id=kind, type=kind, label=labels.get(kind, title), depends_on=list(depends),
+                          inputs=list(depends) or ['request'], output_kinds=list(outputs),
+                          capabilities=list(capabilities), status='queued',
+                          acceptance='Recorded output exists; failures remain explicit.'))
+    return validate(dict(version=2, workflow=workflow, nodes=nodes, requirements=[], router='v29',
                          skills=[dict(name=s.get('name'), version=s.get('version')) for s in skills], planning_agents=1))
 
 

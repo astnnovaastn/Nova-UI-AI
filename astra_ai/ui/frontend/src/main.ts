@@ -519,7 +519,7 @@ socket.onMessage((msg) => {
   }
 
   else if (type === "live_error") {
-    memoryChatBusy=false;conversationState({textBusy:false,status:'Live connection needs attention. Your draft is preserved.'});
+    memoryChatBusy=false;conversationState({activeRequestId:'',textBusy:false,status:'Live connection needs attention. Your draft is preserved.'});
     showError(String(msg.message || "Gemini Live error"));
     recoverTransient(String(msg.message || "Gemini Live error"));
   }
@@ -1079,7 +1079,7 @@ window.addEventListener('orbWidgetStateChange',(event:Event)=>{const d=(event as
 window.addEventListener('nova-chat-microphone',()=>btnMute.click());
 let memoryChatBusy=false;
 let chatAbort:AbortController|null=null;
-window.addEventListener('nova-chat-cancel',()=>{audioPlayer.stop();heldGeneration=pendingInterruptionGeneration='';isAudioPlaying=false;socket.send({type:'live_text_suspend'});conversationState({textBusy:false,status:'Reply interrupted; tasks remain active.'});});
+window.addEventListener('nova-chat-cancel',()=>{audioPlayer.stop();heldGeneration=pendingInterruptionGeneration='';isAudioPlaying=false;socket.send({type:'live_text_suspend'});conversationState({activeRequestId:'',textBusy:false,status:'Reply interrupted; tasks remain active.'});});
 window.addEventListener('nova-research-result',(event:Event)=>socket.send({type:'widget_action_result',...(event as CustomEvent).detail,widget:'application'}));
 window.addEventListener('nova-memory-view-result',(event:Event)=>{socket.send({type:'widget_action_result',...(event as CustomEvent).detail,widget:'memory'});});
 window.addEventListener('nova-job-cancel',async(event:Event)=>{const id=String((event as CustomEvent).detail?.job_id||'');if(id){const headers={'X-Nova-Client':conversationSnapshot().clientId};await fetch('/api/jobs/'+encodeURIComponent(id)+'/cancel',{method:'POST',headers});const r=await fetch('/api/jobs',{headers});if(r.ok){const data=await r.json();conversationState({jobs:data.jobs||[]});}}});

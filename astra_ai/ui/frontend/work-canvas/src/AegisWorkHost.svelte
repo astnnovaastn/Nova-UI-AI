@@ -84,7 +84,6 @@
   function attachAccount(input:AccountInput) {
     accountInputs=[...accountInputs.filter(x=>x.id!==input.id),input].slice(-24);
   }
-  import { workPanels } from "./work-panels.svelte";
   import { buildScene, reportTitle, type CanvasScene, type ZephiumRun } from "./research-to-run";
   import { aegisSession, asWorkSession } from "./session.svelte";
   import { store } from "./store.svelte";
@@ -92,6 +91,10 @@
   import { ACTIVE_JOBS, endedWords, setWaitingReason, wordsForWait } from "./waiting.svelte";
   import { pictureUrl } from "./report-images";
   import ClarificationPanel from './ClarificationPanel.svelte';
+  import { documentIdentity } from "./document-identity";
+  import { Character } from "$shared/ui/presence";
+  import BrowserTabs from "./BrowserTabs.svelte";
+  import { browserTabs } from "./browser-tabs.svelte";
   import VoiceWave from './VoiceWave.svelte';
   import ReportReader from './ReportReader.svelte';
   import {clarificationPresentation} from './clarifications';
@@ -274,9 +277,12 @@
   });
 
   const recorded = () => scene?.pages ?? [];
+  /** V29: the workflow's board profile from the run's route; old runs (no route) keep today's board. */
+  const boardProfile = $derived(zephiumDesign && !pendingReport ? (state.run?.plan?.route?.board ?? undefined) : undefined);
   const stages = $derived(
     scene
       ? environmentStages(scene.snapshot, scene.objectives, {
+          ...(boardProfile ? { board: boardProfile } : {}),
           recorded,
           pictures: new Map(),
           fetched: fetchedPictures(scene.snapshot, new Map()),
@@ -1258,7 +1264,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
       if (url) openSourceWindow(url, "", "evidence");
       else actions?.openView("sources");
     },
-    entity: () => actions?.openView("reader"),
+    entity: () => openReport(),
     command: () => {},
     page: (url) => openSourceWindow(url, "", "board-page"),
     note: () => undefined,
@@ -1294,12 +1300,17 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
   const liftedItem = $derived(lifted ? (items.find((entry) => entry.id === lifted) as { id: string; title?: string; object?: { view: ObjectView } } | undefined) : undefined);
   /** Only a different report closes what is open; the same report reloaded (after an edit) keeps it. */
   const openReportId = $derived(report?.research_id ?? "");
-  $effect(() => { void openReportId; untrack(() => { lifted = null; }); });
+  $effect(() => { void openReportId; untrack(() => { lifted = null; reading = false; }); });
   /** The cards that stand for the report itself (its reply and document): they open the Reader. */
   /** The report's document card: the new reader opens it in the centre. */
   const reportCard = $derived((scene?.snapshot.elements ?? []).find((element) => /-report$/.test((element.reference as { artifact?: string }).artifact ?? ""))?.id ?? null);
+  /** V30: the Work document viewer, for a run whose board has no report card (a routed Work run). */
+  let reading = $state(false);
+  const identity = $derived(documentIdentity(state.run as Parameters<typeof documentIdentity>[0]));
   function openReport() {
     if (zephiumDesign && reportCard) lifted = reportCard;
+    // A Work result (campaign plan, brief, map...) opens as itself in the centre, not in the old research tabs.
+    else if (zephiumDesign && scene?.papers[0]) { lifted = null; reading = true; }
     else actions?.openView("reader");
   }
   // The editor's Back to report returns here, to the same report in reading mode.
@@ -1322,7 +1333,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
         if (readerCards.has(id)) openReport();
         // A video plays where every page opens: the workspace browser.
         else if (shown.kind === "media" && shown.media === "video" && shown.url) openSourceWindow(shown.url, "", "video-card", undefined, event);
-        else lifted = id;
+        else { reading = false; lifted = id; }
         return;
       }
     }
@@ -1342,7 +1353,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     else if (item.type === "objective" || item.type === "request") opened = { kind: "request", id, title: report?.query ?? item.title ?? "" };
     else if (urlOf(item)) openSourceWindow(urlOf(item));
     else if (item.type === "trail") return;
-    else actions?.openView("reader");
+    else openReport();
   }
 
   /** The run behind the Open panel: what it did, what it made, every step. */
@@ -1423,20 +1434,44 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
   /** Whether the next task carries the chosen cards, or the message is a question about them. */
   let useChosenIn = $state<"ask" | "task">("ask");
 
-  function send() {
-    const text = value.trim();
+  let submittingPrompt = $state(false);
+  async function send() {
+    if (submittingPrompt) return;
+    const original = value;
+    const text = original.trim();
     if (!text) return;
     const about = asking.length ? asking : view.chosen;
-    if (state.run?.state === "needs_input") actions?.answerRun(text);
+    if (state.run?.state === "needs_input") {
+      const page = report?.research_id;
+      submittingPrompt = true;
+      try {
+        await actions?.answerRun(text);
+        if (report?.research_id !== page || value !== original) return;
+      } catch {
+        return;
+      } finally {
+        submittingPrompt = false;
+      }
+    }
     else if (accountInputs.length) {
       startNow(text);
       actions?.startWork(text,{chosen:[...accountInputs,...about.map(describe)].slice(0,24),workflow:skill??'',fromResearch:report?.research_id??''});
       accountInputs=[];
     }
     else if (about.length && useChosenIn === "task") { startNow(text); actions?.startWork(text, { chosen: about.map(describe), fromResearch: report?.research_id ?? "" }); }
-    else if (about.length && report) actions?.askNodes(text, about.map(describe), state.run?.run_id ?? report.research_id);
     else if (!report) { startNow(text); actions?.startWork(text, { workflow: skill ?? "" }); }
-    else actions?.prompt(text);
+    else {
+      const page = report.research_id;
+      submittingPrompt = true;
+      try {
+        const accepted = about.length
+          ? await actions?.askNodes(text, about.map(describe), state.run?.run_id ?? page)
+          : await actions?.prompt(text);
+        if (!accepted || report?.research_id !== page || value !== original) return;
+      } finally {
+        submittingPrompt = false;
+      }
+    }
     value = "";
     asking = [];
     useChosenIn = "ask";
@@ -1490,12 +1525,48 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
 
   const activeJobs = $derived(state.jobs.filter((job) => ACTIVE_JOBS.has(job.state)));
   const live = $derived(scene?.state === "running" || scene?.state === "waiting");
-  const question=$derived(clarifications.question);
+  /** The step the backend accepted an answer for: settled for the island while the job queue resumes the run (V30). */
+  let answeredStep = $state<string | null>(null);
+  const pendingQuestion=$derived(clarifications.question);
+  const question=$derived(pendingQuestion && pendingQuestion.step !== answeredStep ? pendingQuestion : null);
+  /** The open question's id, compared by value: the run is re-read often and rebuilds the question object each time. */
+  const questionStep=$derived(question?.step ?? null);
   /** The microphone is on: the composer shows the live voice strip, and a question can be answered aloud. */
   const voiceOn = $derived(!state.muted && state.connected && !state.guest);
   /** While AEGIS waits on a question, the person's finished spoken sentence is their answer. */
+  /** V30 question island: folded by Escape or its header (the run keeps waiting); a new question opens it again. */
+  let questionFolded = $state(false);
+  let islandHead = $state<HTMLButtonElement>();
+  /** Set only after the backend accepted the answer and the run was reloaded: the brief "received" state. */
+  let acknowledged = $state(false);
+  let acknowledgeTimer: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => { void questionStep; untrack(() => { questionFolded = false; }); });
+  // A question that just opened takes the keyboard only if nothing else had it (never from the composer).
+  $effect(() => {
+    const step = questionStep;
+    if (!step) return;
+    requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (untrack(() => questionStep) !== step || (active && active !== document.body && !active.closest(".canvas-stage, .react-flow, .svelte-flow"))) return;
+      document.querySelector<HTMLElement>("#aegis-question-body button, #aegis-question-body textarea, #aegis-question-body input")?.focus({ preventScroll: true });
+    });
+  });
+  async function answerQuestion(text: string) {
+    const step = question?.step ?? null;
+    await actions?.answerRun(text);
+    // The backend has saved the answer (the request succeeded); the run resumes when the job queue picks it up.
+    answeredStep = step;
+    acknowledged = true;
+  }
+  // "Answer received · resuming" lasts until the run is working again (or asks something new), and at least briefly.
+  $effect(() => {
+    if (!acknowledged) return;
+    const resumed = !pendingQuestion || pendingQuestion.step !== answeredStep;
+    clearTimeout(acknowledgeTimer);
+    acknowledgeTimer = setTimeout(() => { if (resumed) acknowledged = false; }, resumed ? 1600 : 60000);
+  });
   let heardAnswer = $state("");
-  $effect(() => { void question?.step; untrack(() => { heardAnswer = ""; }); });
+  $effect(() => { void questionStep; untrack(() => { heardAnswer = ""; }); });
   $effect(() => {
     const open = question;
     if (!open || !voiceOn) return;
@@ -1618,7 +1689,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
       }}
       onmade={(id) => {
         opened = null;
-        if (id.startsWith("paper:")) actions?.openView("reader");
+        if (id.startsWith("paper:")) openReport();
       }}
       onclose={() => (opened = null)}
     />
@@ -1670,8 +1741,13 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
   <ObjectFocus onsource={(url,title,event)=>openSourceWindow(url,title,'object-provenance',undefined,event)} onask={object=>actions?.askNodes('Ask about '+object.title,[objectQuestionContext(object)],state.run?.run_id||'')}/>
   <div class="shell" data-state={scene?.state ?? "empty"} data-panel={state.panel}>
     <Rail />
-    {#if workPanels.open === "skills"}<SkillsPanel />{:else if workPanels.open === "connections"}<ConnectionsPanel onAttach={attachAccount} />{/if}
+    {#if state.panel === "skills"}
+      <SkillsPanel />
+    {:else if state.panel === "connections"}
+      <ConnectionsPanel onAttach={attachAccount} />
+    {/if}
     <div class="environment">
+      {#if browserTabs.available}<BrowserTabs />{/if}
       <div class="canvas-card" class:strings={composedRun} bind:this={cardHost}>
         {#if scene && (state.run !== undefined || pending)}
           {#key `${scene.name}:${camera}`}
@@ -1717,10 +1793,11 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
             {@const view = liftedItem.object.view}
             <Lift origin={null} source={liftedItem.id} bounds={windowBounds} preferred={{ width: 980, height: 720 }} title={liftedItem.title ?? view.title ?? ""} onclose={() => (lifted = null)}>
               <div class="lift-body">
-                <LiftHeader kind={liftedItem.id === reportCard ? "Report" : objectLabel(view.kind)} title={view.title ?? ""} icon={objectIcon(view.kind)} />
+                <LiftHeader kind={liftedItem.id === reportCard ? identity.label : objectLabel(view.kind)} title={view.title ?? ""} icon={objectIcon(view.kind)} />
                 {#if liftedItem.id === reportCard}
                   <div class="lift-actions">
                     <button type="button" onclick={() => { lifted = null; actions?.openView("edit-report"); }}>Edit report</button>
+                    <button type="button" onclick={() => (lifted = null)}>Back to canvas</button>
                   </div>
                 {/if}
                 {#if liftedItem.id === reportCard && scene?.papers[0]}
@@ -1735,6 +1812,19 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
                   }}
                 />
                 {/if}
+              </div>
+            </Lift>
+          {/if}
+          {#if reading && scene?.papers[0]}
+            {@const paper = scene.papers[0]}
+            <Lift origin={null} bounds={windowBounds} preferred={{ width: 980, height: 720 }} title={paper.title} onclose={() => (reading = false)}>
+              <div class="lift-body" data-work-document={identity.kind}>
+                <LiftHeader kind={identity.label} title={paper.title} icon={objectIcon("document")} />
+                <div class="lift-actions">
+                  <button type="button" onclick={() => { reading = false; actions?.openView("edit-report"); }}>Edit</button>
+                  <button type="button" onclick={() => (reading = false)}>Back to canvas</button>
+                </div>
+                <ReportReader {paper} draftHtml={(report as { draft?: { html?: string } } | null)?.draft?.html ?? ""} />
               </div>
             </Lift>
           {/if}
@@ -1790,9 +1880,38 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
             <span>{title}</span>
             <Icon icon={ArrowDown01Icon} size={14} strokeWidth={1.8} />
           </button>
+          {#if browserTabs.available}
+            <!-- V30: browser tabs. The canvas stays as it is; the Work tab brings it back. -->
+            <button type="button" class="new-tab" aria-label="New browser tab" title="New tab (Ctrl+T)" onclick={() => browserTabs.newTab()}>+</button>
+            {#if browserTabs.tabs.length}
+              <button type="button" class="new-tab tabs" title="Show browser tabs" onclick={() => browserTabs.show(browserTabs.tabs.at(-1)!.id)}>{browserTabs.tabs.length} {browserTabs.tabs.length === 1 ? "tab" : "tabs"}</button>
+            {/if}
+          {/if}
           <span class="canvas-top-gap"></span>
-          <div class="island" class:gone={!live && !ended && !chatLabel && !state.status}>
-            {#if live}
+          <div
+            class="island"
+            class:gone={!question && !acknowledged && !live && !ended && !chatLabel && !state.status}
+            class:asking={!!question}
+            class:open={!!question && !questionFolded}
+            role={question ? "region" : undefined}
+            aria-label={question ? "AEGIS question" : undefined}
+            onkeydown={(event) => { if (question && event.key === "Escape" && !questionFolded) { event.stopPropagation(); questionFolded = true; islandHead?.focus(); } }}
+          >
+            {#if question}
+              <!-- V30: the question opens out of the island itself; folding it keeps the run waiting, never answers it. -->
+              <button bind:this={islandHead} type="button" class="ask-head" aria-expanded={!questionFolded} aria-controls="aegis-question-body" onclick={() => (questionFolded = !questionFolded)}>
+                <Character kind="lead" mood={voiceOn ? "reading" : "waiting"} size={20} />
+                <span>AEGIS has a question</span>
+                <small>{questionFolded ? "Open" : "Waiting for you"}</small>
+              </button>
+              <div class="ask-body" id="aegis-question-body" inert={questionFolded}>
+                <div class="ask-inner">
+                  <ClarificationPanel {question} embedded disabled={disabled} listening={voiceOn} heard={heardAnswer} onvoice={() => actions?.microphone()} onanswer={answerQuestion} />
+                </div>
+              </div>
+            {:else if acknowledged}
+              <div class="chat-pill ack" role="status">Answer received · resuming</div>
+            {:else if live}
               <AgentLine session={asWorkSession()} agents={agents.items} />
             {:else if ended && retrying}
               <div class="chat-pill" role="status">Retrying…</div>
@@ -1815,9 +1934,6 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
           <div class="zoom-slot" data-work-zoom-slot></div>
         </div>
       </div>
-      {#if question}
-        <div class="question-panel" style:--dock="{dockHeight}px"><ClarificationPanel {question} disabled={disabled} listening={voiceOn} heard={heardAnswer} onvoice={() => actions?.microphone()} onanswer={text=>actions?.answerRun(text)}/></div>
-      {/if}
       {#if asking.length || view.chosen.length}
         <div class="context-row" style:--dock="{dockHeight}px" role="group" aria-label="Cards this message is about">
           {#if asking.length}
@@ -1839,12 +1955,15 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
             <button type="button" onclick={()=>accountInputs=[]}>Clear all</button>
           </div>
         {/if}
+        {#if state.replyActive}
+          <button type="button" class="stop-research-reply" onclick={() => actions?.stopReply()}>Stop response</button>
+        {/if}
         <WorkBar
           bind:surface={composerSurface}
           bind:value
           {placeholder}
           {disabled}
-          busy={state.busy}
+          busy={state.busy || submittingPrompt}
           tools={barTools}
           onsubmit={send}
           ondictate={() => actions?.microphone()}
@@ -2040,7 +2159,6 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     color: #fff;
   }
 
-  .question-panel{position:absolute;right:24px;top:80px;z-index:45;pointer-events:auto}
   .context-row {
     position: absolute;
     inset-block-end: calc(var(--dock, 64px) + 14px);
@@ -2099,7 +2217,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
 
   /* The Library and Conversation stand beside the canvas, which keeps the rest of the room. */
   @media (min-width: 900px) {
-    .shell[data-panel="history"] .environment {
+    .shell:is([data-panel="history"], [data-panel="skills"], [data-panel="connections"]) .environment {
       margin-inline-start: calc(var(--research-library-width, 360px) + 8px);
     }
 
@@ -2357,6 +2475,96 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     pointer-events: none;
   }
 
+  .new-tab {
+    flex: none;
+    min-inline-size: 30px;
+    block-size: 30px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--color-float);
+    box-shadow: var(--shadow-popover);
+    color: var(--color-text);
+    font: 600 16px var(--font-sans);
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  .new-tab.tabs {
+    font-size: 12px;
+  }
+  .new-tab:focus-visible {
+    outline: 2px solid var(--color-text);
+    outline-offset: 2px;
+  }
+
+  /* V30 question island: the status pill itself opens downward into the question, then closes again. */
+  .island.asking {
+    z-index: 50;
+    inline-size: min(580px, calc(100vw - 48px));
+    max-inline-size: calc(100% - 32px);
+    border-radius: 22px;
+    background: var(--color-float);
+    box-shadow: var(--shadow-popover);
+    color: var(--color-text);
+    overflow: hidden;
+    transition:
+      inline-size 260ms var(--ease-out),
+      border-radius 260ms var(--ease-out),
+      opacity var(--motion-base) var(--ease-out);
+  }
+  .island.asking:not(.open) {
+    inline-size: min(320px, calc(100vw - 48px));
+    border-radius: 999px;
+  }
+  .ask-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    inline-size: 100%;
+    padding: 9px 16px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: 600 var(--text-body) var(--font-sans);
+    text-align: start;
+    cursor: pointer;
+  }
+  .ask-head small {
+    margin-inline-start: auto;
+    font-weight: 500;
+    color: var(--color-muted);
+  }
+  .ask-head:focus-visible {
+    outline: 2px solid var(--color-text);
+    outline-offset: -4px;
+    border-radius: 18px;
+  }
+  .ask-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+      grid-template-rows 260ms var(--ease-out),
+      opacity 180ms var(--ease-out);
+  }
+  .island.open .ask-body {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  .ask-inner {
+    min-block-size: 0;
+    overflow: hidden;
+  }
+  .chat-pill.ack {
+    color: var(--color-text);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .island.asking,
+    .ask-body {
+      transition: none;
+    }
+  }
+
   .chat-pill {
     padding: 10px 18px;
     border-radius: 999px;
@@ -2446,6 +2654,8 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     color: var(--color-muted);
     line-height: 1.5;
   }
+
+  .stop-research-reply { display: block; margin: 0 auto 4px; }
 
   .bar-dock {
     position: absolute;

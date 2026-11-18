@@ -24,7 +24,9 @@
     "desktop:shortcuts": "electron desktop/main.cjs --install-shortcuts",
     "test:desktop": "node --test tests/desktop-resources.test.cjs && node tests/desktop.e2e.cjs && node tests/desktop-lifecycle.e2e.cjs",
     "test:memory-globe": "node tests/memory-globe/run.mjs",
-    "test:agent-lab": "node tests/agent-execution-lab.e2e.cjs"
+    "test:agent-lab": "node tests/agent-execution-lab.e2e.cjs",
+    "test:v30": "node tests/work-v30.e2e.cjs",
+    "test:v30-desktop": "node tests/desktop-v30-browser.e2e.cjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

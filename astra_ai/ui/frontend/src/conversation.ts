@@ -5,6 +5,8 @@ export type ChatMessage = {
   text: string;
   status: string;
   research_id?: string;
+  timestamp?: string;
+  model?: string;
   context_cards?: any[];
 };
 const messages: ChatMessage[] = [];
@@ -30,7 +32,9 @@ export function conversationResearch(id: string, items?: any[], sessionId?: stri
       role: m.role,
       text: m.content || m.text,
       status: m.status || "completed",
-      research_id: id,
+      research_id: m.research_id || id,
+      timestamp: typeof m.timestamp === "string" ? m.timestamp : undefined,
+      model: typeof m.model === "string" ? m.model : undefined,
       context_cards: m.context_cards,
     }));
     const ids = new Set(loaded.map((m) => m.id));
@@ -165,6 +169,11 @@ export function requestConversation(
     }),
   );
 }
+export function hasActiveResearchReply(researchId: string) {
+  const requestId = connection.activeRequestId;
+  return !!researchId && !!requestId && requestResearch.get(requestId) === researchId;
+}
+
 export function requestMicrophone() {
   window.dispatchEvent(new Event("nova-chat-microphone"));
 }

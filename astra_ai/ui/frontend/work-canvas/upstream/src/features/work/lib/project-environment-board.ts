@@ -149,6 +149,8 @@ export function measurer(measured: Map<string, number>) {
 }
 
 export type StageOptions = {
+  /** AEGIS V29: the workflow's board profile (route.board); none or "research" keeps today's board. */
+  board?: string;
   recorded?: (objective: string) => readonly WorkPageV1[];
   pictures?: ReadonlyMap<string, Picture>;
   /** Pictures admitted from the web, by the address they came from. */
@@ -541,7 +543,7 @@ export function environmentStages(
             width: range(object),
             height: (width) => sized(object, width, object.id === open),
           })),
-        open ? { open } : {},
+        { ...(open ? { open } : {}), ...(options.board ? { profile: options.board } : {}) },
       );
       const reply = set.reply;
       const headWidth = reply

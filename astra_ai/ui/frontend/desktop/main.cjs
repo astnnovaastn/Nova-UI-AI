@@ -18,6 +18,7 @@
  *      electron desktop/main.cjs --install-shortcuts
  */
 const { app, BrowserWindow, WebContentsView, Menu, ipcMain, session, shell, dialog } = require("electron");
+const { browserAssist } = require("./browser-assist.cjs");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -28,6 +29,8 @@ const services = require("./services.cjs");
 const uiServer = require("./ui-server.cjs");
 const { ResourceManager } = require("./resources.cjs");
 const { NoteFiles } = require('./note-files.cjs');
+const agentBrowser = require("./agent-browser.cjs");
+const { userTabs } = require("./user-tabs.cjs");
 
 const APP_ID = "ai.aegis.desktop";
 const FRONTEND = path.resolve(__dirname, "..");
@@ -37,6 +40,8 @@ const SHELL_URL = pathToFileURL(SHELL_PAGE).href;
 const PANE_PARTITION = "persist:aegis-browser";
 /** Windows the workspace may have open. How many hold a live page is the lifecycle manager's decision. */
 const MAX_PANES = 8;
+/** V30: the person's own browser tabs (user-tabs.cjs), counted apart from source panes. */
+const MAX_TABS = 16;
 /** What the AEGIS workspace itself may ask Chromium for (voice, camera widget, copy and paste). */
 const WORKSPACE_PERMISSIONS = new Set(["media", "clipboard-read", "clipboard-sanitized-write", "fullscreen", "notifications"]);
 const RESOURCE_MODES = new Set(["auto", "saving", "normal", "performance"]);
@@ -53,8 +58,10 @@ let startedServices = false;
 /** The built web app, served from this process. Null when a dev server is in use. */
 let ownServer = null;
 let uiMode = "";
-/** id -> { id, view | null, bounds, visible, url, title, scrollY, frozen } */
+/** id -> { id, kind: "source" | "tab", view | null, bounds, visible, url, title, scrollY, frozen } */
 const panes = new Map();
+/** The hidden agent browser the backend may use for background reading (agent-browser.cjs). Never a pane. */
+let agentHost = null;
 
 // ---------------------------------------------------------------- settings
 
@@ -116,7 +123,8 @@ async function boot() {
     const build = uiServer.buildState(FRONTEND);
     const backendUp = await services.backendHealthy();
     if (!backendUp || !build.usable) {
-      await services.start(config.projectRoot, { frontend: !build.usable });
+      // The backend learns where the agent browser's token is; it reads the file on each connection.
+      await services.start(config.projectRoot, { frontend: !build.usable, env: agentHost ? { AEGIS_AGENT_BROWSER_TOKEN_FILE: agentHost.tokenFile } : {} });
       // Whatever the launcher was asked to start is stopped again on exit. A backend that was
       // already up, with a current build to serve, never reaches here and is left alone.
       startedServices = true;
@@ -138,6 +146,7 @@ async function boot() {
     );
   }
   workspaceOrigin = target.origin;
+  agentHost?.kick();
   // Not awaited: the reply to the start page would otherwise race the page being replaced.
   setImmediate(() => mainWindow?.loadURL(target.href).catch(() => mainWindow?.loadFile(SHELL_PAGE)));
   return { startedServices, uiMode };
@@ -208,7 +217,7 @@ function paneMemoryMB(pane) {
 
 function registerPane(pane) {
   const timeout = (promise, ms, fallback) => Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(fallback), ms))]);
-  lifecycle.register(resourceId(pane.id), "source page", {
+  lifecycle.register(resourceId(pane.id), pane.kind === "tab" ? "browser tab" : "source page", {
     // Sound the person can hear, or a page still arriving, is never cut off.
     busy: () => (!pane.view ? "" : pane.view.webContents.isCurrentlyAudible() ? "audio" : pane.view.webContents.isLoading() ? "loading" : ""),
     memoryMB: () => paneMemoryMB(pane),
@@ -282,6 +291,21 @@ function notify(id, event) {
   contents.mainFrame.executeJavaScript(`window.__aegisBrowserEvent&&window.__aegisBrowserEvent(${payload})`).catch(() => {});
 }
 
+/** The person's browser tabs: their own signed-in session, downloads and permission questions. */
+const tabs = userTabs({
+  session,
+  dialog,
+  window: () => mainWindow,
+  publicPage,
+  tabOf: (contents) => {
+    for (const [id, pane] of panes) if (pane.kind === "tab" && pane.view?.webContents === contents) return id;
+    return null;
+  },
+  notify: (id, event) => notify(id, event),
+  downloads: () => app.getPath("downloads"),
+  appName: app.getName(),
+});
+
 function paneSession() {
   const store = session.fromPartition(PANE_PARTITION);
   if (store.__aegisReady) return store;
@@ -335,7 +359,7 @@ function attachView(pane) {
   const id = pane.id;
   const view = new WebContentsView({
     webPreferences: {
-      session: paneSession(),
+      session: pane.kind === "tab" ? tabs.session() : paneSession(),
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
@@ -350,8 +374,22 @@ function attachView(pane) {
   view.setBounds(pane.bounds);
   view.setVisible(pane.visible);
 
-  // Only a workspace source control can open a new pane.
-  contents.setWindowOpenHandler(() => ({ action: "deny" }));
+  // A source pane opens nothing. A tab opens links as new tabs and sign-in popups as real popups (user-tabs.cjs).
+  if (pane.kind === "tab") {
+    contents.setWindowOpenHandler(tabs.windowOpen(id));
+    contents.on("did-create-window", (child) => tabs.guardPopup(child, id));
+    // A focused page gets the keys, so the browser's own shortcuts are passed back to the workspace.
+    contents.on("before-input-event", (event, input) => {
+      if (input.type !== "keyDown" || !(input.control || input.meta) || input.alt) return;
+      const key = String(input.key || "").toLowerCase();
+      if (key === "t" || key === "w" || key === "l") {
+        event.preventDefault();
+        notify(id, { kind: "shortcut", key });
+      }
+    });
+  } else {
+    contents.setWindowOpenHandler(() => ({ action: "deny" }));
+  }
   // The page itself may only go to public websites. Its frames load what any browser would.
   const guard = (event, url) => {
     if (publicPage(url)) return;
@@ -365,7 +403,10 @@ function attachView(pane) {
   contents.on("will-attach-webview", (event) => event.preventDefault());
 
   const where = () => contents.getURL();
-  contents.on("did-start-loading", () => notify(id, { kind: "load", loading: true, url: where() }));
+  contents.on("did-start-loading", () => {
+    assist.invalidate(id);
+    notify(id, { kind: "load", loading: true, url: where() });
+  });
   contents.on("did-stop-loading", () => {
     notify(id, { kind: "load", loading: false, url: where() });
     history(id, contents);
@@ -377,6 +418,7 @@ function attachView(pane) {
   });
   contents.on("did-navigate-in-page", (_event, url, isMainFrame) => {
     if (!isMainFrame) return;
+    assist.invalidate(id);
     pane.url = url;
     notify(id, { kind: "load", loading: contents.isLoading(), url });
     history(id, contents);
@@ -425,8 +467,8 @@ function destroyView(pane) {
   }
 }
 
-function createPane(id, bounds, url) {
-  const pane = { id, view: null, bounds, visible: true, url, title: "", scrollY: 0, frozen: false };
+function createPane(id, bounds, url, kind = "source") {
+  const pane = { id, kind, view: null, bounds, visible: true, url, title: "", scrollY: 0, frozen: false };
   panes.set(id, pane);
   attachView(pane);
   registerPane(pane);
@@ -443,9 +485,16 @@ function closePane(id, why = "asked") {
   if (!pane) return;
   trace("close pane", id, why, pane.url);
   panes.delete(id);
+  assist.invalidate(id);
   lifecycle.unregister(resourceId(id));
   destroyView(pane);
   watchResources();
+}
+
+function countOf(kind) {
+  let count = 0;
+  for (const pane of panes.values()) if (pane.kind === kind) count += 1;
+  return count;
 }
 
 function closeAllPanes(why = "asked") {
@@ -474,14 +523,17 @@ const shellCommands = {
 };
 
 /** What the AEGIS workspace may ask for. */
+const assist = browserAssist({ panes, publicPage, dialog, window: () => mainWindow, live });
 const workspaceCommands = {
+  ...assist.commands,
   async browser_open({ id, url, rect }) {
     const page = pageOf(url);
     const key = idOf(id);
     const bounds = rectOf(rect);
     let pane = panes.get(key);
+    if (pane && pane.kind !== "source") throw new Error("That id is a browser tab.");
     if (!pane) {
-      if (panes.size >= MAX_PANES) throw new Error("Too many browser panes are open.");
+      if (countOf("source") >= MAX_PANES) throw new Error("Too many browser panes are open.");
       pane = createPane(key, bounds, page.href);
     } else {
       pane.bounds = bounds;
@@ -490,6 +542,34 @@ const workspaceCommands = {
     // A failed load is reported through the pane's own events, not as a failure to open it.
     (await live(pane)).loadURL(page.href).catch(() => {});
     void lifecycle.tick();
+  },
+  /** V30: a browser tab. Same commands as a pane after this (navigate, back, show...), its own session and rules. */
+  async tab_open({ id, url, rect }) {
+    const page = pageOf(url);
+    const key = idOf(id);
+    const bounds = rectOf(rect);
+    let pane = panes.get(key);
+    if (pane && pane.kind !== "tab") throw new Error("That id is a source pane.");
+    if (!pane) {
+      if (countOf("tab") >= MAX_TABS) throw new Error("Too many browser tabs are open.");
+      pane = createPane(key, bounds, page.href, "tab");
+    } else {
+      pane.bounds = bounds;
+      pane.view?.setBounds(bounds);
+    }
+    (await live(pane)).loadURL(page.href).catch(() => {});
+    void lifecycle.tick();
+  },
+  async browser_stop({ id }) {
+    (await live(paneOf(id))).stop();
+  },
+  tab_downloads() {
+    return tabs.downloads();
+  },
+  /** Shows a finished download in its folder; only a file this app saved, never an arbitrary path. */
+  download_show({ id }) {
+    const row = tabs.downloads().find((entry) => entry.id === Number(id));
+    if (row?.path && row.state === "completed") shell.showItemInFolder(row.path);
   },
   // Sent many times a second while a pane moves; one arriving after the pane closed is not an error.
   browser_bounds({ id, rect }) {
@@ -567,7 +647,9 @@ globalThis.aegisDesktopDiagnostics = () => ({
   uiMode,
   startedServices,
   lifecycle: lifecycle.status(),
-  panes: [...panes.values()].map((pane) => ({ id: pane.id, live: Boolean(pane.view), visible: pane.visible, frozen: pane.frozen, url: pane.view?.webContents.getURL() || pane.url, state: lifecycle.stateOf(resourceId(pane.id)) })),
+  permissions: tabs.decisions(),
+  partitions: { tabs: tabs.partition, panes: PANE_PARTITION },
+  panes: [...panes.values()].map((pane) => ({ id: pane.id, kind: pane.kind, session: pane.view ? (pane.kind === "tab" ? tabs.partition : PANE_PARTITION) : "", live: Boolean(pane.view), visible: pane.visible, frozen: pane.frozen, url: pane.view?.webContents.getURL() || pane.url, state: lifecycle.stateOf(resourceId(pane.id)) })),
 });
 
 // ---------------------------------------------------------------- window
@@ -641,6 +723,10 @@ function createWindow() {
     panes.clear();
     watchResources();
     mainWindow = null;
+    // Its hidden windows would otherwise keep the app running.
+    agentHost?.shutdown();
+    agentHost = null;
+    app.quit();
   });
   mainWindow.loadFile(SHELL_PAGE);
 }
@@ -691,11 +777,19 @@ if (process.argv.includes("--install-shortcuts")) {
   app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
     workspacePermissions();
+    if (process.env.AEGIS_AGENT_BROWSER !== "0") {
+      try {
+        agentHost = agentBrowser.start({ userData: app.getPath("userData"), log: trace });
+      } catch (error) {
+        console.error(`The agent browser could not start: ${error.message}`);
+      }
+    }
     createWindow();
   });
   app.on("window-all-closed", () => app.quit());
   app.on("will-quit", () => {
     if (lifecycleTimer) clearInterval(lifecycleTimer);
+    agentHost?.shutdown();
     void ownServer?.close();
     const config = loadConfig();
     if (startedServices && config.stopOnExit && config.projectRoot) services.stop(config.projectRoot);

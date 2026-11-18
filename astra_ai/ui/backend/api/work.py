@@ -75,6 +75,10 @@ def install(app, *, context_for, artifacts_for, jobs, orchestrator, owner_only, 
             raise HTTPException(409, 'No lead model is configured for AEGIS Work.')
         chosen_mode = WORKFLOWS[workflow].mode if workflow else mode
         storage_mode = 'quick' if chosen_mode in {'quick', 'direct'} else 'detailed'
+        # V29: a routed Work run is not a research artifact, so it never triggers detailed-report media enrichment.
+        from astra_ai.core.work import router as v29router
+        if v29router.enabled(service.settings) and not v29router.spec_for(workflow, query, mode).research:
+            storage_mode = 'quick'
         operation_id = str(body.get('operation_id') or uuid.uuid4().hex)
         artifacts, _ = artifacts_for()
         reserved = await asyncio.to_thread(artifacts.reserve, query, storage_mode, context, operation_id)
@@ -151,7 +155,9 @@ def install(app, *, context_for, artifacts_for, jobs, orchestrator, owner_only, 
             raise HTTPException(404, 'Run unavailable')
         result = await orchestrator().answer(identifier, context, text)
         if result['status'] == 'accepted':
-            submitted = jobs.submit([{'name': 'work_run', 'arguments': {'research_id': identifier}}], {**context, 'requested_research': True}, uuid.uuid4().hex, goal=metadata.get('display_title', ''))
+            # V30: submit waits on the jobs file lock (a large file the job worker also rewrites); off the event loop,
+            # so the rest of the app keeps answering while it waits.
+            submitted = await asyncio.to_thread(jobs.submit, [{'name': 'work_run', 'arguments': {'research_id': identifier}}], {**context, 'requested_research': True}, uuid.uuid4().hex, goal=metadata.get('display_title', ''))
             await asyncio.to_thread(artifacts_for()[0].request_state, identifier, context, job_id=submitted.get('job_id', ''))
         return result
 

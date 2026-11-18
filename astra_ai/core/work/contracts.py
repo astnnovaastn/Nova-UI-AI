@@ -43,6 +43,10 @@ class RunBudget:
     concurrency: int = 2
     #: Tokens kept back so workers cannot leave the lead without room to finish.
     lead_reserve: int = 8000
+    #: The lead's adaptive card pass (AEGIS_WORK_ADAPTIVE_CARDS): its own bounded room, so a short run
+    #: (a day plan, a weekly status) can still place its cards. Spent only when the pass runs.
+    card_tokens: int = 0
+    card_calls: int = 0
 
 
 @dataclass
@@ -100,6 +104,16 @@ class EvidenceRecord:
     credibility: int = 0
     assessment: str = ''
     fetched: bool = False
+    # V30 provenance, the same for every retrieval route (browser read, open API, keyed search, paid search, files).
+    # All optional, so records saved before V30 load unchanged.
+    source_type: str = ''
+    canonical_url: str = ''
+    discovered_by: str = ''
+    agent: str = ''
+    task: str = ''
+    published: str = ''
+    media: list = field(default_factory=list)
+    verification: str = ''
 
 
 @dataclass
@@ -178,6 +192,10 @@ LEAD_PLAN = _object({
     })},
     'reasoning_summary': TEXT,
 })
+
+#: V30: a Work lead also names the official pages it already knows (product, docs, pricing, papers), which the
+#: agent browser reads directly before any search, the way Zephium's lead calls web_fetch on a known URL.
+WORK_PLAN = _object({**LEAD_PLAN['properties'], 'urls': TEXTS})
 
 SOURCE_ASSESSMENT = _object({
     'ranked': {'type': 'array', 'items': _object({

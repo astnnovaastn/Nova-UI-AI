@@ -8905,6 +8905,7 @@ def _work_owner_only(request):
     if context.get('guest') or request.headers.get('x-nova-paired-device'):raise HTTPException(403,'Model settings are available on the host only.')
     return context
 install_work_routes(app,context_for=_learning_context,artifacts_for=get_research_services,jobs=action_jobs,orchestrator=get_work_orchestrator,owner_only=_work_owner_only,emit=workspace_service.emit)
+from astra_ai.ui.backend.api.work_agent_browser import install as install_agent_browser;install_agent_browser(app,owner_only=_work_owner_only)
 from astra_ai.ui.backend.research_api import register_research_api
 register_research_api(app,lambda:research_model,lambda:research_provider_settings,get_research_services,_learning_context,action_jobs,runtime_paths)
 

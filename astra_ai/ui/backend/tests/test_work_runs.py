@@ -7,7 +7,7 @@ import pytest
 
 from astra_ai.core.research.artifacts import ResearchArtifacts
 from astra_ai.core.work.catalog import WORKFLOWS, budget_for
-from astra_ai.core.work.contracts import ANALYSIS, KNOWLEDGE_MAP, LEAD_PLAN, REPORT, SOURCE_ASSESSMENT, VERIFICATION, TaskPlan, WorkRequest
+from astra_ai.core.work.contracts import ANALYSIS, KNOWLEDGE_MAP, LEAD_PLAN, REPORT, SOURCE_ASSESSMENT, VERIFICATION, WORK_PLAN, TaskPlan, WorkRequest
 from astra_ai.core.work.orchestrator import WorkOrchestrator, canonical_url, choose_assignments, clean_map, strip_unknown_citations
 from astra_ai.core.work.providers import ModelRouter, ProviderError, ProviderGuard, load_slots
 from astra_ai.core.work.store import WorkStore
@@ -39,9 +39,10 @@ class FakeAdapter:
         return json.dumps(self.answer(schema, payload)), 100
 
     def answer(self, schema, payload):
-        if schema is LEAD_PLAN:
+        if schema is LEAD_PLAN or schema is WORK_PLAN:
             return {'title': 'Test title', 'acknowledgement': 'On it.', 'intent': 'answer it', 'constraints': [], 'mode': 'quick', 'clarification': '', 'clarification_options': [], 'needs_web': True,
-                    'queries': ['alpha query', 'beta query'], 'sections': ['Answer'], 'assignments': [], 'reasoning_summary': 'A short answer is enough.', **self.plan}
+                    'queries': ['alpha query', 'beta query'], 'sections': ['Answer'], 'assignments': [], 'reasoning_summary': 'A short answer is enough.',
+                    **({'urls': []} if schema is WORK_PLAN else {}), **self.plan}
         if schema is SOURCE_ASSESSMENT:
             return {'ranked': [{'id': row['id'], 'relevance': 4, 'credibility': 4, 'reason': 'good'} for row in payload['candidates']], 'follow_up_queries': [], 'summary': 'Good sources.'}
         if schema is ANALYSIS:

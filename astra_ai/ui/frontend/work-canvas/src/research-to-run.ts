@@ -159,8 +159,10 @@ export function reportTitle(report: ResearchReport): string {
 
 type Citation = { url: string; title: string };
 
-function artifact(execution: string, id: string, title: string, data: WorkArtifactDataV1, evidence: number[] = []): WorkArtifactV1 {
+function artifact(execution: string, id: string, title: string, data: WorkArtifactDataV1, evidence: number[] = [], part?: string): WorkArtifactV1 {
   return {
+    // V29: the helper part that made it (Zephium's part fact id), so it stands on that helper's row.
+    ...(part ? { part } : {}),
     version: 1,
     id,
     execution,
@@ -282,8 +284,19 @@ export function researchSteps(report: ResearchReport, state: RunState, sourceCou
  * What Zephium's own run layout needs from a Work run: one part per helper (each model at its purpose)
  * with when it worked, so overlapping work stands in one column, and what the run drew on.
  */
+/** V29: what the router decided a request needs; old runs have none and keep today's canvas. */
+export type WorkRoute = {
+  intent?: string;
+  capabilities?: string[];
+  outputs?: string[];
+  board?: "technical" | "visual" | "matrix" | "timeline" | "schedule" | "messages" | "research";
+  report?: boolean;
+  needs_web?: boolean;
+  paid_allowed?: boolean;
+};
+
 export type ZephiumRun = {
-  plan?: { mode?: string; workflow?: string };
+  plan?: { mode?: string; workflow?: string; route?: WorkRoute | null };
   assignments?: { agent: string; role: string; task?: string; state?: string; model?: string }[];
   results?: Record<string, { summary?: string; state?: string } | unknown>;
   usage?: { parts?: Record<string, { title: string; helper: string; began: number; ended: number; calls: number; tokens: number; searches: number; model: string }> };
@@ -340,6 +353,8 @@ export type ZephiumResults = {
   /** The report's saved images, with addresses the canvas may draw. */
   images?: readonly { id: string; src: string; caption: string }[];
 };
+
+const isReply = (object: WorkspaceObject) => object.kind === "answer" || (object.kind === "zephium" && object.zkind === "reply");
 
 export function buildScene(report: ResearchReport, reason = "", trace: readonly TraceEvent[] = [], waitWords: (reason: string) => string = () => "", zephium: ZephiumRun | null = null, results: ZephiumResults | null = null): CanvasScene {
   const name = report.research_id;
@@ -459,18 +474,26 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
   const placed: string[] = [];
   if (results) {
     const citedAs = new Map(sources.map((source, index) => [source.url, index + 1]));
-    const add = (id: string, title: string, data: Record<string, unknown> | null, urls: readonly (string | undefined)[] = []) => {
+    // A helper's part, as Zephium names it, only when that helper stands in this run; the lead has none.
+    const partIds = new Set(zephium ? zephiumParts(zephium, live, sources.length).map((part) => part.id) : []);
+    const partOf = (part: string | undefined) => (part && part !== "lead" && partIds.has(`part-${part}`) ? `part-${part}` : undefined);
+    const add = (id: string, title: string, data: Record<string, unknown> | null, urls: readonly (string | undefined)[] = [], part?: string) => {
       if (!data) return;
       const evidence = [...new Set(urls.flatMap((url) => (url && citedAs.has(url) ? [citedAs.get(url)!] : [])))];
-      artifacts.push(artifact(runId, id, title, data as unknown as WorkArtifactDataV1, evidence));
+      artifacts.push(artifact(runId, id, title, data as unknown as WorkArtifactDataV1, evidence, partOf(part)));
       placed.push(id);
     };
     const finished = state === "completed" && !!report.report?.trim();
-    if (finished) add(`${runId}-reply`, "", reportReply(reportTitle(report), report.report ?? ""));
-    if (finished) add(`${runId}-report`, reportTitle(report), { kind: "document", paragraphs: paragraphs(report.report ?? "") }, sources.map((source) => source.url));
+    // V29: the router decides whether a report is part of the answer (a moodboard or a day plan has none).
+    const route = zephium?.plan?.route ?? null;
+    const reported = !(route && route.report === false);
+    // A typed reply heads the result itself; an old run's answer card only does so on a routed run.
+    const replied = results.objects.some((object) => (object.kind === "zephium" && object.zkind === "reply") || (!!route && object.kind === "answer"));
+    if (finished && !replied) add(`${runId}-reply`, "", reportReply(reportTitle(report), report.report ?? ""));
+    if (finished && reported) add(`${runId}-report`, reportTitle(report), { kind: "document", paragraphs: paragraphs(report.report ?? "") }, sources.map((source) => source.url));
     // One of each: the run's own report object repeats the report, and its diagram object the map.
-    const objects = results.objects.filter((object) => !(finished && object.kind === "report"));
-    const drawn = objects.some((object) => ["diagram", "knowledge-graph"].includes(object.kind) && object.nodes?.length);
+    const objects = results.objects.filter((object) => !((finished || !reported) && object.kind === "report"));
+    const drawn = objects.some((object) => (["diagram", "knowledge-graph"].includes(object.kind) && object.nodes?.length) || (object.kind === "zephium" && object.zkind === "diagram"));
     if (results.map && !drawn) add(`${runId}-map`, results.map.title || "Knowledge map", mapWire(results.map));
     // The run's videos are one collection card: the first video, the rest beside it on hover.
     const [first, ...rest] = results.videos ?? [];
@@ -486,7 +509,9 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
       });
     for (const image of results.images ?? [])
       add(`${runId}-image-${image.id}`.slice(0, 120), image.caption.slice(0, 60) || "Image", { kind: "media", medium: "image", url: image.src, poster: image.src });
-    for (const object of objects) add(`${runId}-object-${object.id}`.slice(0, 120), object.title, wireOf(object), object.sources.map((source) => source.url));
+    // The run's replies first: Zephium heads the result with the first reply it meets.
+    const ordered = route ? [...objects].sort((a, b) => Number(isReply(b)) - Number(isReply(a))) : objects;
+    for (const object of ordered) add(`${runId}-object-${object.id}`.slice(0, 120), object.title, wireOf(object), object.sources.map((source) => source.url), object.part);
     if (placed.length) steps.push({ id: `${runId}-results`, turn: 3, kind: { kind: "publish" }, status: "succeeded", artifacts: placed, note: `Placed ${placed.length} ${placed.length === 1 ? "result" : "results"}` } as unknown as WorkStepFact);
   }
   if (!live)

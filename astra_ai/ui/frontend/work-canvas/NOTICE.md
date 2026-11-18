@@ -25,3 +25,13 @@ TaskBoard, CommandReview, CommandRecord and Work object renderers through AEGIS
 adapters in src/tools and src/objects. Those integration portions remain MPL-2.0.
 The Python storage and isolated-execution adapters are AEGIS implementations;
 no Zephium Rust runtime or AGPL backend module is bundled.
+
+
+The Ask composer and welcome view in src/assist/ are adapted from Zephium's
+frame/src/features/assist/components/Composer.svelte and Empty.svelte at the
+commit above. Their Zephium-derived code and styles remain under MPL-2.0.
+
+V30 adapts the Ask welcome view from frame/src/features/assist/components/Empty.svelte
+and ports the conversation layout and scrolling behavior from Thread.svelte and
+PersonMessage.svelte into the Research drawer. The Work composer is the shared
+input surface. Zephium-derived portions retain MPL-2.0 coverage.

@@ -228,6 +228,8 @@ type RouteView = {
   carrierHost?: string;
 };
 export type PickView = Likeness & {
+  /** AEGIS: web addresses of its picture (at most three), tried in order when none was admitted. */
+  remote?: readonly string[];
   imageRegion?: {x:number;y:number;width:number;height:number};
   /** Its canvas element, when it stands as one: choose and ask act on it. */
   element?: string;

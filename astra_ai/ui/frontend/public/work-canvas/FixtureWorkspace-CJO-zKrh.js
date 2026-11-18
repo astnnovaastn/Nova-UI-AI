@@ -1,14 +1,14 @@
 import "./disclose-version-DFvUDwEH.js";
 import { $ as e, B as t, Dt as n, F as r, Ft as i, H as a, J as o, K as s, M as c, N as l, Ot as u, P as d, Pt as f, R as p, V as m, _t as h, b as g, dt as _, ft as v, h as y, ht as b, kt as x, lt as S, m as C, n as w, ot as T, pt as E, q as D, r as O, u as k, ut as A, v as j, x as M, y as N, yt as P, zt as F } from "./index-client-C_2wYFnt.js";
-import { A as I, D as L, E as R, J as z, M as B, Ut as ee, Wt as te, _ as ne, a as re, g as ie, i as ae, j as oe, k as se, n as ce, r as le, s as ue, t as de, tt as V } from "./SourceStackOverlay-P1ttWFsr.js";
+import { A as I, D as L, E as R, Gt as ee, N as z, Wt as te, Y as B, _ as ne, a as re, c as ie, i as ae, j as oe, k as se, n as ce, nt as le, o as ue, t as V, v as de } from "./SourceStackOverlay-CMxL-dee.js";
 import { n as H, r as U } from "./PageFace-D2__z-9e.js";
 // src/fixtures/AdaptiveGallery.svelte
 var W = a("<option> </option>"), fe = a("<li class=\"svelte-lpqqem\"> </li>"), pe = a("<aside class=\"adaptive-gallery svelte-lpqqem\" aria-label=\"Adaptive card library\"><h2 class=\"svelte-lpqqem\">Adaptive cards</h2><p class=\"svelte-lpqqem\">20 families · 800 specifications</p> <label class=\"svelte-lpqqem\">Family<select aria-label=\"Family\" class=\"svelte-lpqqem\"></select></label> <label class=\"svelte-lpqqem\">Presentation<select aria-label=\"Presentation\" class=\"svelte-lpqqem\"></select></label> <label class=\"svelte-lpqqem\">Data size<select aria-label=\"Data size\" class=\"svelte-lpqqem\"></select></label> <p class=\"svelte-lpqqem\"> </p><details><summary class=\"svelte-lpqqem\">15 uses across workflows</summary><ol></ol></details> <p class=\"notice svelte-lpqqem\">Fixture data only. No research is started and no external action is performed.</p></aside>");
 function me(r, a) {
 	u(a, !0);
-	let o = P(() => B.find((e) => e.id === a.family) || B[0]);
+	let o = P(() => z.find((e) => e.id === a.family) || z[0]);
 	var s = pe(), d = v(A(s), 3), m = v(A(d));
-	c(m, 21, () => B, l, (n, r) => {
+	c(m, 21, () => z, l, (n, r) => {
 		var a = W(), o = A(a, !0);
 		i(a);
 		var s = {};
@@ -469,7 +469,7 @@ function he(e = "market") {
 }
 // src/fixtures/adaptive.ts
 function ge(e = "answer", t = "", n = 8) {
-	let r = B.find((t) => t.id === e) || B[0], i = r.presets.find((e) => e.id === t && e.available) || r.presets[0], a = Array.from({ length: n }, (e, t) => ({
+	let r = z.find((t) => t.id === e) || z[0], i = r.presets.find((e) => e.id === t && e.available) || r.presets[0], a = Array.from({ length: n }, (e, t) => ({
 		id: "item-" + t,
 		label: [
 			"Collect evidence",
@@ -1695,12 +1695,12 @@ function je(a, s) {
 			e(o).length && t(f);
 		}), t(n, s);
 	});
-	var z = v(R), B = (e) => {
+	var ee = v(R), z = (e) => {
 		var n = ke();
 		t(e, n);
 	};
-	r(z, (t) => {
-		e(g).length || t(B);
+	r(ee, (t) => {
+		e(g).length || t(z);
 	}), i(L), i(w), T(() => p(N, `${Ee.length ?? ""} layouts and card presentations`)), D("click", F, function(...e) {
 		s.onclose?.apply(this, e);
 	}), k(I, () => e(f), (e) => b(f, e)), t(a, w), n();
@@ -1794,7 +1794,7 @@ function Fe(a, o) {
 	var F = v(N, 2);
 	let I;
 	var L = A(F);
-	V(L, {
+	le(L, {
 		get item() {
 			return f;
 		},
@@ -1802,10 +1802,10 @@ function Fe(a, o) {
 		onopen: (e) => b(S, d.find((t) => t.id === e)?.url || "", !0),
 		onlist: () => {}
 	}), i(F);
-	var R = v(F, 2), z = A(R, !0);
+	var R = v(F, 2), ee = A(R, !0);
 	i(R), i(j);
-	var B = v(j, 2), ee = (t) => {
-		de(t, {
+	var z = v(j, 2), te = (t) => {
+		V(t, {
 			get anchor() {
 				return e(m);
 			},
@@ -1828,13 +1828,13 @@ function Fe(a, o) {
 			onopen: (e) => b(S, e.url, !0)
 		});
 	};
-	r(B, (t) => {
-		e(m) && e(g) && t(ee);
+	r(z, (t) => {
+		e(m) && e(g) && t(te);
 	}), T(() => {
 		p(P, `Production source components · ${l}px · synthetic records`), I = M(F, "", I, {
 			width: l + 170 + "px",
 			height: l * 10 / 16 + 80 + "px"
-		}), p(z, e(S));
+		}), p(ee, e(S));
 	}), t(a, k), n();
 }
 // src/fixtures/FixtureWorkspace.svelte
@@ -1842,7 +1842,7 @@ var Ie = a("<option> </option>"), Le = a("<label class=\"svelte-1b8kcgo\">Videos
 function $(a, s) {
 	u(s, !0);
 	let f = h(E(new DOMRect(16, 88, innerWidth - 32, innerHeight - 112))), m = h(null), C = h("");
-	x(ne, {
+	x(de, {
 		save: async (e, t) => (b(m, e, !0), b(Y, "Simulation: " + (t === "task" ? "draft tasks" : "note") + " stored in memory only"), t === "task" ? {
 			kind: "tasks_created",
 			items: e.entries || []
@@ -1852,12 +1852,12 @@ function $(a, s) {
 		}),
 		open: (e) => b(C, e, !0)
 	});
-	let O = new URLSearchParams(location.search).get("panel"), k = new URLSearchParams(location.search).get("example") || "anchor", M = h(!1), I = h(E(new URLSearchParams(location.search).get("card") || "answer")), R = h(E(new URLSearchParams(location.search).get("preset") || "")), B = h(E(Number(new URLSearchParams(location.search).get("items")) || 8)), oe = [
+	let O = new URLSearchParams(location.search).get("panel"), k = new URLSearchParams(location.search).get("example") || "anchor", M = h(!1), I = h(E(new URLSearchParams(location.search).get("card") || "answer")), R = h(E(new URLSearchParams(location.search).get("preset") || "")), z = h(E(Number(new URLSearchParams(location.search).get("items")) || 8)), oe = [
 		"editorial",
 		"market",
 		"campaign",
 		"activity"
-	].includes(O || ""), de = O === "learning", V = O === "questions", H = h(E([])), U = P(() => we[e(H).length]), W = P(() => e(U) ? {
+	].includes(O || ""), le = O === "learning", V = O === "questions", H = h(E([])), U = P(() => we[e(H).length]), W = P(() => e(U) ? {
 		kind: "question",
 		step: e(U).id,
 		part: null,
@@ -1866,19 +1866,19 @@ function $(a, s) {
 		options: e(U).options,
 		answer: null
 	} : null);
-	w(() => (z.selectResearch("local-fixture"), () => z.selectResearch("")));
+	w(() => (B.selectResearch("local-fixture"), () => B.selectResearch("")));
 	function fe(e, t, n, r) {
-		z.open(e, t, "fixture-source", r, n);
+		B.open(e, t, "fixture-source", r, n);
 	}
 	function pe(e) {
 		let t = e.detail;
 		t?.activation?.isTrusted && fe(t.url, t.title, t.activation, t.sourceId);
 	}
 	let G = new URLSearchParams(location.search), K = h(E(se(G.get("aegisFixture") || "") ? G.get("aegisFixture") : "mixed-result")), q = h(E(Math.max(2, Math.min(100, Number(G.get("count")) || 8)))), J, Y = h("Local simulation · no AI, search or account calls"), ge = G.get("panel") === "references", ve = h(E(Number(G.get("videos")) || 3)), X = P(() => {
-		if (O === "adaptive") return _e(e(I), e(R), e(B));
+		if (O === "adaptive") return _e(e(I), e(R), e(z));
 		if (O === "catalog") return De(k);
 		if (oe) return he(O);
-		if (de) return Ce();
+		if (le) return Ce();
 		if (V) {
 			let t = we.slice(0, Math.min(we.length, e(H).length + 1)).map((t, n) => ({
 				kind: "ask",
@@ -1934,13 +1934,13 @@ function $(a, s) {
 	});
 	function Se(t) {
 		let n = e(X).items.find((e) => e.id === t);
-		n?.aegisObject && ie(n.aegisObject);
+		n?.aegisObject && ne(n.aegisObject);
 	}
 	var Z = We();
 	o("aegis-request-result", S, (t) => {
 		let n = t.detail?.id, r = e(X).objects.find((e) => e.id === n);
 		r ? window.dispatchEvent(new CustomEvent("aegis-object-open", { detail: { object: r } })) : b(Y, "This recorded result is not present in this fixture.");
-	}), o("click", S, (e) => z.capture(e), !0), o("keydown", S, (e) => z.capture(e), !0), o("dblclick", S, (e) => z.capture(e), !0), o("resize", S, () => b(f, new DOMRect(16, 88, innerWidth - 32, innerHeight - 112), !0)), o("aegis-open-source-window", S, pe), o("aegis-object-ask", S, (e) => {
+	}), o("click", S, (e) => B.capture(e), !0), o("keydown", S, (e) => B.capture(e), !0), o("dblclick", S, (e) => B.capture(e), !0), o("resize", S, () => b(f, new DOMRect(16, 88, innerWidth - 32, innerHeight - 112), !0)), o("aegis-open-source-window", S, pe), o("aegis-object-ask", S, (e) => {
 		let { object: t, subject: n } = e.detail;
 		b(Y, "Simulation: ask about " + (n || t.title));
 	});
@@ -2015,7 +2015,7 @@ function $(a, s) {
 		}), i(u), i(s), j(o, () => e(K), (e) => b(K, e)), j(u, () => e(q), (e) => b(q, e)), t(n, r);
 	};
 	r(rt, (e) => {
-		ge ? e(it) : de || V || oe || O === "catalog" || O === "adaptive" || e(at, 1);
+		ge ? e(it) : le || V || oe || O === "catalog" || O === "adaptive" || e(at, 1);
 	});
 	var ot = v(rt);
 	i(Te);
@@ -2028,10 +2028,10 @@ function $(a, s) {
 				return e(R);
 			},
 			get count() {
-				return e(B);
+				return e(z);
 			},
 			onchange: (e, t, n) => {
-				b(I, e, !0), b(R, t, !0), b(B, n, !0);
+				b(I, e, !0), b(R, t, !0), b(z, n, !0);
 			}
 		});
 	};
@@ -2053,13 +2053,13 @@ function $(a, s) {
 		e(M) && t(ut);
 	});
 	var dt = v(lt, 2), ft = A(dt);
-	d(ft, () => e(K) + ":" + e(q) + ":" + e(I) + ":" + e(R) + ":" + e(B), (t) => {
+	d(ft, () => e(K) + ":" + e(q) + ":" + e(I) + ":" + e(R) + ":" + e(z), (t) => {
 		{
 			let n = P(() => ({
 				positions: e(X).plan.geometry.positions,
 				sizes: e(X).plan.geometry.sizes
 			}));
-			ue(t, {
+			ie(t, {
 				get items() {
 					return e(X).items;
 				},
@@ -2086,13 +2086,13 @@ function $(a, s) {
 		}
 	}), i(dt);
 	var pt = v(dt, 2);
-	re(pt, {
+	ue(pt, {
 		onsource: (e, t, n) => fe(e, t, n),
 		onask: (e) => b(Y, "Simulation: ask about " + e.title)
 	});
 	var mt = v(pt, 2), ht = (n) => {
 		var r = ze(), a = A(r);
-		le(a, {
+		ae(a, {
 			get question() {
 				return e(W);
 			},
@@ -2112,7 +2112,7 @@ function $(a, s) {
 		V && !e(W) && t(_t);
 	});
 	var vt = v(gt, 2);
-	c(vt, 21, () => z.shown, (e) => e.id, (t, n) => {
+	c(vt, 21, () => B.shown, (e) => e.id, (t, n) => {
 		ce(t, {
 			get entry() {
 				return e(n);
@@ -2150,7 +2150,7 @@ function $(a, s) {
 	});
 	var wt = v(xt, 2), Tt = (e) => {
 		var n = Ue(), r = v(A(n));
-		ae(r, {
+		re(r, {
 			get api() {
 				return Ne;
 			},
@@ -2161,7 +2161,7 @@ function $(a, s) {
 		e(Et) && t(Tt);
 	}), i(Z), T((t) => {
 		y(Z, "data-v20-fixture", e(K)), y(Q, "aria-expanded", e(M)), p(Oe, `Design library · ${Ee.length ?? ""}`), p(Me, e(Y)), tt !== (tt = O || "designs") && ($.value = ($.__value = O || "designs") ?? "", g($, O || "designs")), y(nt, "aria-pressed", t);
-	}, [() => ee() === "select"]), D("click", Q, () => b(M, !e(M))), D("change", $, (e) => location.href = location.pathname + "?aegisFixture=mixed-result&panel=" + e.currentTarget.value), D("click", nt, () => te(ee() === "select" ? "hand" : "select")), D("click", ot, () => {
+	}, [() => te() === "select"]), D("click", Q, () => b(M, !e(M))), D("change", $, (e) => location.href = location.pathname + "?aegisFixture=mixed-result&panel=" + e.currentTarget.value), D("click", nt, () => ee(te() === "select" ? "hand" : "select")), D("click", ot, () => {
 		b(H, [], !0), J && J.setGeometry(e(X).plan.geometry);
 	}), t(a, Z), n();
 }

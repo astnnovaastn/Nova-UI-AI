@@ -932,6 +932,8 @@ class ResearchArtifacts:
         if metadata.get('images_prepared'):return images
         for index,source in enumerate(self.source_catalog(fetched['artifact'])):
             for row in source.get('images',[]):
+                if isinstance(row,str):row={'url':row}
+                if not isinstance(row,dict):continue
                 url=str(row.get('url',''));parsed=urlsplit(url)
                 if parsed.scheme not in {'http','https'} or not parsed.hostname or parsed.username or parsed.password or url in seen:continue
                 seen.add(url);images.append({'id':'I'+stable(identifier,url)[:24],'url':url,'caption':row.get('caption') or source['title'],'source_id':'S'+str(index+1),'publication':parsed.hostname})

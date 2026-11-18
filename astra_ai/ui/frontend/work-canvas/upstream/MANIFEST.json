@@ -880,6 +880,14 @@
    "why": "Compose a board with several results in balanced columns instead of one long column."
   },
   {
+   "file": "features/work/lib/project-environment-board.ts",
+   "why": "Carry the workflow's board profile to the result board."
+  },
+  {
+   "file": "features/work/lib/project-environment-board.ts",
+   "why": "Lay out a run's results by its workflow's board profile."
+  },
+  {
    "file": "features/work/components/run/PartRow.svelte",
    "why": "Let a source stack open straight down on hover."
   },
@@ -922,6 +930,30 @@
   {
    "file": "features/work/lib/project-environment-board.ts",
    "why": "A helper with no pages, sources or search is a compact label, not an empty 488 px box."
+  },
+  {
+   "file": "features/work/lib/board/types.ts",
+   "why": "A pick can carry its web picture addresses."
+  },
+  {
+   "file": "features/work/lib/board/objects.ts",
+   "why": "Pass a pick's web picture candidates through when no picture was admitted."
+  },
+  {
+   "file": "features/work/components/objects/PickCard.svelte",
+   "why": "Track the web candidate the card is trying."
+  },
+  {
+   "file": "features/work/components/objects/PickCard.svelte",
+   "why": "A pick drawn from a web picture is pictured."
+  },
+  {
+   "file": "features/work/components/objects/PickCard.svelte",
+   "why": "Draw the first web candidate that loads, lazily and without a referrer."
+  },
+  {
+   "file": "features/work/components/objects/PickCard.svelte",
+   "why": "A web picture fills its photo frame like an admitted one."
   }
  ],
  "files": [
@@ -1067,6 +1099,14 @@
   },
   {
    "path": "frame/src/domain/work/work.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/newtab/lib/clock.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/newtab/lib/ground.ts",
    "status": "unchanged"
   },
   {
@@ -2187,6 +2227,50 @@
   },
   {
    "path": "frame/src/shared/platform.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/sky/SkyPrint.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/sky/assets/sky-day.avif",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/sky/assets/sky-night.avif",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/sky/dither.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/sky/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/sky/picture.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/sky/place.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/sky/placement.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/sky/print.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/sky/scene.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/sky/scenes.ts",
    "status": "unchanged"
   },
   {

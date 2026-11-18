@@ -14,7 +14,6 @@
     Settings01Icon,
   } from "@hugeicons/core-free-icons";
   import { store } from "./store.svelte";
-  import { workPanels } from "./work-panels.svelte";
 
   let more = $state(false);
   const actions = $derived(store.actions);
@@ -66,21 +65,23 @@
   <div class="group">
     <button
       type="button"
-      class:selected={workPanels.open === "skills"}
+      class:selected={panel === "skills"}
       aria-label="Skills"
-      aria-expanded={workPanels.open === "skills"}
+      aria-expanded={panel === "skills"}
       title="Skills"
-      onclick={() => workPanels.toggle("skills")}
+      aria-controls="work-skills-drawer"
+      onclick={() => actions?.openPanel("skills")}
     >
       <Icon icon={BookOpen01Icon} size={19} strokeWidth={1.6} />
     </button>
     <button
       type="button"
-      class:selected={workPanels.open === "connections"}
+      class:selected={panel === "connections"}
       aria-label="Connections"
-      aria-expanded={workPanels.open === "connections"}
+      aria-expanded={panel === "connections"}
       title="Connections"
-      onclick={() => workPanels.toggle("connections")}
+      aria-controls="work-connections-drawer"
+      onclick={() => actions?.openPanel("connections")}
     >
       <Icon icon={Plug01Icon} size={19} strokeWidth={1.6} />
     </button>

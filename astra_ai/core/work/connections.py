@@ -19,6 +19,27 @@ SEARCH = {
     'serpapi': ('SerpAPI', ('SERPAPI_KEY', 'QUICK_SEARCH_API_KEY'), ['web search (Quick)', 'YouTube video search']),
     'exa': ('Exa', ('EXA_API_KEY',), ['YouTube video search']),
 }
+# Free, keyless sources the agents may search (V29 `web.search.free`, see free_search.py). Each is on
+# by default and can be turned off; SearXNG only counts as configured when SEARXNG_URL is set.
+FREE_SEARCH = {
+    'wikipedia': ('Wikipedia', ['encyclopedia search']),
+    'wikidata': ('Wikidata', ['entity search']),
+    'arxiv': ('arXiv', ['paper search']),
+    'openalex': ('OpenAlex', ['paper search']),
+    'crossref': ('Crossref', ['paper metadata search']),
+    'semantic_scholar': ('Semantic Scholar', ['paper search']),
+    'github': ('GitHub repository search', ['public repository search (GITHUB_TOKEN optional)']),
+    'hn_algolia': ('Hacker News (Algolia)', ['story search']),
+    'are_na': ('Are.na', ['image and block search for moodboards']),
+    'wikimedia_commons': ('Wikimedia Commons', ['free-licence image search']),
+    'openverse': ('Openverse', ['openly licensed image search']),
+    'searxng': ('SearXNG (self-hosted)', ['general web search']),
+    'wikidata_official': ('Official websites (Wikidata)', ['official website of a named company, product or project']),
+    'direct': ('Direct page reads', ['official pages named by you or the lead, read by the agent browser where robots.txt allows']),
+    'brave': ('Brave Search API', ['general web search (needs BRAVE_SEARCH_API_KEY; official API, free tier)']),
+    'google_cse': ('Google Programmable Search', ['general web search (needs GOOGLE_CSE_KEY and GOOGLE_CSE_ID; official API)']),
+    'site_pages': ('Site search pages', ['public site search pages read by the agent browser, where robots.txt allows']),
+}
 UNAVAILABLE = {
     'folders': ('Unrestricted local folders', 'Only host-configured repositories are readable through Repository context; other folders are unavailable.'),
     'git': ('Git and GitHub', 'Needs a confined command runner, which this build does not have.'),
@@ -53,6 +74,13 @@ class Connections:
             rows.append({'id': name, 'title': title, 'kind': 'search', 'configured': configured, 'enabled': name not in disabled,
                          'status': ('connected' if name not in disabled else 'off') if configured else 'not_configured',
                          'capabilities': can, 'toggle': configured, 'scope': 'Public web only; read-only.'})
+        for name, (title, can) in FREE_SEARCH.items():
+            configured = {'searxng': lambda: bool(self.settings('SEARXNG_URL')), 'brave': lambda: bool(self.settings('BRAVE_SEARCH_API_KEY')),
+                          'google_cse': lambda: bool(self.settings('GOOGLE_CSE_KEY') and self.settings('GOOGLE_CSE_ID'))}.get(name, lambda: True)()
+            rows.append({'id': name, 'title': title, 'kind': 'search', 'configured': configured, 'enabled': name not in disabled,
+                         'status': ('connected' if name not in disabled else 'off') if configured else 'not_configured',
+                         'capabilities': can, 'toggle': configured, 'cost': 'free', 'keyless': name not in ('brave', 'google_cse'),
+                         'scope': 'Public web only; read-only; free and keyless.'})
         if self.router is not None:
             names = {'lead': 'AEGIS lead', 'worker_a': 'Discovery', 'worker_b': 'Analysis', 'worker_c': 'Verification', 'worker_d': 'Second analysis', 'worker_e': 'Writer'}
             for row in self.router.status():
@@ -73,7 +101,7 @@ class Connections:
         return rows
 
     def set_enabled(self, name, enabled):
-        if name not in SEARCH:
+        if name not in SEARCH and name not in FREE_SEARCH:
             raise ValueError('not_toggleable')
         with self.lock:
             state = self._state()

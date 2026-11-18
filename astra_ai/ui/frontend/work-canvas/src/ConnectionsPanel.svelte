@@ -9,7 +9,8 @@
   import GoogleConnections, {type AccountInput} from './GoogleConnections.svelte';
   import RepositoryConnections from './RepositoryConnections.svelte';
   let {onAttach}: {onAttach?: (input:AccountInput)=>void} = $props();
-  import { workApi, workPanels } from "./work-panels.svelte";
+  import { workApi } from "./work-panels.svelte";
+  import WorkLibraryDrawer from "./WorkLibraryDrawer.svelte";
 
   type Row = { id: string; title: string; kind: string; status: string; enabled: boolean; toggle: boolean; capabilities: string[]; scope: string };
   type Proxy = { mode: string; host: string; port: number | null; username: string; has_password: boolean; remote_dns: boolean; last_test: { ok: boolean; status?: number; ms?: number; reason?: string; at?: number } | null; not_applied_to: string };
@@ -79,11 +80,7 @@
     ({ proxy_off: "The proxy is off.", ConnectionError: "Could not connect through the proxy.", ProxyError: "The proxy refused the connection.", ConnectTimeout: "The proxy did not answer in time.", ReadTimeout: "The page did not answer in time through the proxy.", InvalidSchema: "SOCKS support is missing on the server." } as Record<string, string>)[value] ?? value.replace(/_/g, " ");
 </script>
 
-<section class="work-panel" aria-label="Connections">
-  <header>
-    <h2>Connections</h2>
-    <button type="button" class="close" aria-label="Close connections" onclick={() => (workPanels.open = "")}>×</button>
-  </header>
+<WorkLibraryDrawer panel="connections" title="Connections">
   <p class="lede">What AEGIS can reach for your research. Keys stay on the server; nothing here can send, post or delete.</p>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   <GoogleConnections {onAttach} />
@@ -149,36 +146,9 @@
       <p class="meta">Used for the Source Reader. {proxy.not_applied_to}</p>
     </form>
   {/if}
-</section>
+</WorkLibraryDrawer>
 
 <style>
-  .work-panel {
-    position: absolute;
-    inset-block: 12px;
-    inset-inline-start: 64px;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    inline-size: min(380px, calc(100vw - 96px));
-    padding: 14px 14px 12px;
-    overflow-y: auto;
-    border-radius: 14px;
-    background: var(--color-raised);
-    box-shadow: 0 0 0 1px var(--color-border), var(--shadow-float);
-    color: var(--color-text);
-    font: 13px/1.45 var(--font-sans, Inter, sans-serif);
-  }
-  header {
-    display: flex;
-    align-items: center;
-  }
-  h2 {
-    flex: 1;
-    margin: 0;
-    font-size: 16px;
-    font-weight: 650;
-  }
   h4 {
     margin: 10px 0 2px;
     color: var(--color-muted);
@@ -211,13 +181,6 @@
   select:focus-visible {
     outline: 2px solid var(--color-ring, var(--color-text));
     outline-offset: 1px;
-  }
-  .close {
-    inline-size: 26px;
-    block-size: 26px;
-    border-radius: 8px;
-    font-size: 18px;
-    line-height: 1;
   }
   .ghost,
   .primary {
@@ -337,6 +300,9 @@
   .pair {
     display: flex;
     gap: 8px;
+  }
+  .pair > label {
+    min-inline-size: 0;
   }
   .port {
     flex: 0 0 84px;

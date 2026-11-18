@@ -68,6 +68,9 @@
   const photoWidth = $derived(pick.imageRegion ? 1600 : scale?.far ? 240 : 640);
   const failed = $derived(!!pick.picture && broken === pick.picture.src);
   const picture = $derived(pick.picture && !failed ? pick.picture : null);
+  /** AEGIS: which of the web candidates is tried now; one that fails gives way to the next. */
+  let remoteAt = $state(0);
+  const remote = $derived(!picture ? (pick.remote?.[remoteAt] ?? null) : null);
   const logo = $derived(!picture && pick.logo && hasMark(pick.logo) ? pick.logo : null);
   /** "$4,350 / month": the figure loud, its period quiet. */
   const price = $derived.by(() => {
@@ -96,7 +99,7 @@
   class="pick"
   class:recommended={pick.recommended}
   class:chosen={pick.chosen}
-  class:pictured={!!picture}
+  class:pictured={!!picture || !!remote}
 >
   {#if picture}
     <div class="photo" class:video class:product class:region={!!pick.imageRegion} style:--region-w={pick.imageRegion?.width||1} style:--region-h={pick.imageRegion?.height||1} style:--region-x={pick.imageRegion?.x||0} style:--region-y={pick.imageRegion?.y||0}>
@@ -115,9 +118,14 @@
         >{#if pick.duration}<span class="length">{pick.duration}</span>{/if}{/if}
       {#if pick.recommended}<span class="badge"><Star size={11} />{m.work_pick_top()}</span>{/if}
     </div>
+  {:else if remote}
+    <div class="photo remote" class:video class:product>
+      <img src={remote} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" draggable="false" onerror={() => (remoteAt += 1)} />
+      {#if pick.recommended}<span class="badge"><Star size={11} />{m.work_pick_top()}</span>{/if}
+    </div>
   {/if}
   <div class="body">
-    {#if !picture && pick.recommended}<span class="flag"><Star size={11} />{m.work_pick_top()}</span
+    {#if !picture && !remote && pick.recommended}<span class="flag"><Star size={11} />{m.work_pick_top()}</span
       >{/if}
     <header>
       {#if logo}<Mark address={logo} size={20} />{/if}
@@ -204,6 +212,8 @@
 </article>
 
 <style>
+  .photo.remote img{display:block;inline-size:100%;block-size:100%;object-fit:cover}
+  .photo.remote.product img{object-fit:contain;mix-blend-mode:multiply}
  .photo.region canvas{position:absolute;inline-size:calc(100% / var(--region-w));block-size:calc(100% / var(--region-h));inset-inline-start:calc(-100% * var(--region-x) / var(--region-w));inset-block-start:calc(-100% * var(--region-y) / var(--region-h));object-fit:fill}
  .photo:not(.video):not(.region) canvas{object-fit:contain}
   .poster-open{position:absolute;inset:0;z-index:3;width:100%;height:100%;border:0;background:transparent;cursor:pointer;border-radius:inherit}

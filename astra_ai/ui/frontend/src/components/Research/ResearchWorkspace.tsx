@@ -30,6 +30,7 @@ import {
   conversationResearch,
   requestConversation,
   requestMicrophone,
+  hasActiveResearchReply,
   updateUiContext,
 } from "../../conversation";
 import { notify, cue } from "../../notifications";
@@ -40,11 +41,14 @@ import {
 import "./ResearchWorkspace.css";
 import {acceptPublication, mergePublication, publicationPending, publicationWorking, revealDuration} from "./researchPublication";
 import {ChatComposer} from "./ChatComposer";
-import {WorkCanvasHost,researchSurface,saveResearchSurface,type ResearchSurface} from "./WorkCanvasHost";
+import {openSettings} from "../../settings";
+import {ResearchBrowserAssist, browserActionProposal, type LiveTabContext} from "./ResearchBrowserAssist";
+import {WorkCanvasHost,ZephiumAskEmpty,researchSurface,saveResearchSurface,type ResearchSurface} from "./WorkCanvasHost";
 import {ResearchDepthMenu} from "./ResearchDepthMenu";
 import {ResearchHistoryItem} from "./ResearchHistoryItem";
 import {RecentlyRemovedResearch} from "./RecentlyRemovedResearch";
 import { ResearchLibrary, type LibraryPage } from "./ResearchLibrary";
+import { focusWorkLibraryTrigger, type CanvasPanel, type CanvasRailPanel } from "../../../work-canvas/src/canvas-panels";
 import {
   AttachmentAssets,
   AttachmentReader,
@@ -688,7 +692,14 @@ function CopyMessage(props:{text:string}){
 }
 
 /** The conversation header's menu: only what this panel can do. */
-function ConversationMenu(props:{messages:{role:string;text:string}[];onEnd:()=>void}){
+function ConversationMenu(props:{
+  messages:{role:string;text:string}[];
+  onHistory:()=>void;
+  onStyles?:()=>void;
+  onClose:()=>void;
+  onBrowser?:()=>void;
+  onWork?:()=>void;
+}){
   const [open,setOpen]=useState(false);
   const box=useRef<HTMLDivElement>(null);
   useEffect(()=>{
@@ -702,9 +713,14 @@ function ConversationMenu(props:{messages:{role:string;text:string}[];onEnd:()=>
   const all=props.messages.map(m=>(m.role==="user"?"You: ":"Aegis: ")+m.text).join(String.fromCharCode(10, 10));
   return <div className="chat-menu" ref={box}>
     <button type="button" className="chat-menu-button" aria-label="Conversation actions" aria-haspopup="menu" aria-expanded={open} onClick={()=>setOpen(!open)}>⋯</button>
-    {open&&<div role="menu" aria-label="Conversation actions" onKeyDown={(e)=>{const items=[...e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];const at=items.indexOf(document.activeElement as HTMLButtonElement);if(e.key==="ArrowDown"){e.preventDefault();items[(at+1)%items.length]?.focus();}if(e.key==="ArrowUp"){e.preventDefault();items[(at-1+items.length)%items.length]?.focus();}}}>
-      <button type="button" role="menuitem" disabled={!props.messages.length} onClick={()=>{void navigator.clipboard?.writeText(all).catch(()=>{});setOpen(false);}}>Copy conversation</button>
-      <button type="button" role="menuitem" disabled={!props.messages.length} onClick={()=>{props.onEnd();setOpen(false);}}>Jump to latest</button>
+    {open&&<div role="menu" aria-label="Conversation actions" onKeyDown={(e)=>{if(e.key==="Escape"){e.preventDefault();e.stopPropagation();setOpen(false);box.current?.querySelector("button")?.focus();return;}const items=[...e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')];const at=items.indexOf(document.activeElement as HTMLButtonElement);if(e.key==="ArrowDown"){e.preventDefault();items[(at+1)%items.length]?.focus();}if(e.key==="ArrowUp"){e.preventDefault();items[(at-1+items.length)%items.length]?.focus();}}}>
+      <button type="button" role="menuitem" onClick={()=>{setOpen(false);props.onHistory();}}><span aria-hidden="true">◷</span>History</button>
+      {props.onBrowser && <button type="button" role="menuitem" onClick={()=>{setOpen(false);props.onBrowser?.();}}>Browser context</button>}
+      {props.onStyles && <button type="button" role="menuitem" onClick={()=>{setOpen(false);props.onStyles?.();}}><span aria-hidden="true">◉</span>Page styles of this site</button>}
+      <button type="button" role="menuitem" onClick={()=>{setOpen(false);openSettings();}}><span aria-hidden="true">⚙</span>Models</button>
+      <button type="button" role="menuitem" disabled={!props.messages.length} onClick={()=>{void navigator.clipboard?.writeText(all).catch(()=>{});setOpen(false);}}><span aria-hidden="true">▣</span>Copy conversation</button>
+      {props.onWork && <button type="button" role="menuitem" onClick={()=>{setOpen(false);props.onWork?.();}}>Continue in Work</button>}
+      <button className="chat-menu-close" type="button" role="menuitem" onClick={()=>{setOpen(false);props.onClose();}}><span aria-hidden="true">×</span>Close tool</button>
     </div>}
   </div>;
 }
@@ -1997,11 +2013,13 @@ function DocumentPreview({
   source,
   onClose,
   onVideo,
+  onAsk,
 }: {
   report: Report;
   source: Source;
   onClose: () => void;
   onVideo: (source: Source) => void;
+  onAsk: (source: Source) => Promise<void>;
 }) {
   const [data, setData] = useState<Uint8Array | null>(null),
     [html, setHtml] = useState(""),
@@ -2014,6 +2032,19 @@ function DocumentPreview({
     [articleImages, setArticleImages] = useState<ResearchImage[]>([]),
     [trail, setTrail] = useState<Source[]>([]),
     [sourceImage, setSourceImage] = useState<ResearchImage | null>(null);
+  const [attachingContext, setAttachingContext] = useState(false);
+  const [contextError, setContextError] = useState("");
+  async function askAboutSource() {
+    setAttachingContext(true);
+    setContextError("");
+    try {
+      await onAsk(current);
+    } catch (error) {
+      setContextError(error instanceof Error ? error.message : "Could not attach this source.");
+    } finally {
+      setAttachingContext(false);
+    }
+  }
   const canvas = useRef<HTMLCanvasElement>(null),
     pdf = useRef<any>(null),
     heading = useRef<HTMLHeadingElement>(null);
@@ -2126,6 +2157,10 @@ function DocumentPreview({
         </button>
       </header>
       <div className="research-source-meta">
+        <button type="button" className="research-inline-action" disabled={attachingContext} onClick={() => void askAboutSource()}>
+          {attachingContext ? "Attaching source…" : "Ask about this source"}
+        </button>
+        {contextError && <span role="alert">{contextError}</span>}
         {current.retrieved_at
           ? "Retrieved " + new Date(current.retrieved_at).toLocaleString()
           : "Source document"}
@@ -2724,7 +2759,22 @@ function Workspace() {
   useEffect(()=>{setActivePassage(null);updateUiContext({active_selection_id:""});},[report?.research_id]);
   // The canvas surface. "classic" keeps the original three-column screen as a rollback.
   const [surface, setSurfaceState] = useState<ResearchSurface>(researchSurface);
-  const [canvasPanel, setCanvasPanel] = useState<""|"document"|"history"|"conversation">("");
+  const [canvasPanel, setCanvasPanel] = useState<CanvasPanel>("");
+  const [chatTool, setChatTool] = useState<""|"browser"|"styles"|"work">("");
+  const [chatModel, setChatModel] = useState("");
+  useEffect(() => {
+    if (canvasPanel !== "conversation") {
+      setChatTool("");
+      return;
+    }
+    const controller = new AbortController();
+    fetch("/api/settings/research-provider", {signal: controller.signal})
+      .then(response => response.ok ? response.json() : null)
+      .then(data => { if (!controller.signal.aborted && typeof data?.voice_model === "string") setChatModel(data.voice_model); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [canvasPanel]);
+
   /** The editor opened on its own from the new reader: no Reader / Sources / Media tabs, a way back. */
   const [editOnly, setEditOnly] = useState(false);
   /** The reader scrolled up from the conversation's end: a way back to the latest message shows. */
@@ -2749,8 +2799,9 @@ function Workspace() {
   useEffect(() => {
     if (!onCanvas || !canvasPanel) return;
     const close = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      if (e.defaultPrevented || e.key !== "Escape" || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       setCanvasPanel("");
+      if (canvasPanel === "skills" || canvasPanel === "connections") focusWorkLibraryTrigger(canvasPanel);
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
@@ -2801,6 +2852,8 @@ function Workspace() {
   const originFocus = useRef<HTMLElement | null>(null),
     chatReader = useRef<HTMLDivElement>(null),
     chatNearEnd = useRef(true),
+    chatContent = useRef<HTMLDivElement>(null),
+    chatPositions = useRef(new Map<string, {top: number; pinned: boolean}>()),
     mediaRequested = useRef(new Set<string>());
   const loadEpoch = useRef(0),
     reader = useRef<HTMLDivElement>(null),
@@ -2818,6 +2871,7 @@ function Workspace() {
     reportId: string;
     text: string;
     selectionId?: string;
+    complete(accepted: boolean): void;
   } | null>(null);
   useEffect(() => {
     const accepted = (event: Event) => {
@@ -2840,7 +2894,7 @@ function Workspace() {
       if (lastSelection.current === item.reportId)
         setMessage((old) => (old === item.text ? "" : old));
       setActivePassage(old=>{if(old?.id===item.selectionId){updateUiContext({active_selection_id:""});return null;}return old;});
-      pendingMessage.current = null;
+      item.complete(true);
     };
     window.addEventListener("nova-chat-accepted", accepted);
     return () => window.removeEventListener("nova-chat-accepted", accepted);
@@ -3654,10 +3708,26 @@ function Workspace() {
   useEffect(() => {
     if (tab === "edit") setEditOpened(true);
   }, [tab]);
-  useEffect(() => {
-    const el = chatReader.current;
-    if (el && chatNearEnd.current) el.scrollTop = el.scrollHeight;
-  }, [chat.researchMessages, report?.research_id]);
+  useLayoutEffect(() => {
+    const scroller = chatReader.current;
+    const content = chatContent.current;
+    if (!open || !scroller || !content || (onCanvas && canvasPanel !== "conversation")) return;
+    const key = chat.clientId + ":" + conversationSession;
+    const saved = chatPositions.current.get(key);
+    chatNearEnd.current = saved?.pinned ?? true;
+    scroller.scrollTop = chatNearEnd.current ? scroller.scrollHeight : saved?.top ?? 0;
+    setChatAway(!chatNearEnd.current);
+    const observer = new ResizeObserver(() => {
+      if (chatNearEnd.current) scroller.scrollTop = scroller.scrollHeight;
+    });
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+      if (scroller.clientHeight > 0) {
+        chatPositions.current.set(key, {top: scroller.scrollTop, pinned: chatNearEnd.current});
+      }
+    };
+  }, [open, onCanvas, canvasPanel, conversationSession, chat.clientId]);
   useEffect(() => {
     pausePlayers();
   }, [tab, open, preview]);
@@ -3984,18 +4054,72 @@ function Workspace() {
       </details>
     );
   }
+  function focusResearchComposer() {
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLTextAreaElement>(
+        onCanvas ? ".aegis-work-stage .bar-dock textarea" : ".research-central-composer textarea",
+      )?.focus();
+    });
+  }
+
+  async function attachResearchContext(payload: Record<string, unknown>) {
+    if (!report || !chat.clientId || chat.guest) throw new Error("Open a research session first.");
+    const {research_id: page, research_revision: revision} = report;
+    const card: Passage = await api("/" + encodeURIComponent(page) + "/selections", {
+      method: "POST",
+      body: JSON.stringify({...payload, revision}),
+    });
+    if (lastSelection.current !== page || reportRef.current?.research_revision !== revision ||
+        conversationSnapshot().clientId !== chat.clientId || conversationSnapshot().guest) {
+      throw new Error("The research page changed. Attach the context again.");
+    }
+    setActivePassage(card);
+    updateUiContext({active_selection_id: card.id});
+    return card;
+  }
+
+  async function attachLiveTab(snapshot: LiveTabContext) {
+    const links = snapshot.links.map((label, index) => (index + 1) + ". " + label).join("\n");
+    const card = await attachResearchContext({
+      text: snapshot.text + (links ? "\n\nPage links:\n" + links.slice(0, 1700) : ""),
+      origin: {kind: "live_browser_tab", title: snapshot.title, host: snapshot.host},
+    });
+    focusResearchComposer();
+    return card.id;
+  }
+
+  async function attachSourceContext(source: Source) {
+    await attachResearchContext({origin: {source_id: source.id}, use_saved_source: true});
+    closePreview(false);
+    if (onCanvas) setCanvasPanel("conversation");
+    focusResearchComposer();
+  }
+
+  const activeResearchReply = !!report && hasActiveResearchReply(report.research_id);
+
+  function stopResearchReply() {
+    if (report && hasActiveResearchReply(report.research_id)) {
+      window.dispatchEvent(new Event("nova-chat-cancel"));
+    }
+  }
+
   function sendFollowup(prompt?: string) {
     const text = prompt ?? message;
-    if (!report || !text.trim() || chat.textBusy) return;
-    updateUiContext({view:"research",research_id:report.research_id,research_revision:report.research_revision,selected_id:report.research_id,selected_kind:"research"});
+    if (!report || !text.trim() || !chat.connected || chat.guest || chat.textBusy ||
+        pendingMessage.current || hasActiveResearchReply(report.research_id)) return Promise.resolve(false);
+    const page = report.research_id;
+    updateUiContext({view:"research",research_id:page,research_revision:report.research_revision,selected_id:page,selected_kind:"research"});
     const id = crypto.randomUUID();
-    pendingMessage.current = {
-      id,
-      reportId: report.research_id,
-      text,
-      selectionId: activePassage?.id,
-    };
-    requestConversation(text, id, report.research_id);
+    return new Promise<boolean>(resolve => {
+      const timer = window.setTimeout(() => complete(false), 12000);
+      function complete(accepted: boolean) {
+        window.clearTimeout(timer);
+        if (pendingMessage.current?.id === id) pendingMessage.current = null;
+        resolve(accepted);
+      }
+      pendingMessage.current = {id, reportId: page, text, selectionId: activePassage?.id, complete};
+      requestConversation(text, id, page);
+    });
   }
   const reportJob = report ? researchJobs[report.research_id] || (report as {job_id?: string}).job_id || chat.jobs.find(j => ["running","queued","retrying","waiting_for_retry"].includes(j.state) && j.title === report.display_title)?.id || "" : "";
   // The backend's record of the open research. The live connection only hints that there is more;
@@ -4090,12 +4214,15 @@ function Workspace() {
       if (hintTimer) clearTimeout(hintTimer);
     };
   }, [traceFor, traceLive, chat.clientId]);
-  function startWorkRun(text: string, options: {workflow?: string; chosen?: unknown[]; fromResearch?: string} = {}) {
+  function startWorkRun(text: string, options: {workflow?: string; chosen?: unknown[]; fromResearch?: string; explicitHandoff?: boolean} = {}) {
     const query = text.trim();
-    if (!query || busy) return;
+    if (!query || busy) {
+      if (options.explicitHandoff) return Promise.reject(new Error("Wait for the current Work request to finish."));
+      return;
+    }
     setBusy(true);
     setError("");
-    void workApi("/runs", {
+    return workApi("/runs", {
       method: "POST",
       body: JSON.stringify({
         query,
@@ -4120,12 +4247,14 @@ function Workspace() {
       })
       .catch((e) => {
         // With no lead model configured, the existing research path still works.
+        if (options.explicitHandoff) throw e;
         if (/no lead model/i.test(e.message)) void start({preventDefault() {}} as React.FormEvent, query);
         else setError(e.message);
       })
       .finally(() => setBusy(false));
   }
   const canvasActions = {
+    stopReply: stopResearchReply,
     startWork: startWorkRun,
     async getCanvasLayout(page: string) {
       return (await workApi('/runs/' + encodeURIComponent(page) + '/layout')).layout;
@@ -4139,16 +4268,17 @@ function Workspace() {
       const about = nodes.map((node) =>
         `- ${node.kind} "${node.title}" (canvas node ${node.id}${node.url ? ", " + node.url : ""})${node.summary ? ": " + node.summary.slice(0, 400) : ""}`,
       ).join("\n");
-      sendFollowup(`${question}\n\n[About these canvas items of run ${runId}:\n${about}]`);
       setCanvasPanel("conversation");
+      return sendFollowup(`${question}\n\n[About these canvas items of run ${runId}:\n${about}]`);
     },
     answerRun(text: string) {
       const id = reportRef.current?.research_id;
       if (!id) return;
       return workApi("/runs/" + id + "/answer", {method: "POST", body: JSON.stringify({text})})
         .then(() => {
+          // V30: the answer is saved once this succeeds; the report refreshes behind the island, never holding it open.
           reportCache.current.delete(conversationSnapshot().clientId + ":" + id);
-          return reloadReport(id);
+          void reloadReport(id).catch(() => {});
         })
         .catch(e => {setError(e.message);throw e;});
     },
@@ -4165,8 +4295,8 @@ function Workspace() {
     },
     prompt(text: string) {
       if (report) {
-        sendFollowup(text);
         if (report.kind !== "chat") setCanvasPanel("conversation");
+        return sendFollowup(text);
       } else void start({preventDefault() {}} as React.FormEvent, text);
     },
     stopJob(jobId: string) {
@@ -4213,7 +4343,7 @@ function Workspace() {
     findVideos() {
       void requestMore("media");
     },
-    openPanel(panel: "history" | "conversation") {
+    openPanel(panel: CanvasRailPanel) {
       setCanvasPanel(old => old === panel ? "" : panel);
     },
     newEntry(kind: "research" | "chat" | "documentary") {
@@ -4342,7 +4472,21 @@ function Workspace() {
       setError(e.message);
     }
   }
-  const readerSources = report ? [...report.sources, ...(report.linked_sources || []), ...(report.image_sources || [])] : [];
+  const visibleChat = chat.researchMessages[conversationSession] || [];
+  const latestChatReply = visibleChat[visibleChat.length - 1];
+  const visibleRun = trace.research === report?.research_id ? trace.run as {state?: string; plan?: {clarification?: string}} | undefined : undefined;
+  const workClarification = visibleRun?.state === "needs_input"
+    ? visibleRun.plan?.clarification || "Work is waiting for your answer."
+    : "";
+  const relatedLiveTab = visibleChat.slice(0, -1).reverse().find(message => message.role === "user")
+    ?.context_cards?.find(card => card.origin?.kind === "live_browser_tab");
+  const proposedBrowserAction = latestChatReply?.role === "assistant" && latestChatReply.status === "completed" && relatedLiveTab
+    ? browserActionProposal(latestChatReply.text)
+    : null;
+  const readerSources = useMemo(
+    () => [...(report?.sources || []), ...(report?.linked_sources || []), ...(report?.image_sources || [])],
+    [report?.sources, report?.linked_sources, report?.image_sources],
+  );
   const readerSections = useMemo(() => Array.from(new DOMParser().parseFromString(markdown(report?.report || ""), "text/html").querySelectorAll("h1,h2,h3"))
     .slice(0, 50).map((heading, index) => ({id:"visible-section-" + index,title:heading.textContent?.trim() || "Section"})), [report?.report]);
   const readerBaseKeys = report?.completeness === "pending" || report?.evidence_collection || report?.legacy_evidence ? [] : citedSourceKeys(report?.report || "", readerSources);
@@ -4367,6 +4511,7 @@ function Workspace() {
         onFailed={(reason) => {setError(reason);setSurfaceState("classic");}}
         state={{
           report,
+          replyActive: activeResearchReply,
           trace: trace.research === report?.research_id ? trace.events : NO_ROWS,
           workSources: trace.research === report?.research_id ? trace.workSources : NO_ROWS,
           // Undefined until the first read answers, so the canvas frames itself with the whole graph.
@@ -5101,6 +5246,7 @@ function Workspace() {
                 source={preview}
                 onClose={closePreview}
                 onVideo={openSource}
+                onAsk={attachSourceContext}
               />
             )}
           </div>
@@ -5121,18 +5267,28 @@ function Workspace() {
               onSubmit={()=>report?sendFollowup():void start({preventDefault(){}} as React.FormEvent)}
               onNewChat={()=>newEntry("research")} actions={entryMenu()}
               label={report?"Ask Aegis":"Research topic"} placeholder={report?"Ask Aegis":"Ask a research question…"}
-              onMicrophone={requestMicrophone} muted={chat.muted} busy={chat.textBusy} onStop={()=>window.dispatchEvent(new Event('nova-chat-cancel'))}
+              onMicrophone={requestMicrophone} muted={chat.muted} busy={activeResearchReply} onStop={stopResearchReply}
               disabled={busy||!chat.connected||chat.guest||chat.textBusy}
               context={activePassage?<PassageCard card={activePassage} onRemove={()=>{setActivePassage(null);updateUiContext({active_selection_id:""});}}/>:undefined}
               trailing={!report&&entryKind!=="documentary"?<ResearchDepthMenu value={mode} onChange={setMode}/>:undefined}/>}
           </div>
         </main>
         <aside className="research-assistant" id="research-conversation-panel" aria-label="Research conversation" hidden={report?.kind === "chat"}>
-          <button className="research-panel-close" aria-label="Close research conversation" onClick={() => {setNarrowPanel("");setCanvasPanel("");}}><Icon name="close" /></button>
+          {!onCanvas && <button className="research-panel-close" aria-label="Close research conversation" onClick={() => setNarrowPanel("")}><Icon name="close" /></button>}
           <header>
-            <span className="research-eyebrow">{onCanvas ? "Conversation" : "AEGIS"}{onCanvas && conversationSession && (chat.researchMessages[conversationSession]?.length || 0) > 0 ? ` · ${chat.researchMessages[conversationSession]!.length} ${chat.researchMessages[conversationSession]!.length === 1 ? "message" : "messages"}` : ""}</span>
-            <span className="research-chat-label" title={onCanvas ? report?.display_title : undefined}>{onCanvas ? (report?.display_title || "No research open") : "Research conversation"}</span>
-            {onCanvas && <ConversationMenu messages={conversationSession ? chat.researchMessages[conversationSession] || [] : []} onEnd={() => { const el = chatReader.current; if (el) { el.scrollTo({ top: el.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); chatNearEnd.current = true; setChatAway(false); } }} />}
+            {onCanvas ? <>
+              <div className="research-ask-heading"><h2 className="research-ask-title" title={report?.display_title}>Aegis AI</h2>{chatModel && <span>{chatModel}</span>}</div>
+              <div className="research-ask-header-actions">
+                <button type="button" className="chat-menu-button" aria-label="New conversation" title="New conversation" disabled={busy || chat.guest || activeResearchReply} onClick={() => void newEntry("chat")}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M13 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-7M10 14l1-4 8-8 3 3-8 8-4 1Z"/></svg>
+                </button>
+                <ConversationMenu messages={visibleChat} onHistory={() => setCanvasPanel("history")}
+                  onStyles={(window as Window & {aegisDesktop?: unknown}).aegisDesktop && report ? () => setChatTool("styles") : undefined}
+                  onBrowser={(window as Window & {aegisDesktop?: unknown}).aegisDesktop && report ? () => setChatTool("browser") : undefined}
+                  onWork={report && !chat.guest ? () => setChatTool("work") : undefined}
+                  onClose={() => {setNarrowPanel("");setCanvasPanel("");}} />
+              </div>
+            </> : <><span className="research-eyebrow">AEGIS</span><span className="research-chat-label">Research conversation</span></>}
           </header>
           <div
             className="research-chat"
@@ -5142,10 +5298,12 @@ function Workspace() {
             onScroll={(e) => {
               const el = e.currentTarget;
               chatNearEnd.current =
-                el.scrollHeight - el.scrollTop - el.clientHeight < 70;
+                el.scrollHeight - el.scrollTop - el.clientHeight < 32;
               setChatAway(!chatNearEnd.current);
+              if (el.clientHeight > 0) chatPositions.current.set(chat.clientId + ":" + conversationSession, {top: el.scrollTop, pinned: chatNearEnd.current});
             }}
           >
+            <div className="research-chat-content" ref={chatContent}>
             {(conversationSession
               ? chat.researchMessages[conversationSession] || []
               : []
@@ -5154,7 +5312,13 @@ function Workspace() {
                 {(!onCanvas || m.role !== "user") && <small>{m.role === "user" ? "You" : "Aegis"}</small>}
                 {m.context_cards?.map((card:any)=><PassageCard key={card.id} card={card}/>)}
                 {onCanvas && m.role !== "user"
-                  ? <ConversationText text={m.text} sources={readerSources} onOpen={openSource} />
+                  ? <>
+                    <ConversationText text={m.id === latestChatReply?.id && proposedBrowserAction
+                      ? m.text.replace(/(?:^|\n)```aegis-browser-action\s*\n[^\n]+\n```\s*$/, "").trimEnd()
+                      : m.text} sources={readerSources} onOpen={openSource} />
+                    {m.id === latestChatReply?.id && proposedBrowserAction && <button type="button" className="chat-tool"
+                      onClick={() => setChatTool("browser")}>Open browser action</button>}
+                  </>
                   : (() => {
                       const {question, about} = canvasQuestion(m.text);
                       return <>
@@ -5162,13 +5326,24 @@ function Workspace() {
                         {about.length > 0 && <p className="research-chat-about">About {about.join(", ")}</p>}
                       </>;
                     })()}
-                {onCanvas && m.text && <footer className="chat-foot"><CopyMessage text={m.text} /></footer>}
+                {onCanvas && m.text && <footer className="chat-foot">
+                  {m.timestamp && Number.isFinite(Date.parse(m.timestamp)) && <time dateTime={m.timestamp}>{new Date(m.timestamp).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}</time>}
+                  <CopyMessage text={m.text} />
+                </footer>}
               </article>
             ))}
-            {onCanvas && !(conversationSession && chat.researchMessages[conversationSession]?.length) && !chat.textBusy && (
-              <p className="research-chat-empty">{report ? "Ask about this research in the box below. Aegis answers here, and can add to the report." : "Open or start research to talk about it here."}</p>
+            {onCanvas && !(conversationSession && chat.researchMessages[conversationSession]?.length) && !activeResearchReply && (
+              <ZephiumAskEmpty context={Boolean(report)} />
             )}
-            {onCanvas && chat.textBusy && <p className="research-chat-working" role="status"><span aria-hidden="true" />{chat.status || "Aegis is thinking…"}</p>}
+            {onCanvas && activeResearchReply && <div className="research-chat-working">
+              <span aria-hidden="true" />
+              <div role="status">{chat.status || "Aegis is responding…"}</div>
+            </div>}
+            {onCanvas && workClarification && <section className="research-chat-clarification" aria-label="Work clarification">
+              <strong>Work is waiting for your answer</strong>
+              <p>{workClarification}</p>
+              <button type="button" className="chat-tool" onClick={focusResearchComposer}>Answer in composer</button>
+            </section>}
             {report?.research_cards?.map((card) => (
               <article key={card.id} className="document-research-card">
                 <Icon name="citation" />
@@ -5194,8 +5369,23 @@ function Workspace() {
                 </button>
               </article>
             ))}
+            </div>
           </div>
 
+          {onCanvas && canvasPanel === "conversation" && report && !chat.guest && <ResearchBrowserAssist
+            key={report.research_id + ":" + report.research_revision + ":" + chat.clientId}
+            tool={chatTool} onClose={() => setChatTool("")}
+            onAttach={attachLiveTab}
+            onHandoff={async request => { await startWorkRun(request, {
+              fromResearch: report.research_id,
+              explicitHandoff: true,
+            }); }}
+            proposal={proposedBrowserAction && latestChatReply && relatedLiveTab ? {
+              id: latestChatReply.id,
+              attachmentId: relatedLiveTab.id,
+              action: proposedBrowserAction,
+            } : null}
+          />}
           {onCanvas && chatAway && <button type="button" className="chat-to-end" aria-label="Jump to latest message" title="Jump to latest message" onClick={() => { const el = chatReader.current; if (el) { el.scrollTo({ top: el.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); chatNearEnd.current = true; setChatAway(false); } }}>↓</button>}
           {!onCanvas && <small>{chat.status || chat.state}</small>}
         </aside>

@@ -4,12 +4,19 @@
  */
 import "./styles.css";
 import { mount, unmount } from "svelte";
+import AskEmpty from "./assist/Empty.svelte";
 import AegisWorkHost from "./AegisWorkHost.svelte";
 import { store, type CanvasActions, type CanvasState } from "./store.svelte";
 import { missingCommands } from "./native/core";
 import {setWorkspaceHeaders} from './native/host-session';
 
 export type { CanvasActions, CanvasState };
+
+export function mountAskEmpty(target: HTMLElement, context: boolean) {
+  const instance = mount(AskEmpty, { target, props: { context } });
+  return { destroy() { void unmount(instance); } };
+}
+
 
 export async function mountWorkspaceTools(target:HTMLElement, props:{kind:'notes'|'tasks';onclose:()=>void;onlegacy?:()=>void;headers?:()=>Record<string,string>}) {
   setWorkspaceHeaders(props.headers??(()=>({})));

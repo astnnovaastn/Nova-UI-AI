@@ -12,12 +12,13 @@ export type Passage = {
 };
 export function PassageCard({ card, onRemove }: {card: Passage; onRemove?: () => void}) {
     const dialog=useRef<HTMLDialogElement>(null);
-    return <aside className="aegis-passage-card" aria-label="Selected passage">
-      <button type="button" className="aegis-passage-preview" onClick={()=>dialog.current?.showModal()} aria-label="Inspect selected passage">
-        <span>{card.text}</span><small><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4M8 8h8v8H8z"/></svg>Selection</small>
+    const label = card.origin.kind === 'live_browser_tab' ? 'Live tab' : card.origin.kind === 'saved_source' ? 'Saved source' : 'Selected passage';
+    return <aside className="aegis-passage-card" aria-label={label}>
+      <button type="button" className="aegis-passage-preview" onClick={()=>dialog.current?.showModal()} aria-label={`Inspect ${label.toLowerCase()}`}>
+        <span>{card.origin.title || card.text}</span><small><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4M8 8h8v8H8z"/></svg>{label}</small>
       </button>
-      {onRemove&&<button type="button" className="aegis-passage-remove" aria-label="Remove selected passage" onClick={onRemove}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m6 6 12 12M18 6 6 18"/></svg></button>}
-      <dialog ref={dialog} className="aegis-passage-dialog" aria-label="Full selected passage"><header><strong>Selected passage</strong><button type="button" aria-label="Close selected passage" onClick={()=>dialog.current?.close()}>Close</button></header><blockquote>{card.text}</blockquote></dialog>
+      {onRemove&&<button type="button" className="aegis-passage-remove" aria-label={`Remove ${label.toLowerCase()}`} onClick={onRemove}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m6 6 12 12M18 6 6 18"/></svg></button>}
+      <dialog ref={dialog} className="aegis-passage-dialog" aria-label={label}><header><strong>{card.origin.title || label}</strong><button type="button" aria-label="Close selected passage" onClick={()=>dialog.current?.close()}>Close</button></header><blockquote>{card.text}</blockquote></dialog>
     </aside>;
 }
 export function SelectionPill({ page, revision, onAttach }: {
@@ -90,7 +91,9 @@ export function SelectionPill({ page, revision, onAttach }: {
         onAttach(data);
         updateUiContext({ active_selection_id: data.id });
         setPick(null);
-        document.querySelector<HTMLTextAreaElement>('.research-central-composer textarea')?.focus();
+        const composer = document.querySelector<HTMLTextAreaElement>('.aegis-work-stage .bar-dock textarea');
+        if (composer?.offsetParent) composer.focus();
+        else document.querySelector<HTMLTextAreaElement>('.research-central-composer textarea, .research-workspace .bar-dock textarea')?.focus();
     }
     catch (e: any) {
         setError(e.message);

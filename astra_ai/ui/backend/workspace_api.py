@@ -532,6 +532,33 @@ class WorkspaceService:
             origin = body.get("origin", {})
             if not isinstance(origin, dict) or len(json.dumps(origin)) > 2000:
                 raise HTTPException(422, "Invalid selection origin")
+            if origin.get("kind") == "live_browser_tab":
+                title = origin.get("title")
+                host = origin.get("host")
+                if (not isinstance(text, str) or not text.strip() or len(text) > 12000
+                        or not isinstance(title, str) or len(title) > 180
+                        or not isinstance(host, str) or not host or len(host) > 253):
+                    raise HTTPException(422, "Invalid live tab attachment.")
+                return self.store().select(
+                    context, identifier, found["artifact"]["revision"], text,
+                    {"kind": "live_browser_tab", "title": title, "host": host},
+                )
+            if body.get("use_saved_source") is True:
+                source_id = origin.get("source_id")
+                source = next(
+                    (row for index, row in enumerate(artifacts.source_catalog(found["artifact"]), 1)
+                     if source_id == f"S{index}"),
+                    None,
+                )
+                if source is None:
+                    raise HTTPException(404, "Source unavailable")
+                excerpt = str(source.get("content") or source.get("snippet") or "").strip()
+                if not excerpt:
+                    raise HTTPException(422, "This source has no saved text to attach.")
+                return self.store().select(
+                    context, identifier, found["artifact"]["revision"], excerpt[:12000],
+                    {"source_id": source_id, "kind": "saved_source", "title": str(source.get("title") or source_id)[:200]},
+                )
             # Validate against authorized rendered text, not arbitrary client HTML.
             from bs4 import BeautifulSoup
             from markdown_it import MarkdownIt

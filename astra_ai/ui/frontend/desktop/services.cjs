@@ -65,11 +65,12 @@ function powershell(script, args, options = {}) {
  * answers, or fails with the reason. With `frontend: false` only the backend is started, because
  * the desktop app serves the built web app itself.
  */
-function start(projectRoot, { frontend = true } = {}) {
+function start(projectRoot, { frontend = true, env = {} } = {}) {
   return new Promise((resolve, reject) => {
     const script = path.join(projectRoot, "start_nova_ai.ps1");
     if (!fs.existsSync(script)) return reject(new Error(`start_nova_ai.ps1 was not found in ${projectRoot}.`));
-    const child = powershell(script, frontend ? ["-NoBrowser"] : ["-NoBrowser", "-NoFrontend"]);
+    // Start-Process in the launcher passes this environment on to the backend it starts.
+    const child = powershell(script, frontend ? ["-NoBrowser"] : ["-NoBrowser", "-NoFrontend"], { env: { ...process.env, ...env } });
     let errors = "";
     child.stderr.on("data", (chunk) => (errors = (errors + chunk).slice(-4000)));
     child.once("error", (error) => reject(new Error(`Could not run the AEGIS launcher: ${error.message}`)));

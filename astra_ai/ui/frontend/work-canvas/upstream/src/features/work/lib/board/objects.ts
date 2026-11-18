@@ -668,6 +668,13 @@ function leadView(
                 }
               : {}),
             ...(item.logo_host ? { logo: item.logo_host } : {}),
+            // AEGIS: no admitted picture, so the agent's own web candidates (http(s) only, at most three).
+            ...(!src
+              ? (() => {
+                  const remote = pickCandidates(item).filter((candidate) => /^https?:\/\//iu.test(candidate)).slice(0, 3);
+                  return remote.length ? { remote } : {};
+                })()
+              : {}),
             ...(item.url ? { url: item.url } : {}),
             ...(item.price
               ? {

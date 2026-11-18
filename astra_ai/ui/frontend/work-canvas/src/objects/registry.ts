@@ -1,9 +1,16 @@
 import {admittedPreset,type AdaptiveFields} from './adaptive-catalog';
 /** Public, inert result contracts. HTML, scripts and model-supplied component names are never rendered. */
-export const OBJECT_KINDS=['answer','document','report','note','draft','code','diff','test','image','video','audio','table','comparison','chart','timeline','calendar','checklist','decision','diagram','knowledge-graph','task','source'] as const;
+export const OBJECT_KINDS=['answer','document','report','note','draft','code','diff','test','image','video','audio','table','comparison','chart','timeline','calendar','checklist','decision','diagram','knowledge-graph','task','source','zephium'] as const;
+/** V29: a typed Zephium artifact; `data` is that kind's exact Zephium wire data. */
+export const ZEPHIUM_KINDS=['reply','picks','plan','list','sheet','plot','diagram','code','diff','document','draft','media','subject','project','page'] as const;
+export type ZephiumKind=typeof ZEPHIUM_KINDS[number];
 export type ObjectKind=typeof OBJECT_KINDS[number];
 export type WorkspaceObject=AdaptiveFields & {
  id:string;kind:ObjectKind;title:string;revision:number;task_id?:string;status:string;
+ /** V29: the Zephium kind of a `zephium` object, and its wire data (URLs sanitized, nothing else changed). */
+ zkind?:ZephiumKind;data?:Record<string,unknown>;
+ /** V29: the helper that made it (worker_a..), or the lead. */
+ part?:string;
  recommendations?:{id:string;title:string;subtitle?:string;url?:string;image?:string;recommended:boolean;why?:string;imageRegion?:{x:number;y:number;width:number;height:number};facts:{label:string;value:string}[]}[];
  recommendationKind?:'article'|'video'|'course';
  planTotal?:{label:string;value:string};
@@ -23,6 +30,49 @@ export type WorkspaceObject=AdaptiveFields & {
 };
 const text=(v:unknown,max=Infinity)=>typeof v==='string'?v.slice(0,max):'';
 export function safeUrl(value:unknown):string|undefined {try{const u=new URL(String(value));return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password?u.href:undefined;}catch{return undefined;}}
+/** Keys whose values are addresses: only http(s) ones are kept. */
+const URL_KEYS=new Set(['url','poster','image','src','href','target_url','thumbnail','favicon','link','image_url']);
+/** Zephium's own media-store references: AEGIS has no such store, so they never reach the canvas. */
+const DROPPED_KEYS=new Set(['record_media','__proto__','constructor','prototype']);
+/** Zephium wire data as sent, bounded, with every address checked; the kind is the object's own. */
+export function sanitizeData(value:unknown,depth=0):unknown{
+ if(depth>10)return undefined;
+ if(typeof value==='string')return value.slice(0,20000);
+ if(typeof value==='number')return Number.isFinite(value)?value:null;
+ if(value===null||typeof value==='boolean')return value;
+ if(Array.isArray(value))return value.slice(0,500).map(item=>sanitizeData(item,depth+1)).filter(item=>item!==undefined);
+ if(typeof value!=='object')return undefined;
+ const out:Record<string,unknown>={};
+ for(const [key,item] of Object.entries(value as Record<string,unknown>).slice(0,200)){
+  if(DROPPED_KEYS.has(key)||(depth===0&&key==='kind'))continue;
+  if(key==='image_candidates'){out[key]=(Array.isArray(item)?item:[]).map(safeUrl).filter((u):u is string=>!!u).slice(0,3);continue;}
+  if(URL_KEYS.has(key)&&typeof item==='string'){const u=safeUrl(item);if(u)out[key]=u;continue;}
+  const clean=sanitizeData(item,depth+1);if(clean!==undefined)out[key]=clean;
+ }
+ return out;
+}
+/** What each Zephium kind's renderer reads unguarded: a missing list is empty, a missing text blank. */
+const ZEPHIUM_SHAPE:Partial<Record<ZephiumKind,{lists?:string[];texts?:string[]}>>={
+ reply:{lists:['figures','points'],texts:['headline','text']},picks:{lists:['items'],texts:['facet']},plan:{lists:['steps']},list:{lists:['items'],texts:['style']},
+ sheet:{lists:['columns','rows']},plot:{lists:['series']},diagram:{lists:['nodes','edges','layers']},code:{lists:['notes'],texts:['language','text']},
+ diff:{lists:['hunks'],texts:['path','language','summary']},document:{lists:['paragraphs']},draft:{texts:['destination','body']},media:{texts:['medium','url']},
+ subject:{lists:['people','facts','labels'],texts:['noun','title']},project:{lists:['stack','tree','scripts'],texts:['name','summary','root']},page:{texts:['url','title']},
+};
+/** A reply's points are plain sentences in Zephium; a {label,text} point reads as "Label: text". */
+export function replyPoints(value:unknown):string[]{
+ return (Array.isArray(value)?value:[]).map(p=>typeof p==='string'?p:p&&typeof p==='object'?[(p as any).label,(p as any).text??(p as any).value].filter(x=>typeof x==='string'&&x).join(': '):'').filter(p=>p).slice(0,12);
+}
+function zephiumData(zkind:ZephiumKind,raw:unknown):Record<string,unknown>{
+ const data=(sanitizeData(raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{})??{}) as Record<string,unknown>;
+ const shape=ZEPHIUM_SHAPE[zkind]??{};
+ for(const key of shape.lists??[])if(!Array.isArray(data[key]))data[key]=[];
+ for(const key of shape.texts??[])if(typeof data[key]!=='string')data[key]='';
+ if(zkind==='picks')data.items=(data.items as unknown[]).filter(i=>i&&typeof i==='object'&&typeof (i as any).name==='string').map(i=>({...(i as object),facts:Array.isArray((i as any).facts)?(i as any).facts:[],tags:Array.isArray((i as any).tags)?(i as any).tags:[]}));
+ if(zkind==='reply')data.points=replyPoints(data.points);
+ if(zkind==='media'&&!data.medium)data.medium='image';
+ if(zkind==='draft'&&!data.destination)data.destination='message';
+ return data;
+}
 function region(v:any){if(!v||![v.x,v.y,v.width,v.height].every(n=>typeof n==='number'&&Number.isFinite(n))||v.x<0||v.y<0||v.width<=0||v.height<=0||v.x+v.width>1||v.y+v.height>1)return undefined;return {x:v.x,y:v.y,width:v.width,height:v.height};}
 export function parseObject(value:unknown):WorkspaceObject|null {
  if(!value||typeof value!=='object')return null;const v=value as Record<string,unknown>;
@@ -30,6 +80,15 @@ export function parseObject(value:unknown):WorkspaceObject|null {
  if(!text(v.id,200)||!OBJECT_KINDS.includes(v.kind as ObjectKind)||!text(v.title,300))return null;
  const arr=(v:unknown)=>Array.isArray(v)?v:[];
  const object:WorkspaceObject={id:text(v.id,200),kind:v.kind as ObjectKind,title:text(v.title,300),revision:Number.isInteger(v.revision)?Number(v.revision):1,status:text(v.status,40)||'recorded',task_id:text(v.task_id,200),body:text(v.body),language:text(v.language,40),url:safeUrl(v.url),caption:text(v.caption,1000),sources:arr(v.sources).filter(s=>s&&typeof s==='object').map(s=>({id:text(s.id,200),title:text(s.title,300),url:safeUrl(s.url)}))};
+ if(typeof v.part==='string'&&/^(worker_[a-z]|lead)$/.test(v.part))object.part=v.part;
+ if(v.kind==='zephium'){
+  if(!ZEPHIUM_KINDS.includes(v.zkind as ZephiumKind))return null;
+  object.zkind=v.zkind as ZephiumKind;object.data=zephiumData(object.zkind,v.data);
+  return object;
+ }
+ // A legacy object may carry the Zephium fields it knows (reply points, plan checkable, code notes,
+ // draft destination, sheet column metadata) as `data`; the wire then uses them instead of defaults.
+ if(v.data&&typeof v.data==='object'&&!Array.isArray(v.data))object.data=sanitizeData(v.data) as Record<string,unknown>;
  if(['article','video','course'].includes(String(v.recommendationKind)))object.recommendationKind=v.recommendationKind as WorkspaceObject['recommendationKind'];
  if(Array.isArray(v.recommendations))object.recommendations=v.recommendations.slice(0,v.contract_version===26?10000:24).filter(p=>p&&typeof p==='object'&&text(p.title,300)).map(p=>({id:text(p.id,200),title:text(p.title,300),subtitle:text(p.subtitle,500),url:safeUrl(p.url),image:safeUrl(p.image),recommended:p.recommended===true,why:text(p.why,3000),imageRegion:region(p.imageRegion),facts:arr(p.facts).slice(0,12).filter(f=>f&&typeof f==='object').map(f=>({label:text(f.label,100),value:text(f.value,500)}))}));
  if(v.planMode==='calendar'||v.planMode==='schedule')object.planMode=v.planMode;

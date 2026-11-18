@@ -8,7 +8,7 @@
  * report. Nothing is invented: a field the object does not carry is left out, and an object with
  * no Zephium shape (a bare source) returns null and is not drawn as a result.
  */
-import type { WorkspaceObject } from "./objects/registry";
+import { replyPoints, type WorkspaceObject } from "./objects/registry";
 import type { KnowledgeMap } from "./work-run";
 
 export type Wire = { kind: string } & Record<string, unknown>;
@@ -64,7 +64,26 @@ function whenOf(entry: NonNullable<WorkspaceObject["entries"]>[number]) {
 }
 
 /** The Zephium record for one AEGIS object, or null when Zephium has no shape for it. */
+/** A card written as blocks (the lead's adaptive cards) reads as the document's paragraphs. */
+function blockParagraphs(o: WorkspaceObject): string[] {
+  return (o.blocks ?? []).flatMap((block) => {
+    if (block.kind === "heading" && block.text) return [`## ${block.text}`];
+    if (block.kind === "bullets") return block.items?.length ? [block.items.map((item) => `- ${item}`).join(String.fromCharCode(10))] : [];
+    if (block.kind === "quote" && block.text) return [`> ${block.text}`];
+    if (block.kind === "figure" && (block.label || block.value)) return [`**${block.label ?? ""}** ${block.value ?? ""}`.trim()];
+    return block.text ? [block.text] : [];
+  });
+}
+
+/** The Zephium fields an object carries as `data` (V29), each used only when it has the right type. */
+const given = (o: WorkspaceObject) => (o.data ?? {}) as Record<string, unknown>;
+const listOf = (value: unknown) => (Array.isArray(value) ? value : undefined);
+const textOf = (value: unknown) => (typeof value === "string" && value ? value : undefined);
+
 export function wireOf(o: WorkspaceObject): Wire | null {
+  // V29: a typed Zephium artifact is its own wire data, passed through as the backend wrote it.
+  if (o.kind === "zephium") return o.zkind && o.data ? { ...o.data, kind: o.zkind } : null;
+  const data = given(o);
   if (o.kind === "comparison" && o.recommendations?.length)
     return {
       kind: "picks",
@@ -77,6 +96,7 @@ export function wireOf(o: WorkspaceObject): Wire | null {
         ...(pick.why ? { why: pick.why } : {}),
         recommended: pick.recommended,
         tags: [],
+        ...(pick.image ? { image_candidates: [pick.image] } : {}),
       })),
     };
   switch (o.kind) {
@@ -86,15 +106,17 @@ export function wireOf(o: WorkspaceObject): Wire | null {
         headline: o.title,
         text: o.body || o.caption || "",
         figures: (o.entries ?? []).filter((entry) => entry.value !== undefined).map((entry) => ({ label: entry.label, value: `${entry.value}${entry.unit ? ` ${entry.unit}` : ""}` })),
-        points: [],
+        points: replyPoints(data.points),
       };
     case "document":
     case "report":
-    case "note":
-      return { kind: "document", paragraphs: paragraphs(o.body || o.caption || "") };
+    case "note": {
+      const written = o.body || o.caption ? paragraphs(o.body || o.caption || "") : blockParagraphs(o);
+      return written.length ? { kind: "document", paragraphs: written } : null;
+    }
     case "code":
     case "test":
-      return { kind: "code", language: o.language || "text", text: o.body || "", notes: [] };
+      return { kind: "code", language: o.language || "text", text: o.body || "", notes: listOf(data.notes) ?? [] };
     case "diff":
       return { kind: "diff", path: o.title, language: o.language || "text", summary: o.caption || "", hunks: hunks(o.body || "") };
     case "table":
@@ -103,7 +125,14 @@ export function wireOf(o: WorkspaceObject): Wire | null {
         kind: "sheet",
         columns: (o.columns ?? []).map((label, index) => {
           const kind = o.columnKinds?.[index] ?? (o.kind === "comparison" && index === 0 ? "entity" : "text");
-          return { label: plain(label), kind: SHEET_KINDS.has(kind) ? kind : "text" };
+          const meta = (listOf(data.columns)?.[index] ?? {}) as Record<string, unknown>;
+          return {
+            label: plain(label),
+            kind: SHEET_KINDS.has(kind) ? kind : "text",
+            ...(textOf(meta.unit) ? { unit: meta.unit } : {}),
+            ...(textOf(meta.currency) ? { currency: meta.currency } : {}),
+            ...(meta.best === "max" || meta.best === "min" ? { best: meta.best } : {}),
+          };
         }),
         rows: (o.rows ?? []).map((cells) => ({ cells: cells.map(plain) })),
         ...(o.caption ? { note: o.caption } : {}),
@@ -114,7 +143,7 @@ export function wireOf(o: WorkspaceObject): Wire | null {
         : [{ name: o.title, points: (o.entries ?? []).map((entry) => ({ x: entry.label, y: entry.value === undefined ? null : String(entry.value) })) }];
       const unit = o.series?.[0]?.unit || o.entries?.find((entry) => entry.unit)?.unit || "";
       const style = o.chartKind === "line" ? "line" : o.chartKind === "area" ? "area" : o.orientation === "vertical" ? "bar" : "bar_horizontal";
-      return { kind: "plot", style, x: { kind: "category" }, y: { format: "number", ...(unit ? { unit } : {}) }, series, basis: o.caption || "From the run's sources" };
+      return { kind: "plot", style, x: { kind: "category" }, y: { format: "number", ...(unit ? { unit } : {}) }, series, basis: o.caption || "" };
     }
     case "diagram":
     case "knowledge-graph": {
@@ -145,7 +174,7 @@ export function wireOf(o: WorkspaceObject): Wire | null {
     case "calendar":
       return {
         kind: "plan",
-        checkable: false,
+        checkable: data.checkable === true,
         ...(o.kind === "calendar" && o.planMode !== "schedule" ? { calendar: true } : {}),
         ...(o.planTotal ? { total: o.planTotal } : {}),
         steps: (o.entries ?? []).map((entry) => ({
@@ -160,10 +189,26 @@ export function wireOf(o: WorkspaceObject): Wire | null {
       };
     case "image":
     case "video":
-    case "audio":
-      return o.url ? { kind: "media", medium: o.kind, url: o.url } : null;
-    case "draft":
-      return { kind: "draft", destination: "message", body: o.body || "" };
+    case "audio": {
+      // A card may carry its picture as `url`, or (adaptive cards) as its first recorded media item.
+      const item = o.media?.find((entry) => entry.url);
+      const url = o.url || item?.url;
+      if (!url) return null;
+      const poster = o.kind === "image" ? url : item?.thumbnail;
+      return { kind: "media", medium: o.kind, url, ...(poster ? { poster } : {}), ...(item?.title ? { title: item.title } : {}) };
+    }
+    case "draft": {
+      const body = o.body || blockParagraphs(o).join(String.fromCharCode(10, 10));
+      return body
+        ? {
+            kind: "draft",
+            destination: textOf(data.destination) ?? "message",
+            ...(textOf(data.to) ? { to: data.to } : {}),
+            ...(textOf(data.subject) ? { subject: data.subject } : {}),
+            body,
+          }
+        : null;
+    }
     default:
       return null;
   }

@@ -41,7 +41,7 @@ export type WorkRun = {
   stage: string;
   failure: string;
   request: { answer?:string; clarifications?:import('./clarifications').ClarificationRecord[]; query: string; workflow?: string; mode?: string };
-  plan: { title?: string; acknowledgement?: string; intent?: string; mode?: string; clarification?: string; clarification_options?:string[]; sections?: string[]; reasoning_summary?: string; skills?: LoadedSkill[]; skill?: LoadedSkill };
+  plan: { title?: string; acknowledgement?: string; intent?: string; mode?: string; clarification?: string; clarification_options?:string[]; sections?: string[]; reasoning_summary?: string; skills?: LoadedSkill[]; skill?: LoadedSkill; route?: import('./research-to-run').WorkRoute | null };
   assignments: { agent: string; role: string; task: string; provider: string; model: string; state: string }[];
   results: Record<string, { agent: string; role: string; state: string; summary: string; provider: string; model: string; tokens: number; seconds: number; failure: string }>;
   evidence: { id: string; url: string; title: string; domain: string; retrieved_at: string; relevance: number; credibility: number; assessment: string; query: string }[];

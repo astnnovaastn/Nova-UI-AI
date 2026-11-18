@@ -3,12 +3,14 @@ import type { ResearchReport } from "./research-to-run";
 import type { TraceEvent } from "./research-trace";
 import type { CanvasView, WorkRun } from "./work-run";
 import type {LayoutRecord,LayoutSave} from "./designer/types";
+import type { CanvasPanel, CanvasRailPanel } from "./canvas-panels";
 
 export type ResearchJob = { id: string; title?: string; state: string; completed?: number; total?: number; step?: string };
 
 export type CanvasActions = {
   /** Sends a prompt: starts research, or follows up when a report is open. */
-  prompt(text: string): void;
+  prompt(text: string): Promise<boolean> | void;
+  stopReply(): void;
   stopJob(jobId: string): void;
   /** Asks the backend to run a failed research again. */
   retry(): void;
@@ -18,7 +20,7 @@ export type CanvasActions = {
   openSource(url: string): void;
   /** Asks the backend's video search for more videos on the open research (a real search request). */
   findVideos?(): void;
-  openPanel(panel: "history" | "conversation"): void;
+  openPanel(panel: CanvasRailPanel): void;
   newEntry(kind: "research" | "chat" | "documentary"): void;
   attach(): void;
   setDepth(mode: "quick" | "detailed"): void;
@@ -39,7 +41,7 @@ export type CanvasActions = {
   /** Starts a work run: the lead plans it and assigns only the workers it needs. */
   startWork(text: string, options?: { workflow?: string; chosen?: unknown[]; fromResearch?: string }): void;
   /** Asks AEGIS about canvas cards; the reply appears in the conversation. */
-  askNodes(question: string, nodes: { id: string; kind: string; title: string; url?: string; summary: string }[], runId: string): void;
+  askNodes(question: string, nodes: { id: string; kind: string; title: string; url?: string; summary: string }[], runId: string): Promise<boolean> | void;
   /** Answers the question the lead asked before starting. */
   answerRun(text: string): void | Promise<void>;
   /** Saves which cards are chosen and removed. Saved research is never touched. */
@@ -49,6 +51,7 @@ export type CanvasActions = {
 };
 
 export type CanvasState = {
+  replyActive?: boolean;
   report: ResearchReport | null;
   /** The backend's record of the open research, in order. */
   trace: readonly TraceEvent[];
@@ -70,7 +73,7 @@ export type CanvasState = {
   loading: boolean;
   depth: "quick" | "detailed";
   theme: "dark" | "light";
-  panel: string;
+  panel: CanvasPanel;
   error: string;
 };
 

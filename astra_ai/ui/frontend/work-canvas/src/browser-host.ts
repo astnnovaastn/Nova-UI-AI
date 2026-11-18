@@ -20,8 +20,12 @@ export type BrowserHostEvent = { id: number } & (
   /** The page asked for a new window; the workspace decides whether to open a pane. */
   /** The page tried to go to an address that is not a public website. */
   | { kind: "blocked"; url: string }
-  /** The page offered a file; nothing was saved. */
-  | { kind: "download"; url: string }
+  /** The page offered a file. A source pane saves nothing; a browser tab reports its download's progress. */
+  | { kind: "download"; url: string; filename?: string; state?: string; received?: number; total?: number }
+  /** V30: a link in a browser tab asked for a new tab. */
+  | { kind: "open-tab"; url: string; background?: boolean }
+  /** A browser shortcut (Ctrl+T, W, L) pressed while a tab's page had the keyboard. */
+  | { kind: "shortcut"; key: string }
   | { kind: "favicon"; url: string }
   /** Where the desktop's resource manager has the page: active, background, suspended (frozen) or hibernated (released). */
   | { kind: "state"; state: string }
@@ -44,10 +48,17 @@ export interface ResearchBrowserHost {
   setBounds(id: number, rect: PaneRect): Promise<void>;
   /** A native view always paints above the page, so it is hidden whenever something covers it. */
   setVisible(id: number, visible: boolean): Promise<void>;
+  /** V30: a browser tab (the person's own session, downloads, permission questions). Desktop only. */
+  openTab(id: number, url: string, rect: PaneRect): Promise<void>;
+  stop(id: number): Promise<void>;
+  downloads(): Promise<DownloadRow[]>;
+  showDownload(id: number): Promise<void>;
   /** The fallback for anything the pane cannot do: the person's own browser. */
   openExternal(url: string): Promise<void>;
   subscribe(listener: (event: BrowserHostEvent) => void): () => void;
 }
+
+export type DownloadRow = { id: number; tab: number | null; url: string; filename: string; state: string; received: number; total: number };
 
 type DesktopRuntime = { invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> };
 type DesktopWindow = Window & {
@@ -71,6 +82,10 @@ const webHost: ResearchBrowserHost = {
   close: () => done,
   setBounds: () => done,
   setVisible: () => done,
+  openTab: () => done,
+  stop: () => done,
+  downloads: async () => [],
+  showDownload: () => done,
   async openExternal(url) {
     window.open(url, "_blank", "noopener,noreferrer");
   },
@@ -97,6 +112,10 @@ function desktopHost(runtime: DesktopRuntime): ResearchBrowserHost {
     close: (id) => quiet("browser_close", { id }),
     setBounds: (id, rect) => quiet("browser_bounds", { id, rect }),
     setVisible: (id, visible) => quiet("browser_show", { id, visible }),
+    openTab: (id, url, rect) => call("tab_open", { id, url, rect }),
+    stop: (id) => quiet("browser_stop", { id }),
+    downloads: () => runtime.invoke<DownloadRow[]>("tab_downloads", {}),
+    showDownload: (id) => quiet("download_show", { id }),
     openExternal: (url) => call("open_external", { url }),
     subscribe(listener) {
       listeners.add(listener);

@@ -23,13 +23,18 @@ from astra_ai.memory.shared_memory import now, safe
 
 from .catalog import WORKFLOWS, budget_for
 from .contracts import (
-    ANALYSIS, KNOWLEDGE_MAP, LEAD_PLAN, MODES, REPORT, REPORT_FRAME, REPORT_SECTIONS, ROLE_SLOT, SOURCE_ASSESSMENT, VERIFICATION,
+    ANALYSIS, KNOWLEDGE_MAP, LEAD_PLAN, WORK_PLAN, MODES, REPORT, REPORT_FRAME, REPORT_SECTIONS, ROLE_SLOT, SOURCE_ASSESSMENT, VERIFICATION,
     AgentAssignment, AgentResult, Artifact, EvidenceRecord, RunBudget, RunState, TaskPlan, WorkRequest, as_dict, load,
 )
 from .providers import BudgetExhausted, ProviderError, WorkPaused, estimate_tokens
 from . import relations as rel
 from . import task_graph, workspace_objects, card_objects
 from . import allocation as adaptive
+from . import router as v29router
+from .v29_tasks import WorkTasks
+
+#: V30 free-first research: a query with this many relevant free pages needs no paid search call.
+FREE_ENOUGH = 4
 
 log = logging.getLogger('work.orchestrator')
 
@@ -161,7 +166,9 @@ class WorkOrchestrator:
 
     def create(self, research_id, request, context):
         # The engine is fixed when the run is made, so a retry or restart never changes its path.
-        run = RunState(run_id=research_id, research_id=research_id, request={**as_dict(request), 'engine': adaptive.engine(self.settings)}, schema_version=2)
+        # V29: the capability router is fixed at creation too; runs made without it keep the old path.
+        routed = {'router': 'v29'} if v29router.enabled(self.settings) else {}
+        run = RunState(run_id=research_id, research_id=research_id, request={**as_dict(request), 'engine': adaptive.engine(self.settings), **routed}, schema_version=2)
         return self.store.create(run)
 
     async def run(self, research_id, context):
@@ -212,7 +219,7 @@ class WorkOrchestrator:
             return DEFAULT_DAILY_TOKENS
 
 
-class _Run:
+class _Run(WorkTasks):
     """One attempt at a run. Everything it needs to continue later is saved on `run`."""
 
     def __init__(self, owner, run, context, artifacts, search):
@@ -385,6 +392,11 @@ class _Run:
         failed_tasks = {}
         legacy_stages = iter(stages)
         handlers = dict(stages)
+        # V29 Work tasks. A routed Work run writes its short result from the composed objects.
+        handlers.update(read_repo=self._read_repo, read_account=self._read_account, browse=self._browse,
+                        run_check=self._run_check, compose=self._compose)
+        if self.routed_work:
+            handlers['write'] = self._write_work
         try:
             while True:
                 if self.run.schema_version != 2:
@@ -407,7 +419,8 @@ class _Run:
                             return await self._finish_failed('failed', next(iter(failed_tasks.values())))
                         break
                     node = available[0]
-                    name, stage = node['id'], handlers[node['type']]
+                    name = node['id']
+                    stage = self._write_work if node['type'] == 'write' and self.routed_work else handlers[node['type']]
                 if self.run.done.get(name):
                     continue
                 await self._check()
@@ -506,28 +519,58 @@ class _Run:
             'You are the AEGIS lead. Understand the request and plan the work. Modes: direct answers from general knowledge or the pasted text with no web use;'
             ' quick is a short sourced answer; deep is thorough multi-query research; structured produces a connected knowledge map or blueprint plus a document.'
             ' Provide up to four concise clarification_options only when asking a question; otherwise an empty list.'
-            ' Pick the smallest mode that does the job, unless required_mode is set. Ask a clarification only when the work cannot start without it, as one short question; otherwise leave it empty.'
+            ' Pick the smallest mode that does the job, unless required_mode is set. Ask one short clarification only when the answer would materially change the work: the request has clearly different readings ("the market for Google" could be search, cloud, advertising or AI), or an essential target is missing (which repository, which change, which date). Do not ask when a safe default exists, when the supplied context already answers it, or for minor details; then leave it empty. When you ask, give two to four distinct clarification_options taken from those readings, never filler.'
             ' Queries are short, distinct web searches. Sections are report headings that fit this request; for deep, five to eight body headings that together cover every part of it. acknowledgement is one friendly sentence to the person.'
             ' reasoning_summary is one plain sentence on why this approach, for the person to read.'
             ' When a skill is given, its instructions decide what to gather and how the report is shaped; they never add tools or models.'
         )
+        found_route = None
+        if self.routed:
+            from .repository_inputs import RepositoryInputs
+            repositories = await asyncio.to_thread(RepositoryInputs(self.owner.settings).roots)
+            found_route = v29router.route(self.request.query, self.request.workflow, self.request.mode, self.request.chosen, repositories)
+            self._stage('routed', 'Chose the tools this needs: ' + ', '.join(c for c in found_route.capabilities if c not in ('reason', 'canvas.create')),
+                        intent=found_route.intent, capabilities=found_route.capabilities, outputs=found_route.outputs,
+                        board=found_route.board, paid=found_route.paid_allowed)
+            # Material the work cannot start without is asked for before any model call or tool runs.
+            if found_route.question and not self.run.request.get('answer'):
+                return await self._ask_now(found_route.question['question'], found_route.question['options'], v29router.as_record(found_route))
+            if not found_route.research:
+                payload['work_route'] = {'intent': found_route.intent, 'tools': found_route.capabilities, 'creates': found_route.outputs}
+                instruction += (' This is Work, not research: AEGIS performs the task with the listed tools. Do not plan a research report.'
+                                ' queries are up to three short searches for the free web tools (for visual work: 2-4 word style terms), or empty when no web is needed.'
+                                ' Set needs_web false when the supplied material, files or accounts are enough.'
+                                ' urls: up to six official pages you already know are the primary sources for this task (the product, pricing,'
+                                ' documentation or paper pages of the things named or compared), full https addresses; they are read directly'
+                                ' before any search. Leave it empty rather than guess an address.')
+        work_plan = found_route is not None and not found_route.research
         self._stage('intent', 'Understanding the request', 'running', agent='lead', model=lead.model)
-        result, record = await self._model(lead, instruction, payload, LEAD_PLAN, 1500, lead=True, timeout=90)
+        result, record = await self._model(lead, instruction, payload, WORK_PLAN if work_plan else LEAD_PLAN, 1800 if work_plan else 1500, lead=True, timeout=90)
         mode = (workflow.mode if workflow else self.request.mode) or result['mode']
         if mode not in MODES:
             mode = 'quick'
+        named_urls = [str(u).strip()[:500] for u in (result.pop('urls', None) or []) if isinstance(u, str) and u.strip().startswith('https://')][:6]
         plan = TaskPlan(**{**result, 'mode': mode})
         # v2: for work on supplied material (code, notes, messages) the lead decides whether the web helps.
         forced = bool(workflow and workflow.needs_web) and not (self.adaptive and self.request.workflow in adaptive.ANALYSE_SUPPLIED)
-        plan.needs_web = mode != 'direct' and (mode == 'deep' or plan.needs_web or pricing_evidence or forced)
-        if not plan.needs_web:
-            plan.queries = []
+        if found_route is not None and not found_route.research:
+            # V29: Work never uses the paid search path. Free web tools run as their own task instead.
+            found_route = v29router.narrow(found_route, plan)
+            plan.needs_web = False
+        else:
+            plan.needs_web = mode != 'direct' and (mode == 'deep' or plan.needs_web or pricing_evidence or forced)
+            if not plan.needs_web:
+                plan.queries = []
         plan.title = safe(plan.title)[:120]
         self.plan = plan
-        self.run.plan = {**as_dict(plan), 'skills': facts, **({'skill': facts[0]} if facts else {})}
+        self.run.plan = {**as_dict(plan), 'skills': facts, **({'skill': facts[0]} if facts else {}), **({'urls': named_urls} if named_urls else {})}
         self.budget = budget_for(mode, self.owner.settings)
         if self.adaptive:
             self.budget = adaptive.budget_for_workflow(self.budget, mode, self.request.workflow)
+        if found_route is not None:
+            self.run.plan['route'] = v29router.as_record(found_route)
+            if not found_route.research:
+                self.budget = v29router.WORK_BUDGET
         self.run.budget = as_dict(self.budget)
         self.run.results['lead'] = as_dict(AgentResult('lead', 'lead', 'running', provider=record['provider'], model=record['model']))
         self._stage('intent', 'Understood the request', detail=safe(plan.intent)[:400], constraints=[safe(item)[:160] for item in plan.constraints[:6]])
@@ -545,7 +588,10 @@ class _Run:
         planned = self._stage('planned', 'Plan created', detail=safe(plan.reasoning_summary)[:400], acknowledgement=safe(plan.acknowledgement)[:300], sections=[safe(item)[:120] for item in plan.sections[:12]])
         self._relate('plans', 'request', 'agent:lead', planned, note=safe(plan.intent)[:300], detail={'mode': mode})
         self.run.assignments = []
-        if self.adaptive:
+        if self.routed_work:
+            # Work tools are run by AEGIS itself; the lead composes. No research workers are started.
+            assignments = []
+        elif self.adaptive:
             chosen = adaptive.allocate(self.request.query, mode, self.request.workflow, {**as_dict(plan), 'chosen': self.request.chosen},
                                        self.owner.router.slots(), self.owner.settings, self.budget.workers, self.owner.router.guard, self.request.chosen)
             self.run.plan['allocation'] = as_dict(chosen)
@@ -569,6 +615,17 @@ class _Run:
             self._stage('assigned', 'Assigned ' + ', '.join(WORDS[row['role']].lower() for row in self.run.assignments), count=len(self.run.assignments))
         await self._state(display_title=display_title(plan.title or self.request.query))
         return None
+
+    async def _ask_now(self, question, options, route_record):
+        """Pause for material the work cannot start without. Answering resumes this same run."""
+        self.run.state = 'needs_input'
+        self.run.plan = {**(self.run.plan or {}), 'route': route_record, 'clarification': question, 'clarification_options': options}
+        history = self.run.request.setdefault('clarifications', [])
+        if not history or history[-1].get('answer') or history[-1].get('question') != question[:500]:
+            history.append({'id': str(len(history) + 1), 'question': question[:500], 'options': options[:6]})
+        self._stage('question', 'AEGIS has one question', 'queued', question=question[:500], options=options[:6])
+        await self._state(phase='waiting_for_report', waiting_reason='work_needs_input')
+        return {'status': 'completed', 'needs_input': True, 'question': question, 'research_id': self.id}
 
     def _brief(self):
         """Reuse the exact loaded instructions after a retry or restart."""
@@ -622,9 +679,18 @@ class _Run:
         number = self._query_number(query)
         self._emit('search', 'collecting_sources', 'running', query=query, number=number)
         began = time.time()
-        async with self.search.network:
-            rows, error = await asyncio.to_thread(self.search._request, query, 'detailed', 8, depth)
-        self._part('worker_a', began, time.time(), searches=1)
+        free = await self._free_first(query) if str(self.owner.settings('AEGIS_RESEARCH_FREE_FIRST') or '').strip() == '1' else []
+        if len(free) >= FREE_ENOUGH:
+            # V30: enough relevant free evidence for this query, so the paid search call is not made.
+            self.run.usage['searches'] = max(0, self._spent_searches() - 1)
+            self.run.usage['free_searches'] = self.run.usage.get('free_searches', 0) + 1
+            self._part('worker_a', began, time.time())
+            rows, error = free, None
+        else:
+            async with self.search.network:
+                rows, error = await asyncio.to_thread(self.search._request, query, 'detailed', 8, depth)
+            rows = rows + [row for row in free if row['url'] not in {r.get('url') for r in rows}]
+            self._part('worker_a', began, time.time(), searches=1)
         if error:
             event = self._emit('search', 'collecting_sources', 'failed', query=query, number=number, reason=error.get('reason', ''))
         else:
@@ -633,6 +699,31 @@ class _Run:
         for row in rows:
             self._emit('source', 'collecting_sources', 'done', url=row.get('url', ''), title=row.get('title', ''), excerpt=row.get('content', '')[:600], retrieved_at=row.get('retrieved_at', ''), query=query)
         return query, rows, error
+
+    async def _free_first(self, query):
+        """Free adapters (ranked for relevance and diversity) and the agent browser's reads of the best pages, as search rows."""
+        try:
+            from . import free_search, source_ranking as sr
+            from .agent_browser import AgentBrowser
+        except ImportError:
+            return []
+        kind = sr.topic(query + ' ' + self.request.query)
+        names = free_search.plan_sources('research' if kind == 'academic' else kind, query)
+        hits = await asyncio.to_thread(free_search.search, query, names, 10)
+        chosen = sr.rank(hits, query, kind, limit=6)
+        browser = AgentBrowser()
+        rows = []
+        try:
+            for hit in chosen:
+                page = await asyncio.to_thread(browser.read, hit['url']) if len(rows) < 4 else {}
+                text = page.get('text', '') if isinstance(page, dict) and page.get('status') == 'ok' else ''
+                if not text and len(hit.get('snippet', '')) < 120:
+                    continue
+                rows.append({'url': hit['url'], 'title': hit.get('title') or page.get('title', ''), 'content': (text or hit.get('snippet', ''))[:6000],
+                             'retrieved_at': now(), 'provider': 'free:' + hit.get('source', ''), 'score': hit.get('score', 0)})
+        finally:
+            browser.close()
+        return rows
 
     def _spent_searches(self):
         return self.run.usage.get('searches', 0)
@@ -672,6 +763,9 @@ class _Run:
     async def _discover(self):
         discovery_worker = self._assignment('discovery')
         if not discovery_worker and self.plan.mode != 'deep':
+            return None
+        # V29: paid search runs only when the plan needs the web; Deep Research always does.
+        if self.routed and not self.plan.needs_web:
             return None
         started = time.monotonic()
         if discovery_worker:
@@ -1392,10 +1486,11 @@ class _Run:
             return
         usage = self.run.usage
         reserved_calls = 2 if phase == 'analysis' else 0
-        if usage.get('calls', 0) >= self.budget.model_calls - reserved_calls:
+        if usage.get('calls', 0) >= self.budget.model_calls + self.budget.card_calls - reserved_calls:
             self.run.card_state.setdefault('incomplete', {})[phase] = 'model_call_budget'
             return
-        families = card_objects.find(self.request.query, self.request.workflow)[:6]
+        # A short run reads fewer card specifications, so its pass stays small.
+        families = card_objects.find(self.request.query, self.request.workflow)[:3 if self.plan.mode in ('direct', 'quick') else 6]
         payload = {
             'request': self.request.query, 'phase': phase,
             'cards': families,
@@ -1425,7 +1520,7 @@ class _Run:
         )
         reserve = self.budget.lead_reserve if phase == 'analysis' else 0
         estimate = estimate_tokens(instruction, payload, card_objects.COMMAND_SCHEMA) + 5000
-        if usage.get('tokens', 0) + estimate > self.budget.tokens - reserve:
+        if usage.get('tokens', 0) + estimate > self.budget.tokens + self.budget.card_tokens - reserve:
             self.run.card_state.setdefault('incomplete', {})[phase] = 'token_budget'
             return
         try:
@@ -1457,6 +1552,8 @@ class _Run:
 
     async def _publish(self):
         report = self.run.results['report_text']
+        if self.routed_work:
+            return await self._publish_work(report)
         if self.run.schema_version == 2:
             self.run.canvas_objects = card_objects.merge_projection(self.run.canvas_objects, workspace_objects.project(self.run,report))
             self.run.coverage = task_graph.coverage(self.run.plan,self.run.evidence,report)
@@ -1492,4 +1589,25 @@ class _Run:
         self.run.stage = 'published'
         finished = self._stage('finished', 'Run complete', tokens=self.run.usage.get('tokens', 0), calls=self.run.usage.get('calls', 0), sources=len(sources), workers=len(self.run.assignments))
         self._relate('writes', 'agent:lead', 'report', finished, status='contested' if failures else 'complete', note=title.group(1)[:200] if title else '')
+        return None
+
+    async def _publish_work(self, report):
+        """V29 Work publication: typed objects, the short result, and no paid images or media."""
+        self.run.canvas_objects = card_objects.merge_projection(self.run.canvas_objects, self._work_objects())
+        sources = await self._saved_sources()
+        state = await self._state()
+        title = re.search(r'^# (.+)', report, re.M)
+        if title:
+            await self._state(display_title=display_title(title.group(1)))
+        await self._state(phase='preparing_layout', publication_state='preparing')
+        item = await asyncio.to_thread(self.artifacts.save, state['query'], state['mode'], report, sources, [], {**self.context, 'prepare_publication': True}, state['operation_id'])
+        await asyncio.to_thread(self.artifacts.publish_prepared, item['id'], self.context)
+        self.run.artifacts = [row for row in self.run.artifacts if row['kind'] != 'report']
+        self.run.artifacts.append(as_dict(Artifact('report-' + self.id[:12], 'report', title.group(1)[:120] if title else self.request.query[:120], self.id, item['revision'], {'mode': 'work', 'route': self.route.get('board', '')})))
+        self.run.state = 'completed'
+        self.run.stage = 'published'
+        tools = self.run.results.get('v29', {}).get('tools', [])
+        finished = self._stage('finished', 'Run complete', tokens=self.run.usage.get('tokens', 0), calls=self.run.usage.get('calls', 0),
+                               sources=len(sources), objects=len(self.run.canvas_objects), tools=len(tools), paid_searches=self.run.usage.get('searches', 0))
+        self._relate('writes', 'agent:lead', 'report', finished, status='complete', note=title.group(1)[:200] if title else '')
         return None

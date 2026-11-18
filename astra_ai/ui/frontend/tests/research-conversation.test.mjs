@@ -97,3 +97,14 @@ test("changing owner connection clears selected and recent research context", ()
   assert.equal(api.conversationResearch("private").length, 0);
   assert.equal(api.conversationSnapshot().focusRevision, -1);
 });
+test("an active research reply belongs to its submitting page through acceptance", () => {
+  const { api } = setup();
+  api.requestConversation("Explain the source", "request-one", "research-one");
+  api.conversationState({ activeRequestId: "request-one", textBusy: true });
+  assert.equal(api.hasActiveResearchReply("research-one"), true);
+  assert.equal(api.hasActiveResearchReply("research-two"), false);
+  api.conversationState({ textBusy: false });
+  assert.equal(api.hasActiveResearchReply("research-one"), true);
+  api.conversationFinished("request-one");
+  assert.equal(api.hasActiveResearchReply("research-one"), false);
+});

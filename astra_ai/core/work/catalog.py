@@ -9,8 +9,8 @@ from dataclasses import dataclass, replace
 from .contracts import RunBudget
 
 BUDGETS = {
-    'direct': RunBudget(model_calls=3, tokens=16000, searches=0, sources=0, workers=0, deadline_seconds=180, concurrency=1, lead_reserve=8000),
-    'quick': RunBudget(model_calls=5, tokens=36000, searches=2, sources=6, workers=1, deadline_seconds=300, concurrency=2, lead_reserve=10000),
+    'direct': RunBudget(model_calls=3, tokens=16000, searches=0, sources=0, workers=0, deadline_seconds=180, concurrency=1, lead_reserve=8000, card_tokens=18000, card_calls=1),
+    'quick': RunBudget(model_calls=5, tokens=36000, searches=2, sources=6, workers=1, deadline_seconds=300, concurrency=2, lead_reserve=10000, card_tokens=18000, card_calls=1),
     'deep': RunBudget(model_calls=22, tokens=320000, searches=5, sources=18, workers=3, deadline_seconds=1500, concurrency=3, lead_reserve=60000),
     'structured': RunBudget(model_calls=12, tokens=140000, searches=6, sources=12, workers=3, deadline_seconds=1000, concurrency=3, lead_reserve=30000),
 }
@@ -63,4 +63,28 @@ def budget_for(mode, settings=lambda _name: ''):
             wanted = 0
         if wanted:
             budget = replace(budget, sources=max(3, min(40, wanted)))
+    cap = paid_search_cap(settings)
+    if cap is not None and budget.searches > cap:
+        budget = replace(budget, searches=cap)
     return budget
+
+
+def paid_search_cap(settings=lambda _name: ''):
+    """V30: the most paid search calls (Tavily/Exa/SerpAPI) any one run may make, or None for the mode's own limit.
+
+    AEGIS_PAID_SEARCH_MAX_PER_RUN caps the count; AEGIS_PAID_SEARCH_MAX_USD_PER_RUN caps the estimated
+    spend at AEGIS_PAID_SEARCH_PRICE_USD per call (default 0.008). The smaller cap wins; 0 means no paid search."""
+    caps = []
+    try:
+        if str(settings('AEGIS_PAID_SEARCH_MAX_PER_RUN') or '').strip() != '':
+            caps.append(max(0, int(settings('AEGIS_PAID_SEARCH_MAX_PER_RUN'))))
+    except ValueError:
+        pass
+    try:
+        dollars = str(settings('AEGIS_PAID_SEARCH_MAX_USD_PER_RUN') or '').strip()
+        if dollars != '':
+            price = float(settings('AEGIS_PAID_SEARCH_PRICE_USD') or 0.008) or 0.008
+            caps.append(max(0, int(float(dollars) / price)))
+    except ValueError:
+        pass
+    return min(caps) if caps else None

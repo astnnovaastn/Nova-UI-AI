@@ -209,3 +209,24 @@ def test_selection_endpoint_checks_scope_revision_and_formatted_text(tmp_path):
         assert client.post(endpoint, json={'revision': item['revision'], 'text': 'Invented robot model'}).status_code == 422
         workspace.request_context = lambda request: {**CTX, 'project_id': 'other'}
         assert client.post(endpoint, json={'revision': item['revision'], 'text': 'Google robotics'}).status_code == 409
+        workspace.request_context = lambda request: CTX
+        payload = {'revision': item['revision'], 'origin': {'source_id': 'S1'}, 'use_saved_source': True}
+        saved = client.post(endpoint, json={**payload, 'text': 'Untrusted client text'})
+        assert saved.status_code == 200, saved.text
+        assert saved.json()['text'] == SOURCE['content'].strip()
+        assert saved.json()['origin'] == {
+            'source_id': 'S1', 'kind': 'saved_source', 'title': SOURCE['title']
+        }
+        assert client.post(endpoint, json={**payload, 'origin': {'source_id': 'S999'}}).status_code == 404
+        workspace.request_context = lambda request: {**CTX, 'project_id': 'other'}
+        assert client.post(endpoint, json=payload).status_code == 409
+        workspace.request_context = lambda request: CTX
+        tab = {'revision': item['revision'], 'text': 'Visible article content',
+               'origin': {'kind': 'live_browser_tab', 'title': 'Article', 'host': 'example.com'}}
+        attached = client.post(endpoint, json=tab)
+        assert attached.status_code == 200, attached.text
+        assert attached.json()['origin'] == tab['origin']
+        assert attached.json()['text'] == tab['text']
+        assert client.post(endpoint, json={**tab, 'text': 'x' * 12001}).status_code == 422
+        workspace.request_context = lambda request: {**CTX, 'project_id': 'other'}
+        assert client.post(endpoint, json=tab).status_code == 409

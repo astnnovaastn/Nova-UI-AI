@@ -4,6 +4,7 @@
  * app's stylesheets reach into the other. Rollback: the "classic" surface setting.
  */
 import { useEffect, useRef, useState } from "react";
+import type { CanvasPanel, CanvasRailPanel } from "../../../work-canvas/src/canvas-panels";
 
 const SURFACE_KEY = "nova-research-surface";
 export type ResearchSurface = "canvas" | "classic";
@@ -27,6 +28,7 @@ export function saveResearchSurface(surface: ResearchSurface) {
 }
 
 export type CanvasBridgeState = {
+  replyActive?: boolean;
   report: unknown;
   trace: unknown[];
   workSources: unknown[];
@@ -42,18 +44,19 @@ export type CanvasBridgeState = {
   status: string;
   loading: boolean;
   depth: string;
-  panel: string;
+  panel: CanvasPanel;
   error: string;
 };
 
 export type CanvasBridgeActions = {
-  prompt(text: string): void;
+  prompt(text: string): Promise<boolean> | void;
+  stopReply(): void;
   stopJob(jobId: string): void;
   retry(): void;
   microphone(): void;
   openView(view: string): void;
   openSource(url: string): void;
-  openPanel(panel: "history" | "conversation"): void;
+  openPanel(panel: CanvasRailPanel): void;
   newEntry(kind: "research" | "chat" | "documentary"): void;
   attach(): void;
   setDepth(mode: "quick" | "detailed"): void;
@@ -69,7 +72,7 @@ export type CanvasBridgeActions = {
   checkFrame(url: string, signal?: AbortSignal): Promise<{embeddable: boolean | null; reason: string}>;
   addWorkSource(url: string, title: string): Promise<void>;
   startWork(text: string, options?: {workflow?: string; chosen?: unknown[]; fromResearch?: string}): void;
-  askNodes(question: string, nodes: {id: string; kind: string; title: string; url?: string; summary: string}[], runId: string): void;
+  askNodes(question: string, nodes: {id: string; kind: string; title: string; url?: string; summary: string}[], runId: string): Promise<boolean> | void;
   answerRun(text: string): void | Promise<void>;
   saveCanvasView(view: {chosen: string[]; hidden: string[]}): void;
   getCanvasLayout(page: string): Promise<import('../../../work-canvas/src/designer/types').LayoutRecord>;
@@ -95,7 +98,12 @@ function appTheme(): "dark" | "light" {
   return (r * 299 + g * 587 + b * 114) / 1000 > 140 ? "light" : "dark";
 }
 
-let loaded: Promise<{ mountCanvas(target: HTMLElement, portal: HTMLElement): CanvasHandle }> | null = null;
+type CanvasModule = {
+  mountCanvas(target: HTMLElement, portal: HTMLElement): CanvasHandle;
+  mountAskEmpty(target: HTMLElement, context: boolean): { destroy(): void };
+};
+
+let loaded: Promise<CanvasModule> | null = null;
 function loadCanvas() {
   if (!loaded) {
     if (!document.querySelector("link[data-aegis-work-canvas]")) {
@@ -113,6 +121,23 @@ function loadCanvas() {
     });
   }
   return loaded;
+}
+
+export function ZephiumAskEmpty({ context }: { context: boolean }) {
+  const node = useRef<HTMLDivElement>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const target = node.current;
+    let active = true;
+    let handle: { destroy(): void } | undefined;
+    void loadCanvas().then(module => {
+      if (active && target) handle = module.mountAskEmpty(target, context);
+    }).catch(() => { if (active) setFailed(true); });
+    return () => { active = false; handle?.destroy(); };
+  }, [context]);
+  return <div ref={node} className="aegis-work-root research-ask-native research-ask-native-empty">
+    {failed && <p>{context ? "Ask a question about this research." : "Open a report to ask about its findings."}</p>}
+  </div>;
 }
 
 export function WorkCanvasHost({

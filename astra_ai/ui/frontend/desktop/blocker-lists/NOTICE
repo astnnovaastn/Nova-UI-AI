@@ -1,0 +1,15 @@
+AEGIS Desktop advert and tracker blocking: bundled filter lists
+
+easylist.txt.gz and easyprivacy.txt.gz are unmodified EasyList and EasyPrivacy subscription text,
+gzip-compressed. They were taken from the Zephium source's blocker seed v1 (commit 9026a1f), which
+records:
+
+EasyList, EasyPrivacy
+Attribution: The EasyList authors (https://easylist.to/)
+License: CC BY-SA 3.0 Unported (LICENSE-CC-BY-SA-3.0.txt)
+Upstream terms: https://easylist.to/pages/licence.html
+Version: 202611071631
+
+AEGIS reads only the lists' host rules (||host^ with no domain= option) and host exceptions
+(@@||host^). Cosmetic (element hiding) rules and path patterns are not applied.
+The uBlock Origin lists Zephium also bundles (GPL-3.0) are not included.
