@@ -41,22 +41,48 @@
   /** The canvas the pointer last pressed in, so a key reaches it while nothing else has focus. */
   let engaged = false;
   const travel = (name: "fast" | "slow") => (reducedMotion() ? 0 : duration(name));
-  /** AEGIS: Fit view never goes below a reading zoom; a run too large to fit opens at its start instead. */
-  const READABLE = 0.58;
+  /**
+   * AEGIS V35 Fit view: frames the content that is really there (shown, measured nodes), in the part of the pane
+   * that is really visible (side panels such as the Lift or the conversation are found by hit-testing the pane's
+   * edges), centred, with padding. The zoom follows the content: between the canvas's minimum and 100%, never a
+   * fixed value. Only a run larger than the minimum zoom can hold opens at its start, so nothing important is cut.
+   */
+  const PAD = 32, TOP = 80, MIN = 0.2, MAX = 1;
+  function covered(pane: DOMRect, side: "left" | "right") {
+    const flowEl = anchor?.closest(".svelte-flow");
+    let most = 0;
+    for (const f of [0.3, 0.5, 0.7]) {
+      const y = pane.top + pane.height * f;
+      let d = 0;
+      for (; d < pane.width * 0.6; d += 16) {
+        const x = side === "left" ? pane.left + d + 2 : pane.right - d - 2;
+        const hit = document.elementFromPoint(x, y);
+        if (!hit || flowEl?.contains(hit)) break;
+      }
+      most = Math.max(most, d);
+    }
+    return most;
+  }
   function fit() {
     onfit?.();
-    const nodes = flow.getNodes();
     const pane = anchor?.closest(".svelte-flow")?.getBoundingClientRect();
-    if (nodes.length && pane) {
-      const box = flow.getNodesBounds(nodes);
-      const top = bottomInset > 0 ? 110 : 40;
-      const bottom = bottomInset > 0 ? bottomInset + 32 : 40;
-      const zoom = Math.min((pane.width - 80) / Math.max(1, box.width), (pane.height - top - bottom) / Math.max(1, box.height));
-      if (zoom < READABLE) {
-        void flow.setViewport({ x: 40 - box.x * READABLE, y: top - box.y * READABLE, zoom: READABLE }, { duration: travel("slow") });
-        return;
-      }
+    const nodes = flow.getNodes().filter((n) => !n.hidden && (n.measured?.width ?? n.width ?? 0) > 1 && (n.measured?.height ?? n.height ?? 0) > 1);
+    if (!pane || !nodes.length) {
+      void flow.fitView({ duration: travel("slow"), padding: 0.12, maxZoom: MAX });
+      return;
     }
+    const box = flow.getNodesBounds(nodes);
+    const left = covered(pane, "left") + PAD, right = covered(pane, "right") + PAD;
+    const top = TOP, bottom = (bottomInset > 0 ? bottomInset : 0) + PAD;
+    const roomW = Math.max(120, pane.width - left - right), roomH = Math.max(120, pane.height - top - bottom);
+    const want = Math.min(roomW / Math.max(1, box.width), roomH / Math.max(1, box.height));
+    const zoom = Math.max(MIN, Math.min(MAX, want));
+    const fitsW = box.width * zoom <= roomW + 1, fitsH = box.height * zoom <= roomH + 1;
+    const x = fitsW ? left + (roomW - box.width * zoom) / 2 - box.x * zoom : left - box.x * zoom;
+    const y = fitsH ? top + (roomH - box.height * zoom) / 2 - box.y * zoom : top - box.y * zoom;
+    void flow.setViewport({ x, y, zoom }, { duration: travel("slow") });
+  }
+  function unusedFit() {
     void flow.fitView({
       duration: travel("slow"),
       padding:

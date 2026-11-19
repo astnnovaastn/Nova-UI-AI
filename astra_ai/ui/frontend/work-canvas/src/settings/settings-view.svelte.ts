@@ -2,7 +2,7 @@
 export type SettingsSection =
   | "accounts"
   | "search" | "appearance" | "new-tab" | "tabs" | "privacy" | "permissions" | "downloads" | "focus" | "tasks"
-  | "ai" | "keys" | "voice" | "work" | "skills" | "memory" | "connections" | "system";
+  | "ai" | "keys" | "voice" | "work" | "skills" | "memory" | "connections" | "system" | "about";
 
 export type SectionInfo = { id: SettingsSection; group: "identity" | "browser" | "aegis"; title: string; description: string };
 
@@ -26,6 +26,7 @@ export const SECTIONS: readonly SectionInfo[] = [
   { id: "memory", group: "aegis", title: "Memory", description: "Open the saved memories in your AEGIS workspace." },
   { id: "connections", group: "aegis", title: "Connections and devices", description: "Services AEGIS reaches, windows connected to it, and paired computers." },
   { id: "system", group: "aegis", title: "System", description: "The AEGIS server, memories and tasks it holds, and recovery." },
+  { id: "about", group: "aegis", title: "About and updates", description: "The installed version, its release channel and build, and updates from GitHub Releases." },
 ];
 
 export const GROUPS = [
@@ -53,6 +54,7 @@ const WORDS: Record<SettingsSection, string> = {
   memory: "memories memory context saved workspace",
   connections: "connections status server calendar mail windows devices pair pairing",
   system: "system memory tasks port uptime restart server fix",
+  about: "about version update updates release channel stable beta dev build github token check install restart",
 };
 
 export function searchSections(query: string): SectionInfo[] {

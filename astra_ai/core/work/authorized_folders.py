@@ -27,7 +27,11 @@ def grants_file(settings=None):
         except Exception:
             explicit = ''
     explicit = explicit or os.environ.get('AEGIS_WORK_AUTHORIZED_FOLDERS_FILE', '')
-    return Path(explicit) if explicit else DEFAULT_FILE
+    if explicit:
+        return Path(explicit)
+    # V35: an installed AEGIS keeps grants with the rest of its state (NOVA_STATE_DIR), outside the program folder.
+    state = os.environ.get('NOVA_STATE_DIR', '')
+    return Path(state) / 'work' / 'authorized_folders.json' if state else DEFAULT_FILE
 
 
 def refused(path):

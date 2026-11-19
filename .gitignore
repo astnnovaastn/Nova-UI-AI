@@ -254,3 +254,8 @@ astra_ai/ui/frontend/work-canvas/upstream/src/shared/i18n/
 /astra_ai/ui/frontend/work-canvas/lab/dist/
 /astra_ai/ui/frontend/work-canvas/lab/.i18n/
 /astra_ai/ui/frontend/*-lab-verification/
+
+# Local AEGIS release output and signing material.
+/release/out/
+*.pem
+!/astra_ai/ui/frontend/desktop/release-public-key.pem

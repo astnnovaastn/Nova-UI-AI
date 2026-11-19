@@ -17,7 +17,7 @@
  * Run: electron desktop/main.cjs            (npm run desktop)
  *      electron desktop/main.cjs --install-shortcuts
  */
-const { app, BrowserWindow, WebContentsView, Menu, ipcMain, session, shell, dialog, nativeImage, screen, systemPreferences } = require("electron");
+const { app, BrowserWindow, WebContentsView, Menu, ipcMain, session, shell, dialog, nativeImage, screen, systemPreferences, safeStorage } = require("electron");
 const { browserAssist } = require("./browser-assist.cjs");
 const { workDev } = require("./work-dev.cjs");
 const fs = require("node:fs");
@@ -27,6 +27,9 @@ const { pathToFileURL } = require("node:url");
 
 const { workspaceUrl, publicPage, isLoopback } = require("./addresses.cjs");
 const services = require("./services.cjs");
+const { decide: captionDecide } = require("./caption.cjs");
+const installation = require("./installed.cjs");
+const { updater: makeUpdater } = require("./updater.cjs");
 const uiServer = require("./ui-server.cjs");
 const { ResourceManager } = require("./resources.cjs");
 const { NoteFiles } = require('./note-files.cjs');
@@ -115,6 +118,8 @@ function saveConfig(input) {
  * process. Only if there is no current build does the launcher start the dev server too.
  */
 async function boot() {
+  // V35: an installed AEGIS starts its own bundled backend and serves its own build; no project folder or scripts.
+  if (installation.installed) return bootInstalled();
   const config = loadConfig();
   const target = workspaceUrl(config.uiUrl);
   const local = isLoopback(target.hostname);
@@ -151,6 +156,21 @@ async function boot() {
   agentHost?.kick();
   // Not awaited: the reply to the start page would otherwise race the page being replaced.
   setImmediate(() => mainWindow?.loadURL(target.href).catch(() => mainWindow?.loadFile(SHELL_PAGE)));
+  return { startedServices, uiMode };
+}
+
+/** V35: the installed app: bundled backend with the person's data folder, the built web app served here. */
+async function bootInstalled() {
+  const target = new URL("http://127.0.0.1:" + installation.uiPort() + "/");
+  const result = await installation.startBackend(agentHost ? { AEGIS_AGENT_BROWSER_TOKEN_FILE: agentHost.tokenFile } : {});
+  startedServices = Boolean(result.started);
+  if (!(await services.reachable(target))) ownServer = await uiServer.start(FRONTEND, installation.uiPort());
+  uiMode = "installed";
+  if (!(await services.waitReachable(target, 20000))) throw new Error("AEGIS could not serve its workspace on port " + installation.uiPort() + ". Another program may be using it.");
+  workspaceOrigin = target.origin;
+  agentHost?.kick();
+  setImmediate(() => mainWindow?.loadURL(target.href).catch(() => mainWindow?.loadFile(SHELL_PAGE)));
+  updates.start();
   return { startedServices, uiMode };
 }
 
@@ -315,8 +335,8 @@ const CAPTION = {
   /** Symbols per surface tone: "page" is a web page under the corner, whose colour AEGIS can't know (quiet
    *  grey reads on light and dark sites); out, the page has stepped down and the symbols stand on the chrome. */
   tones: {
-    dark: { shown: "#e8e9ec", quiet: "#5d6068" },
-    light: { shown: "#1d1e21", quiet: "#9a9ca2" },
+    dark: { shown: "#e8e9ec", quiet: "#34363c" },
+    light: { shown: "#1d1e21", quiet: "#d3d5da" },
     page: { shown: "#e8e9ec", quiet: "#9aa0a6" },
     "page-light": { shown: "#1d1e21", quiet: "#9aa0a6" },
   },
@@ -369,30 +389,17 @@ function captionReveal(win) {
     // Dwell and linger are measured in real time: the poll's pace changes with where the pointer is.
     const now = Date.now(), elapsed = Math.min(250, now - last);
     last = now;
-    let delay = 80;
-    const suppressed = win.isFullScreen();
-    captionState.suppressed = suppressed;
-    if (!win.isVisible() || win.isMinimized() || suppressed) { armed = 0; away = 0; set(false); delay = 250; }
-    else {
-      const { x, y } = screen.getCursorScreenPoint();
-      const box = win.getContentBounds();
-      const fromRight = box.x + box.width - x, fromTop = y - box.y;
-      const inside = fromRight >= 0 && fromRight <= box.width && fromTop >= 0 && fromTop <= box.height;
-      const focused = win.isFocused();
-      const onButtons = inside && fromRight <= CAPTION.buttons && fromTop <= CAPTION.height;
-      const atEdge = inside && fromRight <= CAPTION.corner && fromTop <= CAPTION.edge;
-      // Maximize is the middle button; the flyout hangs below it and spreads to either side.
-      const snap = inside && fromRight >= 46 - CAPTION.snap && fromRight <= 92 + CAPTION.snap && fromTop >= 0 && fromTop <= CAPTION.height + CAPTION.snap;
-      const held = shown && ((inside && fromRight <= CAPTION.corner && fromTop <= CAPTION.hold) || snap);
-      if (focused && onButtons) { armed = 0; away = 0; set(true); }
-      else if (held) away = 0;
-      else if (focused && atEdge) { away = 0; armed += elapsed; if (armed >= CAPTION.dwell) set(true); }
-      else { armed = 0; if (shown && (away += elapsed) >= CAPTION.linger) set(false); }
-      // Near the corner the pointer is read more often, so a reveal keeps up with it; elsewhere rarely.
-      const near = inside && fromRight <= CAPTION.corner + 160 && fromTop <= CAPTION.hold + 120;
-      delay = !focused && !shown ? 250 : near || shown ? 30 : 80;
-    }
-    poll = setTimeout(tick, delay);
+    const fullscreen = win.isFullScreen();
+    captionState.suppressed = fullscreen;
+    const { x, y } = screen.getCursorScreenPoint();
+    const box = win.getContentBounds();
+    const fromRight = box.x + box.width - x, fromTop = y - box.y;
+    const inside = fromRight >= 0 && fromRight <= box.width && fromTop >= 0 && fromTop <= box.height;
+    // V35: the decision is caption.cjs (unit-tested); no focus requirement, a real approach zone.
+    const next = captionDecide({ shown, armed, away }, { inside, fromRight, fromTop, elapsed, fullscreen, visible: win.isVisible() && !win.isMinimized() });
+    armed = next.armed; away = next.away;
+    set(next.shown);
+    poll = setTimeout(tick, next.delay);
   };
   paint();
   tick();
@@ -707,7 +714,10 @@ const shellCommands = {
 const assist = browserAssist({ panes, publicPage, dialog, window: () => mainWindow, live });
 // V33: developer folder/file access (native dialogs only) and Work <-> browser hand-offs.
 const dev = workDev({ panes, publicPage, dialog, window: () => mainWindow, projectRoot: () => loadConfig().projectRoot });
+// V35: updates for an installed AEGIS (a development copy reports "development" and never updates itself).
+const updates = makeUpdater({ app, safeStorage, log: (line) => console.log("[update] " + line) });
 const workspaceCommands = {
+  ...updates.commands,
   ...assist.commands,
   ...dev.commands,
   ...captionCommands,
@@ -1039,6 +1049,7 @@ if (process.argv.includes("--install-shortcuts")) {
     if (lifecycleTimer) clearInterval(lifecycleTimer);
     agentHost?.shutdown();
     void ownServer?.close();
+    if (installation.installed) return installation.stopBackend();
     const config = loadConfig();
     if (startedServices && config.stopOnExit && config.projectRoot) services.stop(config.projectRoot);
   });

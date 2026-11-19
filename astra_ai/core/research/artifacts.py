@@ -702,7 +702,7 @@ class ResearchArtifacts:
         if format not in {'md','html','pdf','docx'}:raise ValueError('unsupported_export')
         # Private page citations reopen through the application, which resolves owner scope.
         # Never embed a connection credential or an unusable header-only binary URL.
-        result['sources']=[{**s,'url':f'http://127.0.0.1:5173/#research={identifier}&source={s["id"]}'} if s.get('attachment_id') else s for s in result['sources']]
+        result['sources']=[{**s,'url':f'http://127.0.0.1:{os.getenv("AEGIS_UI_PORT", "5173")}/#research={identifier}&source={s["id"]}'} if s.get('attachment_id') else s for s in result['sources']]
         with self.lock:extensions=self.read({}).get('extensions',{}).get(identifier,[])
         result['report']+=''.join('\n\n'+e['report'] for e in extensions)
         body=result.get('draft',{}).get('html','') if draft and result.get('draft') else ''

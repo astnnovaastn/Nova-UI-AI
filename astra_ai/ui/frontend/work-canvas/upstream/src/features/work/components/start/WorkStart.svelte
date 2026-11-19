@@ -16,6 +16,7 @@
     type Workflow,
   } from "../../lib/start/workflows";
   import Vignette from "./Vignette.svelte";
+  import DevSourcePicker from "../../../../../../src/DevSourcePicker.svelte";
   import HostGlyph, { siteMark } from "../cards/HostGlyph.svelte";
 
   /** The places a workflow reads, by the sites whose marks stand for them. */
@@ -175,7 +176,8 @@
       {#if active}<p class="ask">
           {active.input === "none" ? m.work_start_ready() : active.ask()}
         </p>
-        {#if active.input === "folder"}<Button
+        {#if active.persona === "developer"}<DevSourcePicker skill={active.skill} request={active.request()} {disabled} onplace={(text) => void place(text)} />{/if}
+        {#if active.input === "folder" && active.persona !== "developer"}<Button
             size="compact"
             variant="ghost"
             pending={folderPending}

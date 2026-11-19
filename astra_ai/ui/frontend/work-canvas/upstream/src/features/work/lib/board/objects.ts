@@ -363,6 +363,8 @@ function legacyView(block: Block, board: Board): ObjectView | null {
         language: block.language,
         text: block.text,
         notes: block.notes,
+        ...((block as { path?: string }).path ? { path: (block as { path?: string }).path } : {}),
+        ...((block as { start?: number }).start ? { start: (block as { start?: number }).start } : {}),
       };
     case "document":
       return { ...base, kind: "document", content: block.content };

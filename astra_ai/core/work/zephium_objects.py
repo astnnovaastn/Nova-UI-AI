@@ -36,7 +36,7 @@ SHAPES = {
     'sheet': '{columns:[{label, kind: ' + '/'.join(COLUMN_KINDS) + ', unit?, currency?, best?: max|min}], rows:[{cells:[string|number|bool|null], ref?}], note?}',
     'plot': '{style: ' + '/'.join(PLOT_STYLES) + ', x:{label?, kind: category|time|linear}, y:{label?, unit?, format: number|money|duration|percent|bytes, currency?}, series:[{name, points:[{x, y}]}], basis: where the numbers come from}',
     'diagram': '{nodes:[{id, name, kind: ' + '/'.join(NODE_KINDS) + ', note?, layer?}], edges:[{from, to, label?}], layers?:[{id, name}]}',
-    'code': '{language, text, notes?:[{from: line, to: line, text}]}',
+    'code': '{ref?: the R id of a read file (its real lines are shown; do not retype them), language, text?: only for pasted code, notes?:[{from: line number as numbered in the file, to: line number, text}]}',
     'diff': '{path, language, summary, hunks:[{old_start, new_start, lines:[{op: ctx|add|del, text}]}]}',
     'document': '{paragraphs:[markdown paragraph; headings as "## Heading"]}',
     'draft': '{destination: ' + '/'.join(DESTINATIONS) + ', to?, subject?, body}',
@@ -297,7 +297,19 @@ def _code(data, refs):
     for raw in (data.get('notes') or [])[:12]:
         if isinstance(raw, dict) and isinstance(raw.get('from'), int) and isinstance(raw.get('to'), int) and _text(raw.get('text'), 160):
             notes.append({'from': max(1, raw['from']), 'to': max(raw['from'], raw['to']), 'text': _text(raw['text'], 160)})
-    return {'language': _language(data.get('language')), 'text': text[:20000], 'notes': notes}
+    out = {'language': _language(data.get('language')), 'text': text[:20000], 'notes': notes}
+    # V34: a code object grounded in a read file keeps where its lines come from (Zephium's Code view shows
+    # the path and numbers lines from `start`).
+    if isinstance(data.get('start'), int) and data['start'] >= 1:
+        out['start'] = data['start']
+    for key, limit in (('path', 300), ('ref', 12), ('sha256', 64)):
+        if isinstance(data.get(key), str) and data[key]:
+            out[key] = data[key][:limit]
+    if isinstance(data.get('grounded'), bool):
+        out['grounded'] = data['grounded']
+    if isinstance(data.get('total_lines'), int):
+        out['total_lines'] = data['total_lines']
+    return out
 
 
 def _diff(data, refs):

@@ -1,5 +1,6 @@
 """Routes for AEGIS Work runs. Model keys stay on the server; nothing here returns them."""
 import asyncio
+import re
 import uuid
 
 from fastapi import HTTPException, Request
@@ -22,6 +23,8 @@ def _chosen(rows):
         if isinstance(row, dict):
             summary_limit = 12000 if row.get('kind') in {'code','note','task'} else 600
             item={key: safe(str(row.get(key, '')))[:summary_limit if key == 'summary' else 600] for key in ('id', 'kind', 'title', 'url', 'summary') if row.get(key)}
+            # V34: a connected project (a grant id) the person chose for this work; only an id, never a path.
+            if isinstance(row.get('repository'), str) and re.fullmatch(r'[a-zA-Z0-9_-]{1,40}', row['repository']):item['repository']=row['repository']
             if len(safe(str(row.get('summary',''))))>summary_limit:item['summary']+='\n[Selected context truncated; request the missing section when needed.]'
             picked.append(item)
     return picked
@@ -87,7 +90,14 @@ def install(app, *, context_for, artifacts_for, jobs, orchestrator, owner_only, 
         from_research = str(body.get('from_research') or '')
         if from_research and (await asyncio.to_thread(artifacts.get, from_research, context)).get('status') != 'ok':
             raise HTTPException(404, 'Research unavailable')
-        request_record = WorkRequest(query, workflow, mode, _chosen(body.get('chosen')), from_research)
+        chosen = _chosen(body.get('chosen'))
+        # V35: a request that continues a developer session keeps that session's project (reopened from Work History).
+        if from_research and not any(row.get('repository') for row in chosen):
+            previous = await asyncio.to_thread(service.store.get, from_research)
+            scope = ((getattr(previous, 'results', None) or {}).get('v29') or {}).get('scope') or {}
+            if re.fullmatch(r'[a-zA-Z0-9_-]{1,40}', str(scope.get('repository') or '')):
+                chosen.append({'kind': 'folder', 'title': safe(str(scope.get('title') or scope['repository']))[:80], 'repository': scope['repository']})
+        request_record = WorkRequest(query, workflow, mode, chosen, from_research)
         await asyncio.to_thread(service.create, reserved['id'], request_record, context)
         result = jobs.submit(
             [{'name': 'work_run', 'arguments': {'research_id': reserved['id']}}],
@@ -118,6 +128,26 @@ def install(app, *, context_for, artifacts_for, jobs, orchestrator, owner_only, 
             'run': orchestrator().store.public(run) if run else None,
             'view': metadata.get('canvas_view') or {'chosen': [], 'hidden': []},
         }
+
+    @app.get('/api/work/runs/{identifier}/shots/{name}')
+    async def read_shot(identifier: str, name: str, request: Request):
+        """V33: a UI teardown's screenshot, as the run saved it. Only `<n>.png` names of a run the person may see."""
+        import re
+        from fastapi.responses import Response
+        if not re.fullmatch(r'[1-9][0-9]?\.png', name):
+            raise HTTPException(404, 'Screenshot unavailable')
+        context = context_for(request)
+        try:
+            run, _ = await _visible_run(identifier, context)
+        except ValueError:
+            raise HTTPException(404, 'Screenshot unavailable') from None
+        if not run:
+            raise HTTPException(404, 'Screenshot unavailable')
+        path = orchestrator().store.root / 'shots' / run.run_id / name
+        if not path.is_file():
+            raise HTTPException(404, 'Screenshot unavailable')
+        data = await asyncio.to_thread(path.read_bytes)
+        return Response(data, media_type='image/png', headers={'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff'})
 
     @app.get('/api/work/runs/{identifier}/agent-events')
     async def read_agent_events(identifier: str, request: Request):

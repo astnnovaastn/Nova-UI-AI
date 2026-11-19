@@ -48,13 +48,14 @@ class Spec:
 C = ('reason', 'canvas.create')
 SPECS = {
     # Developer
-    'explain-code': Spec('explain', C + ('supplied', 'files.repo_read', 'web.read'), ('reply', 'code', 'diagram'), 'technical', requires='code'),
+    'explain-code': Spec('explain', C + ('supplied', 'files.repo_read', 'web.read'), ('reply', 'code', 'document', 'diagram'), 'technical', requires='code'),
     'map-a-project': Spec('map', C + ('supplied', 'files.repo_read'), ('project', 'diagram', 'document', 'reply'), 'technical', requires='repository'),
     'review-a-change': Spec('review', C + ('supplied', 'files.repo_read', 'code.sandbox'), ('list', 'diff', 'draft', 'reply'), 'technical', requires='change'),
     'fix-a-bug': Spec('modify', C + ('supplied', 'files.repo_read', 'code.sandbox'), ('list', 'diff', 'code', 'reply'), 'technical', requires='failure'),
     # Designer
     'moodboard': Spec('create', C + ('supplied', 'web.images.free', 'web.search.free', 'web.read'), ('picks', 'reply'), 'visual'),
-    'ui-teardown': Spec('review', C + ('supplied', 'web.read', 'web.search.free', 'web.images.free'), ('sheet', 'list', 'picks', 'reply'), 'visual'),
+    # V33: a teardown needs the interface (a URL, pasted HTML or a named product); it adds a measured screenshot.
+    'ui-teardown': Spec('review', C + ('supplied', 'web.read', 'web.search.free', 'web.images.free'), ('media', 'sheet', 'list', 'picks', 'reply'), 'visual', requires='interface'),
     # Marketing
     'competitor-landscape': Spec('compare', C + ('supplied', 'web.search.free', 'web.read'), ('picks', 'sheet', 'plot', 'document', 'reply'), 'matrix'),
     'campaign-plan': Spec('plan', C + ('supplied', 'web.search.free'), ('document', 'plan', 'sheet', 'list', 'draft', 'reply'), 'timeline'),
@@ -101,6 +102,14 @@ def _has_code(text):
     return bool(re.search(r'```|^diff --git|^@@ -\d|^\s*(def|class|function|const|import|from)\s', text or '', re.M))
 
 
+def _has_interface(text):
+    """A UI teardown can start from an address, pasted HTML, or a named product (a capitalised name after the first word)."""
+    if re.search(r'https?://|www\.|<html|<body|<div|```html', text or '', re.I):
+        return True
+    words = re.findall(r"[A-Za-z][\w'.-]*", (text or '').splitlines()[0] if text else '')
+    return any(w[0].isupper() and w.upper() != w for w in words[1:]) or any(w.isupper() and len(w) > 1 and w not in ('UI', 'UX', 'CSS', 'HTML', 'API', 'URL') for w in words[1:])
+
+
 def _has_failure(text):
     return bool(re.search(r'(Traceback|AssertionError|FAILED|Error:|failing test|test fails|\bfailed\b)', text or '', re.I))
 
@@ -110,7 +119,11 @@ def missing_input(spec, query, chosen, repositories):
     supplied = ' '.join(str(row.get('summary', '')) + ' ' + str(row.get('title', '')) for row in chosen or [])
     text = (query or '') + '\n' + supplied
     kinds = {row.get('kind') for row in chosen or []}
-    if spec.requires == 'change' and not (_has_code(text) or kinds & {'code', 'diff'}):
+    # V33: with a repository, "the uncommitted changes", a commit or a branch range is read from git itself.
+    git_change = bool(repositories) and bool(re.search(r'\b(uncommitted|working tree|staged|commit\s+[0-9a-f]{7,40}|branch|pull request|PR\b|\w+\.\.\.?\w+|my changes|local changes)', text, re.I))
+    # V35: a .patch / .diff file the person chose or named is the change.
+    git_change = git_change or bool(re.search(r'\.(patch|diff)\b', text, re.I))
+    if spec.requires == 'change' and not (_has_code(text) or kinds & {'code', 'diff'} or git_change):
         return {'question': 'Which change should I review? Paste the diff, or pick the files on the canvas.',
                 'options': ['I will paste the diff', 'Review the uncommitted changes in a repository'] }
     if spec.requires == 'failure' and not (_has_failure(text) or _has_code(text) or kinds & {'code', 'test'}):
@@ -123,6 +136,9 @@ def missing_input(spec, query, chosen, repositories):
         named = [name for name in repositories if name.lower() in (query or '').lower()]
         if not named:
             return {'question': 'Which repository should I map?', 'options': list(repositories)[:4]}
+    if spec.requires == 'interface' and not _has_interface(text) and not kinds & {'page', 'source', 'link', 'image', 'screenshot', 'html'}:
+        return {'question': 'Which interface should I tear down? Paste its address or its HTML, or name the product.',
+                'options': ['I will paste the address', 'I will paste the HTML']}
     if spec.requires == 'code' and not (_has_code(text) or kinds & {'code'}) and not repositories:
         return {'question': 'Which code should I explain? Paste it or pick the file.', 'options': ['I will paste the code']}
     return None

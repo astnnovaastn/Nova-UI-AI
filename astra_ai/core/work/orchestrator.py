@@ -527,8 +527,30 @@ class _Run(WorkTasks):
         found_route = None
         if self.routed:
             from .repository_inputs import RepositoryInputs
-            repositories = await asyncio.to_thread(RepositoryInputs(self.owner.settings).roots)
+            repos = RepositoryInputs(self.owner.settings)
+            repositories = await asyncio.to_thread(repos.roots)
+            # V34: a developer request reads the project the person chose (or the one holding the named file),
+            # decided from the grants before any model call; never silently the first configured repository.
+            spec = v29router.spec_for(self.request.workflow, self.request.query, self.request.mode)
+            if spec.requires in ('code', 'repository', 'change', 'failure') and not spec.research and repositories:
+                from . import dev_scope
+                answer = str(self.run.request.get('answer') or '')
+                scope = await asyncio.to_thread(dev_scope.resolve, repos, self.request.query, answer, self.request.chosen, spec.intent)
+                self.run.results.setdefault('v29', {'refs': [], 'tools': []})['scope'] = {k: v for k, v in scope.items() if k != 'question'}
+                if scope.question:
+                    unanswered = not answer or (self.run.request.get('clarifications') or [{}])[-1].get('question') != scope.question['question'][:500]
+                    if unanswered:
+                        found_route = v29router.route(self.request.query, self.request.workflow, self.request.mode, self.request.chosen, repositories)
+                        return await self._ask_now(scope.question['question'], scope.question['options'], v29router.as_record(found_route))
+                if scope.get('repository'):
+                    repositories = {scope['repository']: repositories[scope['repository']]}
+                    self._stage('scope', 'Reading ' + dev_scope.describe(scope), repository=scope['repository'],
+                                files=scope.get('files', []), missing=scope.get('missing', []))
             found_route = v29router.route(self.request.query, self.request.workflow, self.request.mode, self.request.chosen, repositories)
+            scope = (self.run.results.get('v29') or {}).get('scope') or {}
+            if scope.get('repository') and scope.get('files') and found_route.intent == 'explain':
+                # The file is read from the authorized project; the web is not searched for its name.
+                found_route.capabilities = [c for c in found_route.capabilities if not c.startswith('web.')]
             self._stage('routed', 'Chose the tools this needs: ' + ', '.join(c for c in found_route.capabilities if c not in ('reason', 'canvas.create')),
                         intent=found_route.intent, capabilities=found_route.capabilities, outputs=found_route.outputs,
                         board=found_route.board, paid=found_route.paid_allowed)
@@ -710,7 +732,7 @@ class _Run(WorkTasks):
         kind = sr.topic(query + ' ' + self.request.query)
         names = free_search.plan_sources('research' if kind == 'academic' else kind, query)
         hits = await asyncio.to_thread(free_search.search, query, names, 10)
-        chosen = sr.rank(hits, query, kind, limit=6)
+        chosen = sr.rank(hits, query + ' ' + self.request.query, kind, limit=6)
         browser = AgentBrowser()
         rows = []
         try:

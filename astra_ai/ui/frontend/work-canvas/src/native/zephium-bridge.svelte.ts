@@ -8,7 +8,7 @@
  * Sources: shared/ipc/bindings.ts (command and view shapes), domain/tabs/tabs-model.ts (snapshot
  * admission), domain/surface/surface.svelte.ts ("browser.<page>" commands), domain/time/focus.svelte.ts.
  */
-import { browserHost } from "../browser-host";
+import { browserHost, desktopWork } from "../browser-host";
 import { browserTabs, type BrowserTab } from "../browser-tabs.svelte";
 import { DEFAULT_SHORTCUTS, ENGINES, type EngineId } from "../search-engines";
 import { focus, type FocusSession } from "../focus.svelte";
@@ -170,8 +170,25 @@ function settingSet(key: string, value: string) {
 }
 
 /** Returns the answer, or `undefined` when the command is not one this bridge serves. */
+/**
+ * V34: Zephium's Work folder commands (WorkStart "Choose a folder", AskCard's folder panel) open the desktop's own
+ * dialog, which also records the grant the backend reads. Before V34 these threw "not available", so the picker
+ * silently did nothing. A drop (`work_admit_folder`) cannot be granted without the dialog, so it is refused.
+ */
+async function pickFolder(): Promise<{ kind: "admitted"; path: string; name: string } | null> {
+  const granted = await desktopWork.selectFolder({ title: "Choose a project folder for AEGIS Work" });
+  if (!granted) return null;
+  window.dispatchEvent(new CustomEvent("aegis-dev-grants-changed"));
+  return { kind: "admitted", path: granted.path, name: granted.title };
+}
+
 export function bridge(command: string, args: Record<string, unknown> = {}): unknown {
   switch (command) {
+    case "work_pick_folder":
+    case "work_choose_folder":
+      return desktopWork.available ? pickFolder() : undefined;
+    case "work_admit_folder":
+      return desktopWork.available ? { kind: "refused", not_a_folder: false } : undefined;
     case "operations_reconcile": return [];
     case "operation_status": return { state: "unknown" };
     case "operation_acknowledge": return true;

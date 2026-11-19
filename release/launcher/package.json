@@ -1,0 +1,6 @@
+{
+  "name": "aegis",
+  "productName": "AEGIS",
+  "private": true,
+  "main": "main.cjs"
+}

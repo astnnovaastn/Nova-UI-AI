@@ -249,7 +249,10 @@ def test_review_without_a_change_asks_first_and_spends_nothing(tmp_path):
     assert len(record.request['clarifications'][-1]['options']) >= 2
 
 
-def test_review_with_a_pasted_diff_makes_a_review(tmp_path):
+def test_review_with_a_pasted_diff_makes_a_review(tmp_path, monkeypatch):
+    # V34: this machine may have Docker now; the test pins "no sandbox" so it checks that nothing is claimed.
+    from astra_ai.core.work import dev_drafts
+    monkeypatch.setattr(dev_drafts, 'sandbox_image', lambda settings: {'available': False, 'reason': 'test: no sandbox'})
     diff = 'Review this diff:\n```diff\n@@ -1 +1 @@\n-return round(x)\n+return x\n```'
     result, record, *_ = run(tmp_path, 'review-a-change', diff)
     assert result['status'] == 'completed', record.failure

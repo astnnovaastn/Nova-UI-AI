@@ -32,6 +32,7 @@ from astra_ai.core.work.network import MAX_PAGE_BYTES, ProxySettings, _local_nam
 USER_AGENT = 'AegisAgentBrowser/1.0 (+local)'
 ROBOTS_AGENT = 'AegisAgentBrowser'
 TEXT_CHARS = 60_000
+HTML_CHARS = 400_000  # V33: markup kept for a UI teardown's inspection
 MAX_TABLES = 5
 MAX_TABLE_ROWS = 40
 MAX_IMAGES = 40
@@ -358,12 +359,19 @@ class AgentBrowser:
                 return {**base, 'status': 'ok', 'title': _site(final), 'text': text[:TEXT_CHARS], 'headings': [], 'tables': [], 'links': [], 'images': [],
                         'meta': {}}
             content = self._extract(self._soup(), final)
+            # V33: the page's markup (untrusted, capped) so a UI teardown can count its components; never executed.
+            match = re.search(r'charset=([\w-]+)', page['kind'])
+            try:
+                base['html'] = page['body'][:HTML_CHARS].decode(match.group(1) if match else 'utf-8', errors='replace')
+            except LookupError:
+                base['html'] = page['body'][:HTML_CHARS].decode('utf-8', errors='replace')
             renderer = self._renderer or _RENDERER or _desktop_renderer()
             if not content['text'] and renderer:
                 try:
                     rendered = renderer('render', final) or {}
                     if rendered.get('html'):
                         content = self._extract(self._soup(str(rendered['html'])), final)
+                        base['html'] = str(rendered['html'])[:HTML_CHARS]
                         base['rendered'] = True
                         self._record('render', final, 'ok', len(str(rendered['html'])))
                     elif rendered.get('text'):

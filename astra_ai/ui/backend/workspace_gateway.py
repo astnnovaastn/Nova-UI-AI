@@ -34,7 +34,7 @@ ALLOWED = (
 PAIR_PAGE = """<!doctype html><meta name="viewport" content="width=device-width"><title>Pair with Aegis</title><style>body{font:16px system-ui;background:#242423;color:#eee;max-width:420px;margin:15vh auto;padding:24px}input,button{font:inherit;border-radius:8px;padding:12px;border:1px solid #777;background:#333;color:inherit;width:100%;box-sizing:border-box;margin:8px 0}p{line-height:1.6}</style><h1>Connect to your host</h1><p>On the host, open Settings → Connected windows and devices → Pair a computer. Enter its code here, then approve this device on the host.</p><form id="pair"><input name="code" aria-label="Pairing code" required autocomplete="off"><input name="label" aria-label="Device name" placeholder="Device name" required maxlength="80"><button>Request pairing</button></form><p id="state" role="status"></p><script>const state=document.getElementById('state');document.getElementById('pair').onsubmit=async e=>{e.preventDefault();const r=await fetch('/pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});state.textContent=r.ok?'Waiting for approval on the host…':'Code expired or already used.';};setInterval(async()=>{const r=await fetch('/pair/status');if(r.ok&&(await r.json()).approved)location.href='/';},3000);</script>"""
 
 
-def make_gateway(store: WorkspaceHub, dist: Path, backend="http://127.0.0.1:8340"):
+def make_gateway(store: WorkspaceHub, dist: Path, backend="http://127.0.0.1:" + __import__("os").environ.get("AEGIS_BACKEND_PORT", "8340")):
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     def credential(request, pending=False):

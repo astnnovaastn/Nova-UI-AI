@@ -19,6 +19,7 @@ Features:
 """
 
 import os
+import hashlib
 import json
 import asyncio
 import base64
@@ -46,13 +47,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 # Load environment variables from .env file
 from dotenv import dotenv_values, load_dotenv
 
-ROOT_ENV_FILE = Path(__file__).parent.parent.parent.parent / '.env'
-LEGACY_ENV_FILE = Path(__file__).parent.parent.parent / '.env'
+# V35: an installed AEGIS keeps its settings with the person's data (AEGIS_ENV_FILE, set by the desktop app), never
+# inside the program folder, so upgrades replace the program without touching keys or preferences.
+ROOT_ENV_FILE = Path(os.environ['AEGIS_ENV_FILE']) if os.environ.get('AEGIS_ENV_FILE') else Path(__file__).parent.parent.parent.parent / '.env'
+LEGACY_ENV_FILE = ROOT_ENV_FILE if os.environ.get('AEGIS_ENV_FILE') else Path(__file__).parent.parent.parent / '.env'
 
 # Prefer the root project .env and allow it to override inherited shell state.
 load_dotenv(ROOT_ENV_FILE, override=True)
 from astra_ai.ui.backend.runtime_paths import runtime_paths
 runtime_paths.initialize()
+# V35: which installation answers /api/health (a hash of its data folder; no path is shown).
+AEGIS_INSTANCE = hashlib.sha256(str(runtime_paths.root).lower().encode()).hexdigest()[:16]
 
 # The Google SDK inspects both names even when an explicit key is passed and
 # otherwise emits an ambiguous-precedence warning.  Canonicalize Gemini auth
@@ -182,7 +187,7 @@ logger = logging.getLogger("AegisServer")
 class ServerConfig:
     """Server configuration"""
     HOST = os.getenv("ASTRA_HOST", "127.0.0.1")
-    PORT = 8340
+    PORT = int(os.getenv('AEGIS_BACKEND_PORT', '8340'))  # V35: an installed AEGIS runs on its own ports
     WS_ENDPOINT = "/ws/voice"
     MAX_CONNECTIONS = 10
     TTS_ENABLED = True
@@ -5470,7 +5475,7 @@ _allowed_origins = [
     origin.strip()
     for origin in os.getenv(
         "ASTRA_ALLOWED_ORIGINS",
-        "http://127.0.0.1:5173,http://localhost:5173",
+        f"http://127.0.0.1:{os.getenv('AEGIS_UI_PORT', '5173')},http://localhost:{os.getenv('AEGIS_UI_PORT', '5173')}",
     ).split(",")
     if origin.strip()
 ]
@@ -6588,6 +6593,9 @@ async def health_check():
         state.health_memory_task=asyncio.create_task(refresh_memory_status())
     return {
         "status": "healthy",
+        # V35: which installation answers, so an installed app never adopts a development backend (or the reverse).
+        "instance": globals().get('AEGIS_INSTANCE', ''),
+        "version": __import__('os').environ.get('AEGIS_APP_VERSION', 'dev'),
         "conversation_core": "astra_ai.core.aegis_ai",
         "typed_provider": "gemini_live",
         "default_voice_provider": "gemini_live",
@@ -6621,7 +6629,7 @@ async def request_supervised_restart():
     import httpx
     try:
         async with httpx.AsyncClient(timeout=3) as client:
-            response = await client.post("http://127.0.0.1:8341/api/runtime/restart", headers={"X-Nova-Runtime-Token": os.environ.get("NOVA_RUNTIME_TOKEN", "")})
+            response = await client.post(f"http://127.0.0.1:{os.getenv('AEGIS_RUNTIME_PORT', '8341')}/api/runtime/restart", headers={"X-Nova-Runtime-Token": os.environ.get("NOVA_RUNTIME_TOKEN", "")})
         return JSONResponse(status_code=response.status_code, content=response.json())
     except Exception:
         return JSONResponse(status_code=503, content={"error": "Runtime supervisor unavailable. Start Nova using start_nova_ai.ps1."})
@@ -7684,7 +7692,7 @@ async def get_config_status():
         
         return {
             "server_running": True,
-            "server_port": 8340,
+            "server_port": ServerConfig.PORT,
             "api_keys_loaded": api_keys,
             "uptime_seconds": 0
         }
@@ -7822,7 +7830,7 @@ async def request_supervised_restart():
     import httpx
     try:
         async with httpx.AsyncClient(timeout=3) as client:
-            response = await client.post("http://127.0.0.1:8341/api/runtime/restart", headers={"X-Nova-Runtime-Token": os.environ.get("NOVA_RUNTIME_TOKEN", "")})
+            response = await client.post(f"http://127.0.0.1:{os.getenv('AEGIS_RUNTIME_PORT', '8341')}/api/runtime/restart", headers={"X-Nova-Runtime-Token": os.environ.get("NOVA_RUNTIME_TOKEN", "")})
         return JSONResponse(status_code=response.status_code, content=response.json())
     except Exception:
         return JSONResponse(status_code=503, content={"error": "Runtime supervisor unavailable. Start Nova using start_nova_ai.ps1."})

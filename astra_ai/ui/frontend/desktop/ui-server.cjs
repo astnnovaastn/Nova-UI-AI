@@ -11,8 +11,9 @@ const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
 
-const BACKEND = { host: "127.0.0.1", port: 8340 };
-const RUNTIME = { host: "127.0.0.1", port: 8341 };
+// V35: an installed AEGIS runs on its own ports (installed.cjs sets them) beside a development copy.
+const BACKEND = { host: "127.0.0.1", port: Number(process.env.AEGIS_BACKEND_PORT || 8340) };
+const RUNTIME = { host: "127.0.0.1", port: Number(process.env.AEGIS_RUNTIME_PORT || 8341) };
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript",

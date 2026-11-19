@@ -85,9 +85,15 @@ DELIVERABLES = {
         D('Triage', 'list', 3, 'style messages with from'),
         D('Replies', 'draft', 1, 'drafts for messages that need an answer', up_to=4),
     ),
+    # V33: the screenshot, component inventory and accessibility findings are measured (v29_tasks._teardown_objects);
+    # the lead writes what only reading the interface can give, each item about these pages.
     'ui-teardown': (
-        D('Patterns', 'list', 4, 'style requirements: patterns observed, with ref'),
-        D('Comparison', 'sheet', 3, 'one row per product surface with ref'),
+        D('Design observations', 'list', 3, 'style requirements: layout, visual hierarchy, typography, colour and spacing of the inspected interfaces'
+          ' (material.ui_inspection gives their structure, palette and fonts), each item with its page ref'),
+        D('UX findings', 'list', 3, 'style requirements: what helps or blocks the task here (primary action, forms, navigation, errors),'
+          ' each with its page ref; priority "high" on the ones that block'),
+        D('Recommendations', 'list', 3, 'style todo: concrete changes to these interfaces, highest impact first, including fixes for the measured accessibility findings'),
+        D('Comparison', 'sheet', 1, 'one row per inspected interface with ref: primary action, navigation, forms, accessibility issues counted, standout pattern'),
     ),
     'moodboard': (
         # The lead makes up to two boards; the helper boards built from each image search fill the rest (v29_tasks._helper_boards).
@@ -271,9 +277,15 @@ def render_object(obj, numbers=()):
             language = 'diff'
         else:
             body = data.get('text') or ''
-        out += ['', '```' + language, body, '```']
+        # V34: a grounded excerpt names its file; its notes are excerpt positions, shown as file line numbers.
+        offset = (data.get('start') or 1) - 1 if kind == 'code' else 0
+        out += [''] + ([f"`{data['path']}`"] if kind == 'code' and data.get('path') else []) + ['```' + language, body, '```']
         for note in data.get('notes') or []:
-            out.append(f"- Lines {note.get('from')}–{note.get('to')}: {note.get('text')}")
+            a, b = (note.get('from') or 0) + offset, (note.get('to') or 0) + offset
+            out.append(f"- Line {a}: {note.get('text')}" if a == b else f"- Lines {a}–{b}: {note.get('text')}")
+    elif kind == 'media':
+        url = data.get('url') or ''
+        out += ['', f"![{_cell(data.get('title') or title)}]({url})" if url else '']
     elif kind == 'subject':
         out += ['', data.get('summary') or '']
         out += [f"- {f['label']}: {f['value']}" for f in (data.get('facts') or []) + (data.get('people') or [])]
@@ -285,8 +297,8 @@ def render_object(obj, numbers=()):
 
 
 #: The order a reader meets results in: the written brief first, then plans, tables, lists and drafts.
-ORDER = {'document': 0, 'subject': 1, 'project': 1, 'plan': 2, 'sheet': 3, 'plot': 4, 'picks': 5, 'diagram': 6,
-         'list': 7, 'draft': 8, 'code': 9, 'diff': 9, 'media': 10}
+ORDER = {'media': -1, 'document': 0, 'subject': 1, 'project': 1, 'plan': 2, 'sheet': 3, 'plot': 4, 'picks': 5, 'diagram': 6,
+         'list': 7, 'draft': 8, 'code': 9, 'diff': 9}
 
 
 def render(reply, objects, evidence=()):

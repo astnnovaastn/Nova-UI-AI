@@ -57,6 +57,22 @@ class WorkStore:
         row['request']['clarifications'] = [{key: item.get(key) for key in ('id', 'question', 'answer', 'options')} for item in data['request'].get('clarifications', []) if isinstance(item, dict)]
         row['evidence'] = [{key: item.get(key) for key in ('id', 'url', 'title', 'domain', 'retrieved_at', 'relevance', 'credibility', 'assessment', 'fetched', 'query')} for item in data['evidence']]
         row['results'] = {name: {key: value.get(key) for key in ('agent', 'role', 'state', 'summary', 'provider', 'model', 'tokens', 'seconds', 'failure')} for name, value in data['results'].items() if isinstance(value, dict) and value.get('agent')}
+        # V34: the developer workspace's real state: which project and files were read, the sandbox, and the draft.
+        v29 = data['results'].get('v29') if isinstance(data['results'].get('v29'), dict) else {}
+        if v29.get('scope') or v29.get('draft') or v29.get('repo'):
+            scope = v29.get('scope') or {}
+            repo = v29.get('repo') or {}
+            draft = v29.get('draft') or None
+            if draft:
+                draft = {**draft, 'runs': {k: {f: r.get(f) for f in ('status', 'argv', 'cwd', 'image', 'environment', 'started_at', 'duration_ms', 'exit_code', 'counts', 'failing', 'passed', 'reason')}
+                                             | {'output': (r.get('output') or '')[-20000:]} for k, r in (draft.get('runs') or {}).items()}}
+            row['developer'] = {
+                'scope': {k: scope.get(k) for k in ('repository', 'title', 'scope', 'files', 'missing', 'why', 'source', 'indexed')},
+                'repository': {k: repo.get(k) for k in ('available', 'name', 'files', 'in_scope', 'scanned', 'truncated')},
+                'read': [{k: r.get(k) for k in ('id', 'path', 'start', 'end', 'total')} for r in v29.get('refs', []) if r.get('kind') == 'file' and r.get('path')][:24],
+                'sandbox': {k: (v29.get('sandbox') or {}).get(k) for k in ('available', 'reason', 'image')},
+                'draft': draft,
+            }
         return row
 
     def spend_today(self, tokens=0):

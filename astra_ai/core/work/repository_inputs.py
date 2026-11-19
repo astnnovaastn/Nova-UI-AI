@@ -17,7 +17,7 @@ class RepositoryError(ValueError):
     pass
 
 BLOCKED={'.git','.env','.aws','.ssh','.codex','.agents','node_modules','.venv','venv','__pycache__','dist','build'}
-SUFFIXES={'.py','.ts','.tsx','.js','.jsx','.mjs','.cjs','.svelte','.vue','.rs','.go','.java','.c','.h','.cpp','.cs','.css','.scss','.html','.md','.txt','.json','.toml','.yaml','.yml','.sql'}
+SUFFIXES={'.py','.ts','.tsx','.js','.jsx','.mjs','.cjs','.svelte','.vue','.rs','.go','.java','.c','.h','.cpp','.cs','.css','.scss','.html','.md','.txt','.json','.toml','.yaml','.yml','.sql','.patch','.diff'}
 
 class RepositoryInputs:
     def __init__(self,settings,grants_file=None):

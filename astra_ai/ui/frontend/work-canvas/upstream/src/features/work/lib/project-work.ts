@@ -250,6 +250,8 @@ function content(data: WorkArtifactDataV1, refs: Refs): ArtifactContent {
           to: note.to,
           text: note.text,
         })),
+        ...((data as { path?: string }).path ? { path: (data as { path?: string }).path } : {}),
+        ...((data as { start?: number }).start ? { start: (data as { start?: number }).start } : {}),
       };
     default:
       // Lead objects render through their own components, not this adapter.

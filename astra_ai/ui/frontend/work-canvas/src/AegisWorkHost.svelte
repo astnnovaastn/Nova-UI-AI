@@ -110,6 +110,8 @@
   import { normalizeAddress } from "./browser-address";
   import type { PaperData } from "./paper";
   import WorkStart from "$features/work/components/start/WorkStart.svelte";
+  import DevWorkspacePanel from "./DevWorkspacePanel.svelte";
+  type DeveloperScope = { repository?: string; title?: string };
   import { installPreviewProvider, savedDataProvider, watchThumbnails } from "./preview-provider";
   import NodePanel, { type Opened } from "./NodePanel.svelte";
   import { CARD, layoutMap } from "./knowledge-map";
@@ -1218,6 +1220,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     if (!designer && id && now === "completed" && (lastState === "running" || lastState === "waiting")) {
       try {
         sessionStorage.removeItem(viewKey(id));
+        localStorage.removeItem(viewKey(id));
       } catch {
         // Without session storage there was no saved camera to clear.
       }
@@ -1230,13 +1233,29 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
   function viewKey(id: string) {
     return `aegis-canvas-view:${id}`;
   }
+  // V35: kept per device (localStorage), so a session reopened after AEGIS restarts opens where it was left.
+  // At most SAVED_CAMERAS cameras are kept; a valid saved camera is restored, never replaced by an automatic fit.
+  const SAVED_CAMERAS = 200;
   const savedViewport = (id: string) => {
     try {
-      return JSON.parse(sessionStorage.getItem(viewKey(id)) ?? "null")?.viewport ?? undefined;
+      const raw = localStorage.getItem(viewKey(id)) ?? sessionStorage.getItem(viewKey(id));
+      const view = JSON.parse(raw ?? "null")?.viewport;
+      return view && [view.x, view.y, view.zoom].every(Number.isFinite) && view.zoom > 0 ? view : undefined;
     } catch {
       return undefined;
     }
   };
+  function rememberView(id: string, viewport: unknown) {
+    try {
+      localStorage.setItem(viewKey(id), JSON.stringify({ viewport, at: Date.now() }));
+      const order = JSON.parse(localStorage.getItem("aegis-canvas-views") ?? "[]").filter((k: string) => k !== id);
+      order.push(id);
+      for (const old of order.splice(0, Math.max(0, order.length - SAVED_CAMERAS))) localStorage.removeItem(viewKey(old));
+      localStorage.setItem("aegis-canvas-views", JSON.stringify(order));
+    } catch {
+      // Without storage only the saved camera is lost.
+    }
+  }
   let resizingBefore: ReturnType<CanvasDesignerApi["snapshot"]> | null = null;
   const saveView = (view: CanvasView) => {
     if(resizingBefore && designer) {
@@ -1247,11 +1266,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     untrack(() => designerVersion++);
     const id = report?.research_id;
     if (!id) return;
-    try {
-      sessionStorage.setItem(viewKey(id), JSON.stringify({ viewport: view.viewport }));
-    } catch {
-      // A full session store only loses the saved camera.
-    }
+    rememberView(id, view.viewport);
   };
   const board: BoardActions = {
     measure: (id,width,isOpen,height) => {
@@ -1466,6 +1481,13 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     }
     else if (about.length && useChosenIn === "task") { startNow(text); actions?.startWork(text, { chosen: about.map(describe), fromResearch: report?.research_id ?? "" }); }
     else if (!report) { startNow(text); actions?.startWork(text, { workflow: skill ?? "" }); }
+    // V35: a reopened developer session keeps working on its project: the next request is a new Work run of the
+    // same workflow on the same connected project (the backend asks to reconnect it if access was removed).
+    else if (!about.length && developerProject && state.run?.request?.workflow) {
+      startNow(text);
+      actions?.startWork(text, { workflow: state.run.request.workflow, fromResearch: report.research_id,
+        chosen: [{ kind: "folder", title: developerProject.title, repository: developerProject.repository }] });
+    }
     else {
       const page = report.research_id;
       submittingPrompt = true;
@@ -1592,6 +1614,11 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     state.voiceState === "thinking" ? "Thinking" : state.voiceState === "speaking" ? "Speaking" : state.voiceState === "listening" && !state.muted ? "Listening" : "",
   );
   const disabled = $derived(!state.connected || state.guest);
+  /** V35: the connected project a developer run used (kept with the run, so it survives Work History). */
+  const developerProject = $derived.by(() => {
+    const scope = (state.run as { developer?: { scope?: DeveloperScope } } | null)?.developer?.scope;
+    return scope?.repository ? { repository: scope.repository, title: scope.title || scope.repository } : null;
+  });
   const placeholder = $derived(
     state.guest
       ? "Research needs the main user"
@@ -1837,6 +1864,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
             </Lift>
           {/if}
           {#if designer}<DesignerOverlay {designer} version={designerVersion}/>{/if}
+          <DevWorkspacePanel developer={(state.run as { developer?: never } | null)?.developer} />
           {#if composedRun}<HandOverlay onreplay={replayBuild} />{/if}
           {#if sharedChoices.length}
             <aside class="relay-choices" aria-label="Shared connections" data-construction-control>

@@ -166,6 +166,8 @@ export function boardOf(input: BoardInput): Board {
           language: content.language,
           text: content.text,
           notes: content.notes,
+          ...((content as { path?: string }).path ? { path: (content as { path?: string }).path } : {}),
+          ...((content as { start?: number }).start ? { start: (content as { start?: number }).start } : {}),
         });
         break;
       case "diagram":

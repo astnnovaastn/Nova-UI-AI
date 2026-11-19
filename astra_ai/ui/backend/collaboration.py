@@ -1,6 +1,6 @@
 """Local Yjs rooms. SQLite is authoritative; HTML is a derived export snapshot."""
 
-import asyncio, base64, contextlib, hashlib, html, json, sqlite3, uuid
+import asyncio, base64, contextlib, hashlib, html, json, os, sqlite3, uuid
 from pathlib import Path
 from fastapi import HTTPException, Request, WebSocket, WebSocketDisconnect
 from pycrdt import Doc, XmlFragment, XmlElement, XmlText
@@ -400,8 +400,8 @@ class CollaborationService:
         ):
             origin = socket.headers.get("origin")
             if origin and origin not in {
-                "http://127.0.0.1:5173",
-                "http://localhost:5173",
+                "http://127.0.0.1:" + os.getenv("AEGIS_UI_PORT", "5173"),
+                "http://localhost:" + os.getenv("AEGIS_UI_PORT", "5173"),
             }:
                 await socket.close(code=1008)
                 return

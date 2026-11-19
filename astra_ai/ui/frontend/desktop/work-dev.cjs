@@ -115,7 +115,7 @@ function workDev({ panes, dialog, window, projectRoot, publicPage }) {
     async dev_file_select() {
       const picked = await dialog.showOpenDialog(window(), {
         title: "Choose a file for AEGIS Work", properties: ["openFile"],
-        filters: [{ name: "Code and text", extensions: ["py", "ts", "tsx", "js", "jsx", "mjs", "cjs", "svelte", "vue", "rs", "go", "java", "c", "h", "cpp", "cs", "css", "scss", "html", "md", "txt", "json", "toml", "yaml", "yml", "sql"] }],
+        filters: [{ name: "Code and text", extensions: ["py", "ts", "tsx", "js", "jsx", "mjs", "cjs", "svelte", "vue", "rs", "go", "java", "c", "h", "cpp", "cs", "css", "scss", "html", "md", "txt", "json", "toml", "yaml", "yml", "sql", "patch", "diff"] }],
       });
       if (picked.canceled || !picked.filePaths?.[0]) return null;
       const file = fs.realpathSync.native(picked.filePaths[0]);

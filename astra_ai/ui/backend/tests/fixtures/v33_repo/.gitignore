@@ -1,0 +1,6 @@
+# Build output and local files
+build_output/
+*.log
+secrets.local.json
+notes/*.tmp.md
+!notes/keep.tmp.md

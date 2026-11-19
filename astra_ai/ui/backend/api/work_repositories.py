@@ -20,7 +20,8 @@ def install(app,*,owner_only,orchestrator):
         try:return JSONResponse(await asyncio.to_thread(method,*args),headers={'Cache-Control':'no-store'})
         except RepositoryError as error:raise HTTPException(422,str(error).replace('_',' ')) from None
         except (OSError,ValueError) as error:
-            reason=str(error) if isinstance(error,ValueError) and str(error).replace('_','').isalpha() else 'Source could not be read'
+            import re
+            reason=str(error) if isinstance(error,ValueError) and (str(error).replace('_','').isalpha() or re.fullmatch(r'conflict: [\w ;,./()-]{1,400}',str(error))) else 'Source could not be read'
             raise HTTPException(422,reason.replace('_',' ')) from None
 
     def service():return RepositoryInputs(orchestrator().settings)
@@ -85,6 +86,34 @@ def install(app,*,owner_only,orchestrator):
         body=await request.json() if action=='save' else {}
         if action=='save':return await call(request,edits().apply,OWNER,edit_id,str(body.get('approval','')))
         if action=='discard':return await call(request,edits().discard,OWNER,edit_id)
+        raise HTTPException(404,'Unknown action')
+
+    # V34 drafts: an isolated copy with the proposed patch, real sandbox runs, approval before publishing.
+
+    def drafts():
+        from astra_ai.core.work.dev_drafts import DraftWorkspace
+        store=getattr(orchestrator(),'store',None)
+        state=Path(store.root).parent if store is not None and getattr(store,'root',None) else service().grants_file.parent
+        return DraftWorkspace(state,orchestrator().settings,service())
+
+    @app.get('/api/work/drafts/{draft_id}')
+    async def draft(draft_id:str,request:Request):
+        return await call(request,lambda:drafts().public(drafts().get(OWNER,draft_id)))
+
+    @app.get('/api/work/sandbox')
+    async def sandbox(request:Request):
+        from astra_ai.core.work.dev_drafts import sandbox_image
+        return await call(request,lambda:{k:v for k,v in sandbox_image(orchestrator().settings).items() if k!='docker'})
+
+    @app.post('/api/work/drafts/{draft_id}/{action}')
+    async def decide_draft(draft_id:str,action:str,request:Request):
+        """apply needs the approval token of the reviewed draft; run re-runs its tests in the sandbox (after only)."""
+        body=await request.json() if action=='apply' else {}
+        work=drafts()
+        if action=='apply':return await call(request,lambda:work.public(work.apply(OWNER,draft_id,str(body.get('approval','')))))
+        if action=='discard':return await call(request,lambda:work.public(work.discard(OWNER,draft_id)))
+        if action=='rollback':return await call(request,lambda:work.public(work.rollback(OWNER,draft_id)))
+        if action=='run':return await call(request,lambda:(work.run(OWNER,draft_id,'after'),work.public(work.get(OWNER,draft_id)))[1])
         raise HTTPException(404,'Unknown action')
 
     @app.delete('/api/work/repositories/{name}/grant')

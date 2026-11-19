@@ -17,6 +17,10 @@ from dotenv import dotenv_values
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / 'astra_ai/ui/backend/server.py'
 TOKEN = secrets.token_urlsafe(32)
+# V35: an installed AEGIS runs on its own ports beside a development copy.
+UI_PORT = os.environ.get('AEGIS_UI_PORT', '5173')
+BACKEND_PORT = os.environ.get('AEGIS_BACKEND_PORT', '8340')
+RUNTIME_PORT = int(os.environ.get('AEGIS_RUNTIME_PORT', '8341'))
 app = FastAPI()
 child = None
 operation = {'state': 'starting', 'operationId': None, 'error': None}
@@ -27,7 +31,7 @@ handles = []
 @app.middleware('http')
 async def local_control(request: Request, call_next):
     origin = request.headers.get('origin')
-    if origin and origin not in {'http://127.0.0.1:5173', 'http://localhost:5173'}:
+    if origin and origin not in {f'http://127.0.0.1:{UI_PORT}', f'http://localhost:{UI_PORT}'}:
         return JSONResponse(status_code=403, content={'error': 'Local Nova origin required'})
     if request.method == 'POST' and request.headers.get('x-nova-control') != '1' and request.headers.get('x-nova-runtime-token') != TOKEN:
         return JSONResponse(status_code=403, content={'error': 'Control header required'})
@@ -36,7 +40,7 @@ async def local_control(request: Request, call_next):
 async def healthy():
     try:
         async with httpx.AsyncClient(timeout=1) as client:
-            response = await client.get('http://127.0.0.1:8340/api/health')
+            response = await client.get(f'http://127.0.0.1:{BACKEND_PORT}/api/health')
         return response.status_code == 200 and response.json().get('status') == 'healthy'
     except Exception:
         return False
@@ -47,7 +51,7 @@ async def stop_child():
         return
     try:
         async with httpx.AsyncClient(timeout=8) as client:
-            await client.post('http://127.0.0.1:8340/api/runtime/shutdown', headers={'X-Nova-Runtime-Token': TOKEN})
+            await client.post(f'http://127.0.0.1:{BACKEND_PORT}/api/runtime/shutdown', headers={'X-Nova-Runtime-Token': TOKEN})
         await asyncio.to_thread(child.wait, 8)
     except Exception:
         if child.poll() is None:
@@ -60,7 +64,8 @@ async def stop_child():
 
 async def launch():
     global child
-    log_root=Path(os.environ.get('NOVA_STATE_DIR') or dotenv_values(ROOT/'.env').get('NOVA_STATE_DIR') or ROOT/'state')/'logs'
+    env_file=Path(os.environ.get('AEGIS_ENV_FILE') or ROOT/'.env')
+    log_root=Path(os.environ.get('NOVA_STATE_DIR') or dotenv_values(env_file).get('NOVA_STATE_DIR') or ROOT/'state')/'logs'
     log_root.mkdir(parents=True,exist_ok=True)
     for handle in handles:
         handle.close()
@@ -130,5 +135,5 @@ async def request_stop():
     return {'state': 'stopping'}
 
 if __name__ == '__main__':
-    http_server = uvicorn.Server(uvicorn.Config(app, host='127.0.0.1', port=8341, log_level='warning'))
+    http_server = uvicorn.Server(uvicorn.Config(app, host='127.0.0.1', port=RUNTIME_PORT, log_level='warning'))
     http_server.run()

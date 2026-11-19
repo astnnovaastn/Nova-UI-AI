@@ -10,6 +10,7 @@
    */
   import { onMount, tick } from "svelte";
   import Icon from "$shared/ui/Icon";
+  import InformationCircleIcon from "@hugeicons/core-free-icons/InformationCircleIcon";
   import {
     UserCircleIcon, Search01Icon, PaintBoardIcon, Layers01Icon, Shield01Icon, LockKeyIcon, Download01Icon, Clock01Icon,
     CheckListIcon, ChipIcon, Key01Icon, Mic01Icon, Briefcase02Icon, Plug01Icon, ComputerIcon, Cancel01Icon, ArrowRight01Icon,
@@ -21,6 +22,7 @@
   import AegisSections from "./AegisSections.svelte";
   import AccountsSection from "./AccountsSection.svelte";
   import TasksSection from "./TasksSection.svelte";
+  import AboutSection from "./AboutSection.svelte";
   import SkillsPanel from "../SkillsPanel.svelte";
 
   let { onclose }: { onclose: () => void } = $props();
@@ -28,7 +30,7 @@
   const ICONS: Record<SettingsSection, typeof UserCircleIcon> = {
     accounts: UserCircleIcon, search: Search01Icon, appearance: PaintBoardIcon, "new-tab": Layers01Icon, tabs: Layers01Icon, privacy: Shield01Icon,
     permissions: LockKeyIcon, downloads: Download01Icon, focus: Clock01Icon, tasks: CheckListIcon, ai: ChipIcon, keys: Key01Icon,
-    voice: Mic01Icon, work: Briefcase02Icon, skills: CheckListIcon, memory: Layers01Icon, connections: Plug01Icon, system: ComputerIcon,
+    voice: Mic01Icon, work: Briefcase02Icon, skills: CheckListIcon, memory: Layers01Icon, connections: Plug01Icon, system: ComputerIcon, about: InformationCircleIcon,
   };
   const BROWSER = new Set<SettingsSection>(["search", "new-tab", "tabs", "privacy", "permissions", "downloads", "focus"]);
   const AEGIS = new Set<SettingsSection>(["ai", "keys", "voice", "work", "memory", "connections", "system"]);
@@ -116,6 +118,7 @@
           {:else if current.id === "appearance"}<AppearanceSection />
           {:else if current.id === "skills"}<SkillsPanel embedded />
           {:else if current.id === "tasks"}<TasksSection onclose={onclose} />
+          {:else if current.id === "about"}<AboutSection />
           {:else if BROWSER.has(current.id)}<BrowserSections section={current.id} />
           {:else if AEGIS.has(current.id)}<AegisSections section={current.id} />
           {/if}

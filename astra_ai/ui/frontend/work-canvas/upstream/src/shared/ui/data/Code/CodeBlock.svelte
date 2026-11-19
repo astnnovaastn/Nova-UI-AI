@@ -27,8 +27,8 @@
   let body = $state<HTMLElement>();
   const span = (note: CodeNoteView) =>
     note.from === note.to
-      ? m.work_code_line({ line: note.from })
-      : m.work_code_lines({ from: note.from, to: note.to });
+      ? m.work_code_line({ line: note.from + start - 1 })
+      : m.work_code_lines({ from: note.from + start - 1, to: note.to + start - 1 });
   function light(index: number) {
     lit = index;
     body

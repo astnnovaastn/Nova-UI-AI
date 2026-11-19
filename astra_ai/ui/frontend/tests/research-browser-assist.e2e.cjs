@@ -367,6 +367,9 @@ async function checkBrowserSurfaces(page, app) {
   await page.getByRole("button", { name: "Close library", exact: true }).click();
   await toolbar.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(settings).toBeVisible();
+  await settings.getByRole("button", { name: "About and updates", exact: true }).click();
+  await expect(settings.getByRole("heading", { name: "About and updates", exact: true })).toBeVisible();
+  await expect(settings.getByText("Version", { exact: true })).toBeVisible();
   await expect(browser.getByRole("tablist", { name: "Browser tabs" })).toBeHidden();
   await settings.getByRole("button", { name: "Appearance", exact: true }).click();
   const light = settings.getByRole("radio", { name: "Light", exact: true });

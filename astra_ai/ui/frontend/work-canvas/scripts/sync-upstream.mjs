@@ -2,6 +2,7 @@ import {v25Patches} from './v25-patches.mjs';
 import {compositionPatches} from './composition-patches.mjs';
 import {mediaCollectionPatches} from './media-collection-patches.mjs';
 import {siteRowPatches} from './site-row-patches.mjs';
+import {developerPatches} from './developer-patches.mjs';
 import {picksPicturePatches} from './picks-picture-patches.mjs';
 import {visualBoardPatches} from './visual-board-patches.mjs';
 import {v24Patches} from './v24-patches.mjs';
@@ -84,7 +85,7 @@ const roots = [
 ];
 
 // Each patch must match exactly once, so an upstream change fails loudly instead of silently.
-const patches = [...designerPatches,
+const patches = [...designerPatches, ...developerPatches,
   {
     file: "features/time/components/TimePage.svelte",
     why: "V32: AEGIS keeps no site-time record; when the report is unavailable, show its note without an empty 0m chart.",
@@ -653,13 +654,15 @@ Object.assign(texts, {
   work_pane: "Source browser",
   work_env_open_browse: "Open in browser",
   ui_search_or_enter_an_address: "Enter a web address",
-  work_flow_explain_code_line: "How a file, a function or a flow works, explained from what you paste",
-  work_flow_explain_code_ask: "Paste the code, or name a public repository. Research can't open folders on this computer.",
-  work_flow_map_project_ask: "Name a public repository, or paste its file tree. Research can't open folders on this computer.",
-  work_flow_review_change_ask: "Paste a public pull request link, or the diff.",
-  work_flow_fix_test_line: "Likely causes and fixes, from the error you paste",
-  work_flow_fix_test_request: "Find the likely cause and fix for this failing test:",
-  work_flow_fix_test_ask: "Paste the test and its error. Research can't run tests or change your code.",
+  // V34: AEGIS Desktop reads the folders and files the person chooses, and runs tests in a sandbox.
+  work_flow_explain_code_line: "How a file, a function or a flow works, explained from the real source",
+  work_flow_explain_code_ask: "Paste code, choose a file or select a connected project.",
+  work_flow_map_project_line: "Its modules, how they connect, and where to start reading, from the real file tree",
+  work_flow_map_project_ask: "Choose a folder or connect a repository to map its architecture.",
+  work_flow_review_change_ask: "Select a Git diff, commit, pull request or local change.",
+  work_flow_fix_test_line: "Reproduces the failure in a sandbox, drafts a patch and re-runs the tests",
+  work_flow_fix_test_request: "Fix the failing test:",
+  work_flow_fix_test_ask: "Choose a project and provide the failing test or error output.",
   work_flow_moodboard_ask: "A direction in a few words.",
   work_flow_day_line: "Your day as one timed plan, from what you paste",
   work_flow_day_request: "Plan my day from this:",
