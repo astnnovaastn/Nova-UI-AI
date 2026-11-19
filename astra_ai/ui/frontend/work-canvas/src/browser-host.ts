@@ -25,10 +25,15 @@ export type BrowserHostEvent = { id: number } & (
   /** V30: a link in a browser tab asked for a new tab. */
   | { kind: "open-tab"; url: string; background?: boolean }
   /** A browser shortcut (Ctrl+T, W, L) pressed while a tab's page had the keyboard. */
-  | { kind: "shortcut"; key: string }
-  | { kind: "favicon"; url: string }
+  | { kind: "shortcut"; key: string; shift?: boolean }
+  /** V31: requests the blocker cancelled on this tab's current page so far. */
+  | { kind: "blocked-count"; count: number }
+  /** V32: the window caption came out (pointer near the top-right corner) or went quiet. */
+  | { kind: "caption"; shown: boolean; height: number; duration?: number }
+  | { kind: "favicon"; url: string; rgba?: string }
   /** Where the desktop's resource manager has the page: active, background, suspended (frozen) or hibernated (released). */
   | { kind: "state"; state: string }
+  | { kind: "media"; available: boolean; playing: boolean; muted: boolean; audible: boolean }
   /** The page could not be loaded: no connection, unknown name, bad certificate and so on. */
   | { kind: "failed"; code: number; description: string; url: string }
 );
@@ -51,14 +56,26 @@ export interface ResearchBrowserHost {
   /** V30: a browser tab (the person's own session, downloads, permission questions). Desktop only. */
   openTab(id: number, url: string, rect: PaneRect): Promise<void>;
   stop(id: number): Promise<void>;
+  setPageZoom?(percent: number): Promise<void>;
+  media?(id: number, action: "play" | "pause" | "mute" | "unmute"): Promise<void>;
   downloads(): Promise<DownloadRow[]>;
   showDownload(id: number): Promise<void>;
+  /** V31 privacy: real counts from the desktop's request filter. */
+  blockerStatus(id?: number | null): Promise<BlockerStatus | null>;
+  blockerSet(enabled: boolean): Promise<BlockerStatus | null>;
+  blockerAllow(host: string, allowed: boolean): Promise<BlockerStatus | null>;
+  permissions(): Promise<PermissionRow[]>;
+  resetPermissions(origin?: string): Promise<PermissionRow[]>;
+  clearData(what: { cookies?: boolean; cache?: boolean }): Promise<void>;
   /** The fallback for anything the pane cannot do: the person's own browser. */
   openExternal(url: string): Promise<void>;
   subscribe(listener: (event: BrowserHostEvent) => void): () => void;
 }
 
 export type DownloadRow = { id: number; tab: number | null; url: string; filename: string; state: string; received: number; total: number };
+
+export type BlockerStatus = { enabled: boolean; today: number; sinceStart: number; tab: number; allowed: string[]; topHosts: { host: string; count: number }[]; rules: number | null; started: boolean };
+export type PermissionRow = { origin: string } & Record<string, boolean | string>;
 
 type DesktopRuntime = { invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> };
 type DesktopWindow = Window & {
@@ -86,13 +103,19 @@ const webHost: ResearchBrowserHost = {
   stop: () => done,
   downloads: async () => [],
   showDownload: () => done,
+  blockerStatus: async () => null,
+  blockerSet: async () => null,
+  blockerAllow: async () => null,
+  permissions: async () => [],
+  resetPermissions: async () => [],
+  clearData: () => done,
   async openExternal(url) {
     window.open(url, "_blank", "noopener,noreferrer");
   },
   subscribe: () => () => {},
 };
 
-function desktopHost(runtime: DesktopRuntime): ResearchBrowserHost {
+function desktopHost(runtime: DesktopRuntime, pageZoom: boolean): ResearchBrowserHost {
   const listeners = new Set<(event: BrowserHostEvent) => void>();
   // The desktop shell reports what a pane did by calling this with plain data.
   (window as DesktopWindow).__aegisBrowserEvent = (event) => {
@@ -114,8 +137,16 @@ function desktopHost(runtime: DesktopRuntime): ResearchBrowserHost {
     setVisible: (id, visible) => quiet("browser_show", { id, visible }),
     openTab: (id, url, rect) => call("tab_open", { id, url, rect }),
     stop: (id) => quiet("browser_stop", { id }),
+    media: pageZoom ? (id, action) => call("tab_media", { id, action }) : undefined,
+    setPageZoom: pageZoom ? (percent) => call("tab_zoom", { percent }) : undefined,
     downloads: () => runtime.invoke<DownloadRow[]>("tab_downloads", {}),
     showDownload: (id) => quiet("download_show", { id }),
+    blockerStatus: (id) => runtime.invoke<BlockerStatus>("blocker_status", id == null ? {} : { id }).catch(() => null),
+    blockerSet: (enabled) => runtime.invoke<BlockerStatus>("blocker_set", { enabled }),
+    blockerAllow: (host, allowed) => runtime.invoke<BlockerStatus>("blocker_allow", { host, allowed }),
+    permissions: () => runtime.invoke<PermissionRow[]>("permissions_list", {}),
+    resetPermissions: (origin) => runtime.invoke<PermissionRow[]>("permissions_reset", origin ? { origin } : {}),
+    clearData: (what) => runtime.invoke<void>("tab_clear_data", what),
     openExternal: (url) => call("open_external", { url }),
     subscribe(listener) {
       listeners.add(listener);
@@ -127,7 +158,31 @@ function desktopHost(runtime: DesktopRuntime): ResearchBrowserHost {
 function detect(): ResearchBrowserHost {
   const page = typeof window === "undefined" ? undefined : (window as DesktopWindow);
   const runtime = page?.aegisDesktop ?? page?.__TAURI_INTERNALS__;
-  return runtime && typeof runtime.invoke === "function" ? desktopHost(runtime) : webHost;
+  return runtime && typeof runtime.invoke === "function" ? desktopHost(runtime, Boolean(page?.aegisDesktop)) : webHost;
 }
 
 export const browserHost: ResearchBrowserHost = detect();
+
+/** V33: a folder or file the person chose in the desktop's own dialog (desktop/work-dev.cjs). */
+export type GrantedFolder = { id: string; title: string; path: string; write: boolean; files?: string[]; file?: string };
+export type PageMeta = { url: string; title: string; description: string; site: string; image: string; canonical: string; kind: string; channel: string };
+
+/**
+ * V33 desktop-only requests for AEGIS Work: native Open Folder / Open File, the page metadata Add to Work
+ * keeps, and pausing a source window's player before its page opens in a tab. AEGIS Web has none of them.
+ */
+export const desktopWork = (() => {
+  const page = typeof window === "undefined" ? undefined : (window as DesktopWindow);
+  const runtime = page?.aegisDesktop;
+  const available = Boolean(runtime && typeof runtime.invoke === "function");
+  const call = <T,>(command: string, args: Record<string, unknown> = {}) => (available ? runtime!.invoke<T>(command, args) : Promise.reject(new Error("Folder access needs AEGIS Desktop.")));
+  return {
+    available,
+    selectFolder: (options: { write?: boolean; title?: string } = {}) => call<GrantedFolder | null>("dev_folder_select", options),
+    selectFile: () => call<GrantedFolder | null>("dev_file_select"),
+    folders: () => (available ? call<GrantedFolder[]>("dev_folders") : Promise.resolve([] as GrantedFolder[])),
+    revoke: (id: string) => call<GrantedFolder[]>("dev_folder_revoke", { id }),
+    pageMeta: (id: number) => (available ? call<PageMeta | null>("tab_page_meta", { id }).catch(() => null) : Promise.resolve(null)),
+    mediaHandoff: (id: number) => (available ? call<{ time: number | null; playing: boolean; count: number }>("media_handoff", { id }).catch(() => ({ time: null, playing: false, count: 0 })) : Promise.resolve({ time: null, playing: false, count: 0 })),
+  };
+})();

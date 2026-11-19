@@ -80,9 +80,26 @@ const given = (o: WorkspaceObject) => (o.data ?? {}) as Record<string, unknown>;
 const listOf = (value: unknown) => (Array.isArray(value) ? value : undefined);
 const textOf = (value: unknown) => (typeof value === "string" && value ? value : undefined);
 
+/**
+ * V33: the engine's sheet cells may be numbers, booleans or null (its schema allows them), but Zephium's
+ * sheet reads every cell as text (`cell.trim()`), so a number crashed the canvas. Cells become text here.
+ */
+export function sheetCellsAsText(data: Record<string, unknown>): Wire {
+  const text = (cell: unknown) => (cell === null || cell === undefined ? "" : typeof cell === "boolean" ? (cell ? "Yes" : "No") : String(cell));
+  const rows = listOf(data.rows) ?? [];
+  return {
+    ...data,
+    kind: "sheet",
+    rows: rows.map((row) => {
+      const record = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
+      return { ...record, cells: (listOf(record.cells) ?? []).map(text) };
+    }),
+  } as unknown as Wire;
+}
+
 export function wireOf(o: WorkspaceObject): Wire | null {
   // V29: a typed Zephium artifact is its own wire data, passed through as the backend wrote it.
-  if (o.kind === "zephium") return o.zkind && o.data ? { ...o.data, kind: o.zkind } : null;
+  if (o.kind === "zephium") return o.zkind && o.data ? (o.zkind === "sheet" ? sheetCellsAsText(o.data) : { ...o.data, kind: o.zkind }) : null;
   const data = given(o);
   if (o.kind === "comparison" && o.recommendations?.length)
     return {

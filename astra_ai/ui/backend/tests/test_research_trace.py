@@ -89,7 +89,8 @@ def test_work_sources_are_references_saved_once(tmp_path):
     second = artifacts.add_work_source(identifier, CONTEXT, 'https://example.com/a', 'Again')
     assert first['source']['id'] == second['source']['id']
     assert len(artifacts.work_sources(identifier, CONTEXT)) == 1
-    assert set(first['source']) == {'id', 'url', 'title', 'retrieved_at', 'reference_kind'}
+    # V33: a reference with its identity and provenance, still never page content.
+    assert set(first['source']) == {'id', 'url', 'key', 'title', 'retrieved_at', 'reference_kind', 'provenance', 'added_at'}
     assert [event['kind'] for event in artifacts.trace.read(identifier)][-1] == 'source_added'
     assert artifacts.add_work_source('missing', CONTEXT, 'https://example.com', '')['status'] == 'not_found'
 

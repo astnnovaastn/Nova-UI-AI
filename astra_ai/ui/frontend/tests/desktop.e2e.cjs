@@ -166,7 +166,10 @@ async function until(probe, timeout = 30000, step = 300) {
   await inPane(0, "location.href = 'file:///C:/Windows/win.ini'; 1").catch(() => {});
   await wait(800);
   check("The page cannot open local files", (await panes())[0].url === before, (await panes())[0].url);
-  check("Microphone is refused without a prompt", (await inPane(0, "navigator.mediaDevices.getUserMedia({audio:true}).then(() => 'granted', e => e.name)")) === "NotAllowedError");
+  const microphone = await inPane(0, "navigator.mediaDevices.getUserMedia({audio:true}).then(() => 'granted', e => e.name)");
+  // With no microphone plugged in Chromium answers NotFoundError before asking; the permission itself must still read "denied".
+  const micPermission = await inPane(0, "navigator.permissions.query({name:'microphone'}).then(p => p.state, e => e.name)");
+  check("Microphone is refused without a prompt", microphone === "NotAllowedError" || (microphone === "NotFoundError" && micPermission === "denied"), `${microphone}, permission ${micPermission}`);
   check("Location is refused", (await inPane(0, "new Promise(r => navigator.geolocation.getCurrentPosition(() => r('granted'), e => r('denied:' + e.code), {timeout: 4000}))")) === "denied:1");
   check("Notifications are refused", (await inPane(0, "Notification.requestPermission()")) === "denied");
   const count = (await panes()).length;
@@ -219,7 +222,7 @@ async function until(probe, timeout = 30000, step = 300) {
   check("Minimizing hides the native view", (await panes()).filter((p) => /github\.com/.test(p.url)).every((p) => !p.visible));
   check("The composer stays reachable", await page.locator(".aegis-work-stage textarea, .aegis-work-stage [contenteditable='true']").first().isVisible().catch(() => false));
   await page.locator(".minimized button").first().dispatchEvent("click");
-  check("Restoring shows the page again", await until(async () => (await panes()).filter((p) => /github\.com/.test(p.url)).some((p) => p.visible), 6000));
+  check("Restoring shows the page again", await until(async () => (await panes()).filter((p) => /github\.com/.test(p.url)).some((p) => p.visible), 6000), await page.evaluate(() => { const hole = [...document.querySelectorAll(".pane .native")].find((n) => n.getBoundingClientRect().width > 2); if (!hole) return "no hole"; const b = hole.getBoundingClientRect(); const pts = [[b.left + 3, b.top + 3], [b.left + b.width / 2, b.top + b.height / 2], [b.right - 3, b.bottom - 3]]; return JSON.stringify(pts.map(([x, y]) => { const t = document.elementFromPoint(x, y); return t ? t.tagName + "." + String(t.className).slice(0, 60) : null; })); }));
   const open = (await panes()).length;
   while (await page.locator('.pane button[aria-label="Close pane"]').count()) {
     await page.locator('.pane button[aria-label="Close pane"]').last().click();

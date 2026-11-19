@@ -4,9 +4,10 @@ const sentences=[
  'Please remember our conversation and let me finish before you reply.',
  'When I return tomorrow, continue where we left off and speak naturally.'
 ];
-export function initVoiceEnrollment(){
- const body=document.querySelector('#settings-container .settings-body');if(!body||document.getElementById('voice-enrollment'))return;
- const section=document.createElement('section');section.className='settings-section voice-enrollment';section.id='voice-enrollment';
+// V33: `target` mounts the controls in the unified Settings (work-canvas); the returned function releases them.
+export function initVoiceEnrollment(target?:HTMLElement):(()=>void)|void{
+ const body=target??document.querySelector('#settings-container .settings-body');if(!body||(!target&&document.getElementById('voice-enrollment')))return;
+ const section=document.createElement('section');section.className='settings-section voice-enrollment';if(!target)section.id='voice-enrollment';
  section.innerHTML=`<div class="voice-enrollment-heading"><span class="voice-enrollment-symbol" aria-hidden="true">◉</span><div><h3>Your voice</h3><p>Your first profile uses your existing memories. Additional speakers get their own context.</p></div></div><p id="voice-profile-state" role="status"></p><div class="voice-profile-home"><label for="voice-profile-select">Speaker profile</label><select id="voice-profile-select" aria-label="Speaker profile"></select><div class="voice-profile-actions"><button class="voice-primary" id="voice-enroll-record">Set up my voice</button><button id="voice-profile-add">Add a speaker</button><button id="voice-profile-toggle">Enable recognition</button><button class="voice-danger" id="voice-profile-delete">Delete profile</button></div><small>Three spoken sentences. Audio stays in RAM; only an encrypted voice fingerprint is saved on this PC.</small></div><div class="voice-profile-wizard" hidden><label id="voice-enroll-name-label" hidden>Speaker name<input id="voice-enroll-name" maxlength="60" autocomplete="off" placeholder="Additional speaker"></label><div class="voice-enrollment-progress" aria-label="Enrollment progress"></div><h4 id="voice-enroll-title"></h4><blockquote id="voice-enroll-sentence"></blockquote><p id="voice-enroll-feedback" role="status"></p><div class="voice-profile-actions"><button class="voice-primary" id="voice-enroll-start">Start reading</button><button id="voice-enroll-done" disabled>Done reading</button><button id="voice-enroll-next" hidden>Next sentence</button><button id="voice-enroll-cancel">Cancel</button></div></div>`;
  body.append(section);
  const get=<T extends HTMLElement>(id:string)=>section.querySelector<T>('#'+id)!;
@@ -33,5 +34,6 @@ export function initVoiceEnrollment(){
  };
  next.onclick=async()=>{if(!sample||busy)return;samples.push(sample);sample='';if(index<2){index++;start.textContent='Start reading';stage();return;}next.disabled=true;feedback.textContent='Creating your encrypted voice profile…';try{const name=get<HTMLInputElement>('voice-enroll-name').value.trim().slice(0,60)||profileName;const result=await request('/api/voice/enroll',{samples,profile_id:pid,name});close();label.textContent=result.profile_id==='owner'?'Main-user voice profile saved. Existing memories are connected.':'Speaker profile saved with separate context.';await refresh();}catch(e){samples.pop();feedback.textContent=String(e)+' Read the final sentence again.';start.hidden=false;start.disabled=false;}finally{next.disabled=false;}};
  // Closing Settings releases the microphone and clears unfinished samples.
- const observer=new MutationObserver(()=>{if(wizardOpen&&section.closest<HTMLElement>('#settings-container')?.style.display==='none')close();});observer.observe(section.closest('#settings-container')!,{attributes:true,attributeFilter:['style']});void refresh();
+ const panel=section.closest('#settings-container');if(panel){const observer=new MutationObserver(()=>{if(wizardOpen&&section.closest<HTMLElement>('#settings-container')?.style.display==='none')close();});observer.observe(panel,{attributes:true,attributeFilter:['style']});}void refresh();
+ return ()=>{if(wizardOpen)close();section.remove();};
 }

@@ -26,7 +26,10 @@
     "test:memory-globe": "node tests/memory-globe/run.mjs",
     "test:agent-lab": "node tests/agent-execution-lab.e2e.cjs",
     "test:v30": "node tests/work-v30.e2e.cjs",
-    "test:v30-desktop": "node tests/desktop-v30-browser.e2e.cjs"
+    "test:v30-desktop": "node tests/desktop-v32-browser.e2e.cjs",
+    "test:v31-desktop": "node tests/desktop-v32-browser.e2e.cjs",
+    "test:v32-desktop": "node tests/desktop-v32-browser.e2e.cjs",
+    "test:blocker": "node --test tests/desktop-blocker.test.cjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

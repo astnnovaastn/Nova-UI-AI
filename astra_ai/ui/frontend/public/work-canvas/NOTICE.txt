@@ -13,6 +13,19 @@ work-canvas/src/AegisWorkHost.svelte, work-canvas/src/BrowserWindow.svelte and w
 copied file and says whether it is unchanged or adapted, and why. The source of the
 covered files is in work-canvas/ in this repository and at the upstream address above.
 
+The Settings color mode picker in work-canvas/src/settings/AppearanceModePicker.svelte
+adapts frame/src/features/settings/components/appearance/ModePicker.svelte from
+the same pinned Zephium commit under MPL-2.0.
+
+Browse uses Zephium's SearchField, EngineMenu, SearchShortcuts, TabRow and New
+Tab layout, plus its MPL-2.0 built-in search shortcuts. AEGIS adapts the New
+Tab search dock styling from features/search/components/NewTabSearch.svelte
+and the corner control styling from features/newtab/components/NewTab.svelte.
+
+The browser media row, tools shelf and provider-key row in work-canvas/src
+adapt Zephium's MediaPlayer, ToolShelf and AiProviderRow presentation under the
+same MPL-2.0 terms.
+
 AEGIS is not affiliated with Zephium. The Zephium name and logo are not licensed
 under the MPL and are not used here.
 

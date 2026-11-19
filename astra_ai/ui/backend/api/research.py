@@ -186,7 +186,15 @@ def install(app, *, context_for, artifacts_for, writer, learning, jobs, collabor
         from astra_ai.core.research.frame_policy import public_address
         try:await asyncio.to_thread(public_address,url)
         except (ValueError,OSError):raise HTTPException(400,'Only public web addresses can be added.')
-        result=await asyncio.to_thread(artifacts.add_work_source,identifier,context,url,title)
+        result=await asyncio.to_thread(artifacts.add_work_source,identifier,context,url,title,body.get('meta') if isinstance(body.get('meta'),dict) else None)
+        if result.get('status')=='not_found':raise HTTPException(404,'Research unavailable')
+        return result
+
+    @app.delete('/api/research/{identifier}/work-sources')
+    async def research_remove_work_source(identifier:str,request:Request,url:str):
+        context=context_for(request);artifacts,_=artifacts_for()
+        if context.get('guest'):raise HTTPException(403,'Owner research required')
+        result=await asyncio.to_thread(artifacts.remove_work_source,identifier,context,url)
         if result.get('status')=='not_found':raise HTTPException(404,'Research unavailable')
         return result
 

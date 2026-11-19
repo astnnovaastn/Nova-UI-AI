@@ -1,4 +1,5 @@
 import type { Emphasis } from "./types";
+import { visualLayout } from "../../../../../../src/designer/moodboard-layout";
 
 export type Rect = { x: number; y: number; width: number; height: number };
 /** A block as the layout sees it: how wide it may stand, how tall it is at a width. */
@@ -9,6 +10,9 @@ export type LayoutBlock = {
   group?: string;
   width: { min: number; ideal: number; max: number };
   height: (width: number) => number;
+  /** AEGIS V33: a picks block's item count and typical picture proportion, for the visual board. */
+  count?: number;
+  aspect?: number;
 };
 export type BoardLayout = { width: number; height: number; at: Record<string, Rect> };
 
@@ -219,6 +223,11 @@ export function boardLayout(
   const pinned = options.pinned ?? new Set<string>();
   const read = reading(blocks.filter((block) => !pinned.has(block.id)));
   const rule = options.profile && options.profile !== "research" ? BOARD_PROFILES[options.profile as Exclude<BoardProfile, "research">] : undefined;
+  // AEGIS V33: a visual board packs its picture groups across the canvas (moodboard-layout.ts).
+  if (options.profile === "visual" && !options.open && read.length >= 1) {
+    const board = visualLayout(read);
+    if (board) return board;
+  }
   if (rule && !options.open && read.length >= 2) return profiled(read, rule) ?? rowLayout(blocks, options);
   if (options.open || read.length < 3) return rowLayout(blocks, options);
   // The run's written report stands right after the hero results, before pictures and supporting

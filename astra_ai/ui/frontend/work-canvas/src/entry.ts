@@ -9,8 +9,34 @@ import AegisWorkHost from "./AegisWorkHost.svelte";
 import { store, type CanvasActions, type CanvasState } from "./store.svelte";
 import { missingCommands } from "./native/core";
 import {setWorkspaceHeaders} from './native/host-session';
+import SettingsHost from "./settings/SettingsHost.svelte";
+import { settingsView } from "./settings/settings-view.svelte";
+
+let settingsRoot: HTMLElement | undefined;
+
+function ensureSettings() {
+  if (settingsRoot) return;
+  settingsRoot = document.createElement("div");
+  settingsRoot.className = "aegis-work-root";
+  settingsRoot.dataset.material = "aegis";
+  const syncTheme = () => {
+    if (settingsRoot) settingsRoot.dataset.theme = document.documentElement.dataset.appearanceMode || document.body.dataset.researchCanvasTheme || "dark";
+  };
+  syncTheme();
+  window.addEventListener("themechange", syncTheme);
+  document.body.append(settingsRoot);
+  mount(SettingsHost, { target: settingsRoot });
+}
+
+export function openUnifiedSettings(section?: string) {
+  ensureSettings();
+  settingsView.open(section);
+}
 
 export type { CanvasActions, CanvasState };
+
+/** V31: the canvas's own reads of the person's workspace (Today's task counts) carry the live client id. */
+export { setWorkspaceHeaders };
 
 export function mountAskEmpty(target: HTMLElement, context: boolean) {
   const instance = mount(AskEmpty, { target, props: { context } });
@@ -37,7 +63,10 @@ export function mountCanvas(target: HTMLElement, portal: HTMLElement): CanvasHan
   const fixture = ['127.0.0.1','localhost','[::1]'].includes(location.hostname) && new URLSearchParams(location.search).has('aegisFixture');
   let host:ReturnType<typeof mount>|undefined,dead=false;
   if(fixture)void import('./fixtures/FixtureWorkspace.svelte').then(({default:FixtureWorkspace})=>{if(!dead)host=mount(FixtureWorkspace,{target});});
-  else host=mount(AegisWorkHost, { target, props: { portal } });
+  else {
+    ensureSettings();
+    host=mount(AegisWorkHost, { target, props: { portal } });
+  }
   return {
     update(next) {
       store.state = { ...store.state, ...next };

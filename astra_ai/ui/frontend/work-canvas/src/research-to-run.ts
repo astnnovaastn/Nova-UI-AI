@@ -31,6 +31,12 @@ export type ResearchSource = {
   retrieved_at?: string;
   favicon?: string;
   attachment_id?: string;
+  /** V33: a page the person added (Add to Work), with the page's own short metadata. */
+  reference_kind?: string;
+  description?: string;
+  image?: string;
+  site?: string;
+  provenance?: string;
 };
 export type ResearchImage = {
   id: string;
@@ -453,6 +459,30 @@ export function buildScene(report: ResearchReport, reason = "", trace: readonly 
     } as unknown as WorkStepFact);
     const image = imageFor.get(source.id);
     if (image) frameIds.set(step, image.id);
+  });
+  // V33: pages the person added (Add to Work) stand with the run's own pages, each in its site's row, marked as theirs.
+  const addedPages = (report.linked_sources ?? []).filter((source) => source.reference_kind === "work_source" && /^https?:\/\//i.test(source.url));
+  addedPages.slice(0, 12).forEach((source, index) => {
+    const key = canonical(source.url);
+    if (seen.has(key)) return;
+    seen.add(key);
+    steps.push({
+      id: `${runId}-added-${index}`,
+      turn: 2,
+      kind: { kind: "read", url: source.url },
+      status: "succeeded",
+      note: source.provenance === "browser_tab" ? "Added from your browser" : "Added by you",
+      local: { page_title: source.title },
+    } as unknown as WorkStepFact);
+    if (!previews.has(source.url))
+      previews.set(source.url, {
+        title: source.title,
+        ...(source.description ? { excerpt: source.description } : {}),
+        ...(source.favicon?.startsWith("https://") ? { favicon: source.favicon } : {}),
+        ...(source.image?.startsWith("https://") ? { image: source.image } : {}),
+        retrieval: "found",
+        citations: 0,
+      });
   });
 
   const artifacts: WorkArtifactV1[] = [];

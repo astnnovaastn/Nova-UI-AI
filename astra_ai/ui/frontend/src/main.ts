@@ -6,6 +6,9 @@ import {VoiceSessionState} from './voiceSession.mjs';
 import {PresenceCapture} from './presenceCapture';
 import {requestedResearchReady} from './taskNotices';
 import {conversationInterrupt,conversationState,conversationMessage,conversationSnapshot,conversationLoad,conversationReplace,conversationFinished,updateUiContext,uiSnapshot} from "./conversation";
+// V31: AEGIS Desktop draws Windows' own window buttons over the page's top-right corner (titleBarOverlay).
+// The page marks itself so it keeps that corner clear, and gives the window a band to be moved by.
+if((window as Window&{aegisDesktop?:unknown}).aegisDesktop){document.documentElement.classList.add('aegis-desktop');const band=document.createElement('div');band.className='aegis-titlebar-drag';band.setAttribute('aria-hidden','true');document.body.prepend(band);void import('./desktop-caption').then((caption)=>caption.watchCaptionSurface());}
 import initMemoryWorkspace from './components/Memory/MemoryWorkspace.jsx';
 /**
  * AEGIS — Main entry point.

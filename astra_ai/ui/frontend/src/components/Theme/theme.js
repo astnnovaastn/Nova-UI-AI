@@ -61,9 +61,53 @@ export function normalizeTheme(theme) {
   };
 }
 
-export function applyTheme(raw) {
+const APPEARANCE_KEY = 'aegis-appearance-v1';
+const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
+let currentTheme;
+let currentAppearance = {};
+try { currentAppearance = JSON.parse(localStorage.getItem(APPEARANCE_KEY) || '{}') || {}; } catch {}
+
+export function readAppearance() {
+  const tokens = (currentTheme || BUILTIN_THEMES.dark).tokens;
+  return {
+    ...tokens, ...currentAppearance, mode: currentAppearance.mode || 'theme',
+    themeId: currentTheme?.id || DEFAULT_THEME_ID,
+  };
+}
+
+export function setAppearance(patch) {
+  currentAppearance = Object.fromEntries(Object.entries({ ...currentAppearance, ...patch }).filter(([, value]) => value !== undefined));
+  try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify(currentAppearance)); } catch {}
+  applyTheme(currentTheme || BUILTIN_THEMES.dark, true);
+}
+
+function themeTone(color) {
+  return contrastRatio(color, '#000000') > contrastRatio(color, '#ffffff') ? 'light' : 'dark';
+}
+
+colorScheme.addEventListener('change', () => {
+  if (currentTheme && currentAppearance.mode === 'system') applyTheme(currentTheme, true);
+});
+
+window.addEventListener('storage', (event) => {
+  if (event.key !== APPEARANCE_KEY) return;
+  try { currentAppearance = JSON.parse(event.newValue || '{}') || {}; } catch { return; }
+  if (currentTheme) applyTheme(currentTheme, true);
+});
+
+export function applyTheme(raw, appearanceOnly = false) {
   const theme = normalizeTheme(raw);
-  const t = theme.tokens;
+  currentTheme = theme;
+  const { mode, accent, font, motion, frosted, uiScale } = readAppearance();
+  const originalTone = themeTone(theme.tokens.bg);
+  const tone = mode === 'system' ? (colorScheme.matches ? 'dark' : 'light') : mode === 'light' || mode === 'dark' ? mode : originalTone;
+  const colors = BUILTIN_THEMES[tone].tokens;
+  const t = { ...theme.tokens, accent, font, motion, frosted, uiScale };
+  if (originalTone !== tone) {
+    Object.assign(t, { bg: colors.bg, fg: colors.fg, panel: colors.panel, border: colors.border });
+  }
+  document.documentElement.dataset.appearanceMode = tone;
+  document.documentElement.style.colorScheme = tone;
   const root = document.documentElement;
   const vars = {
     ...appearanceTokens(t),
@@ -108,7 +152,7 @@ export function applyTheme(raw) {
   if (theme.id !== 'unsaved-draft') { try { localStorage.setItem(ACTIVE_THEME_KEY, JSON.stringify(theme)); } catch {} }
   const preset = orbThemes.find((item) => item.name === theme.orb.preset);
   const orbColor = theme.orb.mode === 'custom' ? theme.orb.color : theme.orb.preset !== 'default' && preset?.orbColor ? preset.orbColor : t.accent;
-  window.dispatchEvent(new CustomEvent('themechange', { detail: { theme, orbColor, orbPreset: theme.orb.preset } }));
+  window.dispatchEvent(new CustomEvent('themechange', { detail: { theme, orbColor, orbPreset: theme.orb.preset, appearanceOnly } }));
   return theme;
 }
 

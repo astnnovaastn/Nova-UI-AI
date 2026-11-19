@@ -799,19 +799,34 @@ class ResearchArtifacts:
         """Pages the person added to this research from the workspace browser."""
         return copy.deepcopy(self.request_state(identifier,context).get('work_sources',[]))
 
-    def add_work_source(self, identifier, context, url, title=''):
-        """A reference only, the address and title: no page content is captured."""
+    def add_work_source(self, identifier, context, url, title='', meta=None):
+        """A reference only: address, title and short page metadata (V33). No page content is captured."""
+        from astra_ai.core.work.page_identity import page_key, clean_meta
+        key=page_key(url);meta=clean_meta(meta)
         with self.lock:
             metadata=self.request_state(identifier,context)
             if metadata.get('status')=='not_found':return {'status':'not_found'}
             rows=list(metadata.get('work_sources',[]))
-            found=next((row for row in rows if row['url']==url),None)
-            if found:return {'status':'completed','source':copy.deepcopy(found),'work_sources':rows}
-            row={'id':'W'+hashlib.sha256(url.encode()).hexdigest()[:24],'url':url,'title':safe(str(title or urlsplit(url).hostname))[:300],'retrieved_at':now(),'reference_kind':'work_source'}
+            found=next((row for row in rows if row['url']==url or row.get('key',page_key(row['url']))==key),None)
+            if found:return {'status':'completed','duplicate':True,'source':copy.deepcopy(found),'work_sources':rows}
+            row={'id':'W'+hashlib.sha256(key.encode()).hexdigest()[:24],'url':url,'key':key,'title':safe(str(title or urlsplit(url).hostname))[:300],'retrieved_at':now(),'reference_kind':'work_source',
+                 **{k:v for k,v in meta.items() if k!='provenance'},'provenance':meta.get('provenance','source_window'),'added_at':now()}
             rows.append(row)
             self.request_state(identifier,context,work_sources=rows)
         self.trace.record(identifier,'source_added','', 'done',context,url=url,title=row['title'])
         return {'status':'completed','source':copy.deepcopy(row),'work_sources':rows}
+
+    def remove_work_source(self, identifier, context, url):
+        """V33: takes back a page added with Add to Work (same page identity); the report is untouched."""
+        from astra_ai.core.work.page_identity import page_key
+        key=page_key(url)
+        with self.lock:
+            metadata=self.request_state(identifier,context)
+            if metadata.get('status')=='not_found':return {'status':'not_found'}
+            rows=list(metadata.get('work_sources',[]))
+            kept=[row for row in rows if row['url']!=url and row.get('key',page_key(row['url']))!=key]
+            if len(kept)!=len(rows):self.request_state(identifier,context,work_sources=kept)
+        return {'status':'completed','removed':len(rows)-len(kept),'work_sources':kept}
 
     def report_links(self, item, context):
         """Only offer follow-on URLs that occur in the preserved source evidence."""

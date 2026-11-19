@@ -1,237 +1,458 @@
 <script lang="ts">
   /*
-   * V30: AEGIS Desktop's browser. A tab strip whose first tab is the Work canvas, real web pages in the
-   * other tabs, an address bar that opens addresses and searches with the person's chosen engine, and
-   * back, forward, reload and stop. The page itself is a native view placed over `.page` (browser-tabs).
+   * AEGIS Browse (V32), laid out as Zephium's browser shell (frame/src/app/browser/Shell.svelte and
+   * features/sidebar/components/Sidebar.svelte, MPL-2.0): a sidebar column on the left with page controls,
+   * the Browse/Work switch, the address field and the tab list; the page, the new tab or a full page
+   * (Tasks, Time, Notes) beside it in one rounded panel. Vendored unchanged from Zephium and answered
+   * by native/zephium-bridge: ModeTabs, TabRow, EngineMenu (inside AddressField), TimePage; TasksPage
+   * was already vendored. The page itself is a native view placed over `.page` (browser-tabs).
    * Ordinary browsing: no AI request, no research job, and AEGIS agents never see these tabs.
+   *
+   * V33: the sidebar's head uses Zephium's IconButton and its sizes (SidebarHeader.svelte); collapsing it
+   * leaves Zephium's compact rail (TabRail.svelte, SidebarHeader compact) instead of nothing, so showing it
+   * again is always one click away and never under the native page view; pinned tabs lead the list
+   * (SidebarBody.svelte); colours come from the shared AEGIS tokens (styles.css); the page slides out from
+   * under the window caption instead of jumping.
    */
+  import { onMount, tick } from "svelte";
+  import { BitsConfig } from "bits-ui";
+  import Icon from "$shared/ui/Icon";
+  import { Add01Icon, ArrowLeft02Icon, ArrowRight02Icon, Cancel01Icon, CheckListIcon, Refresh01Icon, Shield01Icon, SidebarLeftIcon, Clock01Icon } from "@hugeicons/core-free-icons";
+  import IconButton from "$shared/ui/IconButton";
+  import FavIcon from "$shared/ui/FavIcon";
+  import { tabFallbackIcon } from "$features/tabs/lib/tab-icon";
+  import ModeTabs from "$features/sidebar/components/ModeTabs.svelte";
+  import TabRow from "$features/tabs/components/TabRow.svelte";
+  import TimePage from "$features/time/components/TimePage.svelte";
+  import TasksPage from "$features/tasks/components/TasksPage.svelte";
+  import { tabs as zephiumTabs } from "$domain/tabs";
+  import { surface } from "$domain/surface";
+  import { preferences } from "$domain/preferences";
+  import { favicons } from "$domain/favicons";
+  import { focus as zephiumFocus } from "$domain/time";
+  import { startBridge } from "./native/zephium-bridge.svelte";
+  import { captureNativeActivation } from "./native/core";
+  import AddressField from "./AddressField.svelte";
+  import BrowserNewTab from "./BrowserNewTab.svelte";
+  import BrowserDock from "./BrowserDock.svelte";
+  import BrowserRecords from "./BrowserRecords.svelte";
+  import BrowserMediaCard from "./BrowserMediaCard.svelte";
+  import EngineMark from "$shared/ui/EngineMark";
+  import { knownSiteMark } from "./search-engines";
+  import NotesPage from "$features/notes/components/NotesPage.svelte";
+  import { settingsView } from "./settings/settings-view.svelte";
+  import { surface as toolSurface } from "./tools/context.svelte";
+  import GoogleSignIn from "./GoogleSignIn.svelte";
+  import AddToWork from "./AddToWork.svelte";
   import { browserTabs } from "./browser-tabs.svelte";
-  import { ENGINES, displayEntry, engineName, searxngTemplate, validTemplate, type EngineId } from "./search-engines";
+  import { browserSettings } from "./browser-settings.svelte";
+  import { browserHost } from "./browser-host";
+  import { focus } from "./focus.svelte";
+  import { today } from "./today-tasks.svelte";
+
+  import { sidebar, saveSidebar } from './browser-sidebar.svelte';
 
   let page = $state<HTMLElement>();
-  let address = $state<HTMLInputElement>();
-  let typed = $state("");
-  let editing = $state(false);
-  let settings = $state(false);
-  let custom = $state(browserTabs.engine.custom ?? "");
-  let searxng = $state(browserTabs.engine.searxng ?? "");
-  let settingsError = $state("");
+  let portal = $state<HTMLElement>();
+  let resizing = $state(false);
+  let drag = $state<{ id: number; y: number; moved: boolean; over: number } | null>(null);
+  let ghost = $state<{ from: DOMRect; to: DOMRect } | null>(null);
+  /** The Google sign-in band (GoogleSignIn.svelte) is open; it comes back for each sign-in visit. */
+  let signInBand = $state(true);
+  /** A tab's menu (pin, close), opened from its row. */
+  let menu = $state<{ id: number; x: number; y: number } | null>(null);
 
   const tab = $derived(browserTabs.current);
-  const shown = $derived(browserTabs.active !== "work");
+  const pinnedCount = $derived(browserTabs.tabs.filter((row) => row.pinned).length);
+  const pinnedIds = $derived(new Set(browserTabs.tabs.filter((row) => row.pinned).map((row) => String(row.id))));
+  const shown = $derived(browserTabs.active !== "work" || browserTabs.page === "notes");
+  const website = $derived(Boolean(tab?.url) && browserTabs.page === null);
+  const signIn = $derived(Boolean(tab?.url && /^https:\/\/accounts\.google\.com\//.test(tab.url)));
 
-  // The address field shows the page (or the search words) unless the person is typing in it.
-  $effect(() => {
-    const url = tab?.url ?? "";
-    if (!editing) typed = url ? displayEntry(url, browserTabs.engine) : "";
+  onMount(() => {
+    const stop = startBridge();
+    if (browserSettings.value.pageZoom !== 100) {
+      void browserHost.setPageZoom?.(browserSettings.value.pageZoom).catch(() => {});
+    }
+    void preferences.init();
+    void favicons.init();
+    void surface.init();
+    void zephiumTabs.init();
+    void zephiumFocus.init();
+    // Tasks closes through AEGIS's tools context (tools/context.svelte.ts).
+    const closed = (event: Event) => { if (!(event as CustomEvent).detail?.kind && browserTabs.page === "tasks") browserTabs.page = null; };
+    window.addEventListener("aegis-tools-page", closed);
+    return () => { stop(); window.removeEventListener("aegis-tools-page", closed); };
   });
 
-  // A new empty tab puts the cursor in its address field.
   $effect(() => {
-    void browserTabs.focusAddress;
-    if (!browserTabs.focusAddress) return;
-    // Effects run after the DOM update, so the field takes the keyboard at once and no typed letter is lost.
-    address?.focus();
+    if (!signIn) signInBand = true;
+  });
+  $effect(() => {
+    saveSidebar();
   });
 
-  // The native view follows the page area; anything drawn over it (settings, an error) hides it.
+  // The native view follows the page area. While the window caption is out, a web page stands below its
+  // band, as Zephium's caption moves the page (windows_caption.rs); anything drawn over the page hides it.
+  // V33: it slides there over the caption's own fade (the desktop sends its duration). In flight the view
+  // only moves, keeping its size, so the site doesn't reflow on every frame (Zephium translates "without
+  // reflow"); it takes its final height once, when the caption has settled.
+  let band = 0;
+  let settled = true;
+  let placeNow: ((final: boolean) => void) | null = null;
+  $effect(() => {
+    const target = browserTabs.caption.shown ? browserTabs.caption.height : 0;
+    const duration = browserTabs.caption.duration;
+    const from = band, start = performance.now();
+    let frame = 0;
+    const step = (now: number) => {
+      const t = duration > 0 ? Math.min(1, (now - start) / duration) : 1;
+      band = from + (target - from) * (1 - (1 - t) ** 3);
+      settled = t >= 1;
+      placeNow?.(settled);
+      if (!settled) frame = requestAnimationFrame(step);
+    };
+    if (duration > 0 && from !== target) frame = requestAnimationFrame(step);
+    else step(start);
+    return () => cancelAnimationFrame(frame);
+  });
   $effect(() => {
     const element = page;
-    if (!element || !shown) {
+    void website;
+    const settingsOpen = settingsView.isOpen;
+    const notice = signIn && signInBand ? 64 : 0;
+    void sidebar.width;
+    void sidebar.collapsed;
+    if (!element || !shown || !website || settingsOpen) {
+      placeNow = null;
       browserTabs.setRect(null);
       return;
     }
-    const place = () => {
+    const place = (final = true) => {
       const box = element.getBoundingClientRect();
-      browserTabs.setRect({ x: box.left, y: box.top, width: box.width, height: box.height });
-      void browserTabs.attach();
+      const top = Math.max(notice, band - box.top);
+      const height = settled ? box.height - top : box.height - notice;
+      browserTabs.setRect({ x: box.left, y: box.top + top, width: box.width, height: Math.max(0, height) });
+      if (final) void browserTabs.attach();
     };
+    placeNow = place;
     place();
-    const observer = new ResizeObserver(place);
+    const observer = new ResizeObserver(() => place());
     observer.observe(element);
-    window.addEventListener("resize", place);
+    const resized = () => place();
+    window.addEventListener("resize", resized);
     return () => {
+      placeNow = null;
       observer.disconnect();
-      window.removeEventListener("resize", place);
+      window.removeEventListener("resize", resized);
     };
   });
   $effect(() => {
-    browserTabs.cover(settings || Boolean(tab?.error) || !tab?.url);
+    if (!shown || sidebar.collapsed) menu = null;
+  });
+  $effect(() => {
+    browserTabs.cover(settingsView.isOpen || browserTabs.page !== null || browserTabs.overlay || (sidebar.collapsed && browserTabs.shelfOpen) || Boolean(ghost) || Boolean(tab?.error) || Boolean(tab?.held) || !tab?.url || resizing);
   });
 
-  function submit(event: SubmitEvent) {
-    event.preventDefault();
-    if (!tab) return;
-    if (browserTabs.go(tab.id, typed)) {
-      editing = false;
-      address?.blur();
-    }
-  }
+  // "Open in browser" from a source window: the page grows out of that window, briefly, then shows.
+  $effect(() => {
+    const from = browserTabs.origin;
+    if (!from || !shown) return;
+    browserTabs.origin = null;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    void tick().then(() => {
+      const to = page?.getBoundingClientRect();
+      if (!to) return;
+      ghost = { from, to };
+      setTimeout(() => (ghost = null), 280);
+    });
+  });
 
-  function chooseEngine(id: EngineId) {
-    settingsError = "";
-    if (id === "custom" && !validTemplate(custom)) {
-      settingsError = "Enter an https address with {query} where the search words go.";
-      return;
-    }
-    if (id === "searxng" && !searxngTemplate(searxng)) {
-      settingsError = "Enter your SearXNG address, for example https://search.example.org.";
-      return;
-    }
-    browserTabs.setEngine({ id, ...(custom ? { custom } : {}), ...(searxng ? { searxng } : {}) });
-    settings = false;
+  function openSettings(where = "search") {
+    settingsView.open(where);
   }
 
   function keys(event: KeyboardEvent) {
     const mod = event.ctrlKey || event.metaKey;
-    if (mod && event.key.toLowerCase() === "t") { event.preventDefault(); browserTabs.newTab(); }
+    if (!mod || settingsView.isOpen) return;
+    const key = event.key.toLowerCase();
+    if (key === "t" && event.shiftKey) { event.preventDefault(); browserTabs.reopen(); }
+    else if (key === "t") { event.preventDefault(); browserTabs.page = null; browserTabs.newTab(); }
     else if (!shown) return;
-    else if (mod && event.key.toLowerCase() === "w" && tab) { event.preventDefault(); browserTabs.close(tab.id); }
-    else if (mod && event.key.toLowerCase() === "l" && tab) { event.preventDefault(); address?.focus(); address?.select(); }
+    else if (key === "\\") { event.preventDefault(); sidebar.collapsed = !sidebar.collapsed; }
+    else if (key === "w" && tab) { event.preventDefault(); browserTabs.close(tab.id); }
+    else if (key === "l" && tab) { event.preventDefault(); if (sidebar.collapsed && website) sidebar.collapsed = false; browserTabs.focusFor = tab.id; browserTabs.focusAddress += 1; }
+    else if (event.key === "Tab" && browserTabs.tabs.length > 1) {
+      event.preventDefault();
+      browserTabs.cycle(event.shiftKey);
+    }
   }
 
-  const hostOf = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; } };
+  // Sidebar width: dragged on its edge, kept between 200 and 420 px (Zephium SidebarResizeHandle bounds its own).
+  function resize(event: PointerEvent) {
+    const start = event.clientX, from = sidebar.width;
+    resizing = true;
+    const move = (next: PointerEvent) => (sidebar.width = Math.round(Math.min(420, Math.max(200, from + next.clientX - start))));
+    const end = () => { resizing = false; window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+  }
+
+  // Reordering: press a row and move it; the list shows where it lands.
+  const rowAt = (y: number) => {
+    const rows = [...document.querySelectorAll<HTMLElement>(".browser .rows [data-index]")];
+    const hit = rows.findIndex((row) => { const box = row.getBoundingClientRect(); return y < box.top + box.height / 2; });
+    return hit === -1 ? rows.length - 1 : hit;
+  };
+  function dragMove(event: PointerEvent) {
+    if (!drag) return;
+    if (!drag.moved && Math.abs(event.clientY - drag.y) < 5) return;
+    drag = { ...drag, moved: true, over: rowAt(event.clientY) };
+  }
+  function dragEnd(event: PointerEvent) {
+    if (drag?.moved) {
+      if (document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-kept-drop]")) browserTabs.keep(drag.id);
+      else browserTabs.move(drag.id, drag.over);
+    }
+    setTimeout(() => (drag = null));
+  }
+
+  function openMenu(event: MouseEvent, id: number) {
+    event.preventDefault();
+    // Inside the sidebar column, so the native page never paints over it.
+    menu = { id, x: Math.min(event.clientX, sidebar.width - 172), y: Math.min(event.clientY, window.innerHeight - 120) };
+  }
+  function menuKeys(event: KeyboardEvent) {
+    if (event.key === "Escape") { event.preventDefault(); menu = null; }
+  }
+
+  const at = (box: DOMRect) => `left:${box.left}px;top:${box.top}px;width:${box.width}px;height:${box.height}px`;
+  const blockedHere = $derived(tab?.url ? tab.blocked : 0);
 </script>
 
-<svelte:window onkeydown={(event) => browserTabs.available && keys(event)} />
+<svelte:window onkeydown={(event) => browserTabs.available && keys(event)} onpointermove={dragMove} onpointerup={dragEnd} />
 
-<div class="browser" class:shown aria-hidden={!shown} inert={!shown}>
-  <div class="strip" role="tablist" aria-label="Browser tabs">
-    <button type="button" role="tab" class="tab work" aria-selected={browserTabs.active === "work"} onclick={() => browserTabs.show("work")}>
-      <span class="dot" aria-hidden="true"></span><span class="name">Work</span>
-    </button>
-    {#each browserTabs.tabs as row (row.id)}
-      <div class="tab" class:active={browserTabs.active === row.id} role="presentation">
-        <button type="button" role="tab" class="pick" aria-selected={browserTabs.active === row.id} title={row.title || row.url} onclick={() => browserTabs.show(row.id)}>
-          {#if row.loading}<span class="spin" aria-hidden="true"></span>
-          {:else if row.favicon}<img src={row.favicon} alt="" width="14" height="14" referrerpolicy="no-referrer" />
-          {:else}<span class="globe" aria-hidden="true"></span>{/if}
-          <span class="name">{row.title || hostOf(row.url) || "New tab"}</span>
-        </button>
-        <button type="button" class="close" aria-label="Close {row.title || 'tab'}" title="Close tab (Ctrl+W)" onclick={() => browserTabs.close(row.id)}>×</button>
+<div class="browser" class:shown class:collapsed={sidebar.collapsed} class:resizing style:--side="{sidebar.width}px" aria-hidden={!shown} inert={!shown}
+  onclickcapture={captureNativeActivation} onkeydowncapture={captureNativeActivation}>
+  <div class="portals" bind:this={portal}></div>
+  {#if portal}<BitsConfig defaultPortalTo={portal}>
+  <aside class="side" aria-label="Browser sidebar">
+    <!-- Zephium's SidebarHeader: the column's toggle, then back, forward and reload at 28 px. -->
+    <header class="head" aria-label="Navigation">
+      <IconButton icon={SidebarLeftIcon} label="Compact sidebar (Ctrl+\)" onclick={() => (sidebar.collapsed = true)} />
+      <span class="head-gap" aria-hidden="true"></span>
+      <div class="nav" role="group" aria-label="Page">
+        <IconButton icon={ArrowLeft02Icon} label="Back" buttonSize={28} size={16} disabled={!website || !tab?.back} onclick={() => tab && browserTabs.back(tab.id)} />
+        <IconButton icon={ArrowRight02Icon} label="Forward" buttonSize={28} size={16} disabled={!website || !tab?.forward} onclick={() => tab && browserTabs.forward(tab.id)} />
+        {#if tab?.loading && website}
+          <IconButton icon={Cancel01Icon} label="Stop loading" buttonSize={28} size={16} onclick={() => tab && browserTabs.stop(tab.id)} />
+        {:else}
+          <IconButton icon={Refresh01Icon} label="Reload" buttonSize={28} size={16} disabled={!website || !tab?.opened} onclick={() => tab && browserTabs.reload(tab.id)} />
+        {/if}
       </div>
-    {/each}
-    <button type="button" class="add" aria-label="New tab" title="New tab (Ctrl+T)" onclick={() => browserTabs.newTab()}>+</button>
-  </div>
+    </header>
 
-  {#if tab}
-    <form class="bar" onsubmit={submit}>
-      <button type="button" aria-label="Back" title="Back" disabled={!tab.back} onclick={() => browserTabs.back(tab.id)}>‹</button>
-      <button type="button" aria-label="Forward" title="Forward" disabled={!tab.forward} onclick={() => browserTabs.forward(tab.id)}>›</button>
-      {#if tab.loading}
-        <button type="button" aria-label="Stop loading" title="Stop" onclick={() => browserTabs.stop(tab.id)}>✕</button>
-      {:else}
-        <button type="button" aria-label="Reload" title="Reload" disabled={!tab.opened} onclick={() => browserTabs.reload(tab.id)}>↻</button>
-      {/if}
-      <input
-        bind:this={address}
-        bind:value={typed}
-        class="address"
-        type="text"
-        spellcheck="false"
-        autocomplete="off"
-        aria-label="Address or search"
-        placeholder="Search with {engineName(browserTabs.engine)} or enter an address"
-        onfocus={() => { editing = true; address?.select(); }}
-        onblur={() => (editing = false)}
-        onkeydown={(event) => { if (event.key === "Escape") { editing = false; typed = tab.url ? displayEntry(tab.url, browserTabs.engine) : ""; address?.blur(); } }}
-      />
-      <button type="button" class="engine" aria-expanded={settings} aria-label="Search engine: {engineName(browserTabs.engine)}" title="Search engine" onclick={() => (settings = !settings)}>{engineName(browserTabs.engine)}</button>
-    </form>
+    <div class="modes"><ModeTabs /></div>
+
+    {#if tab && tab.url}
+      <div class="address">{#key tab.id}<AddressField tabId={tab.id} url={tab.url} size="compact" onsettings={() => openSettings("search")} onsubmitted={() => (browserTabs.page = null)} />{/key}</div>
+    {/if}
+    {#if tab?.from}<button type="button" class="back-work" onclick={() => browserTabs.returnToWork(tab?.id ?? null)} title="Back to the research this page came from">← {tab.from.title.length > 30 ? tab.from.title.slice(0, 29) + "…" : tab.from.title}</button>{/if}
+    {#if website}<AddToWork {tab} />{/if}
+
+    <button type="button" class="new-row" onclick={() => { browserTabs.page = null; browserTabs.newTab(); }} title="New tab (Ctrl+T)">
+      <Icon icon={Add01Icon} size={16} /><span>New tab</span>
+    </button>
+
+    <div class="rows" role="tablist" aria-label="Browser tabs">
+      {#each zephiumTabs.tabs() as view, index (view.id)}
+        {#if pinnedCount > 0 && index === pinnedCount}<div class="divider" aria-hidden="true"></div>{/if}
+        <div class="slot" data-index={index} data-pinned={pinnedIds.has(view.id) || undefined} class:lifted={drag?.moved && drag.id === Number(view.id)} class:landing={drag?.moved && drag.over === index && drag.id !== Number(view.id)}>
+          <TabRow
+            tab={view}
+            active={browserTabs.page === null && String(browserTabs.active) === view.id}
+            closable={!pinnedIds.has(view.id)}
+            splitCandidate={false}
+            onSelect={(id) => { if (drag?.moved) return; browserTabs.page = null; browserTabs.show(Number(id)); }}
+            onClose={(id) => browserTabs.close(Number(id))}
+            onContextMenu={(event, row) => openMenu(event, Number(row.id))}
+            onPointerDown={(event, row) => { if (event.button === 0) drag = { id: Number(row.id), y: event.clientY, moved: false, over: index }; }}
+            onPointerMove={() => {}}
+            onPointerUp={() => {}}
+            onPointerCancel={() => (drag = null)}
+          />
+        </div>
+      {/each}
+    </div>
+    {#if browserTabs.closed.length}
+      <button type="button" class="reopen" onclick={() => browserTabs.reopen()} title="Reopen closed tab (Ctrl+Shift+T)">Reopen “{browserTabs.closed[0]!.title || browserTabs.closed[0]!.url}”</button>
+    {/if}
+
+    <footer class="tray" aria-label="Browser indicators">
+      <button type="button" class="tray-item" title="Adverts and trackers blocked on this page" onclick={() => openSettings("privacy")}><Icon icon={Shield01Icon} size={15} strokeWidth={1.7} /><span>{blockedHere}</span></button>
+      <button type="button" class="tray-item" class:on={browserTabs.page === "time"} title="Focus" onclick={() => (browserTabs.page = browserTabs.page === "time" ? null : "time")}><Icon icon={Clock01Icon} size={15} strokeWidth={1.7} /><span>{focus.session ? "On" : "Focus"}</span></button>
+      <button type="button" class="tray-item" class:on={browserTabs.page === "tasks"} title="Tasks" onclick={() => (browserTabs.page = browserTabs.page === "tasks" ? null : "tasks")}><Icon icon={CheckListIcon} size={15} strokeWidth={1.7} /><span>{today.counts ? today.counts.today : "Tasks"}</span></button>
+    </footer>
+    <BrowserMediaCard />
+    {#if !sidebar.collapsed}<BrowserDock dragging={!!drag?.moved} />{/if}
+    <div class="edge" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" onpointerdown={resize}></div>
+  </aside>
+
+  {#if sidebar.collapsed}
+    <!-- Zephium's compact column (SidebarHeader compact + TabRail): the switch, then one mark per tab. It
+         stands beside the page, never over it, so the way back to the full column can't be covered. -->
+    <nav class="compact" aria-label="Browser sidebar, compact">
+      <div class="compact-head">
+        <IconButton icon={SidebarLeftIcon} label="Expand sidebar (Ctrl+\)" class="reveal-side" onclick={() => (sidebar.collapsed = false)} />
+        <ModeTabs compact />
+        <span class="compact-rule" aria-hidden="true"></span>
+      </div>
+      <ul class="rail-list" role="list" aria-label="Open tabs">
+        {#each zephiumTabs.tabs() as view, index (view.id)}
+          {@const on = browserTabs.page === null && String(browserTabs.active) === view.id}
+          {#if pinnedCount > 0 && index === pinnedCount}<li class="compact-rule" aria-hidden="true"></li>{/if}
+          <li>
+            <button type="button" class="rail-item" data-tab={view.id} title={view.title || "New tab"} aria-label={view.title || "New tab"} aria-current={on ? "page" : undefined}
+              onclick={() => { browserTabs.page = null; browserTabs.show(Number(view.id)); }} oncontextmenu={(event) => openMenu(event, Number(view.id))}>
+              {#if !favicons.image(view.icon) && knownSiteMark(view.url ?? "")}
+                <EngineMark engine={knownSiteMark(view.url ?? "")!} size={16} />
+              {:else}<FavIcon image={favicons.image(view.icon)} tone={favicons.tone(view.icon)} loading={view.loading} lit={on} size={16} fallback={tabFallbackIcon(view.content)} />{/if}
+            </button>
+            {#if !pinnedIds.has(view.id)}<button type="button" class="rail-close" title="Close tab" aria-label={"Close " + (view.title || "tab")} onclick={() => browserTabs.close(Number(view.id))}><Icon icon={Cancel01Icon} size={8} strokeWidth={2.4} /></button>{/if}
+          </li>
+        {/each}
+        <li><button type="button" class="rail-item" title="New tab (Ctrl+T)" aria-label="New tab" onclick={() => { browserTabs.page = null; browserTabs.newTab(); }}><Icon icon={Add01Icon} size={16} /></button></li>
+      </ul>
+      <div class="compact-tray">
+        <button type="button" class="rail-item" class:on={browserTabs.page === "time"} title={focus.session ? "Focus (on)" : "Focus"} aria-label="Focus" onclick={() => (browserTabs.page = browserTabs.page === "time" ? null : "time")}><Icon icon={Clock01Icon} size={16} /></button>
+        <button type="button" class="rail-item" class:on={browserTabs.page === "tasks"} title="Tasks" aria-label="Tasks" onclick={() => (browserTabs.page = browserTabs.page === "tasks" ? null : "tasks")}><Icon icon={CheckListIcon} size={16} /></button>
+      </div>
+      <BrowserDock compact />
+    </nav>
   {/if}
 
-  <div class="page" bind:this={page}>
-    {#if settings}
-      <section class="sheet" aria-label="Search engine">
-        <h2>Search engine for your tabs</h2>
-        <p>Used when you type words instead of an address. AEGIS agents never use it: they read only permitted sources.</p>
-        <div class="engines" role="radiogroup" aria-label="Search engine">
-          {#each ENGINES as engine (engine.id)}
-            <button type="button" role="radio" aria-checked={browserTabs.engine.id === engine.id} onclick={() => chooseEngine(engine.id)}>{engine.name}</button>
-          {/each}
+  <main class="content">
+    <div class="page" class:blank={!website} bind:this={page}>
+      {#if browserTabs.page === "tasks"}
+        <div class="full"><TasksPage /></div>
+      {:else if browserTabs.page === "time"}
+        <div class="full"><TimePage /></div>
+      {:else if browserTabs.page === "notes"}
+        <div class="full"><NotesPage profile="aegis-owner" onclose={() => toolSurface.close()} /></div>
+      {:else if browserTabs.page === "history" || browserTabs.page === "bookmarks" || browserTabs.page === "downloads"}
+        {#key browserTabs.page}<div class="full"><BrowserRecords page={browserTabs.page} /></div>{/key}
+      {:else if tab && !tab.url}
+        {#key tab.id}<BrowserNewTab tabId={tab.id} onsettings={() => openSettings("new-tab")} onsearchsettings={() => openSettings("search")} onprofile={() => window.dispatchEvent(new CustomEvent("aegis-profile-menu"))} onfocus={() => (browserTabs.page = "time")} />{/key}
+      {:else if tab?.held}
+        <div class="problem" role="alert">
+          <h2>{tab.held} is held back while you focus</h2>
+          <p>You chose to keep this site aside during focus rounds.</p>
+          <div class="row"><button type="button" onclick={() => browserTabs.release(tab.id)}>Open anyway</button><button type="button" onclick={() => browserTabs.close(tab.id)}>Close tab</button></div>
         </div>
-        <label>SearXNG address <input bind:value={searxng} placeholder="https://search.example.org" /></label>
-        <button type="button" class="use" onclick={() => chooseEngine("searxng")}>Use SearXNG</button>
-        <label>Custom search address <input bind:value={custom} placeholder="https://example.org/search?q={'{query}'}" /></label>
-        <button type="button" class="use" onclick={() => chooseEngine("custom")}>Use custom</button>
-        {#if settingsError}<p role="alert">{settingsError}</p>{/if}
-        <button type="button" class="done" onclick={() => (settings = false)}>Done</button>
-      </section>
-    {:else if tab && !tab.url}
-      <div class="start">
-        <h2>New tab</h2>
-        <p>Search with {engineName(browserTabs.engine)} or type an address above. Your Work canvas stays where you left it.</p>
-      </div>
-    {:else if tab?.error}
-      <div class="problem" role="alert">
-        <h2>This page didn't open</h2>
-        <p>{tab.error}</p>
-        <button type="button" onclick={() => { tab.error = ""; browserTabs.reload(tab.id); }}>Try again</button>
+      {:else if tab?.error}
+        <div class="problem" role="alert">
+          <h2>This page didn't open</h2>
+          <p>{tab.error}</p>
+          <button type="button" onclick={() => { tab.error = ""; browserTabs.reload(tab.id); }}>Try again</button>
+        </div>
+      {/if}
+      {#if tab?.download}<p class="download" role="status">{tab.download}</p>{/if}
+    </div>
+    {#if signIn && website && tab}<GoogleSignIn tabId={tab.id} url={tab.url} bind:open={signInBand} />{/if}
+  </main>
+  </BitsConfig>{/if}
+  {#if menu}{@const row = browserTabs.tabs.find((item) => item.id === menu?.id)}
+    {#if row}
+      <div class="menu-veil" role="presentation" onpointerdown={() => (menu = null)} oncontextmenu={(event) => { event.preventDefault(); menu = null; }}></div>
+      <div class="tab-menu" role="menu" aria-label="Tab" tabindex="-1" style:left="{menu.x}px" style:top="{menu.y}px" onkeydown={menuKeys}>
+        <button type="button" role="menuitem" onclick={() => { browserTabs.setPinned(row.id, !row.pinned); menu = null; }}>{row.pinned ? "Unpin tab" : "Pin tab"}</button>
+        <button type="button" role="menuitem" disabled={!row.url} onclick={() => { browserTabs.newTab(row.url); menu = null; }}>Duplicate</button>
+        <button type="button" role="menuitem" disabled={!row.url} onclick={() => { browserTabs.keep(row.id); menu = null; }}>Keep on shelf</button>
+        <button type="button" role="menuitem" onclick={() => { browserTabs.close(row.id); menu = null; }}>Close tab</button>
       </div>
     {/if}
-    {#if tab?.download}<p class="download" role="status">{tab.download}</p>{/if}
-  </div>
+  {/if}
+  {#if ghost}<div class="ghost" aria-hidden="true" style={at(ghost.from)} style:--to-x={`${ghost.to.left - ghost.from.left}px`} style:--to-y={`${ghost.to.top - ghost.from.top}px`} style:--to-sx={ghost.to.width / Math.max(1, ghost.from.width)} style:--to-sy={ghost.to.height / Math.max(1, ghost.from.height)}></div>{/if}
 </div>
 
 <style>
-  .browser {
-    position: absolute;
-    inset: 0;
-    z-index: 70;
-    display: none;
-    grid-template-rows: auto auto 1fr;
-    background: var(--color-surface, #16171a);
-    color: var(--color-text);
-    font-family: var(--font-sans);
-  }
+  /* Zephium's shell: the window's own ground, 8 px gutters, the sidebar column and one rounded panel. */
+  /* Browse owns the window, as Zephium's shell does; the Browse/Work switch (ModeTabs) leads back to Work. */
+  /* V33: every colour is a shared AEGIS token (styles.css), so Browse and Work stand on one ground. */
+  .browser { position: fixed; inset: 0; z-index: 2000; display: none; grid-template-columns: var(--side) minmax(0, 1fr); gap: var(--aegis-gutter); padding: var(--aegis-gutter); background: var(--aegis-bg); color: var(--aegis-text); font-family: var(--font-sans); -webkit-app-region: no-drag; }
   .browser.shown { display: grid; }
-  .strip {
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    padding: 8px 10px 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-    border-bottom: 1px solid var(--color-border);
-  }
-  .tab, .add {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-    height: 32px;
-    border-radius: 10px 10px 0 0;
-    color: var(--color-muted);
-  }
-  .tab { flex: 0 1 220px; }
-  .tab.work { flex: 0 0 auto; padding: 0 14px; gap: 8px; border: 0; background: none; font: 600 12px var(--font-sans); cursor: pointer; }
-  .tab.active, .tab.work[aria-selected="true"] { background: var(--color-raised); color: var(--color-text); }
-  .tab .pick { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; height: 100%; padding: 0 4px 0 12px; border: 0; background: none; color: inherit; font: 500 12px var(--font-sans); cursor: pointer; text-align: start; }
-  .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .close { width: 22px; height: 22px; margin-inline-end: 6px; border: 0; border-radius: 6px; background: none; color: inherit; font-size: 15px; cursor: pointer; }
-  .close:hover, .tab .pick:hover, .add:hover { color: var(--color-text); }
-  .add { justify-content: center; width: 32px; border: 0; background: none; font-size: 18px; cursor: pointer; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #ff8a3d; }
-  .globe { width: 12px; height: 12px; border: 1.5px solid currentColor; border-radius: 50%; }
-  .spin { width: 12px; height: 12px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .bar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--color-raised); border-bottom: 1px solid var(--color-border); }
-  .bar > button { width: 30px; height: 30px; border: 0; border-radius: 8px; background: none; color: var(--color-text); font-size: 17px; cursor: pointer; }
-  .bar > button:disabled { opacity: 0.35; cursor: default; }
-  .bar > button:not(:disabled):hover { background: color-mix(in oklab, var(--color-text) 8%, transparent); }
-  .address { flex: 1; min-width: 0; height: 32px; padding: 0 14px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface, #16171a); color: var(--color-text); font: 13px var(--font-sans); }
-  .address:focus { outline: 2px solid color-mix(in oklab, var(--color-text) 40%, transparent); outline-offset: 0; }
-  .bar > .engine { width: auto; padding: 0 12px; font: 600 12px var(--font-sans); color: var(--color-muted); }
-  .page { position: relative; min-height: 0; }
-  .sheet, .start, .problem { max-width: 520px; margin: 64px auto 0; padding: 0 24px; }
+  /* Compact: Zephium's 56 px rail (.sidebar-tool-rail) instead of the column; the column stays mounted, so
+     its field, its scroll and the page keep their state across any number of collapses. */
+  .browser.collapsed { grid-template-columns: 56px minmax(0, 1fr); }
+  .browser.collapsed .side { display: none; }
+  .browser.resizing { cursor: col-resize; user-select: none; }
+  .portals { position: fixed; inset: 0; z-index: 1800; pointer-events: none; }
+  .portals :global(> *) { pointer-events: auto; -webkit-app-region: no-drag; }
+
+  .side { position: relative; display: flex; flex-direction: column; gap: var(--sidebar-row-gap, 4px); min-inline-size: 0; min-block-size: 0; }
+  .side > :not(.head) { -webkit-app-region: no-drag; }
+  /* SidebarHeader: the titlebar's 32 px row, 6 px in from the start and the end, 1 px between buttons. */
+  .head { display: flex; align-items: center; gap: 1px; block-size: var(--titlebar-height, 32px); padding-inline: 6px; margin-block-end: 2px; }
+  .head { -webkit-app-region: drag; }
+  .head :global(.icon-button), .compact :global(.icon-button) { -webkit-app-region: no-drag; }
+  .head-gap { flex: 1; align-self: stretch; }
+  .nav { display: flex; align-items: center; gap: 2px; }
+  .modes { display: flex; padding-block-end: 2px; }
+  .address { display: block; padding-block: 2px; }
+  .back-work { block-size: 30px; padding: 0 12px; border: 1px solid var(--aegis-border); border-radius: var(--aegis-radius-row); background: none; color: var(--aegis-text-secondary); font: 600 12px var(--font-sans); text-align: start; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .back-work:hover { background: var(--aegis-hover); color: var(--aegis-text); }
+  /* SidebarBody's new tab row: a row's height, its glyph 10 px from its label, muted until hovered. */
+  .new-row { display: flex; align-items: center; gap: 10px; block-size: var(--aegis-row); padding-inline: 8px; border: 0; border-radius: var(--aegis-radius-row); background: transparent; color: var(--aegis-text-muted); font: var(--sidebar-row-weight, 500) var(--sidebar-row-text, 13px) var(--font-sans); letter-spacing: -0.005em; text-align: start; cursor: pointer; transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
+  .new-row:hover { background: var(--aegis-hover); color: var(--aegis-text-secondary); }
+  .rows { flex: 1; display: flex; flex-direction: column; gap: var(--sidebar-row-gap, 4px); min-block-size: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-block-end: 4px; }
+  .slot { position: relative; }
+  .slot.lifted { opacity: 0.5; }
+  .slot.landing::before { content: ""; position: absolute; inset-inline: 6px; inset-block-start: -1px; block-size: 2px; border-radius: 2px; background: var(--aegis-accent); }
+  /* SidebarBody's rule between the pinned tabs and the rest. */
+  .divider { flex: none; block-size: 1px; margin: 3px 8px; background: var(--aegis-border); }
+  .reopen { block-size: 28px; padding: 0 8px; border: 0; border-radius: var(--aegis-radius-row); background: none; color: var(--aegis-text-muted); font: 12px var(--font-sans); text-align: start; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .reopen:hover { color: var(--aegis-text); background: var(--aegis-hover); }
+  .tray { display: flex; gap: 4px; padding-block-start: 6px; border-block-start: 1px solid var(--aegis-border); }
+  .tray-item { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; block-size: 32px; border: 0; border-radius: var(--aegis-radius-row); background: none; color: var(--aegis-text-muted); font: 600 12px var(--font-sans); font-variant-numeric: tabular-nums; cursor: pointer; }
+  .tray-item:hover, .tray-item.on { color: var(--aegis-text); background: var(--aegis-hover); }
+  .tray-item.on { background: var(--aegis-selected); box-shadow: var(--aegis-selected-rim); }
+  .edge { position: absolute; inset-block: 0; inset-inline-end: -6px; inline-size: 6px; cursor: col-resize; -webkit-app-region: no-drag; }
+
+  /* The compact rail (TabRail.svelte): the expanded row with its label taken away, square at the row's height. */
+  .compact { display: flex; flex-direction: column; align-items: center; min-block-size: 0; }
+  .compact-head { display: flex; flex-direction: column; align-items: center; gap: 3px; padding-block-start: 2px; }
+  .compact-rule { flex: none; inline-size: 22px; block-size: 1px; margin: 6px 0 7px; border-radius: 999px; background: var(--aegis-border); list-style: none; }
+  .rail-list { flex: 1; display: flex; flex-direction: column; align-items: center; gap: var(--sidebar-row-gap, 4px); min-block-size: 0; margin: 0; padding: 0 0 8px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; list-style: none; -webkit-app-region: no-drag; }
+  .rail-list > li { position: relative; }
+  .rail-item { display: grid; place-items: center; inline-size: var(--aegis-row); block-size: var(--aegis-row); padding: 0; border: 0; border-radius: var(--aegis-radius-row); background: transparent; color: var(--aegis-text-faint); cursor: pointer; transition: background-color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), scale var(--motion-slow) var(--ease-spring); -webkit-app-region: no-drag; }
+  .rail-item:hover { background: var(--aegis-hover); color: var(--aegis-text-secondary); }
+  .rail-item:active { scale: 0.94; }
+  .rail-item[aria-current="page"], .rail-item.on { background: var(--aegis-selected); box-shadow: var(--aegis-selected-rim); color: var(--aegis-text); }
+  .rail-close { position: absolute; inset-block-start: -3px; inset-inline-end: -3px; display: grid; place-items: center; inline-size: 16px; block-size: 16px; padding: 0; border: 0; border-radius: 999px; background: var(--aegis-float); box-shadow: var(--shadow-badge); color: var(--aegis-text-muted); opacity: 0; scale: 0.6; pointer-events: none; cursor: pointer; transition: opacity var(--motion-fast) var(--ease-out), scale var(--motion-base) var(--ease-spring); }
+  .rail-list > li:hover .rail-close, .rail-close:focus-visible { opacity: 1; scale: 1; pointer-events: auto; transition-delay: 160ms, 160ms; }
+  .rail-close:hover { color: var(--aegis-text); }
+  .compact-tray { display: flex; flex-direction: column; gap: 4px; padding-block-start: 6px; border-block-start: 1px solid var(--aegis-border); -webkit-app-region: no-drag; }
+
+  .content { position: relative; min-inline-size: 0; min-block-size: 0; -webkit-app-region: no-drag; }
+  .page { position: absolute; inset: 0; overflow: hidden; border-radius: var(--aegis-radius-content); background: var(--aegis-surface); }
+  .full { position: absolute; inset: 0; overflow: auto; display: flex; flex-direction: column; }
+  .problem { max-inline-size: 520px; margin: 64px auto 0; padding: 0 24px; }
   h2 { margin: 0 0 8px; font-size: 18px; }
-  p { margin: 0 0 16px; color: var(--color-muted); font-size: 13px; line-height: 1.5; }
-  .engines { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
-  .engines button, .use, .done, .problem button { padding: 7px 14px; border: 1px solid var(--color-border); border-radius: 999px; background: none; color: var(--color-text); font: 600 12px var(--font-sans); cursor: pointer; }
-  .engines button[aria-checked="true"] { background: var(--color-text); color: var(--color-surface, #16171a); }
-  label { display: grid; gap: 6px; margin: 12px 0 6px; font-size: 12px; color: var(--color-muted); }
-  label input { height: 32px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface, #16171a); color: var(--color-text); font: 13px var(--font-sans); }
-  .done { margin-top: 20px; }
-  .download { position: absolute; inset-inline-end: 16px; inset-block-end: 16px; margin: 0; padding: 8px 14px; border-radius: 999px; background: var(--color-float); box-shadow: var(--shadow-popover); color: var(--color-text); }
-  button:focus-visible { outline: 2px solid var(--color-text); outline-offset: 1px; }
-  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+  p { margin: 0 0 16px; color: var(--aegis-text-muted); font-size: 13px; line-height: 1.5; }
+  .row { display: flex; gap: 8px; }
+  .problem button { padding: 7px 14px; border: 1px solid var(--aegis-border-strong); border-radius: 999px; background: none; color: var(--aegis-text); font: 600 12px var(--font-sans); cursor: pointer; }
+  .problem button:hover { background: var(--aegis-hover); }
+  .download { position: absolute; inset-inline-end: 16px; inset-block-end: 16px; margin: 0; padding: 8px 14px; border-radius: 999px; background: var(--aegis-float); box-shadow: var(--aegis-shadow-float); color: var(--aegis-text); }
+  .ghost { position: fixed; z-index: 90; border: 1px solid var(--aegis-border-strong); border-radius: var(--aegis-radius-content); background: color-mix(in oklab, var(--aegis-surface-raised) 70%, transparent); transform-origin: 0 0; animation: grow 260ms cubic-bezier(0.2, 0, 0, 1) forwards; pointer-events: none; }
+  @keyframes grow { to { transform: translate(var(--to-x), var(--to-y)) scale(var(--to-sx), var(--to-sy)); opacity: 0.2; } }
+
+  /* A tab's menu: inside the sidebar column, over a veil that closes it. */
+  .menu-veil { position: fixed; inset: 0; z-index: 2001; -webkit-app-region: no-drag; }
+  .tab-menu { position: fixed; z-index: 2002; display: flex; flex-direction: column; min-inline-size: 164px; padding: var(--menu-pad, 4px); border-radius: var(--radius-menu, 12px); background: var(--color-menu, var(--aegis-float)); box-shadow: var(--shadow-menu); -webkit-app-region: no-drag; }
+  .tab-menu button { display: flex; align-items: center; block-size: 30px; padding: 0 10px; border: 0; border-radius: var(--radius-inset, 8px); background: none; color: var(--aegis-text); font: 13px var(--font-sans); text-align: start; cursor: pointer; }
+  .tab-menu button:hover:not(:disabled), .tab-menu button:focus-visible { background: var(--aegis-hover); outline: none; }
+  .tab-menu button:disabled { color: var(--aegis-text-faint); cursor: default; }
+
+  button:focus-visible { outline: 2px solid var(--aegis-focus-ring); outline-offset: 1px; }
+  @media (prefers-reduced-motion: reduce) { .ghost { animation: none; } .rail-item, .rail-close, .new-row { transition: none; } }
 </style>

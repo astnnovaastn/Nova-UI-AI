@@ -94,7 +94,13 @@
   import { documentIdentity } from "./document-identity";
   import { Character } from "$shared/ui/presence";
   import BrowserTabs from "./BrowserTabs.svelte";
+  import { settingsView } from "./settings/settings-view.svelte";
   import { browserTabs } from "./browser-tabs.svelte";
+
+  const researchVisible = $derived(browserTabs.active === "work" && browserTabs.page !== "notes" && !settingsView.isOpen);
+  $effect(() => {
+    window.dispatchEvent(new CustomEvent("aegis-research-visibility", { detail: researchVisible }));
+  });
   import VoiceWave from './VoiceWave.svelte';
   import ReportReader from './ReportReader.svelte';
   import {clarificationPresentation} from './clarifications';
@@ -1514,6 +1520,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
 
   // H and V switch the pointer tool, as the bar's hint says.
   function keydown(event: KeyboardEvent) {
+    if (!researchVisible) return;
     const target = event.target;
     if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
     if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -1726,7 +1733,8 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
   </div>
 {/if}
 
-<div class="browser-layer" style="pointer-events: none" use:inPortal>
+<!-- V31: research source windows belong to Work; while a browser tab is in front they step out of the way (their pages stay loaded). -->
+<div class="browser-layer" style="pointer-events: none" style:display={researchVisible ? undefined : "none"} use:inPortal>
   {#each windows as entry (entry.id)}
     <BrowserWindow
       {entry}
@@ -1739,16 +1747,16 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
 
 <BitsConfig defaultPortalTo={portal}>
   <ObjectFocus onsource={(url,title,event)=>openSourceWindow(url,title,'object-provenance',undefined,event)} onask={object=>actions?.askNodes('Ask about '+object.title,[objectQuestionContext(object)],state.run?.run_id||'')}/>
-  <div class="shell" data-state={scene?.state ?? "empty"} data-panel={state.panel}>
-    <Rail />
-    {#if state.panel === "skills"}
+  <div class="shell" data-state={scene?.state ?? "empty"} data-panel={researchVisible ? state.panel : ""}>
+    <Rail inactive={!researchVisible} />
+    {#if researchVisible && state.panel === "skills"}
       <SkillsPanel />
-    {:else if state.panel === "connections"}
+    {:else if researchVisible && state.panel === "connections"}
       <ConnectionsPanel onAttach={attachAccount} />
     {/if}
     <div class="environment">
       {#if browserTabs.available}<BrowserTabs />{/if}
-      <div class="canvas-card" class:strings={composedRun} bind:this={cardHost}>
+      <div class="canvas-card" inert={!researchVisible} class:strings={composedRun} bind:this={cardHost}>
         {#if scene && (state.run !== undefined || pending)}
           {#key `${scene.name}:${camera}`}
             <WorkCanvas
@@ -1880,13 +1888,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
             <span>{title}</span>
             <Icon icon={ArrowDown01Icon} size={14} strokeWidth={1.8} />
           </button>
-          {#if browserTabs.available}
-            <!-- V30: browser tabs. The canvas stays as it is; the Work tab brings it back. -->
-            <button type="button" class="new-tab" aria-label="New browser tab" title="New tab (Ctrl+T)" onclick={() => browserTabs.newTab()}>+</button>
-            {#if browserTabs.tabs.length}
-              <button type="button" class="new-tab tabs" title="Show browser tabs" onclick={() => browserTabs.show(browserTabs.tabs.at(-1)!.id)}>{browserTabs.tabs.length} {browserTabs.tabs.length === 1 ? "tab" : "tabs"}</button>
-            {/if}
-          {/if}
+          <!-- V32: no browser tab controls in Work; Browse is the rail's Browser button (or Ctrl+T). -->
           <span class="canvas-top-gap"></span>
           <div
             class="island"
@@ -2200,7 +2202,7 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     position: absolute;
     inset: 0;
     display: flex;
-    background: var(--aegis-shell);
+    background: var(--aegis-bg);
     color: var(--color-text);
     font-family: var(--font-sans);
     font-size: var(--text-body);
@@ -2411,7 +2413,8 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
   .canvas-top {
     position: absolute;
     inset-block-start: 12px;
-    inset-inline: 12px 16px;
+    /* V31: AEGIS Desktop's window buttons sit in the top-right corner; nothing goes under them. */
+    inset-inline: 12px calc(16px + var(--aegis-caption-reserve, 0px));
     z-index: 5;
     display: flex;
     align-items: center;
@@ -2420,8 +2423,25 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     pointer-events: none;
   }
 
+  /* Anything clickable over or beside the window-moving gap must say so, or the window takes the click. */
+  .canvas-top :global(.island),
+  .canvas-top :global(.title),
+  .canvas-top :global(.new-tab),
+  .canvas-top :global(.zoom-slot) {
+    -webkit-app-region: no-drag;
+  }
+
   .canvas-top-gap {
     flex: 1;
+    /* The empty stretch beside the title moves the window in AEGIS Desktop. */
+    -webkit-app-region: drag;
+    align-self: stretch;
+    pointer-events: auto;
+  }
+
+  /* Electron still collects drag regions from an inert canvas behind Browse. */
+  .canvas-card[inert] .canvas-top-gap {
+    -webkit-app-region: none;
   }
 
   .title {

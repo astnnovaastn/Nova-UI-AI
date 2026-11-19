@@ -2,6 +2,12 @@
  "upstream": "https://github.com/zephium-browser/Zephium",
  "commit": "9026a1fffad74d6e201ef97fe8c02c1b01403cd2",
  "license": "MPL-2.0",
+ "extraSources": [
+  {
+   "path": "crates/zephium-core/src/search/shortcuts.json",
+   "packaged": "search-shortcuts.json"
+  }
+ ],
  "messages": {
   "file": "frame/messages/en.json",
   "change": "Zephium replaced with Aegis in user-facing text"
@@ -150,6 +156,14 @@
   {
    "file": "features/work/components/WorkCanvas.svelte",
    "why": "Use existing typed rich-object kinds for content-aware packing without inventing integrations."
+  },
+  {
+   "file": "features/time/components/TimePage.svelte",
+   "why": "V32: AEGIS keeps no site-time record; when the report is unavailable, show its note without an empty 0m chart."
+  },
+  {
+   "file": "features/time/components/TimePage.svelte",
+   "why": "V32: closes the condition above."
   },
   {
    "file": "features/work/components/WorkCanvas.svelte",
@@ -604,6 +618,102 @@
    "why": "Keep the miniature title and excerpt distinct at narrow sizes."
   },
   {
+   "file": "features/search/components/NewTabSearch.svelte",
+   "why": "Use the persistent Windows input and an eagerly mounted engine menu in AEGIS."
+  },
+  {
+   "file": "features/search/components/NewTabSearch.svelte",
+   "why": "Keep the empty field focused between interactions."
+  },
+  {
+   "file": "features/search/components/NewTabSearch.svelte",
+   "why": "Remove the platform caret-parking timeout for the AEGIS desktop host."
+  },
+  {
+   "file": "features/search/components/NewTabSearch.svelte",
+   "why": "The AEGIS input stays focused until its owner changes focus."
+  },
+  {
+   "file": "features/search/components/NewTabSearch.svelte",
+   "why": "Keep the engine visible and avoid replacing a trigger under the pointer on first click."
+  },
+  {
+   "file": "features/search/components/NewTabSearch.svelte",
+   "why": "Preserve AEGIS accessibility labels and keyboard integrations."
+  },
+  {
+   "file": "features/search/components/EngineMenu.svelte",
+   "why": "Accept a preloaded menu where the New Tab dock already uses it."
+  },
+  {
+   "file": "features/search/components/EngineMenu.svelte",
+   "why": "Keep other surfaces free to load their engine menu lazily."
+  },
+  {
+   "file": "features/search/components/EngineMenu.svelte",
+   "why": "Render the persistent trigger whenever the caller supplies the component."
+  },
+  {
+   "file": "features/dock/components/Dock.svelte",
+   "why": "Use the original dock layout with AEGIS-owned tools and account scope."
+  },
+  {
+   "file": "features/dock/components/Dock.svelte",
+   "why": "Supply the local browser tool shelf through a snippet."
+  },
+  {
+   "file": "features/dock/components/Dock.svelte",
+   "why": "The local tool shelf does not depend on Zephium Cloud."
+  },
+  {
+   "file": "features/dock/components/Dock.svelte",
+   "why": "Render the local shelf in the original horizontal dock."
+  },
+  {
+   "file": "features/dock/components/Dock.svelte",
+   "why": "Render the same local shelf in the compact dock."
+  },
+  {
+   "file": "shared/ui/AccountSummary/AccountSummary.svelte",
+   "why": "Allow a local research-token allowance to use the account card."
+  },
+  {
+   "file": "shared/ui/AccountSummary/AccountSummary.svelte",
+   "why": "Show the allowance bar without visible token figures."
+  },
+  {
+   "file": "shared/ui/AccountSummary/AccountSummary.svelte",
+   "why": "Use an accurate accessible label and allow unavailable usage."
+  },
+  {
+   "file": "shared/ui/AccountSummary/AccountSummary.svelte",
+   "why": "The meter names its real local allowance."
+  },
+  {
+   "file": "features/tabs/components/TabRow.svelte",
+   "why": "Use packaged site marks until the browser supplies a native favicon."
+  },
+  {
+   "file": "features/tabs/components/TabRow.svelte",
+   "why": "Use the real site favicon first and a local mark otherwise."
+  },
+  {
+   "file": "features/tabs/components/TabRow.svelte",
+   "why": "Close the conditional site mark in the upstream tab row."
+  },
+  {
+   "file": "features/search/components/ResultRow.svelte",
+   "why": "Add local favicon fallbacks for known tab and history hosts."
+  },
+  {
+   "file": "features/search/components/ResultRow.svelte",
+   "why": "Present a known site mark in the upstream search result."
+  },
+  {
+   "file": "features/search/components/ResultRow.svelte",
+   "why": "Paint the bundled favicon without making a network request."
+  },
+  {
    "file": "features/work/components/WorkCanvas.svelte",
    "why": "Shared visual relay renderer, separate from the logical connection renderer."
   },
@@ -954,9 +1064,45 @@
   {
    "file": "features/work/components/objects/PickCard.svelte",
    "why": "A web picture fills its photo frame like an admitted one."
+  },
+  {
+   "file": "features/work/lib/board/layout.ts",
+   "why": "Use AEGIS's visual board composition."
+  },
+  {
+   "file": "features/work/lib/board/layout.ts",
+   "why": "A block can carry its picture count and proportion."
+  },
+  {
+   "file": "features/work/lib/board/layout.ts",
+   "why": "Lay out a visual board with the content-aware picture composition."
+  },
+  {
+   "file": "features/work/lib/project-environment-board.ts",
+   "why": "Keep a moodboard's picture groups on the result board."
+  },
+  {
+   "file": "features/work/lib/project-environment-board.ts",
+   "why": "Tell the board how many pictures a group holds."
   }
  ],
  "files": [
+  {
+   "path": "frame/src/domain/account/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/account/account-model.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/account/account.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/account/foot.svelte.ts",
+   "status": "unchanged"
+  },
   {
    "path": "frame/src/domain/connections/index.ts",
    "status": "unchanged"
@@ -1014,6 +1160,38 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/domain/operations/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/operations/operations.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/operations/settle.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/preferences/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/preferences/preferences.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/profiles/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/profiles/avatar.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/profiles/profiles.svelte.ts",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/domain/resources/index.ts",
    "status": "unchanged"
   },
@@ -1035,6 +1213,46 @@
   },
   {
    "path": "frame/src/domain/resources/transport.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/surface/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/surface/chrome-modal.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/surface/surface.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/tabs/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/tabs/tabs-model.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/tabs/tabs.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/time/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/time/focus.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/time/report.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/domain/time/time-model.ts",
    "status": "unchanged"
   },
   {
@@ -1102,11 +1320,31 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/features/dock/components/Dock.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/dock/components/NoticePip.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/dock/components/ToolShelf.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/dock/lib/dock-tools.ts",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/features/newtab/lib/clock.ts",
    "status": "unchanged"
   },
   {
    "path": "frame/src/features/newtab/lib/ground.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/newtab/lib/layout.ts",
    "status": "unchanged"
   },
   {
@@ -1230,6 +1468,66 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/features/search/components/EngineMenu.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/search/components/NewTabSearch.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/search/components/ResultList.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/search/components/ResultRow.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/search/lib/calculator.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/search/lib/search-controller.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/search/lib/search-model.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/search/lib/search-surface.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/settings/components/SearchShortcuts.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/settings/lib/search-shortcuts.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/sidebar/components/ModeTabs.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/sidebar/components/ModeWord.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tabs/components/TabRow.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/tabs/lib/middle-click.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/tabs/lib/tab-icon.ts",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/features/tasks/index.ts",
    "status": "unchanged"
   },
@@ -1331,6 +1629,30 @@
   },
   {
    "path": "frame/src/features/tasks/lib/today.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/time/components/FocusCard.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/time/components/ShutSites.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/time/components/SiteList.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/time/components/TimePage.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/features/time/lib/overview.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/features/time/lib/site-mark.ts",
    "status": "unchanged"
   },
   {
@@ -2162,7 +2484,19 @@
    "status": "adapted"
   },
   {
+   "path": "frame/src/session/notice.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/session/sidebar-mode.svelte.ts",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/session/tool-drafts.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/session/tools.svelte.ts",
    "status": "unchanged"
   },
   {
@@ -2183,6 +2517,10 @@
   },
   {
    "path": "frame/src/shared/lib/close.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/lib/drafts.ts",
    "status": "unchanged"
   },
   {
@@ -2210,7 +2548,15 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/shared/lib/parked-caret.ts",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/shared/lib/pointer-drag.svelte.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/lib/search-shortcuts.ts",
    "status": "unchanged"
   },
   {
@@ -2223,6 +2569,10 @@
   },
   {
    "path": "frame/src/shared/lib/visible-interval.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/lib/wordmark.ts",
    "status": "unchanged"
   },
   {
@@ -2274,6 +2624,22 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/shared/ui/AccountSummary/AccountSummary.svelte",
+   "status": "adapted"
+  },
+  {
+   "path": "frame/src/shared/ui/AccountSummary/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/AudioControl/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/AudioControl/AudioControl.svelte",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/shared/ui/Button/index.ts",
    "status": "unchanged"
   },
@@ -2283,6 +2649,14 @@
   },
   {
    "path": "frame/src/shared/ui/Button/control.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/CaptureControl/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/CaptureControl/CaptureControl.svelte",
    "status": "unchanged"
   },
   {
@@ -2302,11 +2676,139 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/shared/ui/EngineMark/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/EngineMark.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/amazon.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/archwiki.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/bing.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/brave.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/chatgpt.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/claude.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/docs-rs.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/duckduckgo.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/ebay.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/github.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/google-images.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/google-maps.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/google.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/hackernews.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/internet-archive.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/kagi.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/mdn.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/perplexity.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/reddit.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/spotify.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/stackoverflow.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/startpage.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/translate.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/twitch.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/wikipedia.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/wolframalpha.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/x.png",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/EngineMark/marks/youtube.png",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/shared/ui/FavIcon/index.ts",
    "status": "unchanged"
   },
   {
    "path": "frame/src/shared/ui/FavIcon/FavIcon.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Field/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Field/Field.svelte",
    "status": "unchanged"
   },
   {
@@ -2366,6 +2868,10 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/shared/ui/Menu/index.ts",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/shared/ui/Menu/material.ts",
    "status": "unchanged"
   },
@@ -2375,6 +2881,26 @@
   },
   {
    "path": "frame/src/shared/ui/Menu/surface.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/ProfileAvatar/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/ProfileAvatar/ProfileAvatar.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/ProviderMark/ProviderMark.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/ProviderMark/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/ProviderMark/marks.ts",
    "status": "unchanged"
   },
   {
@@ -2394,6 +2920,10 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/shared/ui/SearchField/index.ts",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/shared/ui/SegmentedControl/index.ts",
    "status": "unchanged"
   },
@@ -2402,7 +2932,39 @@
    "status": "unchanged"
   },
   {
+   "path": "frame/src/shared/ui/SettingsGroup/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/SettingsGroup/SettingsGroup.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/SettingsGroup/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/SettingsRow/SettingsRow.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/SettingsRow/index.ts",
+   "status": "unchanged"
+  },
+  {
    "path": "frame/src/shared/ui/Shine/shine.css",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Switch/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Switch/Switch.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/Switch/index.ts",
    "status": "unchanged"
   },
   {
@@ -2471,6 +3033,18 @@
   },
   {
    "path": "frame/src/shared/ui/data/Artifact/work-chart.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Bars/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Bars/Bars.svelte",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Bars/bars.ts",
    "status": "unchanged"
   },
   {
@@ -2555,6 +3129,14 @@
   },
   {
    "path": "frame/src/shared/ui/data/DataTable/table.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Ring/index.ts",
+   "status": "unchanged"
+  },
+  {
+   "path": "frame/src/shared/ui/data/Ring/Ring.svelte",
    "status": "unchanged"
   },
   {

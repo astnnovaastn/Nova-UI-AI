@@ -5,6 +5,10 @@ import type { CanvasView, WorkRun } from "./work-run";
 import type {LayoutRecord,LayoutSave} from "./designer/types";
 import type { CanvasPanel, CanvasRailPanel } from "./canvas-panels";
 
+/** V33: what Add to Work keeps about a page besides its address and title (short and plain, never the page text). */
+export type WorkSourceMeta = { description?: string; site?: string; image?: string; canonical?: string; favicon?: string; kind?: string; channel?: string; provenance?: "browser_tab" | "source_window" | "video" };
+export type AddedSource = { duplicate: boolean; title: string };
+
 export type ResearchJob = { id: string; title?: string; state: string; completed?: number; total?: number; step?: string };
 
 export type CanvasActions = {
@@ -37,7 +41,7 @@ export type CanvasActions = {
   /** Whether a public page allows being shown here. Only a verdict comes back, never the page. */
   checkFrame(url: string, signal?: AbortSignal): Promise<{ embeddable: boolean | null; reason: string }>;
   /** Saves a reference to this page on the open research. */
-  addWorkSource(url: string, title: string): Promise<void>;
+  addWorkSource(url: string, title: string, meta?: WorkSourceMeta): Promise<AddedSource | void>;
   /** Starts a work run: the lead plans it and assigns only the workers it needs. */
   startWork(text: string, options?: { workflow?: string; chosen?: unknown[]; fromResearch?: string }): void;
   /** Asks AEGIS about canvas cards; the reply appears in the conversation. */

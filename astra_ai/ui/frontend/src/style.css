@@ -1366,3 +1366,30 @@ body::-webkit-scrollbar-thumb {
   inline-size: 0 !important;
   block-size: 0 !important;
 }
+
+/* V31 AEGIS Desktop window: a thin band along the top edge moves the window (empty areas marked
+   -webkit-app-region: drag inside the workspace move it too); nothing sits under Windows' own buttons. */
+.aegis-titlebar-drag {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: env(titlebar-area-width, 100%);
+  block-size: 6px;
+  -webkit-app-region: drag;
+  z-index: 2147483000;
+}
+html.aegis-desktop {
+  --aegis-caption-reserve: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+}
+
+/* V33 AEGIS Desktop: Windows' own window buttons own the top-right corner (138 x 36 px, on a transparent
+   overlay; desktop/main.cjs captionReveal). AEGIS's own controls that stood there step aside, so a click
+   meant for them can never minimize, maximize or close the window, and the window can always be closed. */
+html.aegis-desktop #controls,
+html.aegis-desktop #menu-dropdown {
+  right: calc(16px + var(--aegis-caption-reserve, 0px));
+}
+html.aegis-desktop .settings-header,
+html.aegis-desktop #settings-container .settings-header {
+  padding-inline-end: calc(24px + var(--aegis-caption-reserve, 0px));
+}

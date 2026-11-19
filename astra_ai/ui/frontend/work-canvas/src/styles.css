@@ -46,6 +46,45 @@
   color-scheme: light;
 }
 
+/*
+ * V33 shared AEGIS surface tokens: one layer for Browse and Work. Each names a role and points at
+ * Zephium's own token for it (upstream/src/styles/tokens.css), so the two themes, the contrast axis
+ * and the tint axis carry through; only the window ground stays AEGIS's slate (--aegis-shell), so
+ * Browse and Work stand on the same ground and AEGIS keeps its own identity. Components use these
+ * roles, never a raw colour. The caption's symbols follow the ground's tone (desktop-caption.ts).
+ */
+:root {
+  --aegis-bg: var(--aegis-shell);
+  --aegis-bg-raised: var(--aegis-shell-raised);
+  --aegis-sidebar: var(--aegis-bg);
+  --aegis-surface: var(--color-page);
+  --aegis-surface-raised: var(--color-raised);
+  --aegis-panel: var(--color-surface);
+  --aegis-float: var(--color-float);
+  --aegis-border: var(--color-border);
+  --aegis-border-strong: var(--color-border-strong);
+  --aegis-input: var(--color-address);
+  --aegis-input-hover: var(--color-address-hover);
+  --aegis-input-focus: var(--shadow-field-focus);
+  --aegis-hover: var(--row-hover);
+  --aegis-selected: var(--row-active);
+  --aegis-selected-rim: var(--row-rim);
+  --aegis-text: var(--color-text);
+  --aegis-text-secondary: var(--color-label-secondary);
+  --aegis-text-muted: var(--color-muted);
+  --aegis-text-faint: var(--color-faint);
+  --aegis-shadow-raised: var(--shadow-raised);
+  --aegis-shadow-float: var(--shadow-float);
+  --aegis-shadow-overlay: var(--shadow-overlay);
+  --aegis-translucent: color-mix(in srgb, var(--aegis-bg) 84%, transparent);
+  --aegis-focus-ring: var(--color-ring);
+  --aegis-accent: var(--red, var(--color-tint-sky));
+  --aegis-radius-content: var(--content-radius);
+  --aegis-radius-row: var(--radius-row);
+  --aegis-gutter: 8px;
+  --aegis-row: var(--row-sidebar);
+}
+
 button,
 input,
 textarea {

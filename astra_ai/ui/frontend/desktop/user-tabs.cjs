@@ -73,8 +73,14 @@ function userTabs({ session, dialog, window, publicPage, tabOf, notify, download
     if (ready) return ready;
     const store = session.fromPartition(USER_PARTITION);
     ready = store;
-    // Chromium's own identity. Electron and app tokens are removed so sites see the browser this is.
+    // Chromium's own identity. Electron and app tokens are removed so ordinary sites see the browser this is.
+    const honest = store.getUserAgent();
     store.setUserAgent(plainUserAgent(store, appName));
+    // V32: Google's sign-in host gets the unmodified identity, Electron token included. Google refuses
+    // sign-in from embedded frameworks, and AEGIS must not hide what it is to get past that check.
+    store.webRequest.onBeforeSendHeaders({ urls: ["https://accounts.google.com/*"] }, (details, done) => {
+      done({ requestHeaders: { ...details.requestHeaders, "User-Agent": honest } });
+    });
     store.setPermissionRequestHandler((contents, permission, answer, details) => {
       if (tabOf(contents) === null && !isPopup(contents)) return answer(false);
       if (ALWAYS.has(permission)) return answer(true);
@@ -150,6 +156,8 @@ function userTabs({ session, dialog, window, publicPage, tabOf, notify, download
     downloads: () => recent.map((row) => ({ ...row })),
     /** For the diagnostics only: which permissions were answered. */
     decisions: () => [...decisions].map(([origin, map]) => ({ origin, ...Object.fromEntries(map) })),
+    /** Forgets the answers for one site, or for all of them; the site asks again next time. */
+    forget: (origin) => (origin ? decisions.delete(origin) : decisions.clear()),
   };
 }
 

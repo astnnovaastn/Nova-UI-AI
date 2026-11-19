@@ -717,7 +717,7 @@ function ConversationMenu(props:{
       <button type="button" role="menuitem" onClick={()=>{setOpen(false);props.onHistory();}}><span aria-hidden="true">◷</span>History</button>
       {props.onBrowser && <button type="button" role="menuitem" onClick={()=>{setOpen(false);props.onBrowser?.();}}>Browser context</button>}
       {props.onStyles && <button type="button" role="menuitem" onClick={()=>{setOpen(false);props.onStyles?.();}}><span aria-hidden="true">◉</span>Page styles of this site</button>}
-      <button type="button" role="menuitem" onClick={()=>{setOpen(false);openSettings();}}><span aria-hidden="true">⚙</span>Models</button>
+      <button type="button" role="menuitem" onClick={()=>{setOpen(false);openSettings("ai");}}><span aria-hidden="true">⚙</span>Models</button>
       <button type="button" role="menuitem" disabled={!props.messages.length} onClick={()=>{void navigator.clipboard?.writeText(all).catch(()=>{});setOpen(false);}}><span aria-hidden="true">▣</span>Copy conversation</button>
       {props.onWork && <button type="button" role="menuitem" onClick={()=>{setOpen(false);props.onWork?.();}}>Continue in Work</button>}
       <button className="chat-menu-close" type="button" role="menuitem" onClick={()=>{setOpen(false);props.onClose();}}><span aria-hidden="true">×</span>Close tool</button>
@@ -2760,6 +2760,12 @@ function Workspace() {
   // The canvas surface. "classic" keeps the original three-column screen as a rollback.
   const [surface, setSurfaceState] = useState<ResearchSurface>(researchSurface);
   const [canvasPanel, setCanvasPanel] = useState<CanvasPanel>("");
+  const [researchForeground, setResearchForeground] = useState(true);
+  useEffect(() => {
+    const update = (event: Event) => setResearchForeground((event as CustomEvent<boolean>).detail !== false);
+    window.addEventListener("aegis-research-visibility", update);
+    return () => window.removeEventListener("aegis-research-visibility", update);
+  }, []);
   const [chatTool, setChatTool] = useState<""|"browser"|"styles"|"work">("");
   const [chatModel, setChatModel] = useState("");
   useEffect(() => {
@@ -2793,11 +2799,11 @@ function Workspace() {
   useEffect(() => {
     const active = open && onCanvas;
     document.body.classList.toggle("research-canvas-open", active);
-    document.body.classList.toggle("research-canvas-panel-open", active && !!canvasPanel);
+    document.body.classList.toggle("research-canvas-panel-open", active && researchForeground && !!canvasPanel);
     return () => document.body.classList.remove("research-canvas-open", "research-canvas-panel-open");
-  }, [open, onCanvas, canvasPanel]);
+  }, [open, onCanvas, canvasPanel, researchForeground]);
   useEffect(() => {
-    if (!onCanvas || !canvasPanel) return;
+    if (!open || !onCanvas || !canvasPanel || !researchForeground) return;
     const close = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.key !== "Escape" || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       setCanvasPanel("");
@@ -2805,7 +2811,7 @@ function Workspace() {
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [onCanvas, canvasPanel]);
+  }, [open, onCanvas, canvasPanel, researchForeground]);
   // Chats and documents are read and written in the panel; they have no run to lay out.
   useEffect(() => {
     if (onCanvas && (report?.kind === "chat" || report?.kind === "documentary")) setCanvasPanel("document");
@@ -4373,17 +4379,20 @@ function Workspace() {
     renderMarkdown: markdown,
     renderHtml: clean,
     checkFrame: (url: string, signal?: AbortSignal) => api("/frame-check?url=" + encodeURIComponent(url), {signal}),
-    async addWorkSource(url: string, title: string) {
+    async addWorkSource(url: string, title: string, meta?: Record<string, unknown>) {
       const id = reportRef.current?.research_id;
       if (!id) return;
-      await api("/" + id + "/work-sources", {method: "POST", body: JSON.stringify({url, title})})
+      let added: {duplicate: boolean; title: string} | undefined;
+      await api("/" + id + "/work-sources", {method: "POST", body: JSON.stringify({url, title, ...(meta ? {meta} : {})})})
         .then((d) => {
+          added = {duplicate: Boolean(d.duplicate), title: String(d.source?.title || title)};
           setTrace(old => old.research === id ? {...old, workSources: d.work_sources || old.workSources} : old);
           window.dispatchEvent(new CustomEvent("nova-research-trace", {detail: {research_id: id}}));
           reportCache.current.delete(conversationSnapshot().clientId + ":" + id);
           return reloadReport(id);
         })
         .catch(e => setError(e.message));
+      return added;
     },
   };
   async function applyDocumentEdit() {
@@ -4498,7 +4507,7 @@ function Workspace() {
   return (
     <section
       className="research-workspace"
-      hidden={!open}
+      hidden={!open || (onCanvas && !researchForeground)}
       data-aegis-widget="research"
       aria-label="Research workspace"
       data-panel={narrowPanel}

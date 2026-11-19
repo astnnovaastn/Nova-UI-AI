@@ -17,8 +17,9 @@
  * Run: electron desktop/main.cjs            (npm run desktop)
  *      electron desktop/main.cjs --install-shortcuts
  */
-const { app, BrowserWindow, WebContentsView, Menu, ipcMain, session, shell, dialog } = require("electron");
+const { app, BrowserWindow, WebContentsView, Menu, ipcMain, session, shell, dialog, nativeImage, screen, systemPreferences } = require("electron");
 const { browserAssist } = require("./browser-assist.cjs");
+const { workDev } = require("./work-dev.cjs");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -31,6 +32,7 @@ const { ResourceManager } = require("./resources.cjs");
 const { NoteFiles } = require('./note-files.cjs');
 const agentBrowser = require("./agent-browser.cjs");
 const { userTabs } = require("./user-tabs.cjs");
+const { blocker: makeBlocker } = require("./blocker.cjs");
 
 const APP_ID = "ai.aegis.desktop";
 const FRONTEND = path.resolve(__dirname, "..");
@@ -219,7 +221,9 @@ function registerPane(pane) {
   const timeout = (promise, ms, fallback) => Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(fallback), ms))]);
   lifecycle.register(resourceId(pane.id), pane.kind === "tab" ? "browser tab" : "source page", {
     // Sound the person can hear, or a page still arriving, is never cut off.
-    busy: () => (!pane.view ? "" : pane.view.webContents.isCurrentlyAudible() ? "audio" : pane.view.webContents.isLoading() ? "loading" : ""),
+    busy: () => (!pane.view ? "" : pane.view.webContents.isCurrentlyAudible() ? "audio" : pane.view.webContents.isLoading() ? "loading"
+      // V31: a tab whose download is still arriving is never released.
+      : pane.kind === "tab" && tabs.downloads().some((row) => row.tab === pane.id && row.state === "progressing") ? "download" : ""),
     memoryMB: () => paneMemoryMB(pane),
     // Freezing stops the page's scripts and timers but keeps it in memory exactly as it was.
     async suspend() {
@@ -283,6 +287,118 @@ const originOf = (address) => {
   }
 };
 
+/**
+ * V33 caption reveal, adapted from Zephium's Windows caption (desktop/src/platform/windows_caption.rs).
+ * The window buttons stay the real Windows caption buttons (titleBarOverlay): Snap layouts, keyboard,
+ * screen readers, double-click and the resize border keep working. The overlay is transparent, so no box
+ * is drawn over AEGIS's surfaces; only the symbols change. They rest quiet and come up to full contrast:
+ *  - at once while the pointer is on the buttons themselves (they own those pixels, so what a click there
+ *    does must be visible), and after a short dwell on the top edge near the corner (Zephium REVEAL_DWELL_MS);
+ *  - held while the pointer stays in the corner band or where the Snap flyout opens under Maximize;
+ *  - quiet again a moment after the pointer leaves (Zephium's 450 ms), never while the window is fullscreen.
+ * The symbols fade over a few frames (setTitleBarOverlay cannot animate; this steps its colour), unless
+ * the system asks for reduced motion. The workspace is told, with the fade's duration, so a web page can
+ * slide out from under the band. The buttons are never removed: the window can always be closed.
+ */
+const CAPTION = {
+  height: 36,
+  /** Windows' three caption buttons are 46 DIP wide each. */
+  buttons: 138,
+  corner: 220,
+  edge: 10,
+  hold: 78,
+  /** How far round Maximize the Snap layouts flyout can open (Zephium within_snap_reach). */
+  snap: 220,
+  dwell: 220,
+  linger: 450,
+  fade: 180,
+  /** Symbols per surface tone: "page" is a web page under the corner, whose colour AEGIS can't know (quiet
+   *  grey reads on light and dark sites); out, the page has stepped down and the symbols stand on the chrome. */
+  tones: {
+    dark: { shown: "#e8e9ec", quiet: "#5d6068" },
+    light: { shown: "#1d1e21", quiet: "#9a9ca2" },
+    page: { shown: "#e8e9ec", quiet: "#9aa0a6" },
+    "page-light": { shown: "#1d1e21", quiet: "#9aa0a6" },
+  },
+};
+const captionState = { shown: false, enabled: false, tone: "dark", level: 0, suppressed: false };
+const hexRgb = (hex) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+const rgbHex = (rgb) => "#" + rgb.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+const reducedMotion = () => {
+  try { return Boolean(systemPreferences.getAnimationSettings().prefersReducedMotion); } catch { return false; }
+};
+/** What the workspace may tell the caption: the tone of the surface under the corner. */
+const captionCommands = {
+  caption_surface({ tone }) {
+    if (!Object.hasOwn(CAPTION.tones, tone)) throw new Error("Unknown tone.");
+    if (captionState.tone !== tone) { captionState.tone = tone; captionPaint?.(); }
+    return { tone };
+  },
+};
+let captionPaint = null;
+function captionReveal(win) {
+  captionState.enabled = true;
+  let shown = false, level = 0, fading = null, away = 0, armed = 0, poll = null, last = Date.now();
+  const paint = () => {
+    if (win.isDestroyed()) return;
+    const tone = CAPTION.tones[captionState.tone];
+    const from = hexRgb(tone.quiet), to = hexRgb(tone.shown);
+    try { win.setTitleBarOverlay({ color: "#00000000", symbolColor: rgbHex(from.map((v, i) => v + (to[i] - v) * level)), height: CAPTION.height }); } catch {}
+    captionState.level = level;
+  };
+  captionPaint = paint;
+  const set = (next) => {
+    if (next === shown || win.isDestroyed()) return;
+    shown = next;
+    captionState.shown = next;
+    const duration = reducedMotion() ? 0 : CAPTION.fade;
+    notify(0, { kind: "caption", shown: next, height: CAPTION.height, duration });
+    clearTimeout(fading);
+    const start = Date.now(), origin = level, target = next ? 1 : 0;
+    const step = () => {
+      const t = duration ? Math.min(1, (Date.now() - start) / duration) : 1;
+      level = origin + (target - origin) * (1 - (1 - t) ** 3);
+      paint();
+      if (t < 1) fading = setTimeout(step, 16);
+    };
+    step();
+  };
+  const tick = () => {
+    poll = null;
+    if (win.isDestroyed()) return;
+    // Dwell and linger are measured in real time: the poll's pace changes with where the pointer is.
+    const now = Date.now(), elapsed = Math.min(250, now - last);
+    last = now;
+    let delay = 80;
+    const suppressed = win.isFullScreen();
+    captionState.suppressed = suppressed;
+    if (!win.isVisible() || win.isMinimized() || suppressed) { armed = 0; away = 0; set(false); delay = 250; }
+    else {
+      const { x, y } = screen.getCursorScreenPoint();
+      const box = win.getContentBounds();
+      const fromRight = box.x + box.width - x, fromTop = y - box.y;
+      const inside = fromRight >= 0 && fromRight <= box.width && fromTop >= 0 && fromTop <= box.height;
+      const focused = win.isFocused();
+      const onButtons = inside && fromRight <= CAPTION.buttons && fromTop <= CAPTION.height;
+      const atEdge = inside && fromRight <= CAPTION.corner && fromTop <= CAPTION.edge;
+      // Maximize is the middle button; the flyout hangs below it and spreads to either side.
+      const snap = inside && fromRight >= 46 - CAPTION.snap && fromRight <= 92 + CAPTION.snap && fromTop >= 0 && fromTop <= CAPTION.height + CAPTION.snap;
+      const held = shown && ((inside && fromRight <= CAPTION.corner && fromTop <= CAPTION.hold) || snap);
+      if (focused && onButtons) { armed = 0; away = 0; set(true); }
+      else if (held) away = 0;
+      else if (focused && atEdge) { away = 0; armed += elapsed; if (armed >= CAPTION.dwell) set(true); }
+      else { armed = 0; if (shown && (away += elapsed) >= CAPTION.linger) set(false); }
+      // Near the corner the pointer is read more often, so a reveal keeps up with it; elsewhere rarely.
+      const near = inside && fromRight <= CAPTION.corner + 160 && fromTop <= CAPTION.hold + 120;
+      delay = !focused && !shown ? 250 : near || shown ? 30 : 80;
+    }
+    poll = setTimeout(tick, delay);
+  };
+  paint();
+  tick();
+  win.on("closed", () => { clearTimeout(poll); clearTimeout(fading); captionPaint = null; });
+}
+
 /** Tells the workspace what a pane did. Data only, and only while the workspace is the page shown. */
 function notify(id, event) {
   const contents = mainWindow?.webContents;
@@ -305,6 +421,36 @@ const tabs = userTabs({
   downloads: () => app.getPath("downloads"),
   appName: app.getName(),
 });
+
+/** V31: advert and tracker blocking on the tab session only, made the first time a tab opens. */
+let protection = null;
+function ensureProtection() {
+  if (protection) return protection;
+  protection = makeBlocker({
+    store: tabs.session(),
+    settingsFile: path.join(app.getPath("userData"), "blocker.json"),
+    tabOf: (contentsId) => {
+      for (const [id, pane] of panes) {
+        if (pane.kind !== "tab" || pane.view?.webContents.id !== contentsId) continue;
+        let host = "";
+        try { host = new URL(pane.view.webContents.getURL()).hostname; } catch { /* not loaded yet */ }
+        return { id, host };
+      }
+      return null;
+    },
+    notify: (() => {
+      // A page can block hundreds of requests; the workspace hears at most every 400 ms per tab.
+      const last = new Map();
+      return (id, count) => {
+        const now = Date.now();
+        if (now - (last.get(id) || 0) < 400) return;
+        last.set(id, now);
+        notify(id, { kind: "blocked-count", count });
+      };
+    })(),
+  });
+  return protection;
+}
 
 function paneSession() {
   const store = session.fromPartition(PANE_PARTITION);
@@ -355,6 +501,8 @@ function history(id, contents) {
 }
 
 /** Gives a pane its live page. All panes share one browser session, so nothing is set up twice. */
+let tabZoomPercent = 100;
+
 function attachView(pane) {
   const id = pane.id;
   const view = new WebContentsView({
@@ -371,20 +519,41 @@ function attachView(pane) {
   });
   const contents = view.webContents;
   view.setBackgroundColor("#ffffff");
+  // V33: a tab's page wears the Browse panel's corners (Zephium --content-radius matches its native view's radius).
+  if (pane.kind === "tab" && typeof view.setBorderRadius === "function") view.setBorderRadius(12);
   view.setBounds(pane.bounds);
   view.setVisible(pane.visible);
 
   // A source pane opens nothing. A tab opens links as new tabs and sign-in popups as real popups (user-tabs.cjs).
   if (pane.kind === "tab") {
+    contents.on("did-finish-load", () => contents.setZoomFactor(tabZoomPercent / 100));
+    ensureProtection();
+    const sendMedia = () => notify(id, {
+      kind: "media", available: Boolean(pane.mediaAvailable), playing: Boolean(pane.mediaPlaying),
+      audible: contents.isCurrentlyAudible(), muted: contents.isAudioMuted(),
+    });
+    pane.sendMedia = sendMedia;
+    contents.on("media-started-playing", () => { pane.mediaAvailable = true; pane.mediaPlaying = true; sendMedia(); });
+    contents.on("media-paused", () => { pane.mediaPlaying = false; sendMedia(); });
+    contents.on("audio-state-changed", sendMedia);
+    contents.on("did-start-navigation", (details) => {
+      if (!details.isMainFrame || details.isSameDocument) return;
+      protection?.resetTab(id);
+      pane.mediaAvailable = false;
+      pane.mediaPlaying = false;
+      sendMedia();
+    });
     contents.setWindowOpenHandler(tabs.windowOpen(id));
     contents.on("did-create-window", (child) => tabs.guardPopup(child, id));
     // A focused page gets the keys, so the browser's own shortcuts are passed back to the workspace.
     contents.on("before-input-event", (event, input) => {
       if (input.type !== "keyDown" || !(input.control || input.meta) || input.alt) return;
       const key = String(input.key || "").toLowerCase();
-      if (key === "t" || key === "w" || key === "l") {
+      const tabKey = ["t", "w", "l", "tab", "h", "j", "e", ","].includes(key);
+      const toolsKey = input.shift && ["k", "f", "o"].includes(key);
+      if (tabKey || toolsKey) {
         event.preventDefault();
-        notify(id, { kind: "shortcut", key });
+        notify(id, { kind: "shortcut", key, shift: Boolean(input.shift) });
       }
     });
   } else {
@@ -429,7 +598,18 @@ function attachView(pane) {
   });
   contents.on("page-favicon-updated", (_event, icons) => {
     const icon = icons.find((address) => address.startsWith("https://"));
-    if (icon) notify(id, { kind: "favicon", url: icon });
+    if (!icon) return;
+    notify(id, { kind: "favicon", url: icon });
+    // V32: Zephium's tab rows draw a 32 px RGBA raster. Fetched through the page's own session.
+    void contents.session.fetch(icon).then((reply) => (reply.ok ? reply.arrayBuffer() : null)).then((bytes) => {
+      if (!bytes || bytes.byteLength > 512 * 1024 || contents.isDestroyed()) return;
+      const picture = nativeImage.createFromBuffer(Buffer.from(bytes));
+      if (picture.isEmpty()) return;
+      const bitmap = picture.resize({ width: 32, height: 32, quality: "best" }).toBitmap();
+      if (bitmap.length !== 32 * 32 * 4) return;
+      for (let at = 0; at < bitmap.length; at += 4) { const blue = bitmap[at]; bitmap[at] = bitmap[at + 2]; bitmap[at + 2] = blue; }
+      notify(id, { kind: "favicon", url: icon, rgba: bitmap.toString("base64") });
+    }).catch(() => {});
   });
   contents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
     // -3 is a load the page or the person abandoned, not a failure.
@@ -468,7 +648,8 @@ function destroyView(pane) {
 }
 
 function createPane(id, bounds, url, kind = "source") {
-  const pane = { id, kind, view: null, bounds, visible: true, url, title: "", scrollY: 0, frozen: false };
+  // Browse shows a tab explicitly after checking that it is still selected.
+  const pane = { id, kind, view: null, bounds, visible: kind !== "tab", url, title: "", scrollY: 0, frozen: false };
   panes.set(id, pane);
   attachView(pane);
   registerPane(pane);
@@ -524,8 +705,12 @@ const shellCommands = {
 
 /** What the AEGIS workspace may ask for. */
 const assist = browserAssist({ panes, publicPage, dialog, window: () => mainWindow, live });
+// V33: developer folder/file access (native dialogs only) and Work <-> browser hand-offs.
+const dev = workDev({ panes, publicPage, dialog, window: () => mainWindow, projectRoot: () => loadConfig().projectRoot });
 const workspaceCommands = {
   ...assist.commands,
+  ...dev.commands,
+  ...captionCommands,
   async browser_open({ id, url, rect }) {
     const page = pageOf(url);
     const key = idOf(id);
@@ -560,11 +745,67 @@ const workspaceCommands = {
     (await live(pane)).loadURL(page.href).catch(() => {});
     void lifecycle.tick();
   },
+  async tab_media({ id, action }) {
+    const pane = paneOf(id);
+    if (pane.kind !== "tab" || !pane.view || !["play", "pause", "mute", "unmute"].includes(action)) {
+      throw new Error("That tab and media action are unavailable.");
+    }
+    const contents = pane.view.webContents;
+    if (action === "mute" || action === "unmute") {
+      contents.setAudioMuted(action === "mute");
+      pane.sendMedia?.();
+      return;
+    }
+    if (action === "pause") {
+      await contents.executeJavaScript('document.querySelectorAll("video,audio").forEach(item => { if (!item.paused) { item.dataset.aegisMediaPaused = ""; item.pause(); } })', true);
+    } else {
+      const played = await contents.executeJavaScript('(async () => { const all = [...document.querySelectorAll("video,audio")]; const held = all.filter(item => Object.hasOwn(item.dataset, "aegisMediaPaused")); const choices = held.length ? held : all.filter(item => item.currentSrc && item.paused).slice(0, 1); const results = await Promise.allSettled(choices.map(async item => { await item.play(); delete item.dataset.aegisMediaPaused; })); return results.some(result => result.status === "fulfilled"); })()', true);
+      if (!played) throw new Error("No playable media was found.");
+    }
+  },
+  tab_zoom({ percent }) {
+    if (!Number.isInteger(percent) || percent < 50 || percent > 200) throw new Error("Invalid browser page zoom.");
+    tabZoomPercent = percent;
+    for (const pane of panes.values()) {
+      if (pane.kind === "tab" && pane.view) pane.view.webContents.setZoomFactor(percent / 100);
+    }
+  },
   async browser_stop({ id }) {
     (await live(paneOf(id))).stop();
   },
   tab_downloads() {
     return tabs.downloads();
+  },
+  /** V31 privacy: real counts of cancelled requests, on/off, and sites where nothing is blocked. */
+  blocker_status({ id } = {}) {
+    if (!protection) return { enabled: true, today: 0, sinceStart: 0, tab: 0, allowed: [], topHosts: [], rules: null, started: false };
+    return { ...protection.status(id == null ? null : idOf(id)), started: true };
+  },
+  blocker_set({ enabled }) {
+    ensureProtection().setEnabled(enabled);
+    return protection.status(null);
+  },
+  blocker_allow({ host, allowed }) {
+    ensureProtection().allow(String(host || ""), Boolean(allowed));
+    return protection.status(null);
+  },
+  /** Site permissions answered this run of the app, and forgetting them. */
+  permissions_list() {
+    return tabs.decisions();
+  },
+  permissions_reset({ origin } = {}) {
+    tabs.forget(origin ? String(origin) : null);
+    return tabs.decisions();
+  },
+  /**
+   * Clears the person's browsing data in the tab session only. Sign-ins live in cookies, so clearing them
+   * signs the person out of sites; source panes and the agent browser are untouched.
+   */
+  async tab_clear_data({ cookies = false, cache = true } = {}) {
+    const store = tabs.session();
+    if (cache) await store.clearCache();
+    if (cookies) await store.clearStorageData({ storages: ["cookies", "localstorage", "indexdb", "serviceworkers", "cachestorage"] });
+    return { cleared: { cache: Boolean(cache), cookies: Boolean(cookies) } };
   },
   /** Shows a finished download in its folder; only a file this app saved, never an arbitrary path. */
   download_show({ id }) {
@@ -582,9 +823,10 @@ const workspaceCommands = {
     const pane = panes.get(idOf(id));
     if (!pane) return;
     pane.visible = Boolean(visible);
-    // A hidden page must not keep the keyboard.
-    if (!pane.visible && pane.view?.webContents.isFocused()) mainWindow.webContents.focus();
+    const restoreFocus = !pane.visible && pane.view?.webContents.isFocused();
     pane.view?.setVisible(pane.visible);
+    // Return the keyboard to the workspace after removing the focused native layer.
+    if (restoreFocus) mainWindow.webContents.focus();
     await syncVisibility(pane);
     pane.view?.setVisible(pane.visible);
   },
@@ -649,7 +891,9 @@ globalThis.aegisDesktopDiagnostics = () => ({
   lifecycle: lifecycle.status(),
   permissions: tabs.decisions(),
   partitions: { tabs: tabs.partition, panes: PANE_PARTITION },
-  panes: [...panes.values()].map((pane) => ({ id: pane.id, kind: pane.kind, session: pane.view ? (pane.kind === "tab" ? tabs.partition : PANE_PARTITION) : "", live: Boolean(pane.view), visible: pane.visible, frozen: pane.frozen, url: pane.view?.webContents.getURL() || pane.url, state: lifecycle.stateOf(resourceId(pane.id)) })),
+  caption: { ...captionState },
+  bounds: mainWindow && !mainWindow.isDestroyed() ? mainWindow.getContentBounds() : null,
+  panes: [...panes.values()].map((pane) => ({ id: pane.id, kind: pane.kind, session: pane.view ? (pane.kind === "tab" ? tabs.partition : PANE_PARTITION) : "", live: Boolean(pane.view), visible: pane.visible, frozen: pane.frozen, url: pane.view?.webContents.getURL() || pane.url, bounds: pane.bounds || null, state: lifecycle.stateOf(resourceId(pane.id)) })),
 });
 
 // ---------------------------------------------------------------- window
@@ -672,6 +916,9 @@ function createWindow() {
     minWidth: 960,
     minHeight: 640,
     backgroundColor: "#16171a",
+    // V31: Windows' own minimize, maximize and close buttons (snap layouts included), drawn in AEGIS's colours
+    // over a 36 px band instead of a full title bar. AEGIS_NATIVE_TITLEBAR=1 brings the system title bar back.
+    ...(process.env.AEGIS_NATIVE_TITLEBAR === "1" ? {} : { titleBarStyle: "hidden", titleBarOverlay: { color: "#00000000", symbolColor: CAPTION.tones.dark.quiet, height: CAPTION.height } }),
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -686,6 +933,7 @@ function createWindow() {
   });
   const contents = mainWindow.webContents;
   mainWindow.once("ready-to-show", () => mainWindow.show());
+  if (process.env.AEGIS_NATIVE_TITLEBAR !== "1") captionReveal(mainWindow);
   mainWindow.on("page-title-updated", (event) => event.preventDefault());
 
   // The window shows the start page or the workspace; any other link leaves for the default browser.

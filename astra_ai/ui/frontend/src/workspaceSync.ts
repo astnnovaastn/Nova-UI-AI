@@ -1,7 +1,6 @@
 import { setSoundArbiter } from './notifications';
 import type { AegisSocket } from './ws';
 import { conversationSnapshot, conversationMessage, conversationResearch, uiSnapshot } from './conversation';
-// @ts-expect-error Theme module is shared with the existing JavaScript theme editor.
 import { applyTheme } from './components/Theme/theme.js';
 // Migrate saved view preferences once; navigation and camera state belong to this window.
 for (const key of ['nova-current-workspace', 'nova-memory-camera-v2', 'nova-memory-chat-spherical']) {
@@ -146,7 +145,7 @@ export function startWorkspaceSync(socket: AegisSocket) {
     setInterval(() => { if (connected)
         socket.send({ type: 'workspace_heartbeat', conversation_id: conversationSnapshot().sessionId, since: sequence }); if (voice && Date.now() - lastAck > 12000)
         lose(); }, 5000);
-    window.addEventListener('themechange', (e: Event) => { const theme = (e as CustomEvent).detail?.theme; if (!applying && theme && theme.id !== 'unsaved-draft')
+    window.addEventListener('themechange', (e: Event) => { const theme = (e as CustomEvent).detail?.theme; if (!applying && !(e as CustomEvent).detail?.appearanceOnly && theme && theme.id !== 'unsaved-draft')
         socket.send({ type: 'workspace_theme', theme }); });
     const reconcile = () => { if (connected && document.visibilityState === 'visible')
         hello(); };

@@ -1,4 +1,5 @@
 import {mountConnectedWindows} from './workspaceSettings';
+import {openUnifiedSettings} from './components/Research/WorkCanvasHost';
 import { mountSoundSettings, showNotificationHistory } from "./notifications";
 import {initVoiceEnrollment} from './voiceEnrollment';
 import {conversationSnapshot} from './conversation';
@@ -10,6 +11,7 @@ import {conversationSnapshot} from './conversation';
  */
 
 import { orbThemes, type OrbTheme } from "./orb-themes";
+import { applyTheme, readAppearance, setAppearance, themeApi } from "./components/Theme/theme.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -736,7 +738,43 @@ async function advanceSetup() {
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function openSettings() {
+/**
+ * V33: every Settings entry (the dashboard menu, the Work rail, the conversation's Models item, the voice
+ * command, first-time setup) opens AEGIS's full-window Settings. If its bundle fails to load,
+ * the classic settings panel remains available.
+ */
+export function openSettings(section?: string) {
+  void openUnifiedSettings(section).catch(() => openLegacySettings());
+}
+
+// V33: what the unified Settings uses from this host's own code (orb themes, voice profile, notifications).
+(window as any).aegisHostSettings = {
+  appearance: readAppearance,
+  setAppearance,
+  async listThemes() {
+    const data = await themeApi.list();
+    return [...data.builtins, ...data.custom];
+  },
+  async selectTheme(id: string) {
+    const result = await themeApi.setDefault(id);
+    if (result?.theme) {
+      applyTheme(result.theme);
+      return;
+    }
+    const data = await themeApi.list();
+    const theme = [...data.builtins, ...data.custom].find((item) => item.id === id);
+    if (!theme) throw new Error("The saved theme could not be loaded.");
+    applyTheme(theme);
+  },
+  orbThemes: () => orbThemes.map(theme => ({ name: theme.name, label: theme.label, color: theme.orbColor })),
+  orbTheme: () => getSavedOrbTheme(),
+  setOrbTheme: (name: string) => { if (orbThemes.some(theme => theme.name === name)) setSavedOrbTheme(name); },
+  mountVoice: (host: HTMLElement) => initVoiceEnrollment(host),
+  notificationHistory: () => showNotificationHistory(),
+  legacy: () => { void openLegacySettings(); },
+};
+
+export async function openLegacySettings() {
   if (isOpen) return;
   isOpen = true;
 
@@ -794,7 +832,7 @@ export async function checkFirstTimeSetup(): Promise<boolean> {
   try {
     const status = await apiGet<StatusResponse>("/api/settings/status");
     if (!status.env_keys_set.groq) {
-      openSettings();
+      openSettings("keys");
       return true;
     }
   } catch {

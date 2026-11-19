@@ -1,0 +1,11 @@
+// ../../../../../../../../Escritorio/MAIN RICH FODER/Nova-UI-AI-NEW-INPROVE-AI-MODEL-AND-A-CLEAN-UI-WITH-THE-GEMINI-MODELS/astra_ai/ui/frontend/work-canvas/node_modules/@hugeicons/core-free-icons/dist/esm/CircleIcon.js
+var e = [["circle", {
+	cx: "12",
+	cy: "12",
+	r: "10",
+	stroke: "currentColor",
+	strokeLinejoin: "round",
+	strokeWidth: "1.5",
+	key: "0"
+}]];
+export { e as t };

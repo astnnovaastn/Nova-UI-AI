@@ -152,3 +152,14 @@ button:disabled {
   opacity: 0.5;
   cursor: default;
 }
+
+/* V31: the window has no system title bar; this band moves it, clear of Windows' own buttons on the right. */
+.titlebar-drag {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: env(titlebar-area-width, 100%);
+  block-size: env(titlebar-area-height, 36px);
+  -webkit-app-region: drag;
+  z-index: 100;
+}

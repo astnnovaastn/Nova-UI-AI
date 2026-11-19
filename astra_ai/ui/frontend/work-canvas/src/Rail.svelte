@@ -6,6 +6,8 @@
     BubbleChatIcon,
     Clock01Icon,
     DashboardSquare01Icon,
+    Globe02Icon,
+    WorkIcon,
     FileSearchIcon,
     BookOpen01Icon,
     MoreHorizontalIcon,
@@ -14,13 +16,15 @@
     Settings01Icon,
   } from "@hugeicons/core-free-icons";
   import { store } from "./store.svelte";
+  import { browserTabs } from "./browser-tabs.svelte";
 
+  let { inactive = false }: { inactive?: boolean } = $props();
   let more = $state(false);
   const actions = $derived(store.actions);
   const panel = $derived(store.state.panel);
 </script>
 
-<nav class="rail" aria-label="AEGIS">
+<nav class="rail" aria-label="AEGIS" inert={inactive}>
   <button type="button" class="logo" aria-label="AEGIS dashboard" title="AEGIS" onclick={() => actions?.navigate("dashboard")}>
     <img class="mark" src="/assets/aegis-seal.svg" width="30" height="30" alt="" />
   </button>
@@ -86,6 +90,18 @@
       <Icon icon={Plug01Icon} size={19} strokeWidth={1.6} />
     </button>
   </div>
+  {#if browserTabs.available}
+    <span class="rule" aria-hidden="true"></span>
+    <!-- V31: AEGIS Work and the browser are two areas of one app. Work comes back exactly as it was left. -->
+    <div class="group">
+      <button type="button" class="work" class:selected={browserTabs.active === "work"} aria-label="AEGIS Work" aria-current={browserTabs.active === "work" ? "page" : undefined} title="AEGIS Work" onclick={() => browserTabs.show("work")}>
+        <Icon icon={WorkIcon} size={19} strokeWidth={1.6} />
+      </button>
+      <button type="button" class:selected={browserTabs.active !== "work"} aria-label="Browser" aria-current={browserTabs.active !== "work" ? "page" : undefined} title={browserTabs.tabs.length ? `Browser (${browserTabs.tabs.length} ${browserTabs.tabs.length === 1 ? "tab" : "tabs"})` : "Browser"} onclick={() => browserTabs.resume()}>
+        <Icon icon={Globe02Icon} size={19} strokeWidth={1.6} />
+      </button>
+    </div>
+  {/if}
   <span class="gap"></span>
   <div class="group">
     <Popover.Root bind:open={more}>
@@ -158,18 +174,18 @@
 
   .rail button:hover,
   .rail :global([data-popover-trigger]:hover) {
-    background: var(--aegis-shell-raised);
+    background: var(--aegis-bg-raised);
     color: var(--color-text);
   }
 
   .rail button:focus-visible,
   .rail :global([data-popover-trigger]:focus-visible) {
-    outline: 2px solid var(--color-focus, currentcolor);
+    outline: 2px solid var(--aegis-focus-ring, currentcolor);
     outline-offset: 1px;
   }
 
   .rail button.selected {
-    background: var(--aegis-shell-raised);
+    background: var(--aegis-bg-raised);
     color: var(--color-text);
   }
 

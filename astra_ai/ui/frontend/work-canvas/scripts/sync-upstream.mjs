@@ -3,6 +3,7 @@ import {compositionPatches} from './composition-patches.mjs';
 import {mediaCollectionPatches} from './media-collection-patches.mjs';
 import {siteRowPatches} from './site-row-patches.mjs';
 import {picksPicturePatches} from './picks-picture-patches.mjs';
+import {visualBoardPatches} from './visual-board-patches.mjs';
 import {v24Patches} from './v24-patches.mjs';
 // Copies the Zephium Work files AEGIS uses out of the read-only reference clone, unchanged
 // except for the patches listed below, and writes the provenance manifest.
@@ -62,11 +63,44 @@ const roots = [
   "shared/sky/index.ts",
   "features/newtab/lib/clock.ts",
   "features/newtab/lib/ground.ts",
+  "features/newtab/lib/layout.ts",
   "shared/ui/Icon/index.ts",
+  // V32 Browse shell: the real search-engine menu, Browse/Work switch, sidebar tab row and Focus page.
+  "features/search/components/EngineMenu.svelte",
+  "features/search/components/NewTabSearch.svelte",
+  "features/dock/components/Dock.svelte",
+  "shared/ui/AccountSummary/index.ts",
+  "shared/ui/ProviderMark/index.ts",
+  "features/settings/components/SearchShortcuts.svelte",
+  "shared/ui/SearchField/index.ts",
+  "features/sidebar/components/ModeTabs.svelte",
+  "features/tabs/components/TabRow.svelte",
+  "features/time/components/TimePage.svelte",
+  "shared/ui/Menu/index.ts",
+  // V33 unified Settings: Zephium's settings card, row and switch primitives (no native commands).
+  "shared/ui/SettingsGroup/index.ts",
+  "shared/ui/SettingsRow/index.ts",
+  "shared/ui/Switch/index.ts",
 ];
 
 // Each patch must match exactly once, so an upstream change fails loudly instead of silently.
 const patches = [...designerPatches,
+  {
+    file: "features/time/components/TimePage.svelte",
+    why: "V32: AEGIS keeps no site-time record; when the report is unavailable, show its note without an empty 0m chart.",
+    find: '            <section class="card overview">',
+    replace: '            {#if !session.failed}<section class="card overview">',
+  },
+  {
+    file: "features/time/components/TimePage.svelte",
+    why: "V32: closes the condition above.",
+    find: `            </section>
+
+            {#if session.failed}`,
+    replace: `            </section>{/if}
+
+            {#if session.failed}`,
+  },
   {
     file: "features/work/components/WorkCanvas.svelte",
     why: "Keep the Svelte Flow attribution visible; hiding it is meant for Pro subscribers.",
@@ -606,6 +640,8 @@ const messages = fs.readFileSync(path.join(frame, "messages/en.json"), "utf8");
 const renamed = messages.replace(/Zephium/g, "Aegis");
 fs.writeFileSync(path.join(out, "messages/en.json"), renamed);
 fs.copyFileSync(path.join(clone, "LICENSE"), path.join(out, "LICENSE"));
+const shortcutSource = "crates/zephium-core/src/search/shortcuts.json";
+fs.copyFileSync(path.join(clone, shortcutSource), path.join(out, "search-shortcuts.json"));
 
 // A paused run in AEGIS is waiting on a provider, never on a hidden window.
 const messagesFile = path.join(out, "messages/en.json");
@@ -1006,9 +1042,157 @@ patches.push(...[
   }
 ]);
 
+patches.push(
+  {
+    file: "features/search/components/NewTabSearch.svelte",
+    why: "Use the persistent Windows input and an eagerly mounted engine menu in AEGIS.",
+    find: '  import { parkCaret } from "$shared/lib/parked-caret";',
+    replace: '  import Menu from "$shared/ui/Menu";',
+  },
+  {
+    file: "features/search/components/NewTabSearch.svelte",
+    why: "Keep the empty field focused between interactions.",
+    find: '  // A parked caret stands in for the focus, so the field keeps its awake look.\n  let parked = $state(false);\n',
+    replace: '',
+  },
+  {
+    file: "features/search/components/NewTabSearch.svelte",
+    why: "Remove the platform caret-parking timeout for the AEGIS desktop host.",
+    find: '    const unpark = input ? parkCaret(input, (value) => (parked = value)) : () => {};\n',
+    replace: '',
+  },
+  {
+    file: "features/search/components/NewTabSearch.svelte",
+    why: "The AEGIS input stays focused until its owner changes focus.",
+    find: '      unpark();\n',
+    replace: '',
+  },
+  {
+    file: "features/search/components/NewTabSearch.svelte",
+    why: "Keep the engine visible and avoid replacing a trigger under the pointer on first click.",
+    find: '          awake={focused || parked || active}',
+    replace: '          awake={true}\n          menu={Menu}',
+  },
+  {
+    file: "features/search/components/NewTabSearch.svelte",
+    why: "Preserve AEGIS accessibility labels and keyboard integrations.",
+    find: '        role: "combobox",',
+    replace: '        role: "combobox",\n        "aria-label": "Address or search",',
+  },
+  {
+    file: "features/search/components/EngineMenu.svelte",
+    why: "Accept a preloaded menu where the New Tab dock already uses it.",
+    find: '    size = 18,',
+    replace: '    menu,\n    size = 18,',
+  },
+  {
+    file: "features/search/components/EngineMenu.svelte",
+    why: "Keep other surfaces free to load their engine menu lazily.",
+    find: '    loadMenu?: () => Promise<MenuModule>;',
+    replace: '    loadMenu?: () => Promise<MenuModule>;\n    menu?: MenuModule["default"];',
+  },
+  {
+    file: "features/search/components/EngineMenu.svelte",
+    why: "Render the persistent trigger whenever the caller supplies the component.",
+    find: '  {#if MenuView}\n    <MenuView',
+    replace: '  {#if menu ?? MenuView}\n    <svelte:component this={menu ?? MenuView}',
+  },
+  {
+    file: "features/dock/components/Dock.svelte",
+    why: "Use the original dock layout with AEGIS-owned tools and account scope.",
+    find: '  import ToolShelf from "./ToolShelf.svelte";',
+    replace: '',
+  },
+  {
+    file: "features/dock/components/Dock.svelte",
+    why: "Supply the local browser tool shelf through a snippet.",
+    find: '    foot,\n',
+    replace: '    foot,\n    shelf,\n',
+  },
+  {
+    file: "features/dock/components/Dock.svelte",
+    why: "The local tool shelf does not depend on Zephium Cloud.",
+    find: '    foot?: Snippet;\n',
+    replace: '    foot?: Snippet;\n    shelf?: Snippet;\n',
+  },
+  {
+    file: "features/dock/components/Dock.svelte",
+    why: "Render the local shelf in the original horizontal dock.",
+    find: '<ToolShelf />',
+    replace: '{@render shelf?.()}',
+  },
+  {
+    file: "features/dock/components/Dock.svelte",
+    why: "Render the same local shelf in the compact dock.",
+    find: '<ToolShelf\n        compact\n        {roomy}\n      />',
+    replace: '{@render shelf?.()}',
+  },
+  {
+    file: "shared/ui/AccountSummary/AccountSummary.svelte",
+    why: "Allow a local research-token allowance to use the account card.",
+    find: '    tone = "calm",',
+    replace: '    tone = "calm",\n    usageLabel = m.account_usage_title(),\n    barOnly = false,',
+  },
+  {
+    file: "shared/ui/AccountSummary/AccountSummary.svelte",
+    why: "Show the allowance bar without visible token figures.",
+    find: '    tone?: "calm" | "high" | "full";',
+    replace: '    tone?: "calm" | "high" | "full";\n    usageLabel?: string;\n    barOnly?: boolean;',
+  },
+  {
+    file: "shared/ui/AccountSummary/AccountSummary.svelte",
+    why: "Use an accurate accessible label and allow unavailable usage.",
+    find: '<span class="title">{m.account_usage_title()}</span>\n      <span class="value">{reading}</span>',
+    replace: '<span class="title">{usageLabel}</span>\n      {#if !barOnly}<span class="value">{reading}</span>{/if}',
+  },
+  {
+    file: "shared/ui/AccountSummary/AccountSummary.svelte",
+    why: "The meter names its real local allowance.",
+    find: 'aria-label={m.account_usage_meter()}',
+    replace: 'aria-label={usageLabel}',
+  },
+);
+patches.push(
+  {
+    file: "features/tabs/components/TabRow.svelte",
+    why: "Use packaged site marks until the browser supplies a native favicon.",
+    find: '  import { closeOnMiddleClick } from "../lib/middle-click";',
+    replace: '  import { closeOnMiddleClick } from "../lib/middle-click";\n  import EngineMark from "$shared/ui/EngineMark";\n  import { knownSiteMark } from "../../../../../src/search-engines";',
+  },
+  {
+    file: "features/tabs/components/TabRow.svelte",
+    why: "Use the real site favicon first and a local mark otherwise.",
+    find: '    <FavIcon\n      image={favicons.image(tab.icon)}',
+    replace: '    {#if knownSiteMark(tab.url ?? "") && !favicons.image(tab.icon)}<EngineMark engine={knownSiteMark(tab.url ?? "")!} size={16} />{:else}<FavIcon\n      image={favicons.image(tab.icon)}',
+  },
+  {
+    file: "features/tabs/components/TabRow.svelte",
+    why: "Close the conditional site mark in the upstream tab row.",
+    find: '      notched={!!tab.audio}\n    />',
+    replace: '      notched={!!tab.audio}\n    />{/if}',
+  },
+  {
+    file: "features/search/components/ResultRow.svelte",
+    why: "Add local favicon fallbacks for known tab and history hosts.",
+    find: '  import FavIcon from "$shared/ui/FavIcon";',
+    replace: '  import FavIcon from "$shared/ui/FavIcon";\n  import EngineMark from "$shared/ui/EngineMark";\n  import { knownSiteMark } from "../../../../../src/search-engines";',
+  },
+  {
+    file: "features/search/components/ResultRow.svelte",
+    why: "Present a known site mark in the upstream search result.",
+    find: '  <span class="glyph">\n    {#if image}',
+    replace: '  <span class="glyph">\n    {#if image}',
+  },
+  {
+    file: "features/search/components/ResultRow.svelte",
+    why: "Paint the bundled favicon without making a network request.",
+    find: '    {:else}<Icon icon={glyph} size={launcher ? 18 : 16} />',
+    replace: '    {:else if sited && result && knownSiteMark(result.detail)}<EngineMark engine={knownSiteMark(result.detail)!} size={16} />\n    {:else}<Icon icon={glyph} size={launcher ? 18 : 16} />',
+  },
+);
 patches.push(...v17Patches);
 patches.push(...v20Patches);
-patches.push(...v21Patches, ...v22Patches, ...v23Patches, ...v24Patches, ...v25Patches, ...compositionPatches, ...mediaCollectionPatches, ...siteRowPatches, ...picksPicturePatches);
+patches.push(...v21Patches, ...v22Patches, ...v23Patches, ...v24Patches, ...v25Patches, ...compositionPatches, ...mediaCollectionPatches, ...siteRowPatches, ...picksPicturePatches, ...visualBoardPatches);
 for (const patch of patches) {
   const target = path.join(dest, patch.file);
   const text = fs.readFileSync(target, "utf8").replace(/\r\n/g, "\n");
@@ -1024,6 +1208,7 @@ const manifest = {
   upstream: "https://github.com/zephium-browser/Zephium",
   commit,
   license: "MPL-2.0",
+  extraSources: [{ path: shortcutSource, packaged: "search-shortcuts.json" }],
   messages: { file: "frame/messages/en.json", change: "Zephium replaced with Aegis in user-facing text" },
   patches: applied.map(({ file, why }) => ({ file, why })),
   files: files.map((f) => {

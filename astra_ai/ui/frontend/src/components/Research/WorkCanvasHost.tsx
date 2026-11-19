@@ -4,6 +4,7 @@
  * app's stylesheets reach into the other. Rollback: the "classic" surface setting.
  */
 import { useEffect, useRef, useState } from "react";
+import { conversationSnapshot } from "../../conversation";
 import type { CanvasPanel, CanvasRailPanel } from "../../../work-canvas/src/canvas-panels";
 
 const SURFACE_KEY = "nova-research-surface";
@@ -70,7 +71,7 @@ export type CanvasBridgeActions = {
   /** The editor's saved HTML, through the same sanitizer the Reader uses. */
   renderHtml?(html: string): string;
   checkFrame(url: string, signal?: AbortSignal): Promise<{embeddable: boolean | null; reason: string}>;
-  addWorkSource(url: string, title: string): Promise<void>;
+  addWorkSource(url: string, title: string, meta?: Record<string, unknown>): Promise<{duplicate: boolean; title: string} | void>;
   startWork(text: string, options?: {workflow?: string; chosen?: unknown[]; fromResearch?: string}): void;
   askNodes(question: string, nodes: {id: string; kind: string; title: string; url?: string; summary: string}[], runId: string): Promise<boolean> | void;
   answerRun(text: string): void | Promise<void>;
@@ -87,6 +88,8 @@ type CanvasHandle = {
 
 /** Follows the AEGIS theme: the canvas goes light when the app's background is light. */
 function appTheme(): "dark" | "light" {
+  const mode = document.documentElement.dataset.appearanceMode;
+  if (mode === "dark" || mode === "light") return mode;
   const probe = document.createElement("span");
   probe.style.color = "var(--bg)";
   probe.hidden = true;
@@ -101,6 +104,8 @@ function appTheme(): "dark" | "light" {
 type CanvasModule = {
   mountCanvas(target: HTMLElement, portal: HTMLElement): CanvasHandle;
   mountAskEmpty(target: HTMLElement, context: boolean): { destroy(): void };
+  openUnifiedSettings(section?: string): void;
+  setWorkspaceHeaders?(value: () => Record<string, string>): void;
 };
 
 let loaded: Promise<CanvasModule> | null = null;
@@ -121,6 +126,12 @@ function loadCanvas() {
     });
   }
   return loaded;
+}
+
+export async function openUnifiedSettings(section?: string) {
+  const module = await loadCanvas();
+  module.setWorkspaceHeaders?.(() => ({ "X-Nova-Client": conversationSnapshot().clientId }));
+  module.openUnifiedSettings(section);
 }
 
 export function ZephiumAskEmpty({ context }: { context: boolean }) {
@@ -185,6 +196,8 @@ export function WorkCanvasHost({
       .then((module) => {
         if (gone) return;
         const canvas = module.mountCanvas(root, pop);
+        // V31: the browser's Today figure reads real tasks with the current workspace session.
+        module.setWorkspaceHeaders?.(() => ({ "X-Nova-Client": conversationSnapshot().clientId }));
         canvas.setActions(stable);
         handle.current = canvas;
         setReady(true);

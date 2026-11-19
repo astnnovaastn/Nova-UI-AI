@@ -10,6 +10,7 @@
   import { workApi } from "./work-panels.svelte";
   import WorkLibraryDrawer from "./WorkLibraryDrawer.svelte";
 
+  let { embedded = false }: { embedded?: boolean } = $props();
   type SkillRow = { name: string; title: string; description: string; category: string; source: string; origin: string; enabled: boolean; version: string; triggers: string[] };
   let skills = $state<SkillRow[]>([]);
   let query = $state("");
@@ -116,7 +117,7 @@
   }
 </script>
 
-<WorkLibraryDrawer panel="skills" title="Skills">
+<WorkLibraryDrawer panel="skills" title="Skills" {embedded}>
   {#snippet headerAction()}
     <button type="button" class="rl-text-button" onclick={create}>New skill</button>
   {/snippet}

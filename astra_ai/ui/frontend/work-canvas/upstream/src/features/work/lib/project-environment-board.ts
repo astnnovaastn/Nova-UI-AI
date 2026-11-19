@@ -486,7 +486,8 @@ export function environmentStages(
         const part = object.part
           ? parts.find((candidate) => candidate.key === object.part)?.id
           : legacyFound.get(object.id);
-        if (part) found.set(object.id, part);
+        // AEGIS V33: on a visual board the picture groups are the result, not a part's finds.
+        if (part && !(options.board === "visual" && object.view.kind === "picks")) found.set(object.id, part);
       }
       // A research part's notes (a list of what it read, not the person's own to-dos or
       // messages) are what it handed the lead, not something it found: its row keeps its
@@ -540,6 +541,7 @@ export function environmentStages(
             kind: object.view.kind,
             emphasis: object.emphasis,
             ...(object.block?.group ? { group: object.block.group } : {}),
+            ...(object.view.kind === "picks" ? { count: object.view.items.length } : {}),
             width: range(object),
             height: (width) => sized(object, width, object.id === open),
           })),

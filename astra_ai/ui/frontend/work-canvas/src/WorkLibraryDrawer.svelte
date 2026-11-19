@@ -3,11 +3,12 @@
   import { focusWorkLibraryTrigger, type WorkLibraryPanel } from "./canvas-panels";
   import { store } from "./store.svelte";
 
-  let { panel, title, children, headerAction }: {
+  let { panel, title, children, headerAction, embedded = false }: {
     panel: WorkLibraryPanel;
     title: string;
     children: Snippet;
     headerAction?: Snippet;
+    embedded?: boolean;
   } = $props();
 
   function close() {
@@ -16,15 +17,15 @@
   }
 </script>
 
-<aside class="work-library" id={"work-" + panel + "-drawer"} aria-label={title}>
+<aside class={embedded ? "embedded" : "work-library"} id={embedded ? undefined : "work-" + panel + "-drawer"} aria-label={title}>
   <header class="rl-head">
-    <h2>{title}</h2>
+    {#if !embedded}<h2>{title}</h2>{/if}
     {@render headerAction?.()}
-    <button type="button" class="rl-close" aria-label={"Close " + title.toLowerCase()} title="Close (Esc)" onclick={close}>
+    {#if !embedded}<button type="button" class="rl-close" aria-label={"Close " + title.toLowerCase()} title="Close (Esc)" onclick={close}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
         <path d="M6 6l12 12M18 6L6 18" />
       </svg>
-    </button>
+    </button>{/if}
   </header>
   <div class="rl-list">
     <div class="content">
@@ -34,6 +35,9 @@
 </aside>
 
 <style>
+  .embedded { display: grid; gap: 10px; color: var(--color-text); font-size: 13px; }
+  .embedded header { display: flex; justify-content: flex-end; }
+  .embedded :global(.rl-text-button) { padding: 6px 14px; border-radius: var(--radius-capsule); background: var(--color-fill); }
   .work-library {
     --r-panel: var(--color-raised);
     --r-fg: var(--color-text);

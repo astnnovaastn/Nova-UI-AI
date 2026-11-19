@@ -5,6 +5,7 @@
  * loudly rather than pretending a native effect happened.
  */
 import {workspaceHeaders} from './host-session';
+import {bridge} from './zephium-bridge.svelte';
 const answers: Record<string, unknown> = {
   favicon_probe: true,
   work_release_memory: true,
@@ -15,6 +16,8 @@ const missing = new Set<string>();
 let activation:Event|undefined;
 export function captureNativeActivation(event:Event){if(event.isTrusted){activation=event;queueMicrotask(()=>{if(activation===event)activation=undefined;});}}
 export const missingCommands = (): string[] => [...missing];
+// V33: read by the desktop end-to-end tests (a button whose command AEGIS lacks shows up here).
+(globalThis as {__aegisMissingCommands?: () => string[]}).__aegisMissingCommands = missingCommands;
 
 export async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if(command==='browser_open_url'){
@@ -59,6 +62,9 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     if (!response.ok) throw new Error('Notes request failed');
     return response.json();
   }
+  // V32: the Browse components' commands, answered from AEGIS state (zephium-bridge.svelte.ts).
+  const bridged = bridge(command, args);
+  if (bridged !== undefined) return bridged as T;
   if (command in answers) return answers[command] as T;
   missing.add(command);
   throw new Error(`"${command}" is not available in AEGIS Research.`);

@@ -8,10 +8,14 @@
   import { untrack } from "svelte";
   import BrowserPane from "$features/work/components/pane/BrowserPane.svelte";
   import { blockedWords, normalizeAddress } from "./browser-address";
-  import { browserHost } from "./browser-host";
+  import { browserHost, desktopWork } from "./browser-host";
+  import { browserTabs } from "./browser-tabs.svelte";
+  import { settingsView } from "./settings/settings-view.svelte";
   import { addressOf, browser, type BrowserWindowState } from "./browser-windows.svelte";
   import { store } from "./store.svelte";
   import type { SourceInfo } from "./research-to-run";
+  import { originalAddress } from "./work-handoff";
+  import { youtubeVideoId } from "./video-player";
 
   let {
     entry,
@@ -37,8 +41,26 @@
    */
   let view = $state<"checking" | "frame" | "native" | "blocked" | "reader">("checking");
   const canOpenOriginal = $derived(Boolean(validAddress && view !== "checking" && (native || view !== "blocked" || framingDenied)));
-  function openOriginal() {
-    if (validAddress && canOpenOriginal) void browserHost.openExternal(validAddress).catch(() => {});
+  let handingOff = false;
+  async function openOriginal() {
+    if (!validAddress || !canOpenOriginal || handingOff) return;
+    if (!browserTabs.available) {
+      void browserHost.openExternal(originalAddress({ live: validAddress, recorded: info?.url }) ?? validAddress).catch(() => {});
+      return;
+    }
+    // V31: in AEGIS Desktop the page opens in an AEGIS tab, growing out of this window; the Work canvas stays as it is.
+    // V33: the page it really shows (a consent page unwrapped, a video as its watch page at the second it was
+    // playing), and this window's player paused first, so the tab is the only one playing.
+    handingOff = true;
+    const rect = hole?.getBoundingClientRect() ?? null;
+    try {
+      const handoff = native && opened ? await desktopWork.mediaHandoff(entry.id) : { time: null };
+      const address = originalAddress({ live: native ? live?.url : undefined, asked: validAddress, recorded: info?.url }, handoff.time) ?? validAddress;
+      const report = store.state.report;
+      browserTabs.openFromSource(address, { title: report?.display_title || report?.query || "", rect, researchId: entry.researchId });
+    } finally {
+      handingOff = false;
+    }
   }
 
   type ReaderPage = { status: string; title?: string; site?: string; html?: string; final_url?: string; retrieved_at?: number; via_proxy?: boolean; words?: number; reason?: string };
@@ -88,7 +110,11 @@
     if (!actions || adding || !validAddress) return;
     adding = true;
     try {
-      await actions.addWorkSource(info?.url ?? url, sourceTitle);
+      const address = info?.url ?? url;
+      await actions.addWorkSource(address, (native && live?.title) || sourceTitle, {
+        provenance: youtubeVideoId(address) ? "video" : "source_window",
+        ...(favicon.startsWith("https://") ? { favicon } : {}),
+      });
     } finally {
       adding = false;
     }
@@ -297,7 +323,8 @@
     return () => clearInterval(timer);
   });
 
-  const showing = $derived(native && opened && view === "native" && !entry.minimized && !covered && !failure);
+  // A native page paints above everything, so it hides while a browser tab is shown over the canvas (V31).
+  const showing = $derived(native && opened && view === "native" && !entry.minimized && !covered && !failure && browserTabs.active === "work" && browserTabs.page !== "notes" && !settingsView.isOpen);
   $effect(() => {
     if (native && opened) void browserHost.setVisible(entry.id, showing);
   });
