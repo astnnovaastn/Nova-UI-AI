@@ -1,0 +1,36 @@
+# V35: tests on every push and pull request. It never builds or publishes a release (see release.yml).
+name: CI
+
+on:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.10"
+      - name: Repository privacy check
+        run: node release/check-repo.mjs
+      - name: Install
+        shell: pwsh
+        run: |
+          python -m pip install pytest==8.3.3 -r release/requirements-desktop.txt
+          npm ci --prefix astra_ai/ui/frontend
+          npm ci --prefix astra_ai/ui/frontend/work-canvas
+      - name: Tests (no network, no model calls)
+        shell: pwsh
+        run: |
+          python -m pytest astra_ai/ui/backend/tests -q -p no:cacheprovider -k "work or workspace or research_trace or v35"
+          npm test --prefix astra_ai/ui/frontend/work-canvas
+          node --test astra_ai/ui/frontend/tests/desktop-caption.test.cjs release/test/release-unit.test.cjs

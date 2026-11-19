@@ -1,0 +1,117 @@
+# V35: builds, tests, signs and publishes an AEGIS Desktop release to GitHub Releases of this (private) repository.
+#
+# Only a version tag starts it (v0.36.0, v0.36.0-beta.1, v0.36.0-dev.3) or a manual run; ordinary pushes never
+# publish anything. Stable versions (no suffix) run in the "release-stable" environment: add required reviewers to
+# it in Settings -> Environments, so a stable release waits for your approval after the tests pass.
+# Secrets: AEGIS_RELEASE_SIGNING_KEY (the Ed25519 private key from `node release/keys.mjs`). No API keys are needed:
+# the build never reads .env, and the app package is checked by a privacy scan before it is signed.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (x.y.z, x.y.z-beta.n, x.y.z-dev.n); its tag v<version> must exist"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      channel: ${{ steps.v.outputs.channel }}
+      environment: ${{ steps.v.outputs.environment }}
+    steps:
+      - id: v
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          version="$REQUESTED_VERSION"
+          [ -z "$version" ] && version="${GITHUB_REF_NAME#v}"
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then channel=stable; env=release-stable
+          elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]; then channel=beta; env=release
+          elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-dev\.[0-9]+$ ]]; then channel=dev; env=release
+          else echo "::error::$version is not x.y.z, x.y.z-beta.n or x.y.z-dev.n"; exit 1; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"; echo "channel=$channel" >> "$GITHUB_OUTPUT"; echo "environment=$env" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    runs-on: windows-2022
+    environment: ${{ needs.plan.outputs.environment }}
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      CHANNEL: ${{ needs.plan.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.plan.outputs.version }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # The official python.org build (Authenticode-signed by the Python Software Foundation) becomes the runtime component.
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: "3.12.10"
+          architecture: x64
+
+      - name: Python packages for the backend
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --only-binary=:all: --target "$env:RUNNER_TEMP\site-packages" -r release/requirements-desktop.txt
+          python -m pip install pytest==8.3.3 -r release/requirements-desktop.txt
+
+      - name: Frontend dependencies
+        shell: pwsh
+        run: |
+          npm ci --prefix astra_ai/ui/frontend
+          npm ci --prefix astra_ai/ui/frontend/work-canvas
+
+      - name: Build the canvas and the web app
+        shell: pwsh
+        run: npm run desktop:build --prefix astra_ai/ui/frontend
+
+      - name: Tests (no network, no model calls)
+        shell: pwsh
+        run: |
+          python -m pytest astra_ai/ui/backend/tests -q -p no:cacheprovider -k "work or workspace or research_trace or v35"
+          npm test --prefix astra_ai/ui/frontend/work-canvas
+          node --test astra_ai/ui/frontend/tests/desktop-caption.test.cjs release/test/release-unit.test.cjs
+
+      - name: Check the version matches the app
+        shell: pwsh
+        run: |
+          $pkg = (Get-Content astra_ai/ui/frontend/package.json -Raw | ConvertFrom-Json).version
+          if ($pkg -ne $env:VERSION) { throw "astra_ai/ui/frontend/package.json says $pkg but the tag is v$env:VERSION" }
+          if (-not (Test-Path "release/notes/$env:VERSION.md")) { throw "Add release notes: release/notes/$env:VERSION.md" }
+
+      - name: Build and sign the release
+        shell: pwsh
+        env:
+          AEGIS_RELEASE_SIGNING_KEY: ${{ secrets.AEGIS_RELEASE_SIGNING_KEY }}
+        run: |
+          if (-not $env:AEGIS_RELEASE_SIGNING_KEY) { throw "The AEGIS_RELEASE_SIGNING_KEY secret is not set." }
+          $py = Split-Path -Parent (Get-Command python).Source
+          node release/build.mjs --channel $env:CHANNEL --version $env:VERSION --skip-build --python "$py" --packages "$env:RUNNER_TEMP\site-packages" --out release/out
+
+      - name: Publish to GitHub Releases
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = Get-ChildItem release/out -File | Where-Object { $_.Name -match '\.(zip|json|sig)$' } | ForEach-Object { $_.FullName }
+          $pre = if ($env:CHANNEL -eq 'stable') { @() } else { @('--prerelease') }
+          gh release create "v$env:VERSION" @assets --title "AEGIS $env:VERSION" --notes-file release/out/release-notes.md @pre --verify-tag
