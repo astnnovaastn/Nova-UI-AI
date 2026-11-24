@@ -40,6 +40,7 @@
     HandIcon,
     PlusSignIcon,
     ShapeCollectionIcon,
+    StopIcon,
   } from "@hugeicons/core-free-icons";
   import WorkCanvas from "$features/work/components/WorkCanvas.svelte";
   import Lift from "$features/work/components/Lift.svelte";
@@ -54,7 +55,6 @@
   import ObjectFocus from './objects/ObjectFocus.svelte';
   import WorkBar from "$features/work/components/bar/WorkBar.svelte";
   import BarTool from "$features/work/components/bar/BarTool.svelte";
-  import AgentLine from "$features/work/components/AgentLine.svelte";
   import { composerEdge, composerHole } from "$features/work/lib/composer-hole";
   import { pointerTool, setPointerTool } from "$features/work/lib/pointer-tool.svelte";
   import {
@@ -85,14 +85,13 @@
     accountInputs=[...accountInputs.filter(x=>x.id!==input.id),input].slice(-24);
   }
   import { buildScene, reportTitle, type CanvasScene, type ZephiumRun } from "./research-to-run";
-  import { aegisSession, asWorkSession } from "./session.svelte";
   import { store } from "./store.svelte";
   import { setCanvasPictures } from "./media";
-  import { ACTIVE_JOBS, endedWords, setWaitingReason, wordsForWait } from "./waiting.svelte";
+  import { ACTIVE_JOBS, endedWords, wordsForWait } from "./waiting.svelte";
   import { pictureUrl } from "./report-images";
-  import ClarificationPanel from './ClarificationPanel.svelte';
+  import QuestionIsland from "./QuestionIsland.svelte";
+  import { projectResearchIsland } from "./research-island-state";
   import { documentIdentity } from "./document-identity";
-  import { Character } from "$shared/ui/presence";
   import BrowserTabs from "./BrowserTabs.svelte";
   import { settingsView } from "./settings/settings-view.svelte";
   import { browserTabs } from "./browser-tabs.svelte";
@@ -197,7 +196,6 @@
   const reasonWords = $derived(
     report?.phase === "failed" ? endedWords(report.waiting_reason ?? "", "failed") : wordsForWait(report?.waiting_reason ?? ""),
   );
-  $effect(() => setWaitingReason(report?.waiting_reason ?? ""));
   /** In Zephium's design the run's results are Zephium artifacts, laid out by its own board. */
   const zephiumResults = $derived(zephiumDesign ? {
     objects: objectItems(state.run?.canvas_objects).map((item) => item.aegisObject),
@@ -275,14 +273,6 @@
   const expandedSources = new SvelteMap<string,{width:number;height:number}>();
   $effect(()=>{void report?.research_id;untrack(()=>expandedSources.clear());});
   let open = $state<string | null>(null);
-
-  $effect(() => {
-    aegisSession.update(
-      scene ? ([...scene.objectives.values()][0] ?? null) : null,
-      scene?.signals ?? [],
-      scene?.pages ?? [],
-    );
-  });
 
   const recorded = () => scene?.pages ?? [];
   /** V29: the workflow's board profile from the run's route; old runs (no route) keep today's board. */
@@ -1562,57 +1552,92 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
   const questionStep=$derived(question?.step ?? null);
   /** The microphone is on: the composer shows the live voice strip, and a question can be answered aloud. */
   const voiceOn = $derived(!state.muted && state.connected && !state.guest);
-  /** While AEGIS waits on a question, the person's finished spoken sentence is their answer. */
-  /** V30 question island: folded by Escape or its header (the run keeps waiting); a new question opens it again. */
-  let questionFolded = $state(false);
-  let islandHead = $state<HTMLButtonElement>();
-  /** Set only after the backend accepted the answer and the run was reloaded: the brief "received" state. */
-  let acknowledged = $state(false);
-  let acknowledgeTimer: ReturnType<typeof setTimeout> | undefined;
-  $effect(() => { void questionStep; untrack(() => { questionFolded = false; }); });
-  // A question that just opened takes the keyboard only if nothing else had it (never from the composer).
+  let sendingStep = $state<string | null>(null);
+  let failedStep = $state<string | null>(null);
+  let receipt = $state<{page: string | undefined; step: string} | null>(null);
+  $effect(() => {
+    if (!receipt) return;
+    const timer = setTimeout(() => receipt = null, 1600);
+    return () => clearTimeout(timer);
+  });
+
+  async function answerQuestion(text: string, step: string | null) {
+    if (!actions || !step || step !== questionStep || sendingStep === step || !text.trim()) {
+      throw Error("This answer cannot be sent.");
+    }
+    const page = report?.research_id;
+    sendingStep = step;
+    failedStep = null;
+    try {
+      await actions.answerRun(text.trim());
+      if (report?.research_id !== page || (questionStep && questionStep !== step)) return;
+      answeredStep = step;
+      receipt = { page, step };
+    } catch (error) {
+      if (questionStep === step) failedStep = step;
+      throw error;
+    } finally {
+      if (sendingStep === step) sendingStep = null;
+    }
+  }
+
+  let captureStep: string | null = null;
   $effect(() => {
     const step = questionStep;
-    if (!step) return;
-    requestAnimationFrame(() => {
-      const active = document.activeElement;
-      if (untrack(() => questionStep) !== step || (active && active !== document.body && !active.closest(".canvas-stage, .react-flow, .svelte-flow"))) return;
-      document.querySelector<HTMLElement>("#aegis-question-body button, #aegis-question-body textarea, #aegis-question-body input")?.focus({ preventScroll: true });
-    });
-  });
-  async function answerQuestion(text: string) {
-    const step = question?.step ?? null;
-    await actions?.answerRun(text);
-    // The backend has saved the answer (the request succeeded); the run resumes when the job queue picks it up.
-    answeredStep = step;
-    acknowledged = true;
-  }
-  // "Answer received · resuming" lasts until the run is working again (or asks something new), and at least briefly.
-  $effect(() => {
-    if (!acknowledged) return;
-    const resumed = !pendingQuestion || pendingQuestion.step !== answeredStep;
-    clearTimeout(acknowledgeTimer);
-    acknowledgeTimer = setTimeout(() => { if (resumed) acknowledged = false; }, resumed ? 1600 : 60000);
-  });
-  let heardAnswer = $state("");
-  $effect(() => { void questionStep; untrack(() => { heardAnswer = ""; }); });
-  $effect(() => {
-    const open = question;
-    if (!open || !voiceOn) return;
+    if (!step || !researchVisible) return;
     const heard = (event: Event) => {
       const detail = (event as CustomEvent<{ who: string; text: string; final: boolean }>).detail;
-      if (detail?.who !== "user" || !detail.text?.trim()) return;
-      heardAnswer = detail.text.trim();
-      if (detail.final) void actions?.answerRun(heardAnswer);
+      if (detail?.who !== "user" || !detail.text?.trim() || (!voiceOn && captureStep !== step)) return;
+      captureStep = step;
+      if (detail.final) {
+        captureStep = null;
+        void answerQuestion(detail.text, step).catch(() => {});
+      }
     };
     window.addEventListener("aegis-voice-transcript", heard);
-    return () => window.removeEventListener("aegis-voice-transcript", heard);
+    return () => { captureStep = null; window.removeEventListener("aegis-voice-transcript", heard); };
   });
+
+  const islandRun = $derived(pendingReport ? null : state.run);
+  const islandOwner = $derived(islandRun?.run_id ?? pendingReport?.research_id ?? report?.research_id);
   const ended = $derived(scene?.state === "failed" || scene?.state === "cancelled");
-  let retrying = $state(false);
-  const chatLabel = $derived(
-    state.voiceState === "thinking" ? "Thinking" : state.voiceState === "speaking" ? "Speaking" : state.voiceState === "listening" && !state.muted ? "Listening" : "",
-  );
+  let retry = $state<{owner: string | undefined; after: number} | null>(null);
+  $effect(() => { void islandOwner; retry = null; });
+  const islandJobId = $derived(pendingReport ? "" : state.jobId);
+  const islandJob = $derived(state.jobs.find(job => job.id === islandJobId));
+  const canStopIsland = $derived(!!islandJobId && (islandJob
+    ? ACTIVE_JOBS.has(islandJob.state)
+    : live || islandRun?.state === "queued" || islandRun?.state === "running" || islandRun?.state === "waiting"));
+  let observedOwner: string | undefined;
+  let observedActive = false;
+  let outcome = $state(false);
+  $effect(() => {
+    const owner = islandOwner;
+    const current = islandRun?.state ?? scene?.state;
+    const active = ["running","queued","waiting","needs_input"].includes(current ?? "");
+    const justEnded = !!owner && owner === observedOwner && observedActive && !active;
+    outcome = justEnded;
+    observedOwner = owner;
+    observedActive = active;
+    if (justEnded) {
+      const timer = setTimeout(() => outcome = false, 2200);
+      return () => clearTimeout(timer);
+    }
+  });
+  const island = $derived(projectResearchIsland({
+    run: islandRun, report: pendingReport ?? report,
+    trace: pendingReport ? [] : state.trace, afterSeq: retry?.owner === islandOwner ? retry?.after : undefined,
+    active: !!pendingReport || (!!islandJob && ACTIVE_JOBS.has(islandJob.state)),
+    showOutcome: ended || outcome,
+    questionPending: !!question, voiceState: state.voiceState, microphoneOn: voiceOn,
+    answer: questionStep && sendingStep === questionStep ? "sending"
+      : receipt && receipt.page === report?.research_id && (!questionStep || questionStep === receipt.step) ? "received" : undefined,
+  }));
+  const statusNotice = $derived(island.phase === "idle" ? state.status.trim() : "");
+  function retryResearch() {
+    retry = { owner: islandOwner, after: state.trace.at(-1)?.seq ?? 0 };
+    actions?.retry();
+  }
   const disabled = $derived(!state.connected || state.guest);
   /** V35: the connected project a developer run used (kept with the run, so it survives Work History). */
   const developerProject = $derived.by(() => {
@@ -1918,51 +1943,29 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
           </button>
           <!-- V32: no browser tab controls in Work; Browse is the rail's Browser button (or Ctrl+T). -->
           <span class="canvas-top-gap"></span>
-          <div
-            class="island"
-            class:gone={!question && !acknowledged && !live && !ended && !chatLabel && !state.status}
-            class:asking={!!question}
-            class:open={!!question && !questionFolded}
-            role={question ? "region" : undefined}
-            aria-label={question ? "AEGIS question" : undefined}
-            onkeydown={(event) => { if (question && event.key === "Escape" && !questionFolded) { event.stopPropagation(); questionFolded = true; islandHead?.focus(); } }}
-          >
-            {#if question}
-              <!-- V30: the question opens out of the island itself; folding it keeps the run waiting, never answers it. -->
-              <button bind:this={islandHead} type="button" class="ask-head" aria-expanded={!questionFolded} aria-controls="aegis-question-body" onclick={() => (questionFolded = !questionFolded)}>
-                <Character kind="lead" mood={voiceOn ? "reading" : "waiting"} size={20} />
-                <span>AEGIS has a question</span>
-                <small>{questionFolded ? "Open" : "Waiting for you"}</small>
-              </button>
-              <div class="ask-body" id="aegis-question-body" inert={questionFolded}>
-                <div class="ask-inner">
-                  <ClarificationPanel {question} embedded disabled={disabled} listening={voiceOn} heard={heardAnswer} onvoice={() => actions?.microphone()} onanswer={answerQuestion} />
-                </div>
-              </div>
-            {:else if acknowledged}
-              <div class="chat-pill ack" role="status">Answer received · resuming</div>
-            {:else if live}
-              <AgentLine session={asWorkSession()} agents={agents.items} />
-            {:else if ended && retrying}
-              <div class="chat-pill" role="status">Retrying…</div>
-            {:else if ended}
-              <div class="chat-pill ended" role="status">
-                <span>{endedWords(report?.waiting_reason ?? "", scene?.state ?? "")}</span>
-                <button
-                  type="button"
-                  onclick={() => {
-                    retrying = true;
-                    setTimeout(() => (retrying = false), 35000);
-                    actions?.retry();
-                  }}>Retry</button
-                >
-              </div>
-            {:else if chatLabel || state.status}
-              <div class="chat-pill" role="status">{state.status || chatLabel}</div>
-            {/if}
-          </div>
           <div class="zoom-slot" data-work-zoom-slot></div>
         </div>
+        {#if researchVisible}
+          <QuestionIsland phase={statusNotice ? "working" : island.phase}
+            label={statusNotice || island.label}
+            detail={ended && island.phase === "failed" ? endedWords(report?.waiting_reason ?? "", "failed") : island.detail}
+            question={question ? { id: question.step, prompt: question.prompt, options: question.options } : null}
+            {disabled} answerFailed={!!questionStep && failedStep === questionStep}
+            onAnswer={answerQuestion}
+            onMicrophone={(id) => { if (id === questionStep) { captureStep = id; actions?.microphone(); } }}
+            onStopVoice={(mode) => mode === "speaking" ? actions?.stopReply() : actions?.microphone()}>
+            {#snippet activityActions()}
+              {#if ended && ["failed","stopped"].includes(island.phase)}
+                <button type="button" class="island-action" onclick={retryResearch}>Retry</button>
+              {:else if canStopIsland && !["idle","speaking","listening","received","sending","complete","partial","stopped","failed"].includes(island.phase)}
+                <button type="button" class="island-action island-stop" aria-label="Stop" title="Stop"
+                  onclick={() => actions?.stopJob(islandJobId)}>
+                  <Icon icon={StopIcon} size={14} />
+                </button>
+              {/if}
+            {/snippet}
+          </QuestionIsland>
+        {/if}
       </div>
       {#if asking.length || view.chosen.length}
         <div class="context-row" style:--dock="{dockHeight}px" role="group" aria-label="Cards this message is about">
@@ -2503,26 +2506,6 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     white-space: nowrap;
   }
 
-  .island {
-    position: absolute;
-    inset-block-start: -2px;
-    inset-inline-start: 50%;
-    inline-size: max-content;
-    min-inline-size: 240px;
-    max-inline-size: min(520px, calc(100% - 560px));
-    translate: -50% 0;
-    pointer-events: auto;
-    transition:
-      opacity var(--motion-base) var(--ease-out),
-      visibility var(--motion-base);
-  }
-
-  .island.gone {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-  }
-
   .new-tab {
     flex: none;
     min-inline-size: 30px;
@@ -2545,106 +2528,36 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     outline-offset: 2px;
   }
 
-  /* V30 question island: the status pill itself opens downward into the question, then closes again. */
-  .island.asking {
-    z-index: 50;
-    inline-size: min(580px, calc(100vw - 48px));
-    max-inline-size: calc(100% - 32px);
-    border-radius: 22px;
-    background: var(--color-float);
-    box-shadow: var(--shadow-popover);
-    color: var(--color-text);
-    overflow: hidden;
-    transition:
-      inline-size 260ms var(--ease-out),
-      border-radius 260ms var(--ease-out),
-      opacity var(--motion-base) var(--ease-out);
-  }
-  .island.asking:not(.open) {
-    inline-size: min(320px, calc(100vw - 48px));
-    border-radius: 999px;
-  }
-  .ask-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    inline-size: 100%;
-    padding: 9px 16px;
+  .island-action {
+    flex: none;
+    min-inline-size: 24px;
+    min-block-size: 24px;
     border: 0;
-    background: none;
-    color: inherit;
-    font: 600 var(--text-body) var(--font-sans);
-    text-align: start;
-    cursor: pointer;
-  }
-  .ask-head small {
-    margin-inline-start: auto;
-    font-weight: 500;
+    border-radius: 7px;
+    padding: 0 6px;
+    background: transparent;
     color: var(--color-muted);
-  }
-  .ask-head:focus-visible {
-    outline: 2px solid var(--color-text);
-    outline-offset: -4px;
-    border-radius: 18px;
-  }
-  .ask-body {
-    display: grid;
-    grid-template-rows: 0fr;
-    opacity: 0;
-    transition:
-      grid-template-rows 260ms var(--ease-out),
-      opacity 180ms var(--ease-out);
-  }
-  .island.open .ask-body {
-    grid-template-rows: 1fr;
-    opacity: 1;
-  }
-  .ask-inner {
-    min-block-size: 0;
-    overflow: hidden;
-  }
-  .chat-pill.ack {
-    color: var(--color-text);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .island.asking,
-    .ask-body {
-      transition: none;
-    }
-  }
-
-  .chat-pill {
-    padding: 10px 18px;
-    border-radius: 999px;
-    background: var(--color-float);
-    box-shadow: var(--shadow-popover);
-    color: var(--color-text);
-    font-size: var(--text-body);
-    text-align: center;
-  }
-
-  .chat-pill.ended {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    padding-block: 6px;
-    padding-inline-end: 6px;
-  }
-
-  .chat-pill.ended button {
-    padding: 5px 12px;
-    border: 0;
-    border-radius: 999px;
-    background: var(--color-text);
-    color: var(--color-canvas);
-    font-size: var(--text-label);
+    font-size: 12px;
     cursor: pointer;
   }
+  .island-action:hover, .island-action:focus-visible {
+    background: color-mix(in srgb, var(--color-text) 8%, transparent);
+    color: var(--color-text);
+  }
+  .island-stop {
+    display: grid;
+    place-items: center;
+    padding: 0;
+    color: var(--color-text);
+  }
+  .canvas-card {
+    --aegis-island-fill: color-mix(in srgb, var(--color-canvas) 74%, light-dark(white, black));
+    --aegis-island-edge: color-mix(in srgb, var(--color-text) 15%, transparent);
+    --aegis-island-ink: var(--color-text);
+  }
 
-  .chat-pill.ended button:focus-visible {
-    outline: 2px solid currentcolor;
-    outline-offset: 2px;
+  .canvas-card:has(:global(.island-rail:not(.compact, .settling))) .title {
+    max-inline-size: min(360px, max(125px, calc(50% - 296px)));
   }
 
   .zoom-slot {
@@ -2850,12 +2763,6 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
     font-weight: 600;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .island {
-      transition: none;
-    }
-  }
-
   .bar-dock :global(textarea::placeholder) {
     white-space: nowrap;
   }
@@ -2875,10 +2782,5 @@ ${css.join("")}@keyframes aegis-construct-in{from{opacity:0;transform:scale(.96)
       font-size: 14px;
     }
 
-    .island {
-      inset-block-start: 40px;
-      min-inline-size: 0;
-      max-inline-size: calc(100% - 24px);
-    }
   }
 </style>

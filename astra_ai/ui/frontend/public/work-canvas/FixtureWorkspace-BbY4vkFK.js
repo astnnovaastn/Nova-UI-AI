@@ -1,35 +1,36 @@
 import "./disclose-version-7ONGmeVC.js";
-import { B as e, Ct as t, F as n, Gt as r, H as i, I as a, J as o, L as s, Mt as c, Nt as l, P as u, Rt as d, U as f, W as p, X as m, Y as h, b as g, bt as _, ft as v, gt as y, h as b, ht as x, jt as ee, lt as S, m as C, mt as w, n as T, pt as E, r as D, tt as O, u as k, v as A, vt as j, x as M, y as N, zt as P } from "./index-client-DH73-vTM.js";
-import { $ as F, A as I, E as L, Gt as te, J as R, M as z, O as ne, T as re, Wt as ie, _ as ae, a as oe, g as se, i as ce, k as B, n as le, r as ue, s as de, t as V } from "./SourceStackOverlay-CmFUDkW-.js";
-import { n as H, r as U } from "./PageFace-D49tiqHZ.js";
+import { B as e, Ct as t, F as n, Gt as r, H as i, I as a, J as o, L as s, Mt as c, Nt as l, P as u, Rt as d, S as f, U as p, W as m, X as h, Y as g, b as _, bt as v, ft as y, gt as b, h as x, ht as S, jt as C, lt as w, m as T, mt as E, n as D, pt as O, r as k, tt as A, u as j, ut as M, v as N, vt as P, x as F, y as I, zt as L } from "./index-client-DH73-vTM.js";
+import { Bt as R, D as ee, O as z, Q as te, Rt as ne, T as B, g as re, h as ie, i as ae, j as V, k as H, n as oe, o as se, q as U, r as ce, t as W, w as le, zt as ue } from "./SourceStackOverlay-x2Q3dG8D.js";
+import { t as de } from "./QuestionCard-BXY1lu0f.js";
+import { n as fe, r as G } from "./PageFace-D49tiqHZ.js";
 // src/fixtures/AdaptiveGallery.svelte
-var W = p("<option> </option>"), fe = p("<li class=\"svelte-lpqqem\"> </li>"), pe = p("<aside class=\"adaptive-gallery svelte-lpqqem\" aria-label=\"Adaptive card library\"><h2 class=\"svelte-lpqqem\">Adaptive cards</h2><p class=\"svelte-lpqqem\">20 families · 800 specifications</p> <label class=\"svelte-lpqqem\">Family<select aria-label=\"Family\" class=\"svelte-lpqqem\"></select></label> <label class=\"svelte-lpqqem\">Presentation<select aria-label=\"Presentation\" class=\"svelte-lpqqem\"></select></label> <label class=\"svelte-lpqqem\">Data size<select aria-label=\"Data size\" class=\"svelte-lpqqem\"></select></label> <p class=\"svelte-lpqqem\"> </p><details><summary class=\"svelte-lpqqem\">15 uses across workflows</summary><ol></ol></details> <p class=\"notice svelte-lpqqem\">Fixture data only. No research is started and no external action is performed.</p></aside>");
+var K = m("<option> </option>"), q = m("<li class=\"svelte-lpqqem\"> </li>"), pe = m("<aside class=\"adaptive-gallery svelte-lpqqem\" aria-label=\"Adaptive card library\"><h2 class=\"svelte-lpqqem\">Adaptive cards</h2><p class=\"svelte-lpqqem\">20 families · 800 specifications</p> <label class=\"svelte-lpqqem\">Family<select aria-label=\"Family\" class=\"svelte-lpqqem\"></select></label> <label class=\"svelte-lpqqem\">Presentation<select aria-label=\"Presentation\" class=\"svelte-lpqqem\"></select></label> <label class=\"svelte-lpqqem\">Data size<select aria-label=\"Data size\" class=\"svelte-lpqqem\"></select></label> <p class=\"svelte-lpqqem\"> </p><details><summary class=\"svelte-lpqqem\">15 uses across workflows</summary><ol></ol></details> <p class=\"notice svelte-lpqqem\">Fixture data only. No research is started and no external action is performed.</p></aside>");
 function me(r, a) {
 	c(a, !0);
-	let o = t(() => z.find((e) => e.id === a.family) || z[0]);
-	var s = pe(), l = x(E(s), 3), f = x(E(l));
-	u(f, 21, () => z, n, (t, n) => {
-		var r = W(), a = E(r, !0);
-		P(r);
+	let o = t(() => V.find((e) => e.id === a.family) || V[0]);
+	var s = pe(), l = S(O(s), 3), f = S(O(l));
+	u(f, 21, () => V, n, (t, n) => {
+		var r = K(), a = O(r, !0);
+		L(r);
 		var o = {};
-		S(() => {
-			e(a, O(n).label), o !== (o = O(n).id) && (r.value = (r.__value = O(n).id) ?? "");
+		w(() => {
+			e(a, A(n).label), o !== (o = A(n).id) && (r.value = (r.__value = A(n).id) ?? "");
 		}), i(t, r);
-	}), P(f);
+	}), L(f);
 	var p;
-	N(f), P(l);
-	var m = x(l, 2), _ = x(E(m));
-	u(_, 21, () => O(o).presets, n, (t, n) => {
-		var r = W(), a = E(r);
-		P(r);
+	I(f), L(l);
+	var m = S(l, 2), h = S(O(m));
+	u(h, 21, () => A(o).presets, n, (t, n) => {
+		var r = K(), a = O(r);
+		L(r);
 		var o = {};
-		S(() => {
-			r.disabled = !O(n).available, e(a, `${O(n).label ?? ""}${O(n).available ? "" : " · awaiting design review"}`), o !== (o = O(n).id) && (r.value = (r.__value = O(n).id) ?? "");
+		w(() => {
+			r.disabled = !A(n).available, e(a, `${A(n).label ?? ""}${A(n).available ? "" : " · awaiting design review"}`), o !== (o = A(n).id) && (r.value = (r.__value = A(n).id) ?? "");
 		}), i(t, r);
-	}), P(_);
+	}), L(h);
 	var v;
-	N(_), P(m);
-	var y = x(m, 2), b = x(E(y));
+	I(h), L(m);
+	var y = S(m, 2), b = S(O(y));
 	u(b, 20, () => [
 		1,
 		3,
@@ -38,35 +39,35 @@ function me(r, a) {
 		50,
 		100
 	], n, (t, n) => {
-		var r = W(), a = E(r);
-		P(r);
+		var r = K(), a = O(r);
+		L(r);
 		var o = {};
-		S(() => {
+		w(() => {
 			e(a, `${n ?? ""} items`), o !== (o = n) && (r.value = (r.__value = n) ?? "");
 		}), i(t, r);
-	}), P(b);
-	var C;
-	N(b), P(y);
-	var w = x(y, 2), T = E(w, !0);
-	P(w);
-	var D = x(w), k = x(E(D));
-	u(k, 21, () => O(o).uses, n, (t, n) => {
-		var r = fe(), a = E(r, !0);
-		P(r), S(() => e(a, O(n))), i(t, r);
-	}), P(k), P(D), d(2), P(s), S(() => {
-		p !== (p = a.family) && (f.value = (f.__value = a.family) ?? "", g(f, a.family)), v !== (v = a.preset || O(o).presets[0].id) && (_.value = (_.__value = a.preset || O(o).presets[0].id) ?? "", g(_, a.preset || O(o).presets[0].id)), C !== (C = a.count) && (b.value = (b.__value = a.count) ?? "", g(b, a.count)), e(T, O(o).purpose);
-	}), h("change", f, (e) => a.onchange(e.currentTarget.value, "", a.count)), h("change", _, (e) => a.onchange(a.family, e.currentTarget.value, a.count)), h("change", b, (e) => a.onchange(a.family, a.preset, Number(e.currentTarget.value))), i(r, s), ee();
+	}), L(b);
+	var x;
+	I(b), L(y);
+	var T = S(y, 2), E = O(T, !0);
+	L(T);
+	var D = S(T), k = S(O(D));
+	u(k, 21, () => A(o).uses, n, (t, n) => {
+		var r = q(), a = O(r, !0);
+		L(r), w(() => e(a, A(n))), i(t, r);
+	}), L(k), L(D), d(2), L(s), w(() => {
+		p !== (p = a.family) && (f.value = (f.__value = a.family) ?? "", _(f, a.family)), v !== (v = a.preset || A(o).presets[0].id) && (h.value = (h.__value = a.preset || A(o).presets[0].id) ?? "", _(h, a.preset || A(o).presets[0].id)), x !== (x = a.count) && (b.value = (b.__value = a.count) ?? "", _(b, a.count)), e(E, A(o).purpose);
+	}), g("change", f, (e) => a.onchange(e.currentTarget.value, "", a.count)), g("change", h, (e) => a.onchange(a.family, e.currentTarget.value, a.count)), g("change", b, (e) => a.onchange(a.family, a.preset, Number(e.currentTarget.value))), i(r, s), C();
 }
 o(["change"]);
 // src/fixtures/presentations.ts
-var G = {
+var J = {
 	revision: 1,
 	status: "simulation",
 	sources: [{
 		id: "reference",
 		title: "Supplied screenshot · illustrative data, not current research"
 	}]
-}, K = [
+}, he = [
 	[
 		"AWS",
 		"Core IaaS",
@@ -147,7 +148,7 @@ var G = {
 		"Business SaaS",
 		"servicenow.com"
 	]
-], q = [
+], ge = [
 	[
 		"2025-05-27",
 		"Set the launch promise and landing page",
@@ -237,11 +238,11 @@ var G = {
 		""
 	]
 ];
-function J() {
+function Y() {
 	let e = typeof location > "u" ? "http://127.0.0.1:5194" : location.origin;
 	return {
 		anchor: {
-			...G,
+			...J,
 			id: "visual-anchor",
 			kind: "comparison",
 			title: "Visual anchor",
@@ -276,12 +277,12 @@ function J() {
 			}]
 		},
 		market: {
-			...G,
+			...J,
 			id: "market-map",
 			kind: "diagram",
 			title: "Google Cloud market map",
 			diagramDirection: "right",
-			nodes: K.map(([e, t, n], r) => ({
+			nodes: he.map(([e, t, n], r) => ({
 				id: "company-" + r,
 				label: e,
 				group: t,
@@ -292,7 +293,7 @@ function J() {
 			edges: []
 		},
 		table: {
-			...G,
+			...J,
 			id: "market-table",
 			kind: "table",
 			title: "Google Cloud players",
@@ -306,7 +307,7 @@ function J() {
 				"tag",
 				"link"
 			],
-			rows: K.map(([e, t, n]) => [
+			rows: he.map(([e, t, n]) => [
 				e,
 				t,
 				"https://" + n
@@ -314,7 +315,7 @@ function J() {
 			caption: "Reference classification from the supplied screenshot. Funding and founding data are intentionally unknown; no live market research was performed."
 		},
 		campaign: {
-			...G,
+			...J,
 			id: "campaign",
 			kind: "timeline",
 			title: "gork launch campaign",
@@ -323,7 +324,7 @@ function J() {
 				label: "Budget envelope",
 				value: "$2,000–10,000"
 			},
-			entries: q.map(([e, t, n, r, i, a], o) => ({
+			entries: ge.map(([e, t, n, r, i, a], o) => ({
 				id: "campaign-" + o,
 				date: e,
 				label: t,
@@ -334,7 +335,7 @@ function J() {
 			}))
 		},
 		activity: {
-			...G,
+			...J,
 			id: "request-activity",
 			kind: "note",
 			title: "Plan a launch campaign for gork",
@@ -374,14 +375,14 @@ function J() {
 			}
 		},
 		editorial: {
-			...G,
+			...J,
 			id: "editorial-answer",
 			kind: "answer",
 			title: "Indigo futures, oversized type, editorial AI",
 			body: "The accessible anchor is a cinematic publication layout: use its dense indigo field, giant type and controlled neon energy as the visual starting point.\n\n• Palette: deep indigo with a restrained neon accent\n• Type: oversized, assertive editorial sans\n• Texture: cinematic imagery over a clear paper-like structure\n• Composition: magazine spreads, strong hierarchy, wide negative space\n• Avoid: generic dashboards and rainbow gradients"
 		},
 		marketAnswer: {
-			...G,
+			...J,
 			id: "market-answer",
 			kind: "answer",
 			title: "Five layers: hyperscalers dominate core cloud",
@@ -409,8 +410,8 @@ function J() {
 		}
 	};
 }
-function Y(e, t) {
-	let n = B(e), r = 40;
+function X(e, t) {
+	let n = z(e), r = 40;
 	return {
 		objects: e,
 		items: n,
@@ -428,27 +429,27 @@ function Y(e, t) {
 		} }
 	};
 }
-function he(e = "market") {
-	let t = J();
-	return e === "editorial" ? Y([t.editorial, t.anchor], [{
+function _e(e = "market") {
+	let t = Y();
+	return e === "editorial" ? X([t.editorial, t.anchor], [{
 		x: 40,
 		y: 40
 	}, {
 		x: 40,
 		y: 450
-	}]) : e === "campaign" ? Y([t.campaign, t.activity], [{
+	}]) : e === "campaign" ? X([t.campaign, t.activity], [{
 		x: 40,
 		y: 40
 	}, {
 		x: 1250,
 		y: 40
-	}]) : e === "activity" ? Y([t.activity, t.campaign], [{
+	}]) : e === "activity" ? X([t.activity, t.campaign], [{
 		x: 40,
 		y: 40
 	}, {
 		x: 800,
 		y: 40
-	}]) : Y([
+	}]) : X([
 		t.marketAnswer,
 		t.table,
 		t.market
@@ -468,8 +469,8 @@ function he(e = "market") {
 	]);
 }
 // src/fixtures/adaptive.ts
-function ge(e = "answer", t = "", n = 8) {
-	let r = z.find((t) => t.id === e) || z[0], i = r.presets.find((e) => e.id === t && e.available) || r.presets[0], a = Array.from({ length: n }, (e, t) => ({
+function ve(e = "answer", t = "", n = 8) {
+	let r = V.find((t) => t.id === e) || V[0], i = r.presets.find((e) => e.id === t && e.available) || r.presets[0], a = Array.from({ length: n }, (e, t) => ({
 		id: "item-" + t,
 		label: [
 			"Collect evidence",
@@ -571,13 +572,13 @@ function ge(e = "answer", t = "", n = 8) {
 		"source",
 		"image",
 		"video"
-	].includes(r.id) && (s.media = o, s.url = o[0]?.url, s.blocks = []), r.id === "code" && (s.language = "python", s.body = "def summarize(records):\n    valid = [r for r in records if r.get(\"source_id\")]\n    return {\"count\": len(valid), \"records\": valid}\n"), r.id === "diff" && (s.language = "python", s.body = "--- a/summary.py\n+++ b/summary.py\n@@ -1,2 +1,2 @@\n def summarize(records):\n-    return len(records)\n+    return sum(bool(r.get(\"source_id\")) for r in records)"), r.id === "test" && (s.body = "NOT EXECUTED — proposed validation\n\n1. Supply a record without a source.\n2. Verify it is marked unknown.\n3. Verify known records retain their evidence.", s.language = "text"), r.id === "draft" && (s.body = "Proposed message\n\nHere is the evidence collected so far. Two questions remain open. Please review the attached comparison before we decide."), I(s);
+	].includes(r.id) && (s.media = o, s.url = o[0]?.url, s.blocks = []), r.id === "code" && (s.language = "python", s.body = "def summarize(records):\n    valid = [r for r in records if r.get(\"source_id\")]\n    return {\"count\": len(valid), \"records\": valid}\n"), r.id === "diff" && (s.language = "python", s.body = "--- a/summary.py\n+++ b/summary.py\n@@ -1,2 +1,2 @@\n def summarize(records):\n-    return len(records)\n+    return sum(bool(r.get(\"source_id\")) for r in records)"), r.id === "test" && (s.body = "NOT EXECUTED — proposed validation\n\n1. Supply a record without a source.\n2. Verify it is marked unknown.\n3. Verify known records retain their evidence.", s.language = "text"), r.id === "draft" && (s.body = "Proposed message\n\nHere is the evidence collected so far. Two questions remain open. Please review the attached comparison before we decide."), H(s);
 }
-function _e(e, t, n) {
-	return Y([ge(e, t, n)]);
+function ye(e, t, n) {
+	return X([ve(e, t, n)]);
 }
 // src/fixtures/workspaces.ts
-var ve = {
+var be = {
 	"focused-answer": ["source", "answer"],
 	"parallel-investigation": [
 		"task",
@@ -706,7 +707,7 @@ var ve = {
 		"timeline",
 		"chart"
 	]
-}, X = "The workspace follows the evidence available to this task. Each result keeps its original context and can be inspected without leaving the canvas.\n\nThis is a local simulation. No provider, account or external action was used.", ye = {
+}, xe = "The workspace follows the evidence available to this task. Each result keeps its original context and can be inspected without leaving the canvas.\n\nThis is a local simulation. No provider, account or external action was used.", Z = {
 	answer: "A clearer path from evidence to a useful result",
 	report: "Research findings and next steps",
 	code: "Request routing · source reference",
@@ -723,17 +724,17 @@ var ve = {
 	source: "Source preview · fixture",
 	note: "Evidence and observations"
 };
-function be(e, t = 8, n = "complete") {
-	let r = L.find((t) => t[0] === e)[1], i = ve[e], a = Array.from({ length: Math.max(2, Math.min(100, t)) }, (e, t) => {
+function Se(e, t = 8, n = "complete") {
+	let r = B.find((t) => t[0] === e)[1], i = be[e], a = Array.from({ length: Math.max(2, Math.min(100, t)) }, (e, t) => {
 		let a = i[t % i.length];
 		return {
 			id: "fixture-" + t,
 			kind: a,
-			title: ye[a] || r,
+			title: Z[a] || r,
 			revision: 1,
 			status: n === "failure" && t === 1 ? "failed" : "simulation",
 			task_id: "task-" + t,
-			body: a === "code" ? "export async function loadContext(runId: string) {\n  const cached = cache.get(runId);\n  if (cached) return cached;\n  return await repository.read(runId);\n}" : a === "diff" ? "@@ context loader @@\n- await fetchEveryPage();\n+ renderFirstPage();\n+ await loadRemainingPages();" : a === "test" ? "LOCAL FIXTURE — not an executed test\n✓ Cached context\n✓ Stable source identities\n○ External provider check unavailable" : X,
+			body: a === "code" ? "export async function loadContext(runId: string) {\n  const cached = cache.get(runId);\n  if (cached) return cached;\n  return await repository.read(runId);\n}" : a === "diff" ? "@@ context loader @@\n- await fetchEveryPage();\n+ renderFirstPage();\n+ await loadRemainingPages();" : a === "test" ? "LOCAL FIXTURE — not an executed test\n✓ Cached context\n✓ Stable source identities\n○ External provider check unavailable" : xe,
 			...a === "image" ? {
 				url: (typeof location < "u" ? location.origin : "http://127.0.0.1:5187") + "/fixtures/v20/reference.png",
 				caption: "Supplied design reference · local fixture, not a generated webpage capture"
@@ -844,13 +845,13 @@ function be(e, t = 8, n = "complete") {
 				title: "Local fixture · synthetic content"
 			}]
 		};
-	}), o = B(a), s = o.slice(1).map((t, n) => ({
+	}), o = z(a), s = o.slice(1).map((t, n) => ({
 		id: "fixture-edge-" + n,
 		source: o[e === "parallel-investigation" ? 0 : n].id,
 		target: t.id
 	})), c = {
 		strategy: e,
-		workflow: L.find((t) => t[0] === e)[3].split(",")[0],
+		workflow: B.find((t) => t[0] === e)[3].split(",")[0],
 		width: 1440,
 		height: 900,
 		viewport: {
@@ -876,7 +877,7 @@ function be(e, t = 8, n = "complete") {
 			y: 0,
 			...t.size
 		}))
-	}, l = re(c);
+	}, l = le(c);
 	return {
 		label: r,
 		objects: a,
@@ -902,7 +903,7 @@ function be(e, t = 8, n = "complete") {
 	};
 }
 // src/fixtures/references.ts
-function xe(e = 3) {
+function Ce(e = 3) {
 	let t = {
 		revision: 1,
 		status: "simulation",
@@ -1179,7 +1180,7 @@ function xe(e = 3) {
 				}
 			]
 		}
-	], r = B(n), i = Array.from({ length: Math.max(1, Math.min(10, e)) }, (e, t) => ({
+	], r = z(n), i = Array.from({ length: Math.max(1, Math.min(10, e)) }, (e, t) => ({
 		id: "video-" + t,
 		videoId: "QbSarcWspvw".padEnd(11, "0"),
 		url: "https://www.youtube.com/watch?v=" + [
@@ -1249,7 +1250,7 @@ function xe(e = 3) {
 	};
 }
 // src/fixtures/learning.ts
-var Se = [
+var we = [
 	["Map the problem", "Watch the RAG overview; write a one-page definition of working memory, episodic memory, semantic memory, and external retrieval."],
 	["Embeddings", "Read the NLP foundations: tokenization, language modeling, embeddings, and similarity. Implement cosine similarity over a small document set."],
 	["Transformers and limits", "Study transformer attention and context windows. Explain why in-context history alone is not durable memory."],
@@ -1263,7 +1264,7 @@ var Se = [
 	["Safety and operations", "Harden the system: prompt-injection-resistant document handling, tenant isolation, PII minimization, and audit logs."],
 	["Capstone", "Ship a capstone: a memory-enabled assistant with ingestion, retrieval, memory writes, evaluations, and a design document describing trade-offs."]
 ];
-function Ce() {
+function Te() {
 	let e = {
 		revision: 1,
 		status: "simulation",
@@ -1339,14 +1340,14 @@ function Ce() {
 				label: "Pace",
 				value: "12 weeks · ~72 hours"
 			},
-			entries: Se.map(([e, t], n) => ({
+			entries: we.map(([e, t], n) => ({
 				id: "week-" + (n + 1),
 				label: "Week " + (n + 1) + " · " + e,
 				detail: t,
 				when: "6 hours"
 			}))
 		}
-	], n = B(t);
+	], n = z(t);
 	return n.push({
 		id: "learning-prompt",
 		type: "request",
@@ -1395,7 +1396,7 @@ function Ce() {
 		} }
 	};
 }
-var we = [{
+var Ee = [{
 	id: "scope",
 	question: "To find investors, what is your company’s AI focus, stage, target round size, and base city/country?",
 	options: [
@@ -1413,7 +1414,7 @@ var we = [{
 		"Both / developer tools",
 		"Other AI focus"
 	]
-}], Z = [
+}], De = [
 	"answer",
 	"report",
 	"document",
@@ -1433,7 +1434,7 @@ var we = [{
 	"diagram",
 	"task",
 	"source"
-], Te = [
+], Oe = [
 	"Supported answer",
 	"Research report",
 	"Document",
@@ -1453,17 +1454,17 @@ var we = [{
 	"Architecture diagram",
 	"Task summary",
 	"Source preview"
-], Ee = [
-	...L.map(([e, t, n]) => ({
+], ke = [
+	...B.map(([e, t, n]) => ({
 		id: "layout:" + e,
 		label: t,
 		description: n,
 		group: "Workspace layouts"
 	})),
-	...Z.map((e, t) => ({
+	...De.map((e, t) => ({
 		id: "card:" + e,
-		label: Te[t],
-		description: "Individual " + Te[t].toLowerCase() + " presentation",
+		label: Oe[t],
+		description: "Individual " + Oe[t].toLowerCase() + " presentation",
 		group: "Core cards"
 	})),
 	...[
@@ -1574,16 +1575,16 @@ var we = [{
 		group: "Reference presentations"
 	}))
 ];
-function De(e) {
+function Ae(e) {
 	if (e.startsWith("layout:")) {
-		let t = L.find((t) => "layout:" + t[0] === e);
-		if (t) return be(t[0], 5);
+		let t = B.find((t) => "layout:" + t[0] === e);
+		if (t) return Se(t[0], 5);
 	}
 	if (e.startsWith("card:") || e === "vertical-chart" || e === "line-chart") {
 		let t = e.startsWith("card:") ? e.slice(5) : "chart";
-		for (let [n] of L) {
-			let r = be(n, 8).objects.find((e) => e.kind === t);
-			if (r) return Y([{
+		for (let [n] of B) {
+			let r = Se(n, 8).objects.find((e) => e.kind === t);
+			if (r) return X([{
 				...r,
 				...e === "vertical-chart" ? { orientation: "vertical" } : e === "line-chart" ? { chartKind: "line" } : {}
 			}]);
@@ -1599,19 +1600,19 @@ function De(e) {
 			"watch",
 			"learning"
 		].indexOf(e);
-		return Y([Ce().objects[t]]);
+		return X([Te().objects[t]]);
 	}
 	if ([
 		"metrics",
 		"fits",
 		"architecture"
-	].includes(e)) return Y([xe().objects[[
+	].includes(e)) return X([Ce().objects[[
 		"metrics",
 		"fits",
 		"architecture"
 	].indexOf(e)]]);
 	if (e === "video-stack") {
-		let e = xe(3), t = e.items.at(-1);
+		let e = Ce(3), t = e.items.at(-1);
 		return {
 			...e,
 			items: [t],
@@ -1626,11 +1627,11 @@ function De(e) {
 			} }
 		};
 	}
-	if (e.endsWith("-set")) return he(e.slice(0, -4));
-	let t = J();
+	if (e.endsWith("-set")) return _e(e.slice(0, -4));
+	let t = Y();
 	if (e === "multi-picks") {
 		let e = t.anchor.recommendations[0];
-		return Y([{
+		return X([{
 			...t.anchor,
 			title: "Visual references",
 			recommendations: [
@@ -1652,69 +1653,165 @@ function De(e) {
 			]
 		}]);
 	}
-	return Y([t[e] || t.anchor]);
+	return X([t[e] || t.anchor]);
 }
 // src/fixtures/DesignCatalog.svelte
-var Q = p("<a class=\"svelte-y9btyj\"><strong class=\"svelte-y9btyj\"> </strong><small class=\"svelte-y9btyj\"> </small></a>"), Oe = p("<h3 class=\"svelte-y9btyj\"> <span> </span></h3><!>", 1), ke = p("<p class=\"svelte-y9btyj\">No matching designs. Try “table”, “calendar” or “diagram”.</p>"), Ae = p("<aside class=\"catalog svelte-y9btyj\" aria-label=\"Design library\"><header class=\"svelte-y9btyj\"><div><h2 class=\"svelte-y9btyj\">Design library</h2><p class=\"svelte-y9btyj\"> </p></div><button aria-label=\"Close design library\" class=\"svelte-y9btyj\">×</button></header> <input type=\"search\" aria-label=\"Search designs\" placeholder=\"Search cards, layouts, interactions…\" class=\"svelte-y9btyj\"/> <nav class=\"svelte-y9btyj\"><!><!></nav></aside>");
-function je(r, a) {
+var je = m("<a class=\"svelte-y9btyj\"><strong class=\"svelte-y9btyj\"> </strong><small class=\"svelte-y9btyj\"> </small></a>"), Me = m("<h3 class=\"svelte-y9btyj\"> <span> </span></h3><!>", 1), Q = m("<p class=\"svelte-y9btyj\">No matching designs. Try “table”, “calendar” or “diagram”.</p>"), Ne = m("<aside class=\"catalog svelte-y9btyj\" aria-label=\"Design library\"><header class=\"svelte-y9btyj\"><div><h2 class=\"svelte-y9btyj\">Design library</h2><p class=\"svelte-y9btyj\"> </p></div><button aria-label=\"Close design library\" class=\"svelte-y9btyj\">×</button></header> <input type=\"search\" aria-label=\"Search designs\" placeholder=\"Search cards, layouts, interactions…\" class=\"svelte-y9btyj\"/> <nav class=\"svelte-y9btyj\"><!><!></nav></aside>");
+function Pe(r, a) {
 	c(a, !0);
-	let o = D(a, "selected", 3, ""), l = _(""), d = t(() => Ee.filter((e) => (e.label + " " + e.description + " " + e.group).toLowerCase().includes(O(l).toLowerCase()))), p = (e) => e === "source-stack" ? "?aegisFixture=mixed-result&panel=stack" : e === "questions" ? "?aegisFixture=mixed-result&panel=questions" : "?aegisFixture=mixed-result&panel=catalog&example=" + encodeURIComponent(e);
-	var g = Ae();
-	m("keydown", v, (e) => {
+	let o = k(a, "selected", 3, ""), l = v(""), d = t(() => ke.filter((e) => (e.label + " " + e.description + " " + e.group).toLowerCase().includes(A(l).toLowerCase()))), f = (e) => e === "source-stack" ? "?aegisFixture=mixed-result&panel=stack" : e === "questions" ? "?aegisFixture=mixed-result&panel=questions" : "?aegisFixture=mixed-result&panel=catalog&example=" + encodeURIComponent(e);
+	var m = Ne();
+	h("keydown", y, (e) => {
 		e.key === "Escape" && a.onclose();
 	});
-	var y = E(g), T = E(y), A = x(E(T)), M = E(A);
-	P(A), P(T);
-	var N = x(T);
-	P(y);
-	var F = x(y, 2);
-	C(F);
-	var I = x(F, 2), L = E(I);
-	u(L, 16, () => [
+	var _ = O(m), b = O(_), D = S(O(b)), M = O(D);
+	L(D), L(b);
+	var N = S(b);
+	L(_);
+	var F = S(_, 2);
+	T(F);
+	var I = S(F, 2), R = O(I);
+	u(R, 16, () => [
 		"Reference presentations",
 		"Core cards",
 		"Workspace layouts"
 	], n, (r, a) => {
-		let c = t(() => O(d).filter((e) => e.group === a));
-		var l = f(), m = w(l), h = (t) => {
-			var r = Oe(), s = w(r), l = E(s), d = x(l), f = E(d, !0);
-			P(d), P(s);
-			var m = x(s);
-			u(m, 17, () => O(c), n, (t, n) => {
-				var r = Q(), a = E(r), s = E(a, !0);
-				P(a);
-				var c = x(a), l = E(c, !0);
-				P(c), P(r), S((t) => {
-					b(r, "href", t), b(r, "aria-current", O(n).id === o() ? "page" : void 0), e(s, O(n).label), e(l, O(n).description);
-				}, [() => p(O(n).id)]), i(t, r);
-			}), S(() => {
-				e(l, `${a ?? ""} `), e(f, O(c).length);
+		let c = t(() => A(d).filter((e) => e.group === a));
+		var l = p(), m = E(l), h = (t) => {
+			var r = Me(), s = E(r), l = O(s), d = S(l), p = O(d, !0);
+			L(d), L(s);
+			var m = S(s);
+			u(m, 17, () => A(c), n, (t, n) => {
+				var r = je(), a = O(r), s = O(a, !0);
+				L(a);
+				var c = S(a), l = O(c, !0);
+				L(c), L(r), w((t) => {
+					x(r, "href", t), x(r, "aria-current", A(n).id === o() ? "page" : void 0), e(s, A(n).label), e(l, A(n).description);
+				}, [() => f(A(n).id)]), i(t, r);
+			}), w(() => {
+				e(l, `${a ?? ""} `), e(p, A(c).length);
 			}), i(t, r);
 		};
 		s(m, (e) => {
-			O(c).length && e(h);
+			A(c).length && e(h);
 		}), i(r, l);
 	});
-	var te = x(L), R = (e) => {
-		var t = ke();
+	var ee = S(R), z = (e) => {
+		var t = Q();
 		i(e, t);
 	};
-	s(te, (e) => {
-		O(d).length || e(R);
-	}), P(I), P(g), S(() => e(M, `${Ee.length ?? ""} layouts and card presentations`)), h("click", N, function(...e) {
+	s(ee, (e) => {
+		A(d).length || e(z);
+	}), L(I), L(m), w(() => e(M, `${ke.length ?? ""} layouts and card presentations`)), g("click", N, function(...e) {
 		a.onclose?.apply(this, e);
-	}), k(F, () => O(l), (e) => j(l, e)), i(r, g), ee();
+	}), j(F, () => A(l), (e) => P(l, e)), i(r, m), C();
+}
+o(["click"]);
+// src/ClarificationPanel.svelte
+var Fe = m("<button type=\"button\"> </button>"), Ie = m("<header class=\"svelte-dyy9dh\"><!><span> </span> <!></header>"), Le = m("<div class=\"voice-row svelte-dyy9dh\"><span> </span><button type=\"button\"> </button></div>"), Re = m("<p class=\"heard svelte-dyy9dh\"><span class=\"svelte-dyy9dh\">Heard</span> </p>"), ze = m("<p role=\"alert\" class=\"svelte-dyy9dh\"> </p>"), Be = m("<section aria-label=\"AEGIS question\" aria-live=\"polite\"><!> <!> <!> <!></section>");
+function Ve(n, r) {
+	c(r, !0);
+	let o = k(r, "disabled", 3, !1), l = k(r, "listening", 3, !1), u = k(r, "heard", 3, ""), d = k(r, "embedded", 3, !1), p = v(!1), m = v(""), h = t(() => r.question.step);
+	M(() => {
+		A(h), P(p, !1), P(m, "");
+	});
+	async function _(e) {
+		if (!(o() || A(p))) {
+			P(p, !0), P(m, "");
+			try {
+				await r.onanswer(e);
+			} catch (e) {
+				P(p, !1), P(m, e instanceof Error ? e.message : "Could not send answer. Try again.", !0);
+			}
+		}
+	}
+	var y = Be();
+	let b;
+	var T = O(y), E = (n) => {
+		var a = Ie(), c = O(a);
+		{
+			let e = t(() => l() ? "reading" : "waiting");
+			R(c, {
+				kind: "lead",
+				get mood() {
+					return A(e);
+				},
+				size: 24
+			});
+		}
+		var u = S(c), d = O(u, !0);
+		L(u);
+		var m = S(u, 2), h = (t) => {
+			var n = Fe();
+			let a;
+			var s = O(n, !0);
+			L(n), w(() => {
+				a = f(n, 1, "voice svelte-dyy9dh", null, a, { on: l() }), x(n, "aria-pressed", l()), n.disabled = o() || A(p), e(s, l() ? "Stop listening" : "Answer by voice");
+			}), g("click", n, function(...e) {
+				r.onvoice?.apply(this, e);
+			}), i(t, n);
+		};
+		s(m, (e) => {
+			r.onvoice && e(h);
+		}), L(a), w(() => e(d, A(p) ? "Sending your answer…" : l() ? "Listening for your answer" : "Waiting for you")), i(n, a);
+	}, D = (t) => {
+		var n = Le(), a = O(n), s = O(a, !0);
+		L(a);
+		var c = S(a);
+		let u;
+		var d = O(c, !0);
+		L(c), L(n), w(() => {
+			e(s, A(p) ? "Sending your answer…" : l() ? "Listening for your answer" : ""), u = f(c, 1, "voice svelte-dyy9dh", null, u, { on: l() }), x(c, "aria-pressed", l()), c.disabled = o() || A(p), e(d, l() ? "Stop listening" : "Answer by voice");
+		}), g("click", c, function(...e) {
+			r.onvoice?.apply(this, e);
+		}), i(t, n);
+	};
+	s(T, (e) => {
+		d() ? r.onvoice && e(D, 1) : e(E);
+	});
+	var j = S(T, 2);
+	a(j, () => r.question.step, (e) => {
+		{
+			let n = t(() => o() || A(p));
+			de(e, {
+				get ask() {
+					return r.question;
+				},
+				placement: "island",
+				get busy() {
+					return A(n);
+				},
+				onanswer: _
+			});
+		}
+	});
+	var N = S(j, 2), F = (t) => {
+		var n = Re(), r = S(O(n));
+		L(n), w(() => e(r, ` “${u() ?? ""}”`)), i(t, n);
+	};
+	s(N, (e) => {
+		l() && u() && e(F);
+	});
+	var I = S(N, 2), ee = (t) => {
+		var n = ze(), r = O(n, !0);
+		L(n), w(() => e(r, A(m))), i(t, n);
+	};
+	s(I, (e) => {
+		A(m) && e(ee);
+	}), L(y), w(() => {
+		b = f(y, 1, "clarification nodrag nopan nowheel svelte-dyy9dh", null, b, { embedded: d() }), x(y, "aria-busy", A(p));
+	}), i(n, y), C();
 }
 o(["click"]);
 // src/fixtures/google.ts
-var Me = !0;
-async function Ne(e, t = {}) {
+var $ = !0;
+async function He(e, t = {}) {
 	let n;
 	if (e === "/api/work/google/connect") n = { authorization_url: "https://accounts.google.com/o/oauth2/v2/auth?fixture=not-a-real-authorization" };
-	else if (e === "/api/work/google") t.method === "DELETE" && (Me = !1), n = {
+	else if (e === "/api/work/google") t.method === "DELETE" && ($ = !1), n = {
 		configured: !0,
-		connected: Me,
-		services: Me ? ["calendar", "gmail"] : []
+		connected: $,
+		services: $ ? ["calendar", "gmail"] : []
 	};
 	else if (e.startsWith("/api/work/google/messages?")) n = {
 		items: [{
@@ -1740,8 +1837,8 @@ async function Ne(e, t = {}) {
 	return n;
 }
 // src/fixtures/SourceStackFixture.svelte
-var Pe = p("<div class=\"source-fixture svelte-14zuxom\"><p class=\"svelte-14zuxom\"> </p> <div><!></div> <output class=\"svelte-14zuxom\"> </output></div> <!>", 1);
-function Fe(t, n) {
+var Ue = m("<div class=\"source-fixture svelte-14zuxom\"><p class=\"svelte-14zuxom\"> </p> <div><!></div> <output class=\"svelte-14zuxom\"> </output></div> <!>", 1);
+function We(t, n) {
 	c(n, !0);
 	let r = new URLSearchParams(location.search), a = Math.max(1, Math.min(10, Number(r.get("pages")) || 3)), o = Number(r.get("sourceWidth")) === 336 ? 336 : 404, l = Array.from({ length: a }, (e, t) => ({
 		id: "fixture-page-" + (t + 1),
@@ -1763,133 +1860,133 @@ function Fe(t, n) {
 				open: !1
 			} } : {}
 		}
-	}, d = _(null), f = _(null), p = _(!1), m = _(!1), h = _("No source selected"), g;
-	function v() {
-		clearTimeout(g), j(m, !1);
+	}, d = v(null), f = v(null), p = v(!1), m = v(!1), h = v("No source selected"), g;
+	function _() {
+		clearTimeout(g), P(m, !1);
 	}
 	function y() {
 		clearTimeout(g), g = setTimeout(b, 180);
 	}
 	function b() {
-		j(m, !0), g = setTimeout(() => {
-			j(d, null), j(m, !1);
+		P(m, !0), g = setTimeout(() => {
+			P(d, null), P(m, !1);
 		}, 280);
 	}
-	T(() => {
-		H(U(new Map(l.map((e) => [e.url, {
+	D(() => {
+		fe(G(new Map(l.map((e) => [e.url, {
 			title: e.title,
 			excerpt: "Synthetic source metadata for readability and interaction checks. The image is a supplied design reference, not a website capture.",
 			retrieval: "fixture"
 		}]))));
 		let e = (e) => {
 			let t = e.detail;
-			t.id === u.id && (t.kind === "leave" ? y() : (v(), j(d, t.anchor, !0), j(f, new DOMRect(0, 0, innerWidth, innerHeight), !0), j(p, t.kind === "toggle")));
+			t.id === u.id && (t.kind === "leave" ? y() : (_(), P(d, t.anchor, !0), P(f, new DOMRect(0, 0, innerWidth, innerHeight), !0), P(p, t.kind === "toggle")));
 		};
 		return window.addEventListener("aegis-source-stack", e), () => {
-			window.removeEventListener("aegis-source-stack", e), clearTimeout(g), H(U(/* @__PURE__ */ new Map()));
+			window.removeEventListener("aegis-source-stack", e), clearTimeout(g), fe(G(/* @__PURE__ */ new Map()));
 		};
 	});
-	var C = Pe(), D = w(C), k = E(D), A = E(k);
-	P(k);
-	var N = x(k, 2);
-	let I;
-	var L = E(N);
-	F(L, {
+	var x = Ue(), T = E(x), k = O(T), j = O(k);
+	L(k);
+	var M = S(k, 2);
+	let N;
+	var I = O(M);
+	te(I, {
 		get item() {
 			return u;
 		},
 		selected: !1,
-		onopen: (e) => j(h, l.find((t) => t.id === e)?.url || "", !0),
+		onopen: (e) => P(h, l.find((t) => t.id === e)?.url || "", !0),
 		onlist: () => {}
-	}), P(N);
-	var te = x(N, 2), R = E(te, !0);
-	P(te), P(D);
-	var z = x(D, 2), ne = (e) => {
-		V(e, {
+	}), L(M);
+	var R = S(M, 2), ee = O(R, !0);
+	L(R), L(T);
+	var z = S(T, 2), ne = (e) => {
+		W(e, {
 			get anchor() {
-				return O(d);
+				return A(d);
 			},
 			get bounds() {
-				return O(f);
+				return A(f);
 			},
 			get pages() {
 				return l;
 			},
 			title: "Fixture source stack",
 			get focusFirst() {
-				return O(p);
+				return A(p);
 			},
 			get closing() {
-				return O(m);
+				return A(m);
 			},
-			onhold: v,
+			onhold: _,
 			onleave: y,
 			onclose: b,
-			onopen: (e) => j(h, e.url, !0)
+			onopen: (e) => P(h, e.url, !0)
 		});
 	};
 	s(z, (e) => {
-		O(d) && O(f) && e(ne);
-	}), S(() => {
-		e(A, `Production source components · ${o}px · synthetic records`), I = M(N, "", I, {
+		A(d) && A(f) && e(ne);
+	}), w(() => {
+		e(j, `Production source components · ${o}px · synthetic records`), N = F(M, "", N, {
 			width: o + 170 + "px",
 			height: o * 10 / 16 + 80 + "px"
-		}), e(R, O(h));
-	}), i(t, C), ee();
+		}), e(ee, A(h));
+	}), i(t, x), C();
 }
 // src/fixtures/FixtureWorkspace.svelte
-var Ie = p("<option> </option>"), Le = p("<label class=\"svelte-1b8kcgo\">Videos<select class=\"svelte-1b8kcgo\"></select></label><button class=\"svelte-1b8kcgo\">All workspace designs</button>", 1), Re = p("<label class=\"svelte-1b8kcgo\">Design<select class=\"svelte-1b8kcgo\"></select></label><label class=\"svelte-1b8kcgo\">Objects<select class=\"svelte-1b8kcgo\"></select></label>", 1), ze = p("<div class=\"fixture-question svelte-1b8kcgo\"><!></div>"), Be = p("<div class=\"fixture-complete svelte-1b8kcgo\" role=\"status\">Both answers recorded in this local fixture. No research was started.</div>"), Ve = p("<p class=\"svelte-1b8kcgo\"> <br/> </p>"), He = p("<aside class=\"fixture-saved svelte-1b8kcgo\"><button class=\"svelte-1b8kcgo\">Close</button><h2> </h2><p class=\"svelte-1b8kcgo\">In-memory preview only</p><h3> </h3><!></aside>"), Ue = p("<aside class=\"fixture-account svelte-1b8kcgo\"><strong class=\"svelte-1b8kcgo\">Simulated account · no Google connection</strong><!></aside>"), We = p("<div class=\"fixture-workspace svelte-1b8kcgo\"><header class=\"svelte-1b8kcgo\"><button class=\"svelte-1b8kcgo\"> </button><div class=\"svelte-1b8kcgo\"><strong class=\"svelte-1b8kcgo\">AEGIS Work</strong><span class=\"svelte-1b8kcgo\"> </span></div><label class=\"svelte-1b8kcgo\">Examples<select class=\"svelte-1b8kcgo\"><option>All cards and layouts</option><option>Visual direction and image picks</option><option>Market map and company table</option><option>Campaign calendar and plan</option><option>Request activity</option><option>25 workspace designs</option><option>AI-adaptive card library</option><option>Diagrams and video stacks</option><option>Reading, video and learning plan</option><option>Clarification conversation</option></select></label><button class=\"svelte-1b8kcgo\">Select / move cards</button><!><button class=\"svelte-1b8kcgo\">Reset fixture</button></header> <!> <!> <div class=\"canvas svelte-1b8kcgo\"><!></div> <!> <!> <!> <div class=\"fixture-browsers svelte-1b8kcgo\"></div> <!> <!> <!></div>");
-function $(o, d) {
+var Ge = m("<option> </option>"), Ke = m("<label class=\"svelte-1b8kcgo\">Videos<select class=\"svelte-1b8kcgo\"></select></label><button class=\"svelte-1b8kcgo\">All workspace designs</button>", 1), qe = m("<label class=\"svelte-1b8kcgo\">Design<select class=\"svelte-1b8kcgo\"></select></label><label class=\"svelte-1b8kcgo\">Objects<select class=\"svelte-1b8kcgo\"></select></label>", 1), Je = m("<div class=\"fixture-question svelte-1b8kcgo\"><!></div>"), Ye = m("<div class=\"fixture-complete svelte-1b8kcgo\" role=\"status\">Both answers recorded in this local fixture. No research was started.</div>"), Xe = m("<p class=\"svelte-1b8kcgo\"> <br/> </p>"), Ze = m("<aside class=\"fixture-saved svelte-1b8kcgo\"><button class=\"svelte-1b8kcgo\">Close</button><h2> </h2><p class=\"svelte-1b8kcgo\">In-memory preview only</p><h3> </h3><!></aside>"), Qe = m("<aside class=\"fixture-account svelte-1b8kcgo\"><strong class=\"svelte-1b8kcgo\">Simulated account · no Google connection</strong><!></aside>"), $e = m("<div class=\"fixture-workspace svelte-1b8kcgo\"><header class=\"svelte-1b8kcgo\"><button class=\"svelte-1b8kcgo\"> </button><div class=\"svelte-1b8kcgo\"><strong class=\"svelte-1b8kcgo\">AEGIS Work</strong><span class=\"svelte-1b8kcgo\"> </span></div><label class=\"svelte-1b8kcgo\">Examples<select class=\"svelte-1b8kcgo\"><option>All cards and layouts</option><option>Visual direction and image picks</option><option>Market map and company table</option><option>Campaign calendar and plan</option><option>Request activity</option><option>25 workspace designs</option><option>AI-adaptive card library</option><option>Diagrams and video stacks</option><option>Reading, video and learning plan</option><option>Clarification conversation</option></select></label><button class=\"svelte-1b8kcgo\">Select / move cards</button><!><button class=\"svelte-1b8kcgo\">Reset fixture</button></header> <!> <!> <div class=\"canvas svelte-1b8kcgo\"><!></div> <!> <!> <!> <div class=\"fixture-browsers svelte-1b8kcgo\"></div> <!> <!> <!></div>");
+function et(o, d) {
 	c(d, !0);
-	let f = _(y(new DOMRect(16, 88, innerWidth - 32, innerHeight - 112))), p = _(null), C = _("");
-	l(ae, {
-		save: async (e, t) => (j(p, e, !0), j(Y, "Simulation: " + (t === "task" ? "draft tasks" : "note") + " stored in memory only"), t === "task" ? {
+	let f = v(b(new DOMRect(16, 88, innerWidth - 32, innerHeight - 112))), p = v(null), m = v("");
+	l(re, {
+		save: async (e, t) => (P(p, e, !0), P(J, "Simulation: " + (t === "task" ? "draft tasks" : "note") + " stored in memory only"), t === "task" ? {
 			kind: "tasks_created",
 			items: e.entries || []
 		} : {
 			kind: "created",
 			summary: { id: "fixture-note" }
 		}),
-		open: (e) => j(C, e, !0)
+		open: (e) => P(m, e, !0)
 	});
-	let D = new URLSearchParams(location.search).get("panel"), k = new URLSearchParams(location.search).get("example") || "anchor", M = _(!1), F = _(y(new URLSearchParams(location.search).get("card") || "answer")), I = _(y(new URLSearchParams(location.search).get("preset") || "")), z = _(y(Number(new URLSearchParams(location.search).get("items")) || 8)), re = [
+	let T = new URLSearchParams(location.search).get("panel"), k = new URLSearchParams(location.search).get("example") || "anchor", j = v(!1), M = v(b(new URLSearchParams(location.search).get("card") || "answer")), F = v(b(new URLSearchParams(location.search).get("preset") || "")), R = v(b(Number(new URLSearchParams(location.search).get("items")) || 8)), z = [
 		"editorial",
 		"market",
 		"campaign",
 		"activity"
-	].includes(D || ""), B = D === "learning", V = D === "questions", H = _(y([])), U = t(() => we[O(H).length]), W = t(() => O(U) ? {
+	].includes(T || ""), te = T === "learning", V = T === "questions", H = v(b([])), W = t(() => Ee[A(H).length]), le = t(() => A(W) ? {
 		kind: "question",
-		step: O(U).id,
+		step: A(W).id,
 		part: null,
 		state: "open",
-		prompt: O(U).question,
-		options: O(U).options,
+		prompt: A(W).question,
+		options: A(W).options,
 		answer: null
 	} : null);
-	T(() => (R.selectResearch("local-fixture"), () => R.selectResearch("")));
-	function fe(e, t, n, r) {
-		R.open(e, t, "fixture-source", r, n);
+	D(() => (U.selectResearch("local-fixture"), () => U.selectResearch("")));
+	function de(e, t, n, r) {
+		U.open(e, t, "fixture-source", r, n);
 	}
-	function pe(e) {
+	function fe(e) {
 		let t = e.detail;
-		t?.activation?.isTrusted && fe(t.url, t.title, t.activation, t.sourceId);
+		t?.activation?.isTrusted && de(t.url, t.title, t.activation, t.sourceId);
 	}
-	let G = new URLSearchParams(location.search), K = _(y(ne(G.get("aegisFixture") || "") ? G.get("aegisFixture") : "mixed-result")), q = _(y(Math.max(2, Math.min(100, Number(G.get("count")) || 8)))), J, Y = _("Local simulation · no AI, search or account calls"), ge = G.get("panel") === "references", ve = _(y(Number(G.get("videos")) || 3)), X = t(() => {
-		if (D === "adaptive") return _e(O(F), O(I), O(z));
-		if (D === "catalog") return De(k);
-		if (re) return he(D);
-		if (B) return Ce();
+	let G = new URLSearchParams(location.search), K = v(b(ee(G.get("aegisFixture") || "") ? G.get("aegisFixture") : "mixed-result")), q = v(b(Math.max(2, Math.min(100, Number(G.get("count")) || 8)))), pe, J = v("Local simulation · no AI, search or account calls"), he = G.get("panel") === "references", ge = v(b(Number(G.get("videos")) || 3)), Y = t(() => {
+		if (T === "adaptive") return ye(A(M), A(F), A(R));
+		if (T === "catalog") return Ae(k);
+		if (z) return _e(T);
+		if (te) return Te();
 		if (V) {
-			let e = we.slice(0, Math.min(we.length, O(H).length + 1)).map((e, t) => ({
+			let e = Ee.slice(0, Math.min(Ee.length, A(H).length + 1)).map((e, t) => ({
 				kind: "ask",
 				question: e.question,
-				answer: O(H)[t] || null
+				answer: A(H)[t] || null
 			})), t = {
 				id: "investor-prompt",
 				type: "request",
 				kind: "request",
 				title: "Find investors for OpenAI and NVIDIA",
-				status: O(U) ? "waiting" : "complete",
+				status: A(W) ? "waiting" : "complete",
 				detail: "",
 				expanded: !0,
 				orders: !0,
@@ -1923,82 +2020,82 @@ function $(o, d) {
 				} }
 			};
 		}
-		return ge ? xe(O(ve)) : be(O(K), O(q));
-	}), ye = t(() => {
-		let e = Object.entries(O(X).plan.geometry.positions), t = Math.min(...e.map(([, e]) => e.x)), n = Math.min(...e.map(([, e]) => e.y));
+		return he ? Ce(A(ge)) : Se(A(K), A(q));
+	}), X = t(() => {
+		let e = Object.entries(A(Y).plan.geometry.positions), t = Math.min(...e.map(([, e]) => e.x)), n = Math.min(...e.map(([, e]) => e.y));
 		return {
 			x: V ? t - 260 : t,
 			y: n,
-			width: Math.max(...e.map(([e, t]) => t.x + O(X).plan.geometry.sizes[e].width)) - t
+			width: Math.max(...e.map(([e, t]) => t.x + A(Y).plan.geometry.sizes[e].width)) - t
 		};
 	});
-	function Se(e) {
-		let t = O(X).items.find((t) => t.id === e);
-		t?.aegisObject && se(t.aegisObject);
+	function ve(e) {
+		let t = A(Y).items.find((t) => t.id === e);
+		t?.aegisObject && ie(t.aegisObject);
 	}
-	var Z = We();
-	m("aegis-request-result", v, (e) => {
-		let t = e.detail?.id, n = O(X).objects.find((e) => e.id === t);
-		n ? window.dispatchEvent(new CustomEvent("aegis-object-open", { detail: { object: n } })) : j(Y, "This recorded result is not present in this fixture.");
-	}), m("click", v, (e) => R.capture(e), !0), m("keydown", v, (e) => R.capture(e), !0), m("dblclick", v, (e) => R.capture(e), !0), m("resize", v, () => j(f, new DOMRect(16, 88, innerWidth - 32, innerHeight - 112), !0)), m("aegis-open-source-window", v, pe), m("aegis-object-ask", v, (e) => {
+	var be = $e();
+	h("aegis-request-result", y, (e) => {
+		let t = e.detail?.id, n = A(Y).objects.find((e) => e.id === t);
+		n ? window.dispatchEvent(new CustomEvent("aegis-object-open", { detail: { object: n } })) : P(J, "This recorded result is not present in this fixture.");
+	}), h("click", y, (e) => U.capture(e), !0), h("keydown", y, (e) => U.capture(e), !0), h("dblclick", y, (e) => U.capture(e), !0), h("resize", y, () => P(f, new DOMRect(16, 88, innerWidth - 32, innerHeight - 112), !0)), h("aegis-open-source-window", y, fe), h("aegis-object-ask", y, (e) => {
 		let { object: t, subject: n } = e.detail;
-		j(Y, "Simulation: ask about " + (n || t.title));
+		P(J, "Simulation: ask about " + (n || t.title));
 	});
-	var Te = E(Z), Q = E(Te), Oe = E(Q);
-	P(Q);
-	var ke = x(Q), Ae = x(E(ke)), Me = E(Ae, !0);
-	P(Ae), P(ke);
-	var Pe = x(ke), $ = x(E(Pe)), Ge = E($);
-	Ge.value = Ge.__value = "catalog";
-	var Ke = x(Ge);
-	Ke.value = Ke.__value = "editorial";
-	var qe = x(Ke);
-	qe.value = qe.__value = "market";
-	var Je = x(qe);
-	Je.value = Je.__value = "campaign";
-	var Ye = x(Je);
-	Ye.value = Ye.__value = "activity";
-	var Xe = x(Ye);
-	Xe.value = Xe.__value = "designs";
-	var Ze = x(Xe);
-	Ze.value = Ze.__value = "adaptive";
-	var Qe = x(Ze);
-	Qe.value = Qe.__value = "references";
-	var $e = x(Qe);
-	$e.value = $e.__value = "learning";
-	var et = x($e);
-	et.value = et.__value = "questions", P($);
+	var xe = O(be), Z = O(xe), we = O(Z);
+	L(Z);
+	var De = S(Z), Oe = S(O(De)), je = O(Oe, !0);
+	L(Oe), L(De);
+	var Me = S(De), Q = S(O(Me)), Ne = O(Q);
+	Ne.value = Ne.__value = "catalog";
+	var Fe = S(Ne);
+	Fe.value = Fe.__value = "editorial";
+	var Ie = S(Fe);
+	Ie.value = Ie.__value = "market";
+	var Le = S(Ie);
+	Le.value = Le.__value = "campaign";
+	var Re = S(Le);
+	Re.value = Re.__value = "activity";
+	var ze = S(Re);
+	ze.value = ze.__value = "designs";
+	var Be = S(ze);
+	Be.value = Be.__value = "adaptive";
+	var $ = S(Be);
+	$.value = $.__value = "references";
+	var Ue = S($);
+	Ue.value = Ue.__value = "learning";
+	var et = S(Ue);
+	et.value = et.__value = "questions", L(Q);
 	var tt;
-	N($), P(Pe);
-	var nt = x(Pe), rt = x(nt), it = (t) => {
-		var r = Le(), a = w(r), o = x(E(a));
+	I(Q), L(Me);
+	var nt = S(Me), rt = S(nt), it = (t) => {
+		var r = Ke(), a = E(r), o = S(O(a));
 		u(o, 20, () => [
 			1,
 			3,
 			10
 		], n, (t, n) => {
-			var r = Ie(), a = E(r, !0);
-			P(r);
+			var r = Ge(), a = O(r, !0);
+			L(r);
 			var o = {};
-			S(() => {
+			w(() => {
 				e(a, n), o !== (o = n) && (r.value = (r.__value = n) ?? "");
 			}), i(t, r);
-		}), P(o), P(a);
-		var s = x(a);
-		A(o, () => O(ve), (e) => j(ve, e)), h("click", s, () => location.href = location.pathname + "?aegisFixture=mixed-result"), i(t, r);
+		}), L(o), L(a);
+		var s = S(a);
+		N(o, () => A(ge), (e) => P(ge, e)), g("click", s, () => location.href = location.pathname + "?aegisFixture=mixed-result"), i(t, r);
 	}, at = (a) => {
-		var o = Re(), s = w(o), c = x(E(s));
-		u(c, 21, () => L, n, (n, a) => {
-			var o = t(() => r(O(a), 2));
-			let s = () => O(o)[0], c = () => O(o)[1];
-			var l = Ie(), u = E(l, !0);
-			P(l);
+		var o = qe(), s = E(o), c = S(O(s));
+		u(c, 21, () => B, n, (n, a) => {
+			var o = t(() => r(A(a), 2));
+			let s = () => A(o)[0], c = () => A(o)[1];
+			var l = Ge(), u = O(l, !0);
+			L(l);
 			var d = {};
-			S(() => {
+			w(() => {
 				e(u, c()), d !== (d = s()) && (l.value = (l.__value = s()) ?? "");
 			}), i(n, l);
-		}), P(c), P(s);
-		var l = x(s), d = x(E(l));
+		}), L(c), L(s);
+		var l = S(s), d = S(O(l));
 		u(d, 20, () => [
 			5,
 			8,
@@ -2006,164 +2103,164 @@ function $(o, d) {
 			50,
 			100
 		], n, (t, n) => {
-			var r = Ie(), a = E(r, !0);
-			P(r);
+			var r = Ge(), a = O(r, !0);
+			L(r);
 			var o = {};
-			S(() => {
+			w(() => {
 				e(a, n), o !== (o = n) && (r.value = (r.__value = n) ?? "");
 			}), i(t, r);
-		}), P(d), P(l), A(c, () => O(K), (e) => j(K, e)), A(d, () => O(q), (e) => j(q, e)), i(a, o);
+		}), L(d), L(l), N(c, () => A(K), (e) => P(K, e)), N(d, () => A(q), (e) => P(q, e)), i(a, o);
 	};
 	s(rt, (e) => {
-		ge ? e(it) : B || V || re || D === "catalog" || D === "adaptive" || e(at, 1);
+		he ? e(it) : te || V || z || T === "catalog" || T === "adaptive" || e(at, 1);
 	});
-	var ot = x(rt);
-	P(Te);
-	var st = x(Te, 2), ct = (e) => {
+	var ot = S(rt);
+	L(xe);
+	var st = S(xe, 2), ct = (e) => {
 		me(e, {
 			get family() {
-				return O(F);
+				return A(M);
 			},
 			get preset() {
-				return O(I);
+				return A(F);
 			},
 			get count() {
-				return O(z);
+				return A(R);
 			},
 			onchange: (e, t, n) => {
-				j(F, e, !0), j(I, t, !0), j(z, n, !0);
+				P(M, e, !0), P(F, t, !0), P(R, n, !0);
 			}
 		});
 	};
 	s(st, (e) => {
-		D === "adaptive" && e(ct);
+		T === "adaptive" && e(ct);
 	});
-	var lt = x(st, 2), ut = (e) => {
+	var lt = S(st, 2), ut = (e) => {
 		{
-			let n = t(() => D === "catalog" ? k : "");
-			je(e, {
+			let n = t(() => T === "catalog" ? k : "");
+			Pe(e, {
 				get selected() {
-					return O(n);
+					return A(n);
 				},
-				onclose: () => j(M, !1)
+				onclose: () => P(j, !1)
 			});
 		}
 	};
 	s(lt, (e) => {
-		O(M) && e(ut);
+		A(j) && e(ut);
 	});
-	var dt = x(lt, 2), ft = E(dt);
-	a(ft, () => O(K) + ":" + O(q) + ":" + O(F) + ":" + O(I) + ":" + O(z), (e) => {
+	var dt = S(lt, 2), ft = O(dt);
+	a(ft, () => A(K) + ":" + A(q) + ":" + A(M) + ":" + A(F) + ":" + A(R), (e) => {
 		{
 			let n = t(() => ({
-				positions: O(X).plan.geometry.positions,
-				sizes: O(X).plan.geometry.sizes
+				positions: A(Y).plan.geometry.positions,
+				sizes: A(Y).plan.geometry.sizes
 			}));
-			de(e, {
+			se(e, {
 				get items() {
-					return O(X).items;
+					return A(Y).items;
 				},
 				get links() {
-					return O(X).links;
+					return A(Y).links;
 				},
 				authoritative: /* @__PURE__ */ new Set(),
 				get initialView() {
-					return O(n);
+					return A(n);
 				},
 				get home() {
-					return O(ye);
+					return A(X);
 				},
 				oninspect: () => {},
-				onopen: Se,
-				onaction: (e, t) => (j(Y, t === "ask" ? "Simulation: ask about " + e : t === "remove" ? "Simulation: removal requested for " + e : t === "choose" || t === "unchoose" ? "Simulation: " + t + " " + e : "Simulation: " + t, !0), !0),
+				onopen: ve,
+				onaction: (e, t) => (P(J, t === "ask" ? "Simulation: ask about " + e : t === "remove" ? "Simulation: removal requested for " + e : t === "choose" || t === "unchoose" ? "Simulation: " + t + " " + e : "Simulation: " + t, !0), !0),
 				onselectionaction: (e, t) => {
-					e === "ask" ? j(Y, "Simulation: a contextual question would include " + t.length + " selected objects.") : e === "remove" ? j(Y, "Simulation: selection retained for repeatable tests.") : j(Y, "Selected " + t.length + " objects for the next instruction.");
+					e === "ask" ? P(J, "Simulation: a contextual question would include " + t.length + " selected objects.") : e === "remove" ? P(J, "Simulation: selection retained for repeatable tests.") : P(J, "Selected " + t.length + " objects for the next instruction.");
 				},
 				expose: (e) => {
-					J = e.designer;
+					pe = e.designer;
 				}
 			});
 		}
-	}), P(dt);
-	var pt = x(dt, 2);
-	oe(pt, {
-		onsource: (e, t, n) => fe(e, t, n),
-		onask: (e) => j(Y, "Simulation: ask about " + e.title)
+	}), L(dt);
+	var pt = S(dt, 2);
+	ae(pt, {
+		onsource: (e, t, n) => de(e, t, n),
+		onask: (e) => P(J, "Simulation: ask about " + e.title)
 	});
-	var mt = x(pt, 2), ht = (e) => {
-		var t = ze(), n = E(t);
-		ue(n, {
+	var mt = S(pt, 2), ht = (e) => {
+		var t = Je();
+		Ve(O(t), {
 			get question() {
-				return O(W);
+				return A(le);
 			},
 			onanswer: (e) => {
-				j(H, [...O(H), e], !0), j(Y, "Simulation: answer recorded locally; no research started");
+				P(H, [...A(H), e], !0), P(J, "Simulation: answer recorded locally; no research started");
 			}
-		}), P(t), i(e, t);
+		}), L(t), i(e, t);
 	};
 	s(mt, (e) => {
-		V && O(W) && e(ht);
+		V && A(le) && e(ht);
 	});
-	var gt = x(mt, 2), _t = (e) => {
-		var t = Be();
+	var gt = S(mt, 2), _t = (e) => {
+		var t = Ye();
 		i(e, t);
 	};
 	s(gt, (e) => {
-		V && !O(W) && e(_t);
+		V && !A(le) && e(_t);
 	});
-	var vt = x(gt, 2);
-	u(vt, 21, () => R.shown, (e) => e.id, (e, t) => {
-		le(e, {
+	var vt = S(gt, 2);
+	u(vt, 21, () => U.shown, (e) => e.id, (e, t) => {
+		oe(e, {
 			get entry() {
-				return O(t);
+				return A(t);
 			},
 			get bounds() {
-				return O(f);
+				return A(f);
 			},
 			info: void 0,
 			added: !1
 		});
-	}), P(vt);
-	var yt = x(vt, 2), bt = (t) => {
-		var r = He(), a = E(r), o = x(a), s = E(o);
-		P(o);
-		var c = x(o, 2), l = E(c, !0);
-		P(c);
-		var d = x(c);
-		u(d, 17, () => O(p).entries || [], n, (t, n) => {
-			var r = Ve(), a = E(r, !0), o = x(a, 2, !0);
-			P(r), S(() => {
-				e(a, O(n).label), e(o, O(n).detail);
+	}), L(vt);
+	var yt = S(vt, 2), bt = (t) => {
+		var r = Ze(), a = O(r), o = S(a), s = O(o);
+		L(o);
+		var c = S(o, 2), l = O(c, !0);
+		L(c);
+		var d = S(c);
+		u(d, 17, () => A(p).entries || [], n, (t, n) => {
+			var r = Xe(), a = O(r, !0), o = S(a, 2, !0);
+			L(r), w(() => {
+				e(a, A(n).label), e(o, A(n).detail);
 			}), i(t, r);
-		}), P(r), S(() => {
-			e(s, `Simulation ${O(C) ?? ""}`), e(l, O(p).title);
-		}), h("click", a, () => j(C, "")), i(t, r);
+		}), L(r), w(() => {
+			e(s, `Simulation ${A(m) ?? ""}`), e(l, A(p).title);
+		}), g("click", a, () => P(m, "")), i(t, r);
 	};
 	s(yt, (e) => {
-		O(C) && O(p) && e(bt);
+		A(m) && A(p) && e(bt);
 	});
-	var xt = x(yt, 2), St = (e) => {
-		Fe(e, {});
+	var xt = S(yt, 2), St = (e) => {
+		We(e, {});
 	}, Ct = t(() => G.get("panel") === "stack");
 	s(xt, (e) => {
-		O(Ct) && e(St);
+		A(Ct) && e(St);
 	});
-	var wt = x(xt, 2), Tt = (e) => {
-		var t = Ue(), n = x(E(t));
+	var wt = S(xt, 2), Tt = (e) => {
+		var t = Qe(), n = S(O(t));
 		ce(n, {
 			get api() {
-				return Ne;
+				return He;
 			},
-			onAttach: (e) => j(Y, "Fixture selected: " + e.title)
-		}), P(t), i(e, t);
+			onAttach: (e) => P(J, "Fixture selected: " + e.title)
+		}), L(t), i(e, t);
 	}, Et = t(() => G.get("panel") === "google");
 	s(wt, (e) => {
-		O(Et) && e(Tt);
-	}), P(Z), S((t) => {
-		b(Z, "data-v20-fixture", O(K)), b(Q, "aria-expanded", O(M)), e(Oe, `Design library · ${Ee.length ?? ""}`), e(Me, O(Y)), tt !== (tt = D || "designs") && ($.value = ($.__value = D || "designs") ?? "", g($, D || "designs")), b(nt, "aria-pressed", t);
-	}, [() => ie() === "select"]), h("click", Q, () => j(M, !O(M))), h("change", $, (e) => location.href = location.pathname + "?aegisFixture=mixed-result&panel=" + e.currentTarget.value), h("click", nt, () => te(ie() === "select" ? "hand" : "select")), h("click", ot, () => {
-		j(H, [], !0), J && J.setGeometry(O(X).plan.geometry);
-	}), i(o, Z), ee();
+		A(Et) && e(Tt);
+	}), L(be), w((t) => {
+		x(be, "data-v20-fixture", A(K)), x(Z, "aria-expanded", A(j)), e(we, `Design library · ${ke.length ?? ""}`), e(je, A(J)), tt !== (tt = T || "designs") && (Q.value = (Q.__value = T || "designs") ?? "", _(Q, T || "designs")), x(nt, "aria-pressed", t);
+	}, [() => ne() === "select"]), g("click", Z, () => P(j, !A(j))), g("change", Q, (e) => location.href = location.pathname + "?aegisFixture=mixed-result&panel=" + e.currentTarget.value), g("click", nt, () => ue(ne() === "select" ? "hand" : "select")), g("click", ot, () => {
+		P(H, [], !0), pe && pe.setGeometry(A(Y).plan.geometry);
+	}), i(o, be), C();
 }
 o(["click", "change"]);
-export { $ as default };
+export { et as default };

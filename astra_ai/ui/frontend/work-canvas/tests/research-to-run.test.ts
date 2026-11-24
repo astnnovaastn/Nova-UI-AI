@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { endedWords } from "../src/waiting.svelte";
+import { projectResearchIsland } from "../src/research-island-state";
 import { activityFor, buildScene, plainExcerpt, reportTitle, researchSteps, runState, type ResearchReport } from "../src/research-to-run";
 import { followupSections, imagesFor, paperSites, splitCitations } from "../src/paper";
 
@@ -188,5 +189,47 @@ describe("text helpers", () => {
   it("makes clean excerpts", () => {
     expect(plainExcerpt("# Title\n\n![pic](a.png) Some [linked](http://x) **text**.")).toBe("Title Some linked text.");
     expect(plainExcerpt("word ".repeat(100), 20).endsWith("…")).toBe(true);
+  });
+});
+
+describe("the Question Island presents public Research status", () => {
+  it("keeps Comparing when the report is comparing and the scheduler is waiting without a reason", () => {
+    expect(projectResearchIsland({
+      run: { state: "waiting" },
+      report: { phase: "comparing_evidence" },
+      trace: [{ seq: 1, kind: "stage", stage: "analysis", status: "running" }],
+    })).toMatchObject({ phase: "analyzing", label: "Comparing" });
+  });
+
+  it.each([
+    ["work_rate_limited", "Waiting for the AI services' limits"],
+    ["work_daily_limit", "Daily AI limit reached; continues tomorrow"],
+    ["provider_quota", "Waiting for search quota"],
+  ])("shows the recorded pause reason %s in the primary island", (waiting_reason, label) => {
+    expect(projectResearchIsland({
+      run: { state: "waiting" },
+      report: { phase: "waiting_for_quota", waiting_reason },
+    })).toEqual({ phase: "waiting-capacity", label });
+  });
+
+  it("uses the report wording for normal activities and permits more specific trace stages", () => {
+    const report = { phase: "comparing_evidence" };
+    const run = { state: "running" };
+    expect(projectResearchIsland({ run, report })).toMatchObject({ phase: "analyzing", label: "Comparing" });
+    expect(projectResearchIsland({
+      run, report, trace: [{ seq: 1, kind: "stage", stage: "verifying", status: "running", count: 7 }],
+    })).toMatchObject({ phase: "verifying", detail: "7 claims to check" });
+  });
+
+  it("uses the latest trace pause reason and clears it on resumed activity", () => {
+    const run = { state: "running" };
+    const trace = [
+      { seq: 1, kind: "phase", phase: "waiting_for_retry", status: "running" },
+      { seq: 2, kind: "waiting", reason: "gemini_service_unavailable" },
+    ];
+    expect(projectResearchIsland({ run, trace })).toEqual({ phase: "waiting", label: "Waiting for the AI service" });
+    expect(projectResearchIsland({
+      run, trace: [...trace, { seq: 3, kind: "phase", phase: "comparing_evidence", status: "running" }],
+    })).toMatchObject({ phase: "analyzing", label: "Comparing" });
   });
 });

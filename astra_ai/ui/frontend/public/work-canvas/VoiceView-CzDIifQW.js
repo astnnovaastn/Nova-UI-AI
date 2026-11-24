@@ -7,11 +7,10 @@ import { t as A } from "./native-events-Bexa20bU.js";
 import { t as j } from "./platform-Mb6CdXdB.js";
 import { t as M } from "./Alert02Icon-B5KhDP6a.js";
 import { t as N } from "./Cancel01Icon-6hDfDS5l.js";
-import { i as ee, n as te, r as ne, t as P } from "./daily-reset-CSj0eIlG.js";
-import { r as F } from "./motion-CNlXCFGr.js";
-import { t as I } from "./runtime-Ci9kzAvr.js";
+import { r as P } from "./motion-CNlXCFGr.js";
+import { t as F } from "./runtime-Ci9kzAvr.js";
 // upstream/src/shared/i18n/messages/voice_cancel.js
-var L = () => "Cancel dictation", re = ((e = {}, t = {}) => (t.locale ?? I(), L(e))), R = () => "Cancel (Esc)", ie = ((e = {}, t = {}) => (t.locale ?? I(), R(e))), z = () => "Your audio is sent here to be transcribed, then discarded", ae = ((e = {}, t = {}) => (t.locale ?? I(), z(e))), B = () => "Dismiss", oe = ((e = {}, t = {}) => (t.locale ?? I(), B(e))), V = () => "On this device", H = ((e = {}, t = {}) => (t.locale ?? I(), V(e))), U = () => "Groq", W = ((e = {}, t = {}) => (t.locale ?? I(), U(e))), G = () => "On this Mac", K = ((e = {}, t = {}) => (t.locale ?? I(), G(e))), q = () => "OpenAI", J = ((e = {}, t = {}) => (t.locale ?? I(), q(e))), Y = () => "Aegis AI", X = ((e = {}, t = {}) => (t.locale ?? I(), Y(e))), se = () => "Dictation", ce = ((e = {}, t = {}) => (t.locale ?? I(), se(e))), le = () => "Listening", ue = ((e = {}, t = {}) => (t.locale ?? I(), le(e))), de = () => "Recordings can be up to 4 minutes.", fe = ((e = {}, t = {}) => (t.locale ?? I(), de(e))), pe = () => "Your Aegis account is under billing review.", me = ((e = {}, t = {}) => (t.locale ?? I(), pe(e))), he = (e) => `${e?.engine} is busy. Try again in a moment.`, ge = ((e, t = {}) => (t.locale ?? I(), he(e))), _e = (e) => `${e?.engine} has no credit left for dictation.`, ve = ((e, t = {}) => (t.locale ?? I(), _e(e))), ye = (e) => `You’ve reached your daily limit. It resets at ${e?.time}.`, be = ((e, t = {}) => (t.locale ?? I(), ye(e))), xe = () => "Dictation is off on this Mac. Turn it on in System Settings → Keyboard.", Se = ((e = {}, t = {}) => (t.locale ?? I(), xe(e))), Ce = () => "Free Aegis AI usage is paused right now. Credits and your own key still work.", we = ((e = {}, t = {}) => (t.locale ?? I(), Ce(e))), Te = () => "Aegis AI is paused for now. Try again later, or use your own key.", Ee = ((e = {}, t = {}) => (t.locale ?? I(), Te(e))), De = () => "Couldn’t read that recording. Try again.", Oe = ((e = {}, t = {}) => (t.locale ?? I(), De(e))), ke = (e) => `${e?.engine} refused your key. Check it in Settings → AI.`, Ae = ((e, t = {}) => (t.locale ?? I(), ke(e))), je = () => "This device can’t recognize your language. Choose another way to dictate in Settings → AI.", Me = ((e = {}, t = {}) => (t.locale ?? I(), je(e))), Ne = () => "Aegis can’t use the microphone. Allow it in Privacy settings.", Pe = ((e = {}, t = {}) => (t.locale ?? I(), Ne(e))), Fe = () => "Dictation needs Aegis AI or your own OpenAI or Groq key. Set one up in Settings → AI.", Ie = ((e = {}, t = {}) => (t.locale ?? I(), Fe(e))), Le = () => "This Mac can’t recognize your language. Sign in to Aegis AI or add an OpenAI or Groq key in Settings → AI.", Re = ((e = {}, t = {}) => (t.locale ?? I(), Le(e))), ze = () => "No microphone is available.", Be = ((e = {}, t = {}) => (t.locale ?? I(), ze(e))), Ve = () => "Didn’t catch that.", He = ((e = {}, t = {}) => (t.locale ?? I(), Ve(e))), Ue = (e) => `Couldn’t reach ${e?.engine}. Check your connection.`, We = ((e, t = {}) => (t.locale ?? I(), Ue(e))), Ge = () => "Dictation needs a different Aegis plan.", Ke = ((e = {}, t = {}) => (t.locale ?? I(), Ge(e))), qe = () => "Speech recognition is off for Aegis. Allow it in Privacy settings.", Je = ((e = {}, t = {}) => (t.locale ?? I(), qe(e))), Ye = () => "Sign in to Aegis AI again to dictate.", Xe = ((e = {}, t = {}) => (t.locale ?? I(), Ye(e))), Ze = () => "That was too long to transcribe. Try a shorter one.", Qe = ((e = {}, t = {}) => (t.locale ?? I(), Ze(e))), $e = () => "Dictation isn’t available right now.", et = ((e = {}, t = {}) => (t.locale ?? I(), $e(e))), tt = () => "That recording’s format isn’t supported. Try recording again.", nt = ((e = {}, t = {}) => (t.locale ?? I(), tt(e))), rt = () => "Open Keyboard Settings", it = ((e = {}, t = {}) => (t.locale ?? I(), rt(e))), at = () => "Open Privacy Settings", ot = ((e = {}, t = {}) => (t.locale ?? I(), at(e))), st = () => "Try again", ct = ((e = {}, t = {}) => (t.locale ?? I(), st(e))), lt = () => "Settings", ut = ((e = {}, t = {}) => (t.locale ?? I(), lt(e))), dt = () => "Stop and insert", Z = ((e = {}, t = {}) => (t.locale ?? I(), dt(e))), ft = () => "Transcribing…", Q = ((e = {}, t = {}) => (t.locale ?? I(), ft(e))), pt = class {
+var I = () => "Cancel dictation", ee = ((e = {}, t = {}) => (t.locale ?? F(), I(e))), L = () => "Cancel (Esc)", te = ((e = {}, t = {}) => (t.locale ?? F(), L(e))), R = () => "Your audio is sent here to be transcribed, then discarded", ne = ((e = {}, t = {}) => (t.locale ?? F(), R(e))), z = () => "Dismiss", re = ((e = {}, t = {}) => (t.locale ?? F(), z(e))), B = () => "On this device", V = ((e = {}, t = {}) => (t.locale ?? F(), B(e))), H = () => "Groq", U = ((e = {}, t = {}) => (t.locale ?? F(), H(e))), W = () => "On this Mac", G = ((e = {}, t = {}) => (t.locale ?? F(), W(e))), K = () => "OpenAI", q = ((e = {}, t = {}) => (t.locale ?? F(), K(e))), J = () => "Aegis AI", Y = ((e = {}, t = {}) => (t.locale ?? F(), J(e))), X = () => "Dictation", ie = ((e = {}, t = {}) => (t.locale ?? F(), X(e))), ae = () => "Listening", oe = ((e = {}, t = {}) => (t.locale ?? F(), ae(e))), se = () => "Recordings can be up to 4 minutes.", ce = ((e = {}, t = {}) => (t.locale ?? F(), se(e))), le = () => "Your Aegis account is under billing review.", ue = ((e = {}, t = {}) => (t.locale ?? F(), le(e))), de = (e) => `${e?.engine} is busy. Try again in a moment.`, fe = ((e, t = {}) => (t.locale ?? F(), de(e))), pe = (e) => `${e?.engine} has no credit left for dictation.`, me = ((e, t = {}) => (t.locale ?? F(), pe(e))), he = (e) => `You’ve reached your daily limit. It resets at ${e?.time}.`, ge = ((e, t = {}) => (t.locale ?? F(), he(e))), _e = () => "Dictation is off on this Mac. Turn it on in System Settings → Keyboard.", ve = ((e = {}, t = {}) => (t.locale ?? F(), _e(e))), ye = () => "Free Aegis AI usage is paused right now. Credits and your own key still work.", be = ((e = {}, t = {}) => (t.locale ?? F(), ye(e))), xe = () => "Aegis AI is paused for now. Try again later, or use your own key.", Se = ((e = {}, t = {}) => (t.locale ?? F(), xe(e))), Ce = () => "Couldn’t read that recording. Try again.", we = ((e = {}, t = {}) => (t.locale ?? F(), Ce(e))), Te = (e) => `${e?.engine} refused your key. Check it in Settings → AI.`, Ee = ((e, t = {}) => (t.locale ?? F(), Te(e))), De = () => "This device can’t recognize your language. Choose another way to dictate in Settings → AI.", Oe = ((e = {}, t = {}) => (t.locale ?? F(), De(e))), ke = () => "Aegis can’t use the microphone. Allow it in Privacy settings.", Ae = ((e = {}, t = {}) => (t.locale ?? F(), ke(e))), je = () => "Dictation needs Aegis AI or your own OpenAI or Groq key. Set one up in Settings → AI.", Me = ((e = {}, t = {}) => (t.locale ?? F(), je(e))), Ne = () => "This Mac can’t recognize your language. Sign in to Aegis AI or add an OpenAI or Groq key in Settings → AI.", Pe = ((e = {}, t = {}) => (t.locale ?? F(), Ne(e))), Fe = () => "No microphone is available.", Ie = ((e = {}, t = {}) => (t.locale ?? F(), Fe(e))), Le = () => "Didn’t catch that.", Re = ((e = {}, t = {}) => (t.locale ?? F(), Le(e))), ze = (e) => `Couldn’t reach ${e?.engine}. Check your connection.`, Be = ((e, t = {}) => (t.locale ?? F(), ze(e))), Ve = () => "Dictation needs a different Aegis plan.", He = ((e = {}, t = {}) => (t.locale ?? F(), Ve(e))), Ue = () => "Speech recognition is off for Aegis. Allow it in Privacy settings.", We = ((e = {}, t = {}) => (t.locale ?? F(), Ue(e))), Ge = () => "Sign in to Aegis AI again to dictate.", Ke = ((e = {}, t = {}) => (t.locale ?? F(), Ge(e))), qe = () => "That was too long to transcribe. Try a shorter one.", Je = ((e = {}, t = {}) => (t.locale ?? F(), qe(e))), Ye = () => "Dictation isn’t available right now.", Xe = ((e = {}, t = {}) => (t.locale ?? F(), Ye(e))), Ze = () => "That recording’s format isn’t supported. Try recording again.", Qe = ((e = {}, t = {}) => (t.locale ?? F(), Ze(e))), $e = () => "Open Keyboard Settings", et = ((e = {}, t = {}) => (t.locale ?? F(), $e(e))), tt = () => "Open Privacy Settings", nt = ((e = {}, t = {}) => (t.locale ?? F(), tt(e))), rt = () => "Try again", it = ((e = {}, t = {}) => (t.locale ?? F(), rt(e))), at = () => "Settings", ot = ((e = {}, t = {}) => (t.locale ?? F(), at(e))), st = () => "Stop and insert", Z = ((e = {}, t = {}) => (t.locale ?? F(), st(e))), ct = () => "Transcribing…", Q = ((e = {}, t = {}) => (t.locale ?? F(), ct(e))), lt = () => "Open account", ut = ((e = {}, t = {}) => (t.locale ?? F(), lt(e))), dt = () => "Change limit", ft = ((e = {}, t = {}) => (t.locale ?? F(), dt(e))), pt = () => "See plans", mt = ((e = {}, t = {}) => (t.locale ?? F(), pt(e))), ht = class {
 	commit;
 	#e = d("idle");
 	get phase() {
@@ -143,111 +142,119 @@ var L = () => "Cancel dictation", re = ((e = {}, t = {}) => (t.locale ?? I(), L(
 // upstream/src/domain/voice/settings.svelte.ts
 function $(e) {
 	switch (e) {
-		case "on_device": return j ? K() : H();
-		case "zephium": return X();
-		case "open_ai": return J();
-		case "groq": return W();
+		case "on_device": return j ? G() : V();
+		case "zephium": return Y();
+		case "open_ai": return q();
+		case "groq": return U();
 	}
 }
+// upstream/src/features/work/lib/daily-reset.ts
+function gt(e = /* @__PURE__ */ new Date()) {
+	let t = Date.UTC(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate() + 1);
+	return new Intl.DateTimeFormat(void 0, {
+		hour: "numeric",
+		minute: "2-digit"
+	}).format(t);
+}
 // upstream/src/features/work/lib/voice-problem.ts
-function mt(e, t) {
-	let n = t ? $(t) : X();
+function _t(e, t) {
+	let n = t ? $(t) : Y();
 	switch (e) {
 		case "microphone_denied": return {
-			message: Pe(),
+			message: Ae(),
 			remedy: "microphone"
 		};
 		case "recognition_denied": return {
-			message: Je(),
+			message: We(),
 			remedy: "recognition"
 		};
 		case "dictation_off": return {
-			message: Se(),
+			message: ve(),
 			remedy: "dictation"
 		};
 		case "no_microphone": return {
-			message: Be(),
+			message: Ie(),
 			remedy: "retry"
 		};
 		case "language_unavailable": return {
-			message: Me(),
+			message: Oe(),
 			remedy: "settings"
 		};
 		case "no_engine": return {
-			message: j ? Re() : Ie(),
+			message: j ? Pe() : Me(),
 			remedy: "settings"
 		};
 		case "key_refused": return {
-			message: Ae({ engine: n }),
+			message: Ee({ engine: n }),
 			remedy: "settings"
 		};
 		case "signed_out": return {
-			message: Xe(),
+			message: Ke(),
 			remedy: "settings"
 		};
 		case "out_of_credit": return {
-			message: ve({ engine: n }),
+			message: me({ engine: n }),
 			remedy: t === "zephium" || t === null ? "plans" : "settings"
 		};
 		case "plan_required": return {
-			message: Ke(),
+			message: He(),
 			remedy: "plans"
 		};
 		case "free_usage_paused": return {
-			message: we(),
+			message: be(),
 			remedy: "plans"
 		};
 		case "billing_review": return {
-			message: me(),
+			message: ue(),
 			remedy: "account"
 		};
 		case "daily_limit": return {
-			message: be({ time: P() }),
+			message: ge({ time: gt() }),
 			remedy: "limit"
 		};
 		case "hosted_paused": return {
-			message: Ee(),
+			message: Se(),
 			remedy: "settings"
 		};
 		case "invalid_audio": return {
-			message: Oe(),
+			message: we(),
 			remedy: "retry"
 		};
 		case "unsupported_audio": return {
-			message: nt(),
+			message: Qe(),
 			remedy: "retry"
 		};
 		case "audio_too_long": return {
-			message: fe(),
+			message: ce(),
 			remedy: "retry"
 		};
 		case "rate_limited":
 		case "provider_down": return {
-			message: ge({ engine: n }),
+			message: fe({ engine: n }),
 			remedy: "retry"
 		};
 		case "offline": return {
-			message: We({ engine: n }),
+			message: Be({ engine: n }),
 			remedy: "retry"
 		};
 		case "too_long": return {
-			message: Qe(),
+			message: Je(),
 			remedy: "retry"
 		};
 		case "nothing_heard": return {
-			message: He(),
+			message: Re(),
 			remedy: "retry"
 		};
 		case "busy":
 		case "unavailable": return {
-			message: et(),
+			message: Xe(),
 			remedy: "retry"
 		};
 	}
 }
 // upstream/src/features/work/components/bar/VoiceWave.svelte
-var ht = c("<span class=\"bar svelte-183kw1n\"></span>"), gt = c("<div class=\"wave svelte-183kw1n\" aria-hidden=\"true\"><div class=\"strip svelte-183kw1n\"></div></div>");
-function _t(e, i) {
+var vt = c("<span class=\"bar svelte-183kw1n\"></span>"), yt = c("<div class=\"wave svelte-183kw1n\" aria-hidden=\"true\"><div class=\"strip svelte-183kw1n\"></div></div>");
+function bt(e, i) {
 	o(i, !0);
 	let a = [
 		.45,
@@ -255,7 +262,7 @@ function _t(e, i) {
 		1,
 		.75,
 		.45
-	], c = d(0), l = d(void 0), u = F(), p = t(() => u ? a.length : Math.min(160, Math.max(12, Math.floor(w(c) / 4) + 1))), g = m([]), _ = (e) => .12 + .88 * Math.min(1, e / 100) ** .75, b = [], x = [];
+	], c = d(0), l = d(void 0), u = P(), p = t(() => u ? a.length : Math.min(160, Math.max(12, Math.floor(w(c) / 4) + 1))), g = m([]), _ = (e) => .12 + .88 * Math.min(1, e / 100) ** .75, b = [], x = [];
 	function O(e = 0) {
 		let t = g.slice(0, w(p));
 		if (u) {
@@ -285,19 +292,19 @@ function _t(e, i) {
 		};
 		return e = requestAnimationFrame(r), () => cancelAnimationFrame(e);
 	});
-	var k = gt(), A = S(k);
+	var k = yt(), A = S(k);
 	s(A, 21, () => ({ length: w(p) }), n, (e, t, n) => {
-		var i = ht();
+		var i = vt();
 		C(i, (e, t) => g[t] = e, (e) => g?.[e], () => [n]), r(e, i);
 	}), D(A), C(A, (e) => E(l, e), () => w(l)), D(k), y(() => {
 		h(k, "data-phase", i.phase), h(k, "data-reduce", u);
 	}), f(k, "clientWidth", (e) => E(c, e)), r(e, k), v();
 }
 // upstream/src/features/work/components/bar/VoiceView.svelte
-var vt = c("<p class=\"partial svelte-1xboy4n\"> </p>"), yt = c("<button type=\"button\" class=\"remedy svelte-1xboy4n\"> </button>"), bt = c("<span class=\"problem-mark svelte-1xboy4n\" aria-hidden=\"true\"><!></span> <p class=\"message svelte-1xboy4n\" role=\"alert\"> </p> <!> <button type=\"button\" class=\"ghost svelte-1xboy4n\"><!></button>", 1), xt = c("<span class=\"working svelte-1xboy4n\"> </span>"), St = c("<span class=\"engine svelte-1xboy4n\"> </span>"), Ct = c("<span class=\"spinner svelte-1xboy4n\" aria-hidden=\"true\"></span>"), wt = c("<span class=\"square svelte-1xboy4n\" aria-hidden=\"true\"></span>"), Tt = c("<button type=\"button\" class=\"ghost svelte-1xboy4n\"><!></button> <div class=\"listen svelte-1xboy4n\"><!> <!></div> <span class=\"meta svelte-1xboy4n\"><!> <span class=\"time svelte-1xboy4n\" aria-hidden=\"true\"> </span></span> <button type=\"button\" class=\"stop svelte-1xboy4n\"><!></button>", 1), Et = c("<div class=\"voice svelte-1xboy4n\" role=\"group\"><!> <div class=\"strip svelte-1xboy4n\"><!></div> <span class=\"sr-only svelte-1xboy4n\" aria-live=\"polite\"> </span></div>");
-function Dt(n, i) {
+var xt = c("<p class=\"partial svelte-1xboy4n\"> </p>"), St = c("<button type=\"button\" class=\"remedy svelte-1xboy4n\"> </button>"), Ct = c("<span class=\"problem-mark svelte-1xboy4n\" aria-hidden=\"true\"><!></span> <p class=\"message svelte-1xboy4n\" role=\"alert\"> </p> <!> <button type=\"button\" class=\"ghost svelte-1xboy4n\"><!></button>", 1), wt = c("<span class=\"working svelte-1xboy4n\"> </span>"), Tt = c("<span class=\"engine svelte-1xboy4n\"> </span>"), Et = c("<span class=\"spinner svelte-1xboy4n\" aria-hidden=\"true\"></span>"), Dt = c("<span class=\"square svelte-1xboy4n\" aria-hidden=\"true\"></span>"), Ot = c("<button type=\"button\" class=\"ghost svelte-1xboy4n\"><!></button> <div class=\"listen svelte-1xboy4n\"><!> <!></div> <span class=\"meta svelte-1xboy4n\"><!> <span class=\"time svelte-1xboy4n\" aria-hidden=\"true\"> </span></span> <button type=\"button\" class=\"stop svelte-1xboy4n\"><!></button>", 1), kt = c("<div class=\"voice svelte-1xboy4n\" role=\"group\"><!> <div class=\"strip svelte-1xboy4n\"><!></div> <span class=\"sr-only svelte-1xboy4n\" aria-live=\"polite\"> </span></div>");
+function At(n, i) {
 	o(i, !0);
-	let s = _(() => i.take) ?? new pt((e) => i.oncommit(e)), c = d(void 0), f = d(m(performance.now()));
+	let s = _(() => i.take) ?? new ht((e) => i.oncommit(e)), c = d(void 0), f = d(m(performance.now()));
 	function A() {
 		s.phase === "listening" || s.phase === "starting" ? s.stop() : s.phase === "failed" && (s.cancel(), i.onclose());
 	}
@@ -313,7 +320,7 @@ function Dt(n, i) {
 	let P = t(() => {
 		let e = s.since === null ? 0 : Math.max(0, Math.floor((w(f) - s.since) / 1e3));
 		return `${Math.floor(e / 60)}:${String(e % 60).padStart(2, "0")}`;
-	}), F = t(() => s.engine !== null && s.engine !== "on_device"), I = t(() => s.problem ? mt(s.problem, s.engine) : null), L = t(() => s.phase === "listening" ? ue() : s.phase === "transcribing" ? Q() : "");
+	}), F = t(() => s.engine !== null && s.engine !== "on_device"), I = t(() => s.problem ? _t(s.problem, s.engine) : null), L = t(() => s.phase === "listening" ? oe() : s.phase === "transcribing" ? Q() : "");
 	function R() {
 		s.cancel(), i.onclose();
 	}
@@ -331,20 +338,20 @@ function Dt(n, i) {
 				return;
 		}
 	}
-	let B = t(() => w(I)?.remedy === "settings" ? ut() : w(I)?.remedy === "plans" ? te() : w(I)?.remedy === "account" ? ee() : w(I)?.remedy === "limit" ? ne() : w(I)?.remedy === "microphone" || w(I)?.remedy === "recognition" ? ot() : w(I)?.remedy === "dictation" ? it() : w(I)?.remedy === "retry" ? ct() : null);
-	var V = { toggle: A }, H = Et();
+	let B = t(() => w(I)?.remedy === "settings" ? ot() : w(I)?.remedy === "plans" ? mt() : w(I)?.remedy === "account" ? ut() : w(I)?.remedy === "limit" ? ft() : w(I)?.remedy === "microphone" || w(I)?.remedy === "recognition" ? nt() : w(I)?.remedy === "dictation" ? et() : w(I)?.remedy === "retry" ? it() : null);
+	var V = { toggle: A }, H = kt();
 	l("keydown", p, (e) => {
 		e.key !== "Escape" || e.isComposing || s.phase === "idle" || (e.preventDefault(), e.stopPropagation(), R());
 	});
 	var U = S(H), W = (t) => {
-		var n = vt(), i = S(n, !0);
+		var n = xt(), i = S(n, !0);
 		D(n), y(() => e(i, s.partial)), r(t, n);
 	};
 	a(U, (e) => {
 		s.phase === "listening" && s.partial && e(W);
 	});
 	var G = g(U, 2), K = S(G), q = (t) => {
-		var n = bt(), i = b(n), o = S(i);
+		var n = Ct(), i = b(n), o = S(i);
 		O(o, {
 			get icon() {
 				return M;
@@ -354,7 +361,7 @@ function Dt(n, i) {
 		var s = g(i, 2), c = S(s, !0);
 		D(s);
 		var l = g(s, 2), d = (t) => {
-			var n = yt(), i = S(n, !0);
+			var n = St(), i = S(n, !0);
 			D(n), y(() => e(i, w(B))), u("click", n, z), r(t, n);
 		};
 		a(l, (e) => {
@@ -369,9 +376,9 @@ function Dt(n, i) {
 			strokeWidth: 1.8
 		}), D(f), y((t) => {
 			e(c, w(I).message), h(f, "aria-label", t);
-		}, [() => oe()]), u("click", f, R), r(t, n);
+		}, [() => re()]), u("click", f, R), r(t, n);
 	}, J = (t) => {
-		var n = Tt(), i = b(n), o = S(i);
+		var n = Ot(), i = b(n), o = S(i);
 		O(o, {
 			get icon() {
 				return N;
@@ -380,7 +387,7 @@ function Dt(n, i) {
 			strokeWidth: 1.8
 		}), D(i);
 		var l = g(i, 2), d = S(l);
-		_t(d, {
+		bt(d, {
 			get take() {
 				return s;
 			},
@@ -389,17 +396,17 @@ function Dt(n, i) {
 			}
 		});
 		var f = g(d, 2), p = (t) => {
-			var n = xt(), i = S(n, !0);
+			var n = wt(), i = S(n, !0);
 			D(n), y((t) => e(i, t), [() => Q()]), r(t, n);
 		};
 		a(f, (e) => {
 			s.phase === "transcribing" && e(p);
 		}), D(l);
 		var m = g(l, 2), _ = S(m), v = (t) => {
-			var n = St(), i = S(n, !0);
+			var n = Tt(), i = S(n, !0);
 			D(n), y((t, r) => {
 				h(n, "title", t), e(i, r);
-			}, [() => ae(), () => $(s.engine)]), r(t, n);
+			}, [() => ne(), () => $(s.engine)]), r(t, n);
 		};
 		a(_, (e) => {
 			w(F) && s.engine && e(v);
@@ -407,10 +414,10 @@ function Dt(n, i) {
 		var x = g(_, 2), T = S(x, !0);
 		D(x), D(m);
 		var k = g(m, 2), A = S(k), j = (e) => {
-			var t = Ct();
+			var t = Et();
 			r(e, t);
 		}, M = (e) => {
-			var t = wt();
+			var t = Dt();
 			r(e, t);
 		};
 		a(A, (e) => {
@@ -418,8 +425,8 @@ function Dt(n, i) {
 		}), D(k), C(k, (e) => E(c, e), () => w(c)), y((t, n, r, a) => {
 			h(i, "aria-label", t), h(i, "title", n), e(T, w(P)), h(k, "aria-label", r), h(k, "title", a), h(k, "aria-busy", s.phase === "transcribing" || void 0), k.disabled = s.phase === "transcribing";
 		}, [
-			() => re(),
-			() => ie(),
+			() => ee(),
+			() => te(),
 			() => s.phase === "transcribing" ? Q() : Z(),
 			() => Z()
 		]), u("click", i, R), u("click", k, () => s.stop()), r(t, n);
@@ -430,7 +437,7 @@ function Dt(n, i) {
 	var Y = g(G, 2), X = S(Y, !0);
 	return D(Y), D(H), y((t) => {
 		h(H, "data-phase", s.phase), h(H, "aria-label", t), e(X, w(L));
-	}, [() => ce()]), r(n, H), v(V);
+	}, [() => ie()]), r(n, H), v(V);
 }
 i(["click"]);
-export { Dt as default };
+export { At as default };
